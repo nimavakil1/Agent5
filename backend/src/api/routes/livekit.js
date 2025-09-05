@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { AccessToken } = require('livekit-server-sdk');
 
-router.get('/token', (req, res) => {
+router.get('/token', async (req, res) => {
   try {
     const room = String(req.query.room || '').trim();
     const identity = String(req.query.identity || `viewer-${Date.now()}`);
@@ -14,7 +14,7 @@ router.get('/token', (req, res) => {
 
     const at = new AccessToken(apiKey, apiSecret, { identity });
     at.addGrant({ room, roomJoin: true, canPublish: false, canSubscribe: true });
-    const token = at.toJwt();
+    const token = await at.toJwt();
     res.json({ token, room, identity });
   } catch (e) {
     console.error('livekit token error', e);
@@ -23,4 +23,3 @@ router.get('/token', (req, res) => {
 });
 
 module.exports = router;
-
