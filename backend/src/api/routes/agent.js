@@ -1,6 +1,9 @@
 const express = require('express');
+const WebSocket = require('ws');
+const { AccessToken } = require('livekit-server-sdk');
 const router = express.Router();
 const { getSettings, setSettings } = require('../../config/agentSettings');
+const { createPublisher } = require('../../livekit/publisher');
 
 router.get('/settings', (req, res) => {
   res.json(getSettings());
@@ -14,3 +17,93 @@ router.post('/settings', (req, res) => {
 
 module.exports = router;
 
+// Demo: make the agent speak into a LiveKit room without Telnyx
+// POST /api/agent/demo-speak { room: string, text?: string }
+router.post('/demo-speak', async (req, res) => {
+  try {
+    const roomName = String(req.body.room || '').trim();
+    const text = String(req.body.text || 'Please introduce yourself briefly.');
+    if (!roomName) return res.status(400).json({ message: 'room is required' });
+
+    const host = process.env.LIVEKIT_SERVER_URL;
+    const apiKey = process.env.LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    if (!host || !apiKey || !apiSecret) return res.status(500).json({ message: 'LiveKit not configured' });
+
+    const identity = `demo-agent-${Date.now()}`;
+    const at = new AccessToken(apiKey, apiSecret, { identity });
+    at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
+    const token = await at.toJwt();
+
+    const publisher = await createPublisher({ host, token, roomName });
+    if (!publisher) return res.status(500).json({ message: 'Failed to start LiveKit publisher' });
+
+    // Create OpenAI Realtime session
+    const { instructions, voice } = getSettings();
+    const OPENAI_REALTIME_SESSIONS_URL = 'https://api.openai.com/v1/realtime/sessions';
+    const sessionResp = await fetch(OPENAI_REALTIME_SESSIONS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-realtime-preview',
+        modalities: ['audio', 'text'],
+        instructions: instructions || 'You are a helpful AI assistant for a call center.',
+        voice: voice || undefined,
+      }),
+    });
+    if (!sessionResp.ok) {
+      const errText = await sessionResp.text();
+      return res.status(500).json({ message: 'Failed to create OpenAI session', error: errText });
+    }
+    const session = await sessionResp.json();
+
+    const openaiWs = new WebSocket(session.websocket_url, {
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    });
+
+    openaiWs.on('open', () => {
+      try {
+        // Provide an input text then request a response with audio
+        openaiWs.send(
+          JSON.stringify({
+            type: 'conversation.item.create',
+            content: { type: 'input_text', text },
+          })
+        );
+        openaiWs.send(
+          JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'], voice: voice || undefined } })
+        );
+      } catch (e) {
+        console.error('openai send error', e);
+      }
+    });
+
+    openaiWs.on('message', (data) => {
+      try {
+        const str = typeof data === 'string' ? data : data.toString('utf8');
+        const msg = JSON.parse(str);
+        if (msg.type === 'response.output_audio.delta' && msg.delta) {
+          const pcm24k = Buffer.from(msg.delta, 'base64');
+          publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+        }
+      } catch (e) {
+        console.error('openai msg error', e);
+      }
+    });
+
+    openaiWs.on('close', async () => {
+      try { await publisher.close(); } catch (_) {}
+    });
+    openaiWs.on('error', async () => {
+      try { await publisher.close(); } catch (_) {}
+    });
+
+    res.json({ message: 'started', room: roomName, identity });
+  } catch (e) {
+    console.error('demo-speak error', e);
+    res.status(500).json({ message: 'error' });
+  }
+});
