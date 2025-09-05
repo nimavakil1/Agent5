@@ -29,6 +29,11 @@
       <input id="identity" placeholder="viewer-123" />
     </div>
     <div class="row">
+      <label>API Token (Authorization: Bearer)</label>
+      <input id="token" placeholder="paste AUTH_TOKEN here" />
+      <button id="saveToken">Save Token</button>
+    </div>
+    <div class="row">
       <button id="join">Join Room</button>
       <button id="leave">Leave</button>
     </div>
@@ -61,8 +66,13 @@
         if (!identity) identity = 'viewer-' + Date.now();
 
         // fetch token from backend
+        const tokenInput = document.getElementById('token').value.trim();
+        if (tokenInput) {
+          localStorage.setItem('AUTH_TOKEN', tokenInput);
+        }
+        const bearer = localStorage.getItem('AUTH_TOKEN') || '';
         const res = await fetch(`/api/livekit/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('AUTH_TOKEN') || ''}` },
+          headers: { Authorization: `Bearer ${bearer}` },
         });
         if (!res.ok) {
           log('Failed to get token', await res.text());
@@ -98,8 +108,16 @@
       }
 
       document.getElementById('join').onclick = join;
+      document.getElementById('saveToken').onclick = () => {
+        const v = document.getElementById('token').value.trim();
+        if (v) {
+          localStorage.setItem('AUTH_TOKEN', v);
+          log('Token saved');
+        } else {
+          log('Enter a token before saving');
+        }
+      };
       document.getElementById('leave').onclick = leave;
     </script>
   </body>
   </html>
-
