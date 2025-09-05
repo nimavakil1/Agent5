@@ -35,9 +35,14 @@
       }
       const { token } = await res.json();
 
-      const LK = window.LiveKitClient || window.LivekitClient;
+      const LK =
+        window.LivekitClient ||
+        window.LiveKitClient ||
+        window.LiveKit ||
+        window.livekitClient ||
+        window.livekit || null;
       if (!LK) {
-        log('LiveKit client not loaded');
+        log('LiveKit client not loaded. Make sure the CDN script is reachable.');
         return;
       }
       room = new LK.Room();
