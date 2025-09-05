@@ -28,8 +28,14 @@ const app = express();
 if (process.env.TRUST_PROXY === '1') {
   app.set('trust proxy', 1);
 }
-// Disable CSP to allow external CDN script on monitor page (can be tightened later)
-app.use(helmet({ contentSecurityPolicy: false }));
+// Relax security headers for the monitor page to load CDN module scripts
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
 app.use(
   pinoHttp({
     redact: {
