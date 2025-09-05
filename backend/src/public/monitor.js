@@ -35,7 +35,12 @@
       }
       const { token } = await res.json();
 
-      room = new LivekitClient.Room();
+      const LK = window.LiveKitClient || window.LivekitClient;
+      if (!LK) {
+        log('LiveKit client not loaded');
+        return;
+      }
+      room = new LK.Room();
       await room.connect(host, token);
       log('Connected to room');
 
@@ -81,4 +86,3 @@
     }
   };
 })();
-
