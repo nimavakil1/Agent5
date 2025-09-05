@@ -1,5 +1,5 @@
-
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const { getAllCampaigns, createCampaign, updateCampaign, deleteCampaign } = require('../services/campaignService');
 
@@ -23,6 +23,9 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid id' });
+    }
     const updatedCampaign = await updateCampaign(req.params.id, req.body);
     res.json(updatedCampaign);
   } catch (error) {
@@ -32,6 +35,9 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid id' });
+    }
     await deleteCampaign(req.params.id);
     res.status(204).send(); // No content
   } catch (error) {

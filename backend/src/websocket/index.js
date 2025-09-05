@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
 const OpenAI = require('openai');
-const fetch = require('node-fetch');
+// use global fetch (Node >= 18)
 const url = require('url'); // Import url module
 const { RoomServiceClient, AccessToken } = require('livekit-server-sdk'); // Import LiveKit SDK
 const CallLogEntry = require('../models/CallLogEntry'); // Import CallLogEntry model
@@ -61,7 +61,8 @@ function createWebSocketServer(server) {
     console.log('Telnyx WebSocket client connected');
 
     const parsedUrl = url.parse(req.url, true);
-    const roomName = parsedUrl.query.roomName;
+    const rawRoom = parsedUrl.query.roomName;
+    const roomName = String(rawRoom || '').replace(/[^a-zA-Z0-9_-]/g, '');
 
     if (!roomName) {
       console.error('Room name not provided in WebSocket URL');
@@ -77,6 +78,26 @@ function createWebSocketServer(server) {
     let customerRecord = null; // Customer Record for personalization
     let currentTranscription = ''; // To accumulate transcription
     let audioChunks = []; // To accumulate audio for recording
+
+    // Ensure a call log document exists with required fields
+    async function ensureCallLogDefaults() {
+      const now = new Date();
+      await CallLogEntry.findOneAndUpdate(
+        { call_id: roomName },
+        {
+          $setOnInsert: {
+            call_id: roomName,
+            customer_id: 'unknown',
+            campaign_id: 'unknown',
+            start_time: now,
+            end_time: now,
+            language_detected: 'und',
+            call_status: 'no_answer',
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    }
 
     try {
       // Fetch customer record based on roomName (assuming it maps to a call_id/phone_number)
@@ -162,11 +183,12 @@ function createWebSocketServer(server) {
 
             currentTranscription += textContent + ' '; // Append to transcription
 
+            await ensureCallLogDefaults();
             // Update CallLogEntry with transcription
             await CallLogEntry.findOneAndUpdate(
               { call_id: roomName },
               { transcription: currentTranscription },
-              { upsert: true, new: true }
+              { new: true, runValidators: true }
             );
 
             // TODO: Language Detection and Switching
@@ -177,7 +199,7 @@ function createWebSocketServer(server) {
             await CallLogEntry.findOneAndUpdate(
               { call_id: roomName },
               { language_detected: detectedLanguage },
-              { upsert: true, new: true }
+              { new: true, runValidators: true }
             );
 
             // TODO: Perform sentiment analysis on textContent
@@ -195,7 +217,7 @@ function createWebSocketServer(server) {
             await CallLogEntry.findOneAndUpdate(
               { call_id: roomName }, // Use roomName as call_id
               { $push: { sentiment_scores: sentiment } },
-              { upsert: true, new: true } // Create if not exists, return updated doc
+              { new: true, runValidators: true }
             );
           }
 
@@ -235,6 +257,7 @@ function createWebSocketServer(server) {
         if (data.event === 'start') {
           console.log('Telnyx stream started:', data);
           audioChunks = []; // Reset for new call
+          await ensureCallLogDefaults();
         } else if (data.event === 'media') {
           const audioBase64 = data.media.payload;
           const audioBuffer = Buffer.from(audioBase64, 'base64');
@@ -268,12 +291,13 @@ function createWebSocketServer(server) {
       // Save audio recording
       if (audioChunks.length > 0) {
         const audioFileName = `${roomName}.wav`;
-        const audioFilePath = path.join(__dirname, '../../recordings', audioFileName); // Save in a 'recordings' folder
+        const recordingsDir = path.resolve(__dirname, '../../recordings');
+        const audioFilePath = path.resolve(recordingsDir, audioFileName); // Save in a 'recordings' folder
         const audioRecordingUrl = `/recordings/${audioFileName}`; // URL for access
 
         // Ensure recordings directory exists
-        if (!fs.existsSync(path.join(__dirname, '../../recordings'))) {
-          fs.mkdirSync(path.join(__dirname, '../../recordings'));
+        if (!fs.existsSync(recordingsDir)) {
+          fs.mkdirSync(recordingsDir);
         }
 
         // Concatenate all audio chunks
@@ -310,10 +334,11 @@ function createWebSocketServer(server) {
         console.log(`Audio recording saved to: ${audioFilePath}`);
 
         // Update CallLogEntry with audio recording URL
+        await ensureCallLogDefaults();
         await CallLogEntry.findOneAndUpdate(
           { call_id: roomName },
           { audio_recording_url: audioRecordingUrl },
-          { upsert: true, new: true }
+          { new: true, runValidators: true }
         );
       }
       // TODO: Disconnect telnyxParticipant from LiveKit

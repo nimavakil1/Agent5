@@ -20,13 +20,23 @@ async function createOutboundCall(to) {
     const room = await roomService.createRoom({ name: roomName });
 
     // 2. Create a Telnyx Call
-    // TODO: Replace with your actual Telnyx Connection ID
-    const connectionId = '2729194733782959144';
+    const connectionId = process.env.TELNYX_CONNECTION_ID;
+    if (!connectionId) {
+      throw new Error('TELNYX_CONNECTION_ID not configured');
+    }
+
+    // Streaming URL for Telnyx to connect back to this server
+    const baseStreamUrl = (process.env.TELNYX_STREAM_URL || '').replace(/\/$/, '');
+    const localPort = process.env.PORT || 3000;
+    const defaultStreamUrl = `ws://localhost:${localPort}/websocket`;
+    const streamBase = baseStreamUrl || defaultStreamUrl; // Prefer env, default to local dev
+
     const call = await telnyx.calls.create({
       to,
       from: process.env.TELNYX_PHONE_NUMBER,
       connection_id: connectionId,
-      stream_url: `ws://51.195.41.57:3001/websocket?roomName=${roomName}`,
+      // Provide roomName as a query param for the WS server
+      stream_url: `${streamBase}?roomName=${encodeURIComponent(roomName)}`,
       stream_track: 'both_tracks',
     });
 

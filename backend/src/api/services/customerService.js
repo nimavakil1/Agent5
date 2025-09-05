@@ -36,7 +36,7 @@ async function getCustomerById(id) {
 
 async function updateCustomer(id, customerData) {
   try {
-    const updatedCustomer = await CustomerRecord.findByIdAndUpdate(id, customerData, { new: true });
+    const updatedCustomer = await CustomerRecord.findByIdAndUpdate(id, customerData, { new: true, runValidators: true });
     if (!updatedCustomer) {
       throw new Error('Customer not found');
     }

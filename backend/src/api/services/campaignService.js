@@ -24,7 +24,7 @@ async function createCampaign(campaignData) {
 
 async function updateCampaign(id, campaignData) {
   try {
-    const updatedCampaign = await CampaignDefinition.findByIdAndUpdate(id, campaignData, { new: true });
+    const updatedCampaign = await CampaignDefinition.findByIdAndUpdate(id, campaignData, { new: true, runValidators: true });
     if (!updatedCampaign) {
       throw new Error('Campaign not found');
     }
