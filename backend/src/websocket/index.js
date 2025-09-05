@@ -3,6 +3,7 @@ const OpenAI = require('openai');
 // use global fetch (Node >= 18)
 const url = require('url'); // Import url module
 const { RoomServiceClient, AccessToken } = require('livekit-server-sdk'); // Import LiveKit SDK
+const { createPublisher, toWsUrl } = require('../livekit/publisher');
 const CallLogEntry = require('../models/CallLogEntry'); // Import CallLogEntry model
 const CustomerRecord = require('../models/CustomerRecord'); // Import CustomerRecord model
 const fs = require('fs'); // Import file system module
@@ -126,6 +127,7 @@ function createWebSocketServer(server) {
     let openaiWs = null; // WebSocket connection to OpenAI
     let livekitRoom = null; // LiveKit Room object
     let telnyxParticipant = null; // LiveKit Participant for Telnyx audio
+    let livekitPublisher = null; // Node publisher into LiveKit
     let customerRecord = null; // Customer Record for personalization
     let currentTranscription = ''; // To accumulate transcription
     // Recording stream state
@@ -266,19 +268,19 @@ function createWebSocketServer(server) {
         console.log(`LiveKit room ${roomName} created.`);
       }
 
-      // Conceptual: AI Agent joins LiveKit room
-      const aiAgentIdentity = `ai-agent-${roomName}`;
-      const aiAgentAccessToken = new AccessToken(apiKey, apiSecret, {
-        identity: aiAgentIdentity,
-      });
-      aiAgentAccessToken.addGrant({
-        room: roomName,
-        roomJoin: true,
-        canPublish: true,
-        canSubscribe: true,
-      });
-      const aiAgentToken = aiAgentAccessToken.toJwt();
-      console.log(`Conceptual: AI Agent ${aiAgentIdentity} joins LiveKit room ${roomName} with token: ${aiAgentToken}`);
+      // Bridge-bot publisher joins LiveKit room & publishes tracks (callee/agent)
+      try {
+        const bridgeIdentity = `bridge-bot-${roomName}`;
+        const bridgeTokenAt = new AccessToken(apiKey, apiSecret, { identity: bridgeIdentity });
+        bridgeTokenAt.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
+        const bridgeToken = bridgeTokenAt.toJwt();
+        livekitPublisher = await createPublisher({ host: livekitHost, token: bridgeToken, roomName });
+        if (!livekitPublisher) {
+          console.warn('LiveKit publisher not available. Proceeding without LiveKit audio publish.');
+        }
+      } catch (e) {
+        console.error('Failed to start LiveKit publisher:', e);
+      }
 
 
       // 2. Create OpenAI Session and connect WebSocket
@@ -346,10 +348,18 @@ function createWebSocketServer(server) {
             );
           }
 
-          // Audio streaming deltas
+          // Audio streaming deltas (OpenAI -> Telnyx + LiveKit agent track)
           if (openaiResponse.type === 'response.output_audio.delta' && openaiResponse.delta) {
             const audioBase64 = openaiResponse.delta;
             appendAiPcmuFromOpenAIBase64(audioBase64);
+            try {
+              if (livekitPublisher) {
+                const pcm24k = Buffer.from(audioBase64, 'base64');
+                livekitPublisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+              }
+            } catch (e) {
+              console.error('Error feeding agent audio to LiveKit:', e);
+            }
           }
 
         } catch (error) {
@@ -425,6 +435,16 @@ function createWebSocketServer(server) {
             openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
           }
 
+          // Also feed callee audio to LiveKit publisher
+          if (livekitPublisher) {
+            try {
+              const pcm8k = decodePCMUtoPCM16(audioBuffer);
+              livekitPublisher.pushCalleeFrom8kPcm16(pcm8k);
+            } catch (e) {
+              console.error('Error feeding callee audio to LiveKit:', e);
+            }
+          }
+
           // TODO: Publish audio to LiveKit room via telnyxParticipant
           // This would involve using LiveKit client SDK or a server-side bot framework
         } else if (data.event === 'stop') {
@@ -443,6 +463,9 @@ function createWebSocketServer(server) {
               console.error('Error finalizing OpenAI input buffer:', e);
             }
             openaiWs.close();
+          }
+          if (livekitPublisher) {
+            try { await livekitPublisher.close(); } catch (_) {}
           }
           // Finalize WAV header and update DB
           try {
@@ -484,6 +507,9 @@ function createWebSocketServer(server) {
       if (aiSendTimer) {
         clearInterval(aiSendTimer);
         aiSendTimer = null;
+      }
+      if (livekitPublisher) {
+        try { await livekitPublisher.close(); } catch (_) {}
       }
 
       // Try to finalize header sizes if a file exists
