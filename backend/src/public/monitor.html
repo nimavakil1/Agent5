@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LiveKit Monitor</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 20px; }
+      label { display: block; margin: 8px 0 4px; }
+      input { width: 360px; padding: 6px; }
+      button { margin-top: 10px; padding: 8px 12px; }
+      .row { margin: 10px 0; }
+      audio { display: block; margin: 10px 0; }
+      pre { background: #f7f7f7; padding: 10px; max-height: 180px; overflow: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>LiveKit Monitor</h1>
+    <div class="row">
+      <label>LiveKit WS URL (wss://...)</label>
+      <input id="host" placeholder="wss://your-livekit.example" />
+    </div>
+    <div class="row">
+      <label>Room Name</label>
+      <input id="room" placeholder="call-..." />
+    </div>
+    <div class="row">
+      <label>Identity</label>
+      <input id="identity" placeholder="viewer-123" />
+    </div>
+    <div class="row">
+      <button id="join">Join Room</button>
+      <button id="leave">Leave</button>
+    </div>
+    <div class="row">
+      <strong>Subscribed Tracks:</strong>
+      <div id="tracks"></div>
+    </div>
+    <div class="row">
+      <strong>Logs:</strong>
+      <pre id="logs"></pre>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+    <script>
+      const logEl = document.getElementById('logs');
+      function log(...args) {
+        const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+        logEl.textContent += msg + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      let room = null;
+      const tracksEl = document.getElementById('tracks');
+
+      async function join() {
+        const host = document.getElementById('host').value.trim();
+        const roomName = document.getElementById('room').value.trim();
+        let identity = document.getElementById('identity').value.trim();
+        if (!host || !roomName) return alert('host and room are required');
+        if (!identity) identity = 'viewer-' + Date.now();
+
+        // fetch token from backend
+        const res = await fetch(`/api/livekit/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('AUTH_TOKEN') || ''}` },
+        });
+        if (!res.ok) {
+          log('Failed to get token', await res.text());
+          return;
+        }
+        const { token } = await res.json();
+
+        room = new LivekitClient.Room();
+        await room.connect(host, token);
+        log('Connected to room');
+
+        room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+          log('TrackSubscribed', pub.trackName || pub.source || 'audio');
+          if (track.kind === 'audio') {
+            const audio = document.createElement('audio');
+            audio.autoplay = true;
+            audio.controls = true;
+            track.attach(audio);
+            audio.dataset.name = pub.trackName || 'audio';
+            tracksEl.appendChild(audio);
+          }
+        });
+
+        room.on(LivekitClient.RoomEvent.Disconnected, () => log('Disconnected'));
+      }
+
+      async function leave() {
+        if (room) {
+          await room.disconnect();
+          room = null;
+          tracksEl.innerHTML = '';
+        }
+      }
+
+      document.getElementById('join').onclick = join;
+      document.getElementById('leave').onclick = leave;
+    </script>
+  </body>
+  </html>
+

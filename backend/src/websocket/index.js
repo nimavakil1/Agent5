@@ -20,6 +20,7 @@ const livekitHost = process.env.LIVEKIT_SERVER_URL;
 const apiKey = process.env.LIVEKIT_API_KEY;
 const apiSecret = process.env.LIVEKIT_API_SECRET;
 const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
+const agentSettings = require('../config/agentSettings');
 
 // --- Audio helpers: PCMU (G.711 u-law) -> PCM16, then upsample to 24kHz ---
 function ulawDecode(sample) {
@@ -68,7 +69,8 @@ function int16ToLEBuffer(int16Arr) {
 
 async function createOpenAISession(customerRecord = null) {
   try {
-    let instructions = 'You are a helpful AI assistant for a call center.';
+    let { instructions, voice } = agentSettings.getSettings();
+    if (!instructions) instructions = 'You are a helpful AI assistant for a call center.';
     if (customerRecord) {
       instructions += ` The customer's name is ${customerRecord.name}. Their preferred language is ${customerRecord.preferred_language || 'English'}. Their historical offers include: ${customerRecord.historical_offers.join(', ')}.`;
     }
@@ -82,7 +84,8 @@ async function createOpenAISession(customerRecord = null) {
       body: JSON.stringify({
         model: 'gpt-4o-realtime-preview', // Or 'gpt-realtime'
         modalities: ['audio', 'text'],
-        instructions: instructions,
+        instructions,
+        voice: voice || undefined,
       }),
     });
 
@@ -293,8 +296,11 @@ function createWebSocketServer(server) {
 
       openaiWs.on('open', () => {
         console.log('Connected to OpenAI Realtime API');
-        // Optionally prime a response
-        openaiWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'] } }));
+        // Optionally prime a response with chosen voice
+        const { voice } = agentSettings.getSettings();
+        openaiWs.send(
+          JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'], voice: voice || undefined } })
+        );
       });
 
       openaiWs.on('message', async (data) => {

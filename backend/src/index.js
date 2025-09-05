@@ -9,6 +9,8 @@ const pinoHttp = require('pino-http');
 const { createWebSocketServer } = require('./websocket');
 const callsRouter = require('./api/routes/calls');
 const telnyxRouter = require('./api/routes/telnyx');
+const agentRouter = require('./api/routes/agent');
+const livekitRouter = require('./api/routes/livekit');
 const campaignsRouter = require('./api/routes/campaigns');
 const dashboardRouter = require('./api/routes/dashboard');
 const customersRouter = require('./api/routes/customers');
@@ -80,8 +82,9 @@ app.get('/', (req, res) => {
 app.get('/healthz', (req, res) => res.status(200).send('ok'));
 app.get('/readyz', (req, res) => res.status(200).json({ ready: true }));
 
-// Serve call recordings (optionally protected)
+// Serve static monitor and call recordings (optionally protected)
 const recordingsDir = path.join(__dirname, 'recordings');
+app.use('/', express.static(path.join(__dirname, 'public')));
 if (process.env.PROTECT_RECORDINGS === '1') {
   app.use('/recordings', auth, express.static(recordingsDir));
 } else {
@@ -96,6 +99,8 @@ app.use('/api', limiter);
 
 // Protect API routes with simple bearer auth
 app.use('/api/calls', auth, callsRouter);
+app.use('/api/agent', auth, agentRouter);
+app.use('/api/livekit', auth, livekitRouter);
 app.use('/api/campaigns', auth, campaignsRouter);
 app.use('/api/dashboard', auth, dashboardRouter);
 app.use('/api/customers', auth, customersRouter);
