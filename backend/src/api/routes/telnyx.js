@@ -1,10 +1,19 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { createPublicKey, verify } = require('crypto');
 
 const router = express.Router();
 
+// Per-route limiter for webhook
+const webhookLimiter = rateLimit({
+  windowMs: parseInt(process.env.WEBHOOK_RATE_WINDOW_MS || '10000', 10),
+  max: parseInt(process.env.WEBHOOK_RATE_MAX || '300', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Use raw body for signature verification
-router.post('/events', express.raw({ type: '*/*' }), (req, res) => {
+router.post('/events', webhookLimiter, express.raw({ type: '*/*' }), (req, res) => {
   try {
     const pubKeyPem = process.env.TELNYX_PUBLIC_KEY_PEM;
     if (!pubKeyPem) {

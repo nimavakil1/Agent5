@@ -27,7 +27,22 @@ if (process.env.TRUST_PROXY === '1') {
   app.set('trust proxy', 1);
 }
 app.use(helmet());
-app.use(pinoHttp());
+app.use(
+  pinoHttp({
+    redact: {
+      paths: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'req.headers["x-api-key"]',
+        'req.body.to',
+        'req.body.phone',
+        'req.body.phone_number',
+        'req.body.email',
+      ],
+      remove: true,
+    },
+  })
+);
 const server = http.createServer(app);
 let wss = null;
 if (process.env.NODE_ENV !== 'test') {

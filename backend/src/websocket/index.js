@@ -132,6 +132,81 @@ function createWebSocketServer(server) {
     let audioFilePath = null;
     let audioWriteStream = null;
     let bytesWritten = 0;
+    let telnyxStreamId = null; // Stream ID from Telnyx 'start' event
+
+    // Outgoing AI speech queue (PCMU @8kHz)
+    let aiPcmuQueue = Buffer.alloc(0);
+    let aiSendTimer = null;
+    const AI_FRAME_SAMPLES = 160; // 20ms @8kHz
+
+    function linearToUlaw(sample) {
+      // Convert 16-bit PCM sample to 8-bit u-law
+      const BIAS = 0x84;
+      const CLIP = 32635;
+      let sign = (sample >> 8) & 0x80;
+      if (sign !== 0) sample = -sample;
+      if (sample > CLIP) sample = CLIP;
+      sample = sample + BIAS;
+      const exponent = ulaw_exponent_table[(sample >> 7) & 0xFF];
+      const mantissa = (sample >> (exponent + 3)) & 0x0F;
+      let ulawByte = ~(sign | (exponent << 4) | mantissa) & 0xFF;
+      return ulawByte;
+    }
+
+    // Precompute exponent table for u-law
+    const ulaw_exponent_table = new Uint8Array(256);
+    (function makeExpTable() {
+      let exp = 0;
+      for (let i = 0; i < 256; i++) {
+        if (i < 16) exp = 0;
+        else if (i < 32) exp = 1;
+        else if (i < 64) exp = 2;
+        else if (i < 128) exp = 3;
+        else exp = 4;
+        ulaw_exponent_table[i] = exp;
+      }
+    })();
+
+    function downsample24kTo8k(pcmLeBuf) {
+      // Buffer of 16-bit LE samples at 24kHz -> Int16Array at 8kHz by decimation
+      const len = Math.floor(pcmLeBuf.length / 2);
+      const outLen = Math.floor(len / 3);
+      const out = new Int16Array(outLen);
+      for (let i = 0, j = 0; j < outLen; i += 6, j++) {
+        // i increments by 6 bytes = 3 samples (we pick the first sample of each triplet)
+        out[j] = pcmLeBuf.readInt16LE(i);
+      }
+      return out;
+    }
+
+    function appendAiPcmuFromOpenAIBase64(b64Pcm16Le24k) {
+      const pcm24k = Buffer.from(b64Pcm16Le24k, 'base64');
+      const pcm8k = downsample24kTo8k(pcm24k);
+      const mu = Buffer.alloc(pcm8k.length);
+      for (let i = 0; i < pcm8k.length; i++) {
+        mu[i] = linearToUlaw(pcm8k[i]);
+      }
+      aiPcmuQueue = Buffer.concat([aiPcmuQueue, mu]);
+      if (!aiSendTimer) startAiSender();
+    }
+
+    function startAiSender() {
+      if (aiSendTimer) return;
+      aiSendTimer = setInterval(() => {
+        try {
+          if (!telnyxWs || telnyxWs.readyState !== WebSocket.OPEN) return;
+          if (aiPcmuQueue.length < AI_FRAME_SAMPLES) return;
+          const frame = aiPcmuQueue.subarray(0, AI_FRAME_SAMPLES);
+          aiPcmuQueue = aiPcmuQueue.subarray(AI_FRAME_SAMPLES);
+          const payload = frame.toString('base64');
+          const msg = { event: 'media', media: { payload } };
+          if (telnyxStreamId) msg.stream_id = telnyxStreamId;
+          telnyxWs.send(JSON.stringify(msg));
+        } catch (err) {
+          console.error('AI sender error:', err);
+        }
+      }, 20); // 20ms pacing
+    }
 
     // Ensure a call log document exists with required fields
     async function ensureCallLogDefaults() {
@@ -274,10 +349,7 @@ function createWebSocketServer(server) {
           // Audio streaming deltas
           if (openaiResponse.type === 'response.output_audio.delta' && openaiResponse.delta) {
             const audioBase64 = openaiResponse.delta;
-            console.log('Conceptual: AI Agent audio delta (base64):', audioBase64.substring(0, 50) + '...');
-            // TODO: Transcode OpenAI audio to Telnyx PCMU 8kHz
-            // TODO: Encode OpenAI audio and send to Telnyx
-            // telnyxWs.send(encodedOpenAIAudio);
+            appendAiPcmuFromOpenAIBase64(audioBase64);
           }
 
         } catch (error) {
@@ -310,6 +382,7 @@ function createWebSocketServer(server) {
           const audioFileName = `${roomName}.wav`;
           audioFilePath = path.resolve(recordingsDir, audioFileName);
           audioWriteStream = fs.createWriteStream(audioFilePath);
+          telnyxStreamId = data.stream_id || data.streamId || (data.start && data.start.stream_id) || null;
 
           // Placeholder WAV header (44 bytes), patched on finalize
           const sampleRate = 8000;
@@ -356,6 +429,11 @@ function createWebSocketServer(server) {
           // This would involve using LiveKit client SDK or a server-side bot framework
         } else if (data.event === 'stop') {
           console.log('Telnyx stream stopped:', data);
+          // Stop AI sender
+          if (aiSendTimer) {
+            clearInterval(aiSendTimer);
+            aiSendTimer = null;
+          }
           if (openaiWs) {
             try {
               // Commit input and request response
@@ -402,6 +480,10 @@ function createWebSocketServer(server) {
       console.log('Telnyx WebSocket client disconnected');
       if (openaiWs) {
         openaiWs.close();
+      }
+      if (aiSendTimer) {
+        clearInterval(aiSendTimer);
+        aiSendTimer = null;
       }
 
       // Try to finalize header sizes if a file exists

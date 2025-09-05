@@ -1,11 +1,28 @@
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { createOutboundCall } = require('../services/callService');
 const { createPrefilledCartLink } = require('../services/shopifyService');
 const { sendEmail } = require('../services/brevoService');
 
-router.post('/outbound', async (req, res) => {
+// Optional API key middleware for creating outbound calls
+function requireCreateCallsApiKey(req, res, next) {
+  const required = process.env.CREATE_CALLS_API_KEY;
+  if (!required) return next();
+  const key = req.header('x-api-key');
+  if (key && key === required) return next();
+  return res.status(401).json({ message: 'Unauthorized' });
+}
+
+const createCallLimiter = rateLimit({
+  windowMs: parseInt(process.env.CREATE_CALLS_WINDOW_MS || '60000', 10),
+  max: parseInt(process.env.CREATE_CALLS_MAX || '10', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.post('/outbound', requireCreateCallsApiKey, createCallLimiter, async (req, res) => {
   const { to } = req.body;
 
   if (!to) {
