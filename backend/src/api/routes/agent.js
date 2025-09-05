@@ -107,4 +107,48 @@ router.post('/demo-speak', async (req, res) => {
   }
 });
 
+// Demo: generate a test tone into the room without OpenAI
+// POST /api/agent/demo-tone?room=...&freq=440&seconds=3
+router.post('/demo-tone', async (req, res) => {
+  try {
+    const roomName = String((req.body?.room ?? req.query.room ?? '')).trim();
+    const freq = Number(req.body?.freq ?? req.query.freq ?? 440);
+    const seconds = Number(req.body?.seconds ?? req.query.seconds ?? 3);
+    if (!roomName) return res.status(400).json({ message: 'room is required' });
+
+    const host = process.env.LIVEKIT_SERVER_URL;
+    const apiKey = process.env.LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    if (!host || !apiKey || !apiSecret) return res.status(500).json({ message: 'LiveKit not configured' });
+
+    const identity = `tone-agent-${Date.now()}`;
+    const at = new AccessToken(apiKey, apiSecret, { identity });
+    at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
+    const token = await at.toJwt();
+
+    const publisher = await createPublisher({ host, token, roomName });
+    if (!publisher) return res.status(500).json({ message: 'Failed to start LiveKit publisher' });
+
+    // Generate 48kHz mono sine wave
+    const sampleRate = 48000;
+    const totalSamples = Math.floor(seconds * sampleRate);
+    const int16 = new Int16Array(totalSamples);
+    const amplitude = 0.2 * 32767;
+    for (let i = 0; i < totalSamples; i++) {
+      int16[i] = Math.floor(amplitude * Math.sin(2 * Math.PI * freq * (i / sampleRate)));
+    }
+    publisher.pushAgentFrom48kInt16(int16);
+
+    // Close the publisher after playback
+    setTimeout(async () => {
+      try { await publisher.close(); } catch (_) {}
+    }, (seconds + 0.5) * 1000);
+
+    res.json({ message: 'started', room: roomName, seconds, freq });
+  } catch (e) {
+    console.error('demo-tone error', e);
+    res.status(500).json({ message: 'error' });
+  }
+});
+
 module.exports = router;

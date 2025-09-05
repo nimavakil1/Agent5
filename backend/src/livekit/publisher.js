@@ -144,6 +144,14 @@ async function createPublisher({ host, token, roomName }) {
           console.error('[LiveKit] pushAgentFrom24k error:', e);
         }
       },
+      pushAgentFrom48kInt16(int16Array48k) {
+        try {
+          const buf = Buffer.from(int16Array48k.buffer, int16Array48k.byteOffset, int16Array48k.length * 2);
+          agentQueue = Buffer.concat([agentQueue, buf]);
+        } catch (e) {
+          console.error('[LiveKit] pushAgentFrom48kInt16 error:', e);
+        }
+      },
       async close() {
         try {
           if (calleeTimer) clearInterval(calleeTimer);
@@ -161,4 +169,3 @@ async function createPublisher({ host, token, roomName }) {
 }
 
 module.exports = { createPublisher, toWsUrl };
-
