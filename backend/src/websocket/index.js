@@ -106,6 +106,12 @@ function createWebSocketServer(server) {
     console.log('Telnyx WebSocket client connected');
 
     const parsedUrl = url.parse(req.url, true);
+    const pathname = parsedUrl.pathname || '';
+    if (pathname !== '/websocket') {
+      console.error('Invalid WebSocket path:', pathname);
+      telnyxWs.close();
+      return;
+    }
     const rawRoom = parsedUrl.query.roomName;
     const roomName = String(rawRoom || '').replace(/[^a-zA-Z0-9_-]/g, '');
 
@@ -122,7 +128,10 @@ function createWebSocketServer(server) {
     let telnyxParticipant = null; // LiveKit Participant for Telnyx audio
     let customerRecord = null; // Customer Record for personalization
     let currentTranscription = ''; // To accumulate transcription
-    let audioChunks = []; // To accumulate audio for recording
+    // Recording stream state
+    let audioFilePath = null;
+    let audioWriteStream = null;
+    let bytesWritten = 0;
 
     // Ensure a call log document exists with required fields
     async function ensureCallLogDefaults() {
@@ -201,7 +210,9 @@ function createWebSocketServer(server) {
       const session = await createOpenAISession(customerRecord);
       const OPENAI_REALTIME_API_URL = session.websocket_url;
 
-      openaiWs = new WebSocket(OPENAI_REALTIME_API_URL);
+      openaiWs = new WebSocket(OPENAI_REALTIME_API_URL, {
+        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      });
 
       openaiWs.on('open', () => {
         console.log('Connected to OpenAI Realtime API');
@@ -293,12 +304,43 @@ function createWebSocketServer(server) {
         const data = JSON.parse(message);
         if (data.event === 'start') {
           console.log('Telnyx stream started:', data);
-          audioChunks = []; // Reset for new call
+          // Prepare streaming WAV file (G.711 u-law @ 8kHz)
+          const recordingsDir = path.resolve(__dirname, '../../recordings');
+          if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir);
+          const audioFileName = `${roomName}.wav`;
+          audioFilePath = path.resolve(recordingsDir, audioFileName);
+          audioWriteStream = fs.createWriteStream(audioFilePath);
+
+          // Placeholder WAV header (44 bytes), patched on finalize
+          const sampleRate = 8000;
+          const numChannels = 1;
+          const bitsPerSample = 8; // u-law 8-bit
+          const wavHeader = Buffer.alloc(44);
+          wavHeader.write('RIFF', 0);
+          wavHeader.writeUInt32LE(0, 4);
+          wavHeader.write('WAVE', 8);
+          wavHeader.write('fmt ', 12);
+          wavHeader.writeUInt32LE(16, 16);
+          wavHeader.writeUInt16LE(7, 20);
+          wavHeader.writeUInt16LE(numChannels, 22);
+          wavHeader.writeUInt32LE(sampleRate, 24);
+          const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+          const blockAlign = numChannels * (bitsPerSample / 8);
+          wavHeader.writeUInt32LE(byteRate, 28);
+          wavHeader.writeUInt16LE(blockAlign, 32);
+          wavHeader.writeUInt16LE(bitsPerSample, 34);
+          wavHeader.write('data', 36);
+          wavHeader.writeUInt32LE(0, 40);
+          audioWriteStream.write(wavHeader);
+          bytesWritten = 44;
           await ensureCallLogDefaults();
         } else if (data.event === 'media') {
           const audioBase64 = data.media.payload;
           const audioBuffer = Buffer.from(audioBase64, 'base64');
-          audioChunks.push(audioBuffer); // Accumulate for recording
+          if (audioWriteStream) {
+            audioWriteStream.write(audioBuffer);
+            bytesWritten += audioBuffer.length;
+          }
 
           // Transcode Telnyx PCMU 8kHz to OpenAI PCM16 24kHz mono and send to Realtime API
           if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
@@ -324,6 +366,31 @@ function createWebSocketServer(server) {
             }
             openaiWs.close();
           }
+          // Finalize WAV header and update DB
+          try {
+            if (audioWriteStream) {
+              await new Promise((resolve) => audioWriteStream.end(resolve));
+              const dataSize = Math.max(0, bytesWritten - 44);
+              const fileSize = dataSize + 36;
+              const fd = fs.openSync(audioFilePath, 'r+');
+              const buf4 = Buffer.alloc(4);
+              buf4.writeUInt32LE(fileSize, 0);
+              fs.writeSync(fd, buf4, 0, 4, 4);
+              buf4.writeUInt32LE(dataSize, 0);
+              fs.writeSync(fd, buf4, 0, 4, 40);
+              fs.closeSync(fd);
+
+              const audioRecordingUrl = `/recordings/${path.basename(audioFilePath)}`;
+              await ensureCallLogDefaults();
+              await CallLogEntry.findOneAndUpdate(
+                { call_id: roomName },
+                { audio_recording_url: audioRecordingUrl },
+                { new: true, runValidators: true }
+              );
+            }
+          } catch (e) {
+            console.error('Error finalizing WAV recording:', e);
+          }
           // TODO: Disconnect telnyxParticipant from LiveKit
         }
       } catch (error) {
@@ -337,58 +404,24 @@ function createWebSocketServer(server) {
         openaiWs.close();
       }
 
-      // Save audio recording
-      if (audioChunks.length > 0) {
-        const audioFileName = `${roomName}.wav`;
-        const recordingsDir = path.resolve(__dirname, '../../recordings');
-        const audioFilePath = path.resolve(recordingsDir, audioFileName); // Save in a 'recordings' folder
-        const audioRecordingUrl = `/recordings/${audioFileName}`; // URL for access
-
-        // Ensure recordings directory exists
-        if (!fs.existsSync(recordingsDir)) {
-          fs.mkdirSync(recordingsDir);
+      // Try to finalize header sizes if a file exists
+      try {
+        if (audioFilePath && fs.existsSync(audioFilePath)) {
+          const stat = fs.statSync(audioFilePath);
+          if (stat.size >= 44) {
+            const dataSize = stat.size - 44;
+            const fileSize = dataSize + 36;
+            const fd = fs.openSync(audioFilePath, 'r+');
+            const buf4 = Buffer.alloc(4);
+            buf4.writeUInt32LE(fileSize, 0);
+            fs.writeSync(fd, buf4, 0, 4, 4);
+            buf4.writeUInt32LE(dataSize, 0);
+            fs.writeSync(fd, buf4, 0, 4, 40);
+            fs.closeSync(fd);
+          }
         }
-
-        // Concatenate all audio chunks
-        const fullAudioBuffer = Buffer.concat(audioChunks);
-
-        // For PCMU, we need to add a WAV header. This is a simplified example.
-        // A proper WAV header for 8kHz, mono, 8-bit PCMU (G.711 U-law)
-        const sampleRate = 8000; // Telnyx PCMU is 8kHz
-        const numChannels = 1;
-        const bitsPerSample = 8; // PCMU is 8-bit
-        const byteRate = sampleRate * numChannels * bitsPerSample / 8;
-        const blockAlign = numChannels * bitsPerSample / 8;
-        const dataSize = fullAudioBuffer.length;
-        const fileSize = dataSize + 36; // 36 bytes for WAV header (excluding data chunk header)
-
-        const wavHeader = Buffer.alloc(44);
-        wavHeader.write('RIFF', 0);
-        wavHeader.writeUInt32LE(fileSize, 4);
-        wavHeader.write('WAVE', 8);
-        wavHeader.write('fmt ', 12);
-        wavHeader.writeUInt32LE(16, 16); // Subchunk1Size for PCM
-        wavHeader.writeUInt16LE(7, 20); // AudioFormat: 7 for G.711 U-law (PCMU)
-        wavHeader.writeUInt16LE(numChannels, 22);
-        wavHeader.writeUInt32LE(sampleRate, 24);
-        wavHeader.writeUInt32LE(byteRate, 28);
-        wavHeader.writeUInt16LE(blockAlign, 32);
-        wavHeader.writeUInt16LE(bitsPerSample, 34);
-        wavHeader.write('data', 36);
-        wavHeader.writeUInt32LE(dataSize, 40);
-
-        const finalAudioBuffer = Buffer.concat([wavHeader, fullAudioBuffer]);
-
-        fs.writeFileSync(audioFilePath, finalAudioBuffer);
-        console.log(`Audio recording saved to: ${audioFilePath}`);
-
-        // Update CallLogEntry with audio recording URL
-        await ensureCallLogDefaults();
-        await CallLogEntry.findOneAndUpdate(
-          { call_id: roomName },
-          { audio_recording_url: audioRecordingUrl },
-          { new: true, runValidators: true }
-        );
+      } catch (e) {
+        console.error('Error finalizing WAV on close:', e);
       }
       // TODO: Disconnect telnyxParticipant from LiveKit
     });

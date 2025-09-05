@@ -23,10 +23,12 @@
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
     "livekit-server-sdk": "^2.13.3",
     "mongoose": "^8.18.0",
     "node-fetch": "^3.3.2",
     "openai": "^5.19.1",
+    "pino-http": "^10.3.0",
     "telnyx": "^2.1.1",
     "ws": "^8.18.3"
   },
