@@ -15,8 +15,6 @@ router.post('/settings', (req, res) => {
   res.json(getSettings());
 });
 
-module.exports = router;
-
 // Demo: make the agent speak into a LiveKit room without Telnyx
 // POST /api/agent/demo-speak { room: string, text?: string }
 router.post('/demo-speak', async (req, res) => {
@@ -107,3 +105,5 @@ router.post('/demo-speak', async (req, res) => {
     res.status(500).json({ message: 'error' });
   }
 });
+
+module.exports = router;
