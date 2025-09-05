@@ -19,8 +19,9 @@ router.post('/settings', (req, res) => {
 // POST /api/agent/demo-speak { room: string, text?: string }
 router.post('/demo-speak', async (req, res) => {
   try {
-    const roomName = String(req.body.room || '').trim();
-    const text = String(req.body.text || 'Please introduce yourself briefly.');
+    const body = (req.body && typeof req.body === 'object') ? req.body : {};
+    const roomName = String((body.room ?? req.query.room ?? '')).trim();
+    const text = String((body.text ?? req.query.text ?? 'Please introduce yourself briefly.'));
     if (!roomName) return res.status(400).json({ message: 'room is required' });
 
     const host = process.env.LIVEKIT_SERVER_URL;
