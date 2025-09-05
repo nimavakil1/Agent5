@@ -20,6 +20,51 @@ const apiKey = process.env.LIVEKIT_API_KEY;
 const apiSecret = process.env.LIVEKIT_API_SECRET;
 const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
 
+// --- Audio helpers: PCMU (G.711 u-law) -> PCM16, then upsample to 24kHz ---
+function ulawDecode(sample) {
+  // u-law decode from 8-bit to 16-bit signed PCM
+  sample = ~sample & 0xff;
+  const sign = sample & 0x80;
+  let exponent = (sample >> 4) & 0x07;
+  let mantissa = sample & 0x0f;
+  let magnitude = ((mantissa << 3) + 0x84) << exponent;
+  magnitude -= 0x84;
+  let pcm = sign ? -magnitude : magnitude;
+  // Clamp to int16
+  if (pcm > 32767) pcm = 32767;
+  if (pcm < -32768) pcm = -32768;
+  return pcm;
+}
+
+function decodePCMUtoPCM16(ulawBuf) {
+  const out = new Int16Array(ulawBuf.length);
+  for (let i = 0; i < ulawBuf.length; i++) {
+    out[i] = ulawDecode(ulawBuf[i]);
+  }
+  return out;
+}
+
+function upsampleTo24kHz(pcm8k) {
+  // naive upsample x3 (nearest-neighbor)
+  const out = new Int16Array(pcm8k.length * 3);
+  for (let i = 0; i < pcm8k.length; i++) {
+    const v = pcm8k[i];
+    const j = i * 3;
+    out[j] = v;
+    out[j + 1] = v;
+    out[j + 2] = v;
+  }
+  return out;
+}
+
+function int16ToLEBuffer(int16Arr) {
+  const buf = Buffer.alloc(int16Arr.length * 2);
+  for (let i = 0; i < int16Arr.length; i++) {
+    buf.writeInt16LE(int16Arr[i], i * 2);
+  }
+  return buf;
+}
+
 async function createOpenAISession(customerRecord = null) {
   try {
     let instructions = 'You are a helpful AI assistant for a call center.';
@@ -158,27 +203,21 @@ function createWebSocketServer(server) {
 
       openaiWs = new WebSocket(OPENAI_REALTIME_API_URL);
 
-      openaiWs.onopen = () => {
+      openaiWs.on('open', () => {
         console.log('Connected to OpenAI Realtime API');
-        // Send initial message to OpenAI
-        openaiWs.send(JSON.stringify({
-          type: 'conversation.item.create',
-          content: {
-            type: 'input_text',
-            text: 'Hello, how can I help you today?',
-          },
-          modalities: ['audio', 'text'],
-        }));
-      };
+        // Optionally prime a response
+        openaiWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'] } }));
+      });
 
-      openaiWs.onmessage = async (message) => {
+      openaiWs.on('message', async (data) => {
         try {
-          const openaiResponse = JSON.parse(message.data);
+          const str = typeof data === 'string' ? data : data.toString('utf8');
+          const openaiResponse = JSON.parse(str);
           console.log('Received from OpenAI:', openaiResponse);
 
-          // Assuming OpenAI Realtime API provides text in some part of the response
-          if (openaiResponse.type === 'conversation.item.update' && openaiResponse.content && openaiResponse.content.type === 'text_output') {
-            const textContent = openaiResponse.content.text;
+          // Text streaming per Realtime events
+          if (openaiResponse.type === 'response.output_text.delta' && openaiResponse.delta) {
+            const textContent = openaiResponse.delta;
             console.log('OpenAI Text Output:', textContent);
 
             currentTranscription += textContent + ' '; // Append to transcription
@@ -221,12 +260,10 @@ function createWebSocketServer(server) {
             );
           }
 
-          // Conceptual: Publish OpenAI audio to LiveKit room via AI Agent
-          // This would involve using LiveKit client SDK or a server-side bot framework
-          // For now, we'll just log that audio is received.
-          if (openaiResponse.type === 'conversation.item.update' && openaiResponse.content && openaiResponse.content.type === 'audio_output') {
-            const audioBase64 = openaiResponse.content.audio;
-            console.log('Conceptual: AI Agent publishing audio to LiveKit (base64):', audioBase64.substring(0, 50) + '...');
+          // Audio streaming deltas
+          if (openaiResponse.type === 'response.output_audio.delta' && openaiResponse.delta) {
+            const audioBase64 = openaiResponse.delta;
+            console.log('Conceptual: AI Agent audio delta (base64):', audioBase64.substring(0, 50) + '...');
             // TODO: Transcode OpenAI audio to Telnyx PCMU 8kHz
             // TODO: Encode OpenAI audio and send to Telnyx
             // telnyxWs.send(encodedOpenAIAudio);
@@ -235,15 +272,15 @@ function createWebSocketServer(server) {
         } catch (error) {
           console.error('Error processing OpenAI message:', error);
         }
-      };
+      });
 
-      openaiWs.onclose = () => {
+      openaiWs.on('close', () => {
         console.log('Disconnected from OpenAI Realtime API');
-      };
+      });
 
-      openaiWs.onerror = (error) => {
+      openaiWs.on('error', (error) => {
         console.error('OpenAI WebSocket error:', error);
-      };
+      });
 
     } catch (error) {
       console.error('Failed to establish LiveKit/OpenAI connection:', error);
@@ -261,11 +298,16 @@ function createWebSocketServer(server) {
         } else if (data.event === 'media') {
           const audioBase64 = data.media.payload;
           const audioBuffer = Buffer.from(audioBase64, 'base64');
-          audioChunks.push(audioBuffer); // Accumulate audio
+          audioChunks.push(audioBuffer); // Accumulate for recording
 
-          // TODO: Transcode audio from Telnyx PCMU 8kHz to OpenAI 16-bit PCM 24kHz mono
+          // Transcode Telnyx PCMU 8kHz to OpenAI PCM16 24kHz mono and send to Realtime API
           if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-            openaiWs.send(audioBuffer);
+            const pcm8k = decodePCMUtoPCM16(audioBuffer);
+            const pcm24k = upsampleTo24kHz(pcm8k);
+            const pcmBuf = int16ToLEBuffer(pcm24k);
+            const b64 = pcmBuf.toString('base64');
+            // Append chunk to input buffer
+            openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
           }
 
           // TODO: Publish audio to LiveKit room via telnyxParticipant
@@ -273,6 +315,13 @@ function createWebSocketServer(server) {
         } else if (data.event === 'stop') {
           console.log('Telnyx stream stopped:', data);
           if (openaiWs) {
+            try {
+              // Commit input and request response
+              openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+              openaiWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'] } }));
+            } catch (e) {
+              console.error('Error finalizing OpenAI input buffer:', e);
+            }
             openaiWs.close();
           }
           // TODO: Disconnect telnyxParticipant from LiveKit
