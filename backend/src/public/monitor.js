@@ -90,4 +90,79 @@
       log('Enter a token before saving');
     }
   };
+
+  // Mic streaming to backend WS -> OpenAI
+  let micStream = null;
+  let audioCtx = null;
+  let procNode = null;
+  let ws = null;
+
+  function floatTo16BitPCM(input) {
+    const out = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+      let s = Math.max(-1, Math.min(1, input[i]));
+      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return out;
+  }
+
+  function downsample48kTo24k(int16) {
+    const out = new Int16Array(Math.floor(int16.length / 2));
+    for (let i = 0, j = 0; j < out.length; i += 2, j++) out[j] = int16[i];
+    return out;
+  }
+
+  async function startTalk() {
+    try {
+      const roomName = document.getElementById('room').value.trim();
+      if (!roomName) return alert('room required');
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}/agent-stream?room=${encodeURIComponent(roomName)}`);
+      ws.onopen = () => log('Talk WS connected');
+      ws.onclose = () => log('Talk WS closed');
+      ws.onerror = (e) => log('Talk WS error');
+
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+      const src = audioCtx.createMediaStreamSource(micStream);
+      const bufSize = 1024;
+      procNode = audioCtx.createScriptProcessor(bufSize, 1, 1);
+      procNode.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const input = e.inputBuffer.getChannelData(0);
+        const int16 = floatTo16BitPCM(input);
+        const ds = downsample48kTo24k(int16);
+        // Convert to base64 LE bytes
+        const buf = new Uint8Array(ds.length * 2);
+        for (let i = 0; i < ds.length; i++) {
+          buf[i * 2] = ds[i] & 0xff;
+          buf[i * 2 + 1] = (ds[i] >> 8) & 0xff;
+        }
+        const b64 = btoa(String.fromCharCode(...buf));
+        ws.send(JSON.stringify({ type: 'audio', audio: b64 }));
+      };
+      src.connect(procNode);
+      procNode.connect(audioCtx.destination);
+      log('Mic streaming started');
+    } catch (e) {
+      log('startTalk error:', e.message || String(e));
+    }
+  }
+
+  async function stopTalk() {
+    try {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'commit' }));
+      }
+      if (procNode) { try { procNode.disconnect(); } catch(_) {} procNode = null; }
+      if (audioCtx) { try { audioCtx.close(); } catch(_) {} audioCtx = null; }
+      if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+      log('Mic streaming stopped');
+    } catch (e) {
+      log('stopTalk error:', e.message || String(e));
+    }
+  }
+
+  document.getElementById('talk').onclick = startTalk;
+  document.getElementById('stopTalk').onclick = stopTalk;
 })();
