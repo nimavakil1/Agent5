@@ -135,7 +135,7 @@ function createWebSocketServer(server) {
         });
         oaWs.on('open', () => {
           try {
-            oaWs.send(JSON.stringify({ type: 'session.update', session: { instructions: settings.instructions || 'You are a helpful assistant.', voice: settings.voice || undefined } }));
+            oaWs.send(JSON.stringify({ type: 'session.update', session: { instructions: (settings.instructions || 'You are a helpful assistant.') + ' Respond in English only.', voice: settings.voice || undefined, input_audio_format: { type: 'pcm16', sample_rate_hz: 24000 } } }));
           } catch (_) {}
         });
         let notified = false;

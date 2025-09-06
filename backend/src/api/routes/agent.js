@@ -52,26 +52,18 @@ router.post('/demo-speak', async (req, res) => {
 
     openaiWs.on('open', () => {
       try {
-        // Update session settings
-        openaiWs.send(
-          JSON.stringify({
-            type: 'session.update',
-            session: {
-              instructions: instructions || 'You are a helpful AI assistant for a call center.',
-              voice: voice || undefined,
-            },
-          })
-        );
-        // Provide an input text then request a response with audio
-        openaiWs.send(
-          JSON.stringify({
-            type: 'conversation.item.create',
-            content: { type: 'input_text', text },
-          })
-        );
-        openaiWs.send(
-          JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'], voice: voice || undefined } })
-        );
+        // Update session settings with explicit audio format and English-only instruction
+        openaiWs.send(JSON.stringify({
+          type: 'session.update',
+          session: {
+            instructions: (instructions || 'You are a helpful assistant.') + ' Respond in English only.',
+            voice: voice || undefined,
+            input_audio_format: { type: 'pcm16', sample_rate_hz: 24000 },
+          },
+        }));
+        // Send input as simple input_text, then create a response with audio
+        openaiWs.send(JSON.stringify({ type: 'input_text', text }));
+        openaiWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio'], voice: voice || undefined } }));
       } catch (e) {
         console.error('openai send error', e);
       }
