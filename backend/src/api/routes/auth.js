@@ -16,9 +16,16 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ message: 'email and password required' });
-    const user = await User.findOne({ email: String(email).toLowerCase(), active: true });
+    const lower = String(email).trim().toLowerCase();
+    let user = await User.findOne({ email: lower, active: true });
     if (!user) {
-      console.warn('login: user-not-found', String(email).toLowerCase());
+      // Fallback: search without active flag to help diagnose mismatches
+      const anyUser = await User.findOne({ email: lower });
+      if (anyUser && anyUser.active === false) {
+        console.warn('login: user-inactive', lower);
+        return res.status(403).json({ message: 'Account disabled' });
+      }
+      console.warn('login: user-not-found', lower);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     const ok = await bcrypt.compare(password, user.passwordHash);
