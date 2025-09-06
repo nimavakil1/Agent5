@@ -128,7 +128,14 @@ function createWebSocketServer(server) {
         const { AccessToken } = require('livekit-server-sdk');
         const { createPublisher } = require('../livekit/publisher');
         // Load saved settings for this bridge session
-        const settings = await agentSettings.getSettings();
+        let settings = await agentSettings.getSettings();
+        try {
+          if (query.profile) {
+            const AgentProfile = require('../models/AgentProfile');
+            const p = await AgentProfile.findById(String(query.profile)).lean();
+            if (p) settings = { instructions: p.instructions || settings.instructions, voice: p.voice || settings.voice };
+          }
+        } catch (_) {}
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
         const at = new AccessToken(apiKey, apiSecret, { identity });
@@ -143,6 +150,8 @@ function createWebSocketServer(server) {
         const oaWs = new WebSocket(OA_URL, {
           headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' },
         });
+        let currentResponseId = null;
+        let bargeIn = false;
         oaWs.on('open', () => {
           try {
             // Apply saved settings as-is
@@ -168,9 +177,17 @@ function createWebSocketServer(server) {
           try {
             const s = typeof data === 'string' ? data : data.toString('utf8');
             const m = JSON.parse(s);
+            if (m.type === 'response.created' && m.response) {
+              currentResponseId = m.response.id || null;
+            }
+            if ((m.type === 'response.audio_transcript.delta' || m.type === 'response.output_text.delta') && m.delta) {
+              try { telnyxWs.send(JSON.stringify({ type: 'transcript_delta', text: m.delta })); } catch(_) {}
+            }
             if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta) {
-              const pcm24k = Buffer.from(m.delta, 'base64');
-              publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+              if (!bargeIn) {
+                const pcm24k = Buffer.from(m.delta, 'base64');
+                publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+              }
               if (!notified) {
                 notified = true;
                 try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
@@ -187,6 +204,19 @@ function createWebSocketServer(server) {
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
               oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio'] } }));
+            } else if (m.type === 'vad_start' && oaWs.readyState === WebSocket.OPEN) {
+              // User started speaking: cancel current agent response and duck audio
+              bargeIn = true;
+              if (currentResponseId) {
+                try { oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId } })); } catch(_) {}
+              }
+            } else if (m.type === 'vad_stop_commit' && oaWs.readyState === WebSocket.OPEN) {
+              // User stopped speaking: commit and ask for a new response
+              try {
+                oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+                oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio','text'], voice: settings.voice || undefined } }));
+              } catch(_) {}
+              bargeIn = false;
             }
           } catch(_) {}
         });

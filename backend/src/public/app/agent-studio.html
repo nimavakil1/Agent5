@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white shadow-sm">
+      <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <h1 class="text-lg font-semibold text-slate-800">Agent Studio</h1>
+        <div class="flex items-center gap-3">
+          <span id="who" class="text-sm text-slate-500"></span>
+          <button id="logout" class="text-sm text-indigo-600 hover:underline">Logout</button>
+        </div>
+      </div>
+    </header>
+    <main class="max-w-6xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <section class="bg-white rounded-lg shadow p-4">
+        <h2 class="font-semibold text-slate-800 mb-3">Profile</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="col-span-2">
+            <label class="block text-sm text-slate-600">Profile Name</label>
+            <input id="name" class="mt-1 w-full border rounded px-3 py-2" placeholder="e.g., Sales - DACH" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-600">Voice</label>
+            <select id="voice" class="mt-1 w-full border rounded px-3 py-2">
+              <option value="">(model default)</option>
+              <option>alloy</option>
+              <option>shimmer</option>
+              <option>verse</option>
+              <option>aria</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-slate-600">Language</label>
+            <input id="language" class="mt-1 w-full border rounded px-3 py-2" placeholder="e.g., de" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-sm text-slate-600">Instructions</label>
+            <textarea id="instructions" class="mt-1 w-full border rounded px-3 py-2 h-36" placeholder="How should the agent behave?"></textarea>
+          </div>
+        </div>
+        <div class="mt-3 flex gap-2">
+          <button id="saveProfile" class="bg-indigo-600 text-white rounded px-3 py-2">Save Profile</button>
+          <button id="newProfile" class="bg-slate-100 rounded px-3 py-2">New</button>
+        </div>
+        <div class="mt-4">
+          <label class="block text-sm text-slate-600">Profiles</label>
+          <select id="profiles" class="mt-1 w-full border rounded px-3 py-2"></select>
+        </div>
+      </section>
+      <section class="bg-white rounded-lg shadow p-4">
+        <h2 class="font-semibold text-slate-800 mb-3">Talk & Test</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="col-span-2">
+            <label class="block text-sm text-slate-600">Room</label>
+            <input id="room" class="mt-1 w-full border rounded px-3 py-2" placeholder="test-room" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-sm text-slate-600">Prime Text (optional)</label>
+            <input id="prime" class="mt-1 w-full border rounded px-3 py-2" placeholder="Topic to open with" />
+          </div>
+        </div>
+        <div class="mt-3 flex gap-2">
+          <button id="talk" class="bg-emerald-600 text-white rounded px-3 py-2">Talk to Agent</button>
+          <button id="stop" class="bg-slate-100 rounded px-3 py-2">Stop</button>
+        </div>
+        <div class="mt-4 grid grid-cols-2 gap-3">
+          <div>
+            <div class="text-sm text-slate-500">State</div>
+            <div id="state" class="font-medium">idle</div>
+          </div>
+          <div>
+            <div class="text-sm text-slate-500">Latency</div>
+            <div id="latency" class="font-medium">--</div>
+          </div>
+        </div>
+        <div class="mt-4">
+          <div class="text-sm text-slate-500 mb-1">Transcript</div>
+          <pre id="transcript" class="bg-slate-50 border rounded p-2 h-40 overflow-auto"></pre>
+        </div>
+      </section>
+    </main>
+    <script>
+      // Session info
+      fetch('/api/auth/me').then(r => r.ok ? r.json() : Promise.reject()).then(u => {
+        document.getElementById('who').textContent = u.email;
+      }).catch(() => location.href = '/app/login');
+      document.getElementById('logout').onclick = async () => { await fetch('/api/auth/logout', { method: 'POST' }); location.href = '/app/login'; };
+
+      // Profiles
+      async function loadProfiles() {
+        const res = await fetch('/api/agents');
+        const list = res.ok ? await res.json() : [];
+        const sel = document.getElementById('profiles');
+        sel.innerHTML = '';
+        for (const p of list) {
+          const opt = document.createElement('option'); opt.value = p._id; opt.textContent = `${p.name} — ${p.voice || 'default'}`; sel.appendChild(opt);
+        }
+        sel.onchange = async () => {
+          const id = sel.value; if (!id) return;
+          const p = await (await fetch('/api/agents/' + id)).json();
+          document.getElementById('name').value = p.name || '';
+          document.getElementById('voice').value = p.voice || '';
+          document.getElementById('language').value = p.language || '';
+          document.getElementById('instructions').value = p.instructions || '';
+        };
+      }
+      loadProfiles();
+      document.getElementById('newProfile').onclick = () => {
+        document.getElementById('name').value = '';
+        document.getElementById('voice').value = '';
+        document.getElementById('language').value = '';
+        document.getElementById('instructions').value = '';
+      };
+      document.getElementById('saveProfile').onclick = async () => {
+        const body = {
+          name: document.getElementById('name').value.trim() || ('Agent ' + Date.now()),
+          voice: document.getElementById('voice').value,
+          language: document.getElementById('language').value,
+          instructions: document.getElementById('instructions').value,
+        };
+        const sel = document.getElementById('profiles');
+        let res;
+        if (sel.value) res = await fetch('/api/agents/' + sel.value, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        else res = await fetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (res.ok) loadProfiles();
+      };
+
+      // Talk unified with simple VAD (energy threshold)
+      let ws, audioCtx, src, proc, stream, lastCommitAt=0, currentState='idle';
+      const stateEl = document.getElementById('state'); const latEl = document.getElementById('latency');
+      function setState(s){ currentState=s; stateEl.textContent=s; }
+      function floatTo16(input){ const out=new Int16Array(input.length); for(let i=0;i<input.length;i++){ let s=Math.max(-1,Math.min(1,input[i])); out[i]= s<0 ? s*0x8000 : s*0x7fff; } return out; }
+      function down48to24(int16){ const out=new Int16Array(Math.floor(int16.length/2)); for(let i=0,j=0;j<out.length;i+=2,j++) out[j]=int16[i]; return out; }
+      function energy(buf){ let sum=0; for(let i=0;i<buf.length;i++){ const v=buf[i]; sum+= v*v; } return Math.sqrt(sum/buf.length); }
+
+      function attachWs(room, prime){
+        const proto = location.protocol==='https:'?'wss':'ws';
+        const qs = new URLSearchParams({ room }); if (prime) qs.set('text', prime);
+        const profSel = document.getElementById('profiles');
+        if (profSel.value) qs.set('profile', profSel.value);
+        ws = new WebSocket(`${proto}://${location.host}/agent-stream?${qs.toString()}`);
+        ws.onopen = ()=> setState('connected');
+        ws.onmessage = (ev)=>{
+          try{ const m=JSON.parse(ev.data); if(m.type==='first_audio_delta' && lastCommitAt){ const dt=Date.now()-lastCommitAt; latEl.textContent=dt+' ms'; } if(m.type==='transcript_delta'){ const el=document.getElementById('transcript'); el.textContent+=m.text; el.scrollTop=el.scrollHeight; } }catch(_){}
+        };
+        ws.onclose = ()=> setState('idle');
+        ws.onerror = ()=> setState('error');
+      }
+
+      async function startTalk(){
+        const room = document.getElementById('room').value.trim() || 'test-room-1';
+        const prime = document.getElementById('prime').value.trim();
+        attachWs(room, prime);
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new (window.AudioContext||window.webkitAudioContext)({ sampleRate: 48000 });
+        src = audioCtx.createMediaStreamSource(stream);
+        proc = audioCtx.createScriptProcessor(1024,1,1);
+        let speaking=false; let vadDownAt=0;
+        proc.onaudioprocess = (e)=>{
+          if(!ws || ws.readyState!==WebSocket.OPEN) return;
+          const input=e.inputBuffer.getChannelData(0);
+          const rms = energy(input);
+          const int16=floatTo16(input); const ds=down48to24(int16);
+          // send audio
+          const buf=new Uint8Array(ds.length*2); for(let i=0;i<ds.length;i++){ buf[i*2]=ds[i]&0xff; buf[i*2+1]=(ds[i]>>8)&0xff; }
+          ws.send(JSON.stringify({ type:'audio', audio: btoa(String.fromCharCode(...buf)) }));
+          // simple VAD threshold with debounce
+          const now=Date.now();
+          if(rms>0.02 && !speaking){ speaking=true; ws.send(JSON.stringify({ type:'vad_start' })); setState('listening'); }
+          if(rms<0.01){ if(!vadDownAt) vadDownAt=now; if(speaking && now-vadDownAt>250){ speaking=false; vadDownAt=0; lastCommitAt=Date.now(); ws.send(JSON.stringify({ type:'vad_stop_commit' })); setState('thinking'); } }
+          else { vadDownAt=0; }
+        };
+        src.connect(proc); proc.connect(audioCtx.destination);
+      }
+      async function stopTalk(){
+        try{ if(ws&&ws.readyState===WebSocket.OPEN){ ws.close(); } }catch(_){ }
+        try{ if(proc){ proc.disconnect(); proc=null; } }catch(_){ }
+        try{ if(src){ src.disconnect(); src=null; } }catch(_){ }
+        try{ if(audioCtx){ await audioCtx.close(); audioCtx=null; } }catch(_){ }
+        try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }catch(_){ }
+        setState('idle');
+      }
+      document.getElementById('talk').onclick = startTalk;
+      document.getElementById('stop').onclick = stopTalk;
+    </script>
+  </body>
+  </html>

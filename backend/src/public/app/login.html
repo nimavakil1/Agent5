@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in · Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div class="w-full max-w-sm bg-white shadow rounded-lg p-6">
+      <h1 class="text-xl font-semibold text-slate-800 mb-4">Sign in</h1>
+      <form id="form" class="space-y-4">
+        <div>
+          <label class="block text-sm text-slate-600">Email</label>
+          <input id="email" type="email" class="mt-1 w-full border rounded px-3 py-2" required />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-600">Password</label>
+          <input id="password" type="password" class="mt-1 w-full border rounded px-3 py-2" required />
+        </div>
+        <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-2">Sign in</button>
+        <p id="msg" class="text-sm text-red-600"></p>
+      </form>
+    </div>
+    <script>
+      const form = document.getElementById('form');
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        if (res.ok) { location.href = '/app/agent-studio.html'; }
+        else { document.getElementById('msg').textContent = (await res.json()).message || 'Login failed'; }
+      };
+    </script>
+  </body>
+  </html>
+

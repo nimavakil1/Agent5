@@ -4,6 +4,7 @@ const http = require('http');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const pinoHttp = require('pino-http');
 const { createWebSocketServer } = require('./websocket');
@@ -12,11 +13,14 @@ const telnyxRouter = require('./api/routes/telnyx');
 const agentRouter = require('./api/routes/agent');
 const livekitRouter = require('./api/routes/livekit');
 const campaignsRouter = require('./api/routes/campaigns');
+const authRouter = require('./api/routes/auth');
+const agentsRouter = require('./api/routes/agents');
 const dashboardRouter = require('./api/routes/dashboard');
 const customersRouter = require('./api/routes/customers');
 const connectDB = require('./config/database');
 const validateEnv = require('./config/validateEnv');
 const auth = require('./middleware/auth');
+const { requireSession, allowBearerOrSession } = require('./middleware/sessionAuth');
 
 // Validate env & connect to MongoDB (skip DB in tests)
 if (process.env.NODE_ENV !== 'test') {
@@ -52,6 +56,7 @@ app.use(
     },
   })
 );
+app.use(cookieParser());
 const server = http.createServer(app);
 let wss = null;
 if (process.env.NODE_ENV !== 'test') {
@@ -81,9 +86,7 @@ if (process.env.CORS_ORIGIN) {
 // JSON parser with body size limit
 app.use(express.json({ limit: process.env.BODY_LIMIT || '1mb' }));
 
-app.get('/', (req, res) => {
-  res.send('Hello, Gemini!');
-});
+app.get('/', (req, res) => { res.redirect('/app/'); });
 
 // Health endpoints
 app.get('/healthz', (req, res) => res.status(200).send('ok'));
@@ -91,7 +94,14 @@ app.get('/readyz', (req, res) => res.status(200).json({ ready: true }));
 
 // Serve static monitor and call recordings (optionally protected)
 const recordingsDir = path.join(__dirname, 'recordings');
-app.use('/', express.static(path.join(__dirname, 'public')));
+// Public: login page
+app.get('/app/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app', 'login.html'));
+});
+// Protected: app shell and tools
+app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'app')));
+// Legacy pages now protected as well
+app.use('/', requireSession, express.static(path.join(__dirname, 'public')));
 if (process.env.PROTECT_RECORDINGS === '1') {
   app.use('/recordings', auth, express.static(recordingsDir));
 } else {
@@ -105,12 +115,17 @@ const limiter = rateLimit({ windowMs, max, standardHeaders: true, legacyHeaders:
 app.use('/api', limiter);
 
 // Protect API routes with simple bearer auth
-app.use('/api/calls', auth, callsRouter);
-app.use('/api/agent', auth, agentRouter);
-app.use('/api/livekit', auth, livekitRouter);
-app.use('/api/campaigns', auth, campaignsRouter);
-app.use('/api/dashboard', auth, dashboardRouter);
-app.use('/api/customers', auth, customersRouter);
+// Auth endpoints
+app.use('/api/auth', authRouter);
+
+// Use either bearer token (service) or session cookie (UI)
+app.use('/api/calls', allowBearerOrSession, callsRouter);
+app.use('/api/agent', allowBearerOrSession, agentRouter);
+app.use('/api/livekit', allowBearerOrSession, livekitRouter);
+app.use('/api/campaigns', allowBearerOrSession, campaignsRouter);
+app.use('/api/dashboard', allowBearerOrSession, dashboardRouter);
+app.use('/api/customers', allowBearerOrSession, customersRouter);
+app.use('/api/agents', agentsRouter);
 
 if (process.env.NODE_ENV !== 'test') {
   server.listen(port, () => {

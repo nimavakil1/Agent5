@@ -7,7 +7,8 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "jest"
+    "test": "jest",
+    "seed-admin": "node scripts/seedAdmin.js"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +21,7 @@
     "@sendinblue/client": "^3.3.1",
     "@shopify/shopify-api": "^11.14.1",
     "cors": "^2.8.5",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "express-rate-limit": "^7.4.0",
@@ -32,7 +34,9 @@
     "pino-http": "^10.3.0",
     "wrtc": "^0.4.7",
     "telnyx": "^2.1.1",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "jest": "^29.7.0",
