@@ -112,6 +112,13 @@
           <div class="text-sm text-slate-500 mb-1">Subscribed Tracks</div>
           <div id="tracks" class="flex gap-2 flex-wrap"></div>
         </div>
+        <div class="mt-4">
+          <div class="flex items-center justify-between mb-1">
+            <div class="text-sm text-slate-500">Active Rooms</div>
+            <button id="refreshRooms" class="text-xs bg-slate-100 rounded px-2 py-1">Refresh</button>
+          </div>
+          <div id="rooms" class="text-sm text-slate-700 flex flex-wrap gap-2"></div>
+        </div>
       </section>
     </main>
     <script>
@@ -283,6 +290,27 @@
       }
       document.getElementById('talk').onclick = startTalk;
       document.getElementById('stop').onclick = stopTalk;
+
+      // List active rooms and click to use room name
+      async function listRooms(){
+        try {
+          const res = await fetch('/api/livekit/rooms', { credentials: 'include' });
+          if (!res.ok) return;
+          const rooms = await res.json();
+          const wrap = document.getElementById('rooms');
+          wrap.innerHTML='';
+          if (!rooms || rooms.length === 0) { wrap.textContent = 'No active rooms'; return; }
+          for (const r of rooms) {
+            const b = document.createElement('button');
+            b.className='px-2 py-1 rounded bg-slate-100 hover:bg-slate-200';
+            b.textContent = `${r.name} (${r.num_participants ?? '-'})`;
+            b.onclick = ()=> { document.getElementById('room').value = r.name; };
+            wrap.appendChild(b);
+          }
+        } catch (_) {}
+      }
+      document.getElementById('refreshRooms').onclick = listRooms;
+      listRooms();
     </script>
   </body>
   </html>
