@@ -80,12 +80,18 @@ async function createPublisher({ host, token, roomName }) {
     if (typeof calleeTrack.getConstraints !== 'function') {
       calleeTrack.getConstraints = () => ({});
     }
+    if (typeof calleeTrack.getSettings !== 'function') {
+      calleeTrack.getSettings = () => ({ sampleRate: 48000, channelCount: 1 });
+    }
     await room.localParticipant.publishTrack(calleeTrack, { name: 'callee' });
 
     const agentSource = new RTCAudioSource();
     const agentTrack = agentSource.createTrack();
     if (typeof agentTrack.getConstraints !== 'function') {
       agentTrack.getConstraints = () => ({});
+    }
+    if (typeof agentTrack.getSettings !== 'function') {
+      agentTrack.getSettings = () => ({ sampleRate: 48000, channelCount: 1 });
     }
     await room.localParticipant.publishTrack(agentTrack, { name: 'agent' });
 
