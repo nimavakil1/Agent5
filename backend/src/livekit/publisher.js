@@ -95,10 +95,10 @@ async function createPublisher({ host, token, roomName }) {
     }
     await room.localParticipant.publishTrack(agentTrack, { name: 'agent' });
 
-    // Queues and timers for 20ms frames @ 48kHz
+    // Queues and timers for 10ms frames @ 48kHz (480 samples)
     let calleeQueue = Buffer.alloc(0); // int16 LE
     let agentQueue = Buffer.alloc(0);
-    const FRAME_SAMPLES_48K = 960; // 20ms
+    const FRAME_SAMPLES_48K = 480; // 10ms
     const FRAME_BYTES = FRAME_SAMPLES_48K * 2;
     let calleeTimer = null;
     let agentTimer = null;
@@ -121,7 +121,7 @@ async function createPublisher({ host, token, roomName }) {
           } catch (e) {
             console.error('[LiveKit] callee push error:', e);
           }
-        }, 20);
+        }, 10);
       }
       if (!agentTimer) {
         agentTimer = setInterval(() => {
@@ -140,7 +140,7 @@ async function createPublisher({ host, token, roomName }) {
           } catch (e) {
             console.error('[LiveKit] agent push error:', e);
           }
-        }, 20);
+        }, 10);
       }
     }
 
