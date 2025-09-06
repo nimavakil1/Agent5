@@ -37,34 +37,29 @@ router.post('/demo-speak', async (req, res) => {
     const publisher = await createPublisher({ host, token, roomName });
     if (!publisher) return res.status(500).json({ message: 'Failed to start LiveKit publisher' });
 
-    // Create OpenAI Realtime session
+    // Connect directly to OpenAI Realtime WS (server-side)
     const { instructions, voice } = getSettings();
-    const OPENAI_REALTIME_SESSIONS_URL = 'https://api.openai.com/v1/realtime/sessions';
-    const sessionResp = await fetch(OPENAI_REALTIME_SESSIONS_URL, {
-      method: 'POST',
+    const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
+    const OPENAI_REALTIME_WS_URL = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
+    const openaiWs = new WebSocket(OPENAI_REALTIME_WS_URL, {
       headers: {
-        'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'OpenAI-Beta': 'realtime=v1',
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-realtime-preview',
-        modalities: ['audio', 'text'],
-        instructions: instructions || 'You are a helpful AI assistant for a call center.',
-        voice: voice || undefined,
-      }),
-    });
-    if (!sessionResp.ok) {
-      const errText = await sessionResp.text();
-      return res.status(500).json({ message: 'Failed to create OpenAI session', error: errText });
-    }
-    const session = await sessionResp.json();
-
-    const openaiWs = new WebSocket(session.websocket_url, {
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
     });
 
     openaiWs.on('open', () => {
       try {
+        // Update session settings
+        openaiWs.send(
+          JSON.stringify({
+            type: 'session.update',
+            session: {
+              instructions: instructions || 'You are a helpful AI assistant for a call center.',
+              voice: voice || undefined,
+            },
+          })
+        );
         // Provide an input text then request a response with audio
         openaiWs.send(
           JSON.stringify({
