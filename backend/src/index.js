@@ -86,7 +86,10 @@ if (process.env.CORS_ORIGIN) {
 // JSON parser with body size limit
 app.use(express.json({ limit: process.env.BODY_LIMIT || '1mb' }));
 
-app.get('/', (req, res) => { res.redirect('/app/'); });
+// Root shows the login page (public)
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app', 'login.html'));
+});
 
 // Health endpoints
 app.get('/healthz', (req, res) => res.status(200).send('ok'));
