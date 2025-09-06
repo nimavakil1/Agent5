@@ -78,6 +78,28 @@
             <div id="latency" class="font-medium">--</div>
           </div>
         </div>
+        <div class="mt-4 grid grid-cols-2 gap-4 items-center">
+          <div>
+            <div class="text-sm text-slate-500 mb-1">Mic Level</div>
+            <div class="h-3 w-full bg-slate-200 rounded"><div id="vum-fill" class="h-3 bg-emerald-500 rounded" style="width:0%"></div></div>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span id="youBadge" class="px-2 py-1 rounded text-xs bg-slate-100 text-slate-600">You: silent</span>
+            <span id="agentBadge" class="px-2 py-1 rounded text-xs bg-slate-100 text-slate-600">Agent: idle</span>
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-slate-600">Speak Threshold</label>
+            <input id="thSpeak" type="range" min="0" max="0.05" step="0.001" class="w-full" />
+            <div class="text-xs text-slate-500">Current: <span id="thSpeakVal"></span></div>
+          </div>
+          <div>
+            <label class="block text-sm text-slate-600">Silence Threshold</label>
+            <input id="thSilent" type="range" min="0" max="0.05" step="0.001" class="w-full" />
+            <div class="text-xs text-slate-500">Current: <span id="thSilentVal"></span></div>
+          </div>
+        </div>
         <div class="mt-4">
           <div class="text-sm text-slate-500 mb-1">Transcript</div>
           <pre id="transcript" class="bg-slate-50 border rounded p-2 h-40 overflow-auto"></pre>
@@ -146,7 +168,11 @@
         ws = new WebSocket(`${proto}://${location.host}/agent-stream?${qs.toString()}`);
         ws.onopen = ()=> setState('connected');
         ws.onmessage = (ev)=>{
-          try{ const m=JSON.parse(ev.data); if(m.type==='first_audio_delta' && lastCommitAt){ const dt=Date.now()-lastCommitAt; latEl.textContent=dt+' ms'; } if(m.type==='transcript_delta'){ const el=document.getElementById('transcript'); el.textContent+=m.text; el.scrollTop=el.scrollHeight; } }catch(_){}
+          try{ const m=JSON.parse(ev.data);
+            if(m.type==='first_audio_delta' && lastCommitAt){ const dt=Date.now()-lastCommitAt; latEl.textContent=dt+' ms'; }
+            if(m.type==='transcript_delta'){ const el=document.getElementById('transcript'); el.textContent+=m.text; el.scrollTop=el.scrollHeight; }
+            if(m.type==='agent_speaking'){ const ab=document.getElementById('agentBadge'); if(m.speaking){ ab.textContent='Agent: speaking'; ab.className='px-2 py-1 rounded text-xs bg-indigo-600 text-white'; } else { ab.textContent='Agent: idle'; ab.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600'; } }
+          }catch(_){}
         };
         ws.onclose = ()=> setState('idle');
         ws.onerror = ()=> setState('error');
@@ -160,21 +186,33 @@
         audioCtx = new (window.AudioContext||window.webkitAudioContext)({ sampleRate: 48000 });
         src = audioCtx.createMediaStreamSource(stream);
         proc = audioCtx.createScriptProcessor(1024,1,1);
-        let speaking=false; let vadDownAt=0; let above=0; let below=0;
+        let speaking=false; let above=0; let below=0;
+        const vum = document.getElementById('vum-fill');
+        const youBadge = document.getElementById('youBadge');
+        // thresholds (persisted)
+        let speakTh = Number(localStorage.getItem('thSpeak')||'0.008');
+        let silentTh = Number(localStorage.getItem('thSilent')||'0.003');
+        const thSpeak = document.getElementById('thSpeak'); const thSilent = document.getElementById('thSilent');
+        const thSpeakVal = document.getElementById('thSpeakVal'); const thSilentVal = document.getElementById('thSilentVal');
+        thSpeak.value = speakTh; thSilent.value = silentTh; thSpeakVal.textContent = speakTh.toFixed(3); thSilentVal.textContent = silentTh.toFixed(3);
+        thSpeak.oninput = () => { speakTh = Number(thSpeak.value); thSpeakVal.textContent = speakTh.toFixed(3); localStorage.setItem('thSpeak', String(speakTh)); };
+        thSilent.oninput = () => { silentTh = Number(thSilent.value); thSilentVal.textContent = silentTh.toFixed(3); localStorage.setItem('thSilent', String(silentTh)); };
         proc.onaudioprocess = (e)=>{
           if(!ws || ws.readyState!==WebSocket.OPEN) return;
           const input=e.inputBuffer.getChannelData(0);
           const rms = energy(input);
+          // update VU (map 0..0.1 -> 0..100%)
+          const pct = Math.max(0, Math.min(100, Math.round((rms/0.1)*100)));
+          if (vum) vum.style.width = pct + '%';
           const int16=floatTo16(input); const ds=down48to24(int16);
           // send audio
           const buf=new Uint8Array(ds.length*2); for(let i=0;i<ds.length;i++){ buf[i*2]=ds[i]&0xff; buf[i*2+1]=(ds[i]>>8)&0xff; }
           ws.send(JSON.stringify({ type:'audio', audio: btoa(String.fromCharCode(...buf)) }));
           // simple VAD threshold with debounce
           const now=Date.now();
-          const speakTh=0.008, silentTh=0.003;
           if(rms>speakTh){ above++; below=0; } else if(rms<silentTh){ below++; above=0; } else { above=0; below=0; }
-          if(above>=2 && !speaking){ speaking=true; ws.send(JSON.stringify({ type:'vad_start' })); setState('listening'); }
-          if(below>=10 && speaking){ speaking=false; lastCommitAt=Date.now(); ws.send(JSON.stringify({ type:'vad_stop_commit' })); setState('thinking'); }
+          if(above>=2 && !speaking){ speaking=true; ws.send(JSON.stringify({ type:'vad_start' })); setState('listening'); youBadge.textContent='You: speaking'; youBadge.className='px-2 py-1 rounded text-xs bg-emerald-600 text-white'; }
+          if(below>=10 && speaking){ speaking=false; lastCommitAt=Date.now(); ws.send(JSON.stringify({ type:'vad_stop_commit' })); setState('thinking'); youBadge.textContent='You: silent'; youBadge.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600'; }
         };
         src.connect(proc); proc.connect(audioCtx.destination);
       }

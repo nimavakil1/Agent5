@@ -153,6 +153,7 @@ function createWebSocketServer(server) {
         let currentResponseId = null;
         let bargeIn = false;
         let agentSpeaking = false;
+        let agentSpeakingSent = false;
         oaWs.on('open', () => {
           try {
             // Apply saved settings as-is
@@ -186,6 +187,10 @@ function createWebSocketServer(server) {
             }
             if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta) {
               agentSpeaking = true;
+              if (!agentSpeakingSent) {
+                agentSpeakingSent = true;
+                try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(_) {}
+              }
               if (!bargeIn) {
                 const pcm24k = Buffer.from(m.delta, 'base64');
                 publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
@@ -197,6 +202,8 @@ function createWebSocketServer(server) {
             }
             if (m.type === 'response.done') {
               agentSpeaking = false;
+              agentSpeakingSent = false;
+              try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(_) {}
             }
           } catch (_) {}
         });
@@ -216,6 +223,8 @@ function createWebSocketServer(server) {
                     oaWs.send(JSON.stringify({ type: 'response.cancel' }));
                   }
                 } catch(_) {}
+                agentSpeaking = false;
+                if (agentSpeakingSent) { agentSpeakingSent = false; try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(_) {} }
               }
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
@@ -241,6 +250,7 @@ function createWebSocketServer(server) {
               bargeIn = false;
               agentSpeaking = false;
               try { publisher.muteAgent(false); } catch(_) {}
+              try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(_) {}
             }
           } catch(_) {}
         });
