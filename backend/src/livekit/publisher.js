@@ -77,10 +77,16 @@ async function createPublisher({ host, token, roomName }) {
 
     const calleeSource = new RTCAudioSource();
     const calleeTrack = calleeSource.createTrack();
+    if (typeof calleeTrack.getConstraints !== 'function') {
+      calleeTrack.getConstraints = () => ({});
+    }
     await room.localParticipant.publishTrack(calleeTrack, { name: 'callee' });
 
     const agentSource = new RTCAudioSource();
     const agentTrack = agentSource.createTrack();
+    if (typeof agentTrack.getConstraints !== 'function') {
+      agentTrack.getConstraints = () => ({});
+    }
     await room.localParticipant.publishTrack(agentTrack, { name: 'agent' });
 
     // Queues and timers for 20ms frames @ 48kHz
