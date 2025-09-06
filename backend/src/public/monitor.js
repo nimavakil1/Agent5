@@ -117,9 +117,12 @@
   async function startTalk() {
     try {
       const roomName = document.getElementById('room').value.trim();
+      const primeText = (document.getElementById('primeText')?.value || '').trim();
       if (!roomName) return alert('room required');
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(`${proto}://${location.host}/agent-stream?room=${encodeURIComponent(roomName)}`);
+      const qs = new URLSearchParams({ room: roomName });
+      if (primeText) qs.set('text', primeText);
+      ws = new WebSocket(`${proto}://${location.host}/agent-stream?${qs.toString()}`);
       ws.onopen = () => log('Talk WS connected');
       ws.onclose = () => log('Talk WS closed');
       ws.onerror = (e) => log('Talk WS error');

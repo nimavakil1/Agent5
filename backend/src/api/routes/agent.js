@@ -69,6 +69,11 @@ router.post('/demo-speak', async (req, res) => {
             .replace(/\s+/g, ' ');
           console.log('Agent settings -> voice:', voice || '(default)', '| instructions:', preview);
         } catch (_) {}
+        // Log a short preview of the demo-speak prompt text
+        try {
+          const textPreview = (text || '').slice(0, 160).replace(/\s+/g, ' ');
+          console.log('Demo-speak prompt ->', textPreview || '(empty)');
+        } catch (_) {}
         // Create input item then request a response (audio + text)
         // Some deployments require a 'message' item with content parts
         openaiWs.send(JSON.stringify({

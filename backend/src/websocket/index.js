@@ -123,6 +123,7 @@ function createWebSocketServer(server) {
         const query = parsedUrl.query || {};
         const roomName = String(query.room || '').replace(/[^a-zA-Z0-9_-]/g, '');
         if (!roomName) { telnyxWs.close(); return; }
+        const primeText = typeof query.text === 'string' ? String(query.text) : '';
 
         const { AccessToken } = require('livekit-server-sdk');
         const { createPublisher } = require('../livekit/publisher');
@@ -144,7 +145,22 @@ function createWebSocketServer(server) {
         });
         oaWs.on('open', () => {
           try {
-            oaWs.send(JSON.stringify({ type: 'session.update', session: { instructions: (settings.instructions || 'You are a helpful assistant.') + ' Respond in English only.', voice: settings.voice || undefined, input_audio_format: 'pcm16' } }));
+            // Apply saved settings as-is
+            oaWs.send(JSON.stringify({ type: 'session.update', session: { instructions: settings.instructions || 'You are a helpful assistant.', voice: settings.voice || undefined, input_audio_format: 'pcm16' } }));
+            // If a prime text was provided, send as an initial user message and request a response
+            if (primeText && primeText.trim().length > 0) {
+              const preview = primeText.slice(0, 160).replace(/\s+/g, ' ');
+              console.log('Agent-WS prime text ->', preview);
+              oaWs.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: {
+                  type: 'message',
+                  role: 'user',
+                  content: [{ type: 'input_text', text: primeText }],
+                },
+              }));
+              oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio','text'], voice: settings.voice || undefined } }));
+            }
           } catch (_) {}
         });
         let notified = false;
