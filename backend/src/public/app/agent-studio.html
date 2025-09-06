@@ -194,16 +194,26 @@
           const identity = 'viewer-' + Date.now();
           const res = await fetch(`/api/livekit/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`, { credentials: 'include' });
           if (!res.ok) return;
-          const { token } = await res.json();
+          const { token, host } = await res.json();
           const LK = window.LivekitClient || window.LiveKitClient || window.LiveKit || window.livekitClient || window.livekit || null;
           if (!LK) return;
-          const host = 'wss://ai.acropaq.com';
+          const wsHost = host || 'wss://ai.acropaq.com';
           lkRoom = new LK.Room();
-          await lkRoom.connect(host, token);
+          await lkRoom.connect(wsHost, token);
           const tracksEl = document.getElementById('tracks'); tracksEl.innerHTML='';
           lkRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub) => {
             if (track.kind === 'audio') {
-              const audio = document.createElement('audio'); audio.autoplay=true; audio.controls=true; audio.dataset.name = pub.trackName || pub.source || 'audio'; track.attach(audio); tracksEl.appendChild(audio);
+              const audio = document.createElement('audio'); audio.autoplay=true; audio.controls=true; audio.dataset.name = pub.trackName || pub.source || 'audio';
+              track.attach(audio); tracksEl.appendChild(audio);
+              // Attempt autoplay and fall back to click-to-unmute
+              const tryPlay = () => audio.play().catch(() => {
+                const btn = document.createElement('button');
+                btn.textContent = 'Tap to enable audio (' + (pub.trackName || 'agent') + ')';
+                btn.className = 'mt-2 bg-emerald-600 text-white rounded px-3 py-2';
+                btn.onclick = () => { audio.muted=false; audio.play().catch(()=>{}); btn.remove(); };
+                tracksEl.appendChild(btn);
+              });
+              tryPlay();
             }
           });
         } catch (_) {}

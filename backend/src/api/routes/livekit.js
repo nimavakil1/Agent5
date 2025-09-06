@@ -15,7 +15,7 @@ router.get('/token', async (req, res) => {
     const at = new AccessToken(apiKey, apiSecret, { identity });
     at.addGrant({ room, roomJoin: true, canPublish: false, canSubscribe: true });
     const token = await at.toJwt();
-    res.json({ token, room, identity });
+    res.json({ token, room, identity, host: process.env.LIVEKIT_SERVER_URL });
   } catch (e) {
     console.error('livekit token error', e);
     res.status(500).json({ message: 'error' });
