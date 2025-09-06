@@ -41,8 +41,8 @@ router.post('/demo-speak', async (req, res) => {
     const { instructions, voice } = getSettings();
     const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
     const OPENAI_REALTIME_WS_URL = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
-    // Connect without subprotocol; rely on headers for Realtime negotiation
-    const openaiWs = new WebSocket(OPENAI_REALTIME_WS_URL, {
+    // Try explicit WS subprotocol used by some Realtime deployments
+    const openaiWs = new WebSocket(OPENAI_REALTIME_WS_URL, 'realtime', {
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         'OpenAI-Beta': 'realtime=v1',
