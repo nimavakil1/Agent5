@@ -17,9 +17,15 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ message: 'email and password required' });
     const user = await User.findOne({ email: String(email).toLowerCase(), active: true });
-    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!user) {
+      console.warn('login: user-not-found', String(email).toLowerCase());
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!ok) {
+      console.warn('login: password-mismatch for', user.email);
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
     const token = signJwt(user);
     const cookieOpts = {
       httpOnly: true,
@@ -63,4 +69,3 @@ router.post('/users', requireSession, async (req, res) => {
 });
 
 module.exports = router;
-
