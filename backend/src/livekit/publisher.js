@@ -111,12 +111,14 @@ async function createPublisher({ host, token, roomName }) {
               const frame = calleeQueue.subarray(0, FRAME_BYTES);
               calleeQueue = calleeQueue.subarray(FRAME_BYTES);
               const samples = new Int16Array(frame.buffer, frame.byteOffset, FRAME_SAMPLES_48K);
-              calleeSource.onData({
-                samples,
-                sampleRate: 48000,
-                numberOfFrames: FRAME_SAMPLES_48K,
-                channelCount: 1,
-              });
+        calleeSource.onData({
+          samples,
+          sampleRate: 48000,
+          bitsPerSample: 16,
+          numberOfFrames: FRAME_SAMPLES_48K,
+          numberOfChannels: 1,
+          channelCount: 1,
+        });
             }
           } catch (e) {
             console.error('[LiveKit] callee push error:', e);
@@ -130,12 +132,14 @@ async function createPublisher({ host, token, roomName }) {
               const frame = agentQueue.subarray(0, FRAME_BYTES);
               agentQueue = agentQueue.subarray(FRAME_BYTES);
               const samples = new Int16Array(frame.buffer, frame.byteOffset, FRAME_SAMPLES_48K);
-              agentSource.onData({
-                samples,
-                sampleRate: 48000,
-                numberOfFrames: FRAME_SAMPLES_48K,
-                channelCount: 1,
-              });
+        agentSource.onData({
+          samples,
+          sampleRate: 48000,
+          bitsPerSample: 16,
+          numberOfFrames: FRAME_SAMPLES_48K,
+          numberOfChannels: 1,
+          channelCount: 1,
+        });
             }
           } catch (e) {
             console.error('[LiveKit] agent push error:', e);
