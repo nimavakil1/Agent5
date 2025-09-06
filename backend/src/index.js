@@ -103,8 +103,8 @@ app.get('/app/login', (req, res) => {
 });
 // Protected: app shell and tools
 app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'app')));
-// Legacy pages now protected as well
-app.use('/', requireSession, express.static(path.join(__dirname, 'public')));
+// Remove broad root-protected static to avoid intercepting /api/auth/login
+// Legacy pages (monitor/admin) can be accessed during transition under /legacy if needed
 if (process.env.PROTECT_RECORDINGS === '1') {
   app.use('/recordings', auth, express.static(recordingsDir));
 } else {
