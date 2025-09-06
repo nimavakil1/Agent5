@@ -110,15 +110,18 @@ async function createPublisher({ host, token, roomName }) {
             if (calleeQueue.length >= FRAME_BYTES) {
               const frame = calleeQueue.subarray(0, FRAME_BYTES);
               calleeQueue = calleeQueue.subarray(FRAME_BYTES);
-              const samples = new Int16Array(frame.buffer, frame.byteOffset, FRAME_SAMPLES_48K);
-        calleeSource.onData({
-          samples,
-          sampleRate: 48000,
-          bitsPerSample: 16,
-          numberOfFrames: FRAME_SAMPLES_48K,
-          numberOfChannels: 1,
-          channelCount: 1,
-        });
+              const samples = new Int16Array(FRAME_SAMPLES_48K);
+              for (let i = 0; i < FRAME_SAMPLES_48K; i++) {
+                samples[i] = frame.readInt16LE(i * 2);
+              }
+              calleeSource.onData({
+                samples,
+                sampleRate: 48000,
+                bitsPerSample: 16,
+                numberOfFrames: FRAME_SAMPLES_48K,
+                numberOfChannels: 1,
+                channelCount: 1,
+              });
             }
           } catch (e) {
             console.error('[LiveKit] callee push error:', e);
@@ -131,15 +134,18 @@ async function createPublisher({ host, token, roomName }) {
             if (agentQueue.length >= FRAME_BYTES) {
               const frame = agentQueue.subarray(0, FRAME_BYTES);
               agentQueue = agentQueue.subarray(FRAME_BYTES);
-              const samples = new Int16Array(frame.buffer, frame.byteOffset, FRAME_SAMPLES_48K);
-        agentSource.onData({
-          samples,
-          sampleRate: 48000,
-          bitsPerSample: 16,
-          numberOfFrames: FRAME_SAMPLES_48K,
-          numberOfChannels: 1,
-          channelCount: 1,
-        });
+              const samples = new Int16Array(FRAME_SAMPLES_48K);
+              for (let i = 0; i < FRAME_SAMPLES_48K; i++) {
+                samples[i] = frame.readInt16LE(i * 2);
+              }
+              agentSource.onData({
+                samples,
+                sampleRate: 48000,
+                bitsPerSample: 16,
+                numberOfFrames: FRAME_SAMPLES_48K,
+                numberOfChannels: 1,
+                channelCount: 1,
+              });
             }
           } catch (e) {
             console.error('[LiveKit] agent push error:', e);
