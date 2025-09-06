@@ -107,10 +107,64 @@ function createWebSocketServer(server) {
   const wss = new WebSocket.Server({ server });
 
   wss.on('connection', async (telnyxWs, req) => { // Add req parameter
-    console.log('Telnyx WebSocket client connected');
-
     const parsedUrl = url.parse(req.url, true);
     const pathname = parsedUrl.pathname || '';
+    // Browser mic bridge: /agent-stream?room=<roomName>
+    if (pathname === '/agent-stream') {
+      try {
+        const query = parsedUrl.query || {};
+        const roomName = String(query.room || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!roomName) { telnyxWs.close(); return; }
+
+        const { AccessToken } = require('livekit-server-sdk');
+        const { createPublisher } = require('../livekit/publisher');
+        const settings = agentSettings.getSettings();
+
+        const identity = `browser-bridge-${roomName}-${Date.now()}`;
+        const at = new AccessToken(apiKey, apiSecret, { identity });
+        at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
+        const token = at.toJwt();
+        const publisher = await createPublisher({ host: livekitHost, token, roomName });
+        if (!publisher) { telnyxWs.close(); return; }
+
+        // OpenAI Realtime WS
+        const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
+        const OA_URL = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
+        const oaWs = new WebSocket(OA_URL, {
+          headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' },
+        });
+        oaWs.on('open', () => {
+          try {
+            oaWs.send(JSON.stringify({ type: 'session.update', session: { instructions: settings.instructions || 'You are a helpful assistant.', voice: settings.voice || undefined } }));
+          } catch (_) {}
+        });
+        oaWs.on('message', (data) => {
+          try {
+            const s = typeof data === 'string' ? data : data.toString('utf8');
+            const m = JSON.parse(s);
+            if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta) {
+              const pcm24k = Buffer.from(m.delta, 'base64');
+              publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+            }
+          } catch (_) {}
+        });
+        const closeAll = async () => { try { oaWs.close(); } catch(_) {}; try { await publisher.close(); } catch(_) {} };
+        telnyxWs.on('message', (raw) => {
+          try {
+            const m = JSON.parse(raw.toString());
+            if (m.type === 'audio' && m.audio && oaWs.readyState === WebSocket.OPEN) {
+              oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
+            } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
+              oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+              oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio'] } }));
+            }
+          } catch(_) {}
+        });
+        telnyxWs.on('close', closeAll); telnyxWs.on('error', closeAll); oaWs.on('close', closeAll); oaWs.on('error', closeAll);
+      } catch (_) { try { telnyxWs.close(); } catch(_) {} }
+      return;
+    }
+    console.log('Telnyx WebSocket client connected');
     if (pathname !== '/websocket') {
       console.error('Invalid WebSocket path:', pathname);
       telnyxWs.close();
