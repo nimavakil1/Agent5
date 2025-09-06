@@ -81,9 +81,13 @@ router.post('/demo-speak', async (req, res) => {
         const str = typeof data === 'string' ? data : data.toString('utf8');
         const msg = JSON.parse(str);
         if (msg.type) console.log('OpenAI msg type:', msg.type);
-        if (msg.type === 'response.output_audio.delta' && msg.delta) {
+        // Accept both legacy and current event names
+        if ((msg.type === 'response.audio.delta' || msg.type === 'response.output_audio.delta') && msg.delta) {
           const pcm24k = Buffer.from(msg.delta, 'base64');
           publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+        }
+        if (msg.type === 'error') {
+          console.error('OpenAI error event:', msg);
         }
       } catch (e) {
         console.error('openai msg error', e);
