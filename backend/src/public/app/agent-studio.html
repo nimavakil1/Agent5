@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Agent Studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js" crossorigin="anonymous"></script>
+    <style>
+      #transcript { white-space: pre-wrap; word-break: break-word; }
+    </style>
   </head>
   <body class="min-h-screen bg-slate-50">
     <header class="bg-white shadow-sm">
@@ -104,6 +108,10 @@
           <div class="text-sm text-slate-500 mb-1">Transcript</div>
           <pre id="transcript" class="bg-slate-50 border rounded p-2 h-40 overflow-auto"></pre>
         </div>
+        <div class="mt-4">
+          <div class="text-sm text-slate-500 mb-1">Subscribed Tracks</div>
+          <div id="tracks" class="flex gap-2 flex-wrap"></div>
+        </div>
       </section>
     </main>
     <script>
@@ -114,7 +122,7 @@
       document.getElementById('logout').onclick = async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); location.href = '/app/login'; };
 
       // Profiles
-      async function loadProfiles() {
+      async function loadProfiles(selectedId = '') {
         const res = await fetch('/api/agents', { credentials: 'include' });
         const list = res.ok ? await res.json() : [];
         const sel = document.getElementById('profiles');
@@ -122,6 +130,7 @@
         for (const p of list) {
           const opt = document.createElement('option'); opt.value = p._id; opt.textContent = `${p.name} — ${p.voice || 'default'}`; sel.appendChild(opt);
         }
+        if (selectedId) sel.value = selectedId;
         sel.onchange = async () => {
           const id = sel.value; if (!id) return;
           const p = await (await fetch('/api/agents/' + id, { credentials: 'include' })).json();
@@ -147,13 +156,15 @@
         };
         const sel = document.getElementById('profiles');
         let res;
-        if (sel.value) res = await fetch('/api/agents/' + sel.value, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
-        else res = await fetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
-        if (res.ok) loadProfiles();
+        let doc;
+        if (sel.value) { res = await fetch('/api/agents/' + sel.value, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) }); if (res.ok) doc = await res.json(); }
+        else { res = await fetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) }); if (res.ok) doc = await res.json(); }
+        if (doc && doc._id) { await loadProfiles(doc._id); }
       };
 
       // Talk unified with simple VAD (energy threshold)
       let ws, audioCtx, src, proc, stream, lastCommitAt=0, currentState='idle';
+      let lkRoom = null;
       const stateEl = document.getElementById('state'); const latEl = document.getElementById('latency');
       function setState(s){ currentState=s; stateEl.textContent=s; }
       function floatTo16(input){ const out=new Int16Array(input.length); for(let i=0;i<input.length;i++){ let s=Math.max(-1,Math.min(1,input[i])); out[i]= s<0 ? s*0x8000 : s*0x7fff; } return out; }
@@ -178,9 +189,32 @@
         ws.onerror = ()=> setState('error');
       }
 
+      async function joinLiveKit(roomName){
+        try {
+          const identity = 'viewer-' + Date.now();
+          const res = await fetch(`/api/livekit/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`, { credentials: 'include' });
+          if (!res.ok) return;
+          const { token } = await res.json();
+          const LK = window.LivekitClient || window.LiveKitClient || window.LiveKit || window.livekitClient || window.livekit || null;
+          if (!LK) return;
+          const host = 'wss://ai.acropaq.com';
+          lkRoom = new LK.Room();
+          await lkRoom.connect(host, token);
+          const tracksEl = document.getElementById('tracks'); tracksEl.innerHTML='';
+          lkRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub) => {
+            if (track.kind === 'audio') {
+              const audio = document.createElement('audio'); audio.autoplay=true; audio.controls=true; audio.dataset.name = pub.trackName || pub.source || 'audio'; track.attach(audio); tracksEl.appendChild(audio);
+            }
+          });
+        } catch (_) {}
+      }
+      async function leaveLiveKit(){ try { if (lkRoom) { await lkRoom.disconnect(); lkRoom=null; document.getElementById('tracks').innerHTML=''; } } catch(_) {}
+      }
+
       async function startTalk(){
         const room = document.getElementById('room').value.trim() || 'test-room-1';
         const prime = document.getElementById('prime').value.trim();
+        await joinLiveKit(room);
         attachWs(room, prime);
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioCtx = new (window.AudioContext||window.webkitAudioContext)({ sampleRate: 48000 });
@@ -222,6 +256,7 @@
         try{ if(src){ src.disconnect(); src=null; } }catch(_){ }
         try{ if(audioCtx){ await audioCtx.close(); audioCtx=null; } }catch(_){ }
         try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }catch(_){ }
+        try{ await leaveLiveKit(); } catch(_) {}
         setState('idle');
       }
       document.getElementById('talk').onclick = startTalk;
