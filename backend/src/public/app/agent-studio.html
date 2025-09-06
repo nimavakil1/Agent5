@@ -130,15 +130,25 @@
         for (const p of list) {
           const opt = document.createElement('option'); opt.value = p._id; opt.textContent = `${p.name} — ${p.voice || 'default'}`; sel.appendChild(opt);
         }
+        // pick selection: explicit -> last used -> first
+        const last = localStorage.getItem('agentProfileId');
         if (selectedId) sel.value = selectedId;
-        sel.onchange = async () => {
+        else if (last && [...sel.options].some(o => o.value === last)) sel.value = last;
+        else if (sel.options.length) sel.selectedIndex = 0;
+
+        async function applySelected() {
           const id = sel.value; if (!id) return;
+          localStorage.setItem('agentProfileId', id);
           const p = await (await fetch('/api/agents/' + id, { credentials: 'include' })).json();
           document.getElementById('name').value = p.name || '';
           document.getElementById('voice').value = p.voice || '';
           document.getElementById('language').value = p.language || '';
           document.getElementById('instructions').value = p.instructions || '';
-        };
+        }
+
+        sel.onchange = applySelected;
+        // apply immediately on load so fields are populated
+        if (sel.value) await applySelected();
       }
       loadProfiles();
       document.getElementById('newProfile').onclick = () => {
