@@ -39,7 +39,8 @@ router.post('/demo-speak', async (req, res) => {
     if (!publisher) return res.status(500).json({ message: 'Failed to start LiveKit publisher' });
 
     // Connect directly to OpenAI Realtime WS (server-side)
-    const { instructions, voice } = getSettings();
+    // Load saved agent settings (voice + instructions)
+    const { instructions, voice } = await getSettings();
     const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
     const OPENAI_REALTIME_WS_URL = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
     // Try explicit WS subprotocol used by some Realtime deployments
@@ -61,10 +62,21 @@ router.post('/demo-speak', async (req, res) => {
             input_audio_format: 'pcm16',
           },
         }));
+        // Log a short preview of the instructions used (for debugging)
+        try {
+          const preview = ((instructions || '').slice(0, 160) || '(default)')
+            .replace(/\s+/g, ' ');
+          console.log('Agent settings -> voice:', voice || '(default)', '| instructions:', preview);
+        } catch (_) {}
         // Create input item then request a response (audio + text)
+        // Some deployments require a 'message' item with content parts
         openaiWs.send(JSON.stringify({
           type: 'conversation.item.create',
-          item: { type: 'input_text', text },
+          item: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text }],
+          },
         }));
         openaiWs.send(JSON.stringify({
           type: 'response.create',
