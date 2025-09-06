@@ -19,11 +19,18 @@ async function main(){
   if (!uri) { console.error('MONGO_URI not set'); process.exit(1); }
   await mongoose.connect(uri);
   const exists = await User.findOne({ email: String(email).toLowerCase() });
-  if (exists) { console.log('User already exists'); process.exit(0); }
   const passwordHash = await bcrypt.hash(password, 10);
-  await User.create({ email: String(email).toLowerCase(), passwordHash, role: 'admin' });
-  console.log('Admin user created:', email);
+  if (exists) {
+    if (process.env.FORCE_RESET === '1') {
+      await User.updateOne({ _id: exists._id }, { $set: { passwordHash, role: exists.role || 'admin', active: true } });
+      console.log('Admin password reset for:', email);
+    } else {
+      console.log('User already exists');
+    }
+  } else {
+    await User.create({ email: String(email).toLowerCase(), passwordHash, role: 'admin' });
+    console.log('Admin user created:', email);
+  }
   await mongoose.disconnect();
 }
 main().catch(e=>{ console.error(e); process.exit(1); });
-
