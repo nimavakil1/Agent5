@@ -8,6 +8,13 @@ const wrtc = (() => {
     return null;
   }
 })();
+const WS = (() => {
+  try {
+    return require('ws');
+  } catch (e) {
+    return null;
+  }
+})();
 
 function toWsUrl(httpish) {
   if (!httpish) return null;
@@ -19,6 +26,13 @@ function toWsUrl(httpish) {
 
 async function createPublisher({ host, token, roomName }) {
   try {
+    // Minimal globals expected by livekit-client in Node
+    if (typeof globalThis.navigator === 'undefined') {
+      globalThis.navigator = { userAgent: 'node' };
+    }
+    if (!globalThis.WebSocket && WS) {
+      globalThis.WebSocket = WS;
+    }
     if (!wrtc) {
       console.warn('[LiveKit] wrtc not installed; publisher disabled');
       return null;
@@ -41,6 +55,11 @@ async function createPublisher({ host, token, roomName }) {
       global.RTCSessionDescription = wrtc.RTCSessionDescription;
       global.MediaStream = wrtc.MediaStream;
       global.MediaStreamTrack = wrtc.MediaStreamTrack;
+    }
+    if (typeof lk.setWebSocket === 'function' && WS) {
+      lk.setWebSocket(WS);
+    } else if (lk.default && typeof lk.default.setWebSocket === 'function' && WS) {
+      lk.default.setWebSocket(WS);
     }
 
     const room = new lk.Room({
