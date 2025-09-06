@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Settings</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 20px; max-width: 900px; }
+      label { display: block; margin: 12px 0 6px; font-weight: 600; }
+      input, select, textarea { width: 100%; padding: 8px; }
+      textarea { min-height: 180px; }
+      button { margin-top: 12px; padding: 8px 14px; }
+      .row { margin: 12px 0; }
+      pre { background: #f7f7f7; padding: 8px; max-height: 160px; overflow: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>Agent Settings</h1>
+
+    <div class="row">
+      <label>API Token (Authorization: Bearer)</label>
+      <input id="token" placeholder="paste AUTH_TOKEN here" />
+      <button id="saveToken">Save Token</button>
+    </div>
+
+    <div class="row">
+      <label>Voice</label>
+      <select id="voice">
+        <option value="">(model default)</option>
+        <option>alloy</option>
+        <option>shimmer</option>
+        <option>verse</option>
+        <option>aria</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Instructions</label>
+      <textarea id="instructions" placeholder="How should the agent behave?"></textarea>
+    </div>
+    <div class="row">
+      <button id="load">Load Settings</button>
+      <button id="save">Save Settings</button>
+    </div>
+
+    <h2>Quick Test</h2>
+    <div class="row">
+      <label>Room</label>
+      <input id="room" placeholder="test-1" />
+    </div>
+    <div class="row">
+      <label>Prompt text</label>
+      <input id="text" placeholder="Say a brief hello in one sentence." />
+      <button id="speak">Demo Speak</button>
+    </div>
+
+    <h3>Logs</h3>
+    <pre id="logs"></pre>
+
+    <script>
+      const logEl = document.getElementById('logs');
+      function log(...a){ logEl.textContent += a.join(' ') + "\n"; logEl.scrollTop = logEl.scrollHeight; }
+      const bearer = () => localStorage.getItem('AUTH_TOKEN') || '';
+      document.getElementById('saveToken').onclick = () => {
+        const t = document.getElementById('token').value.trim();
+        if (t) { localStorage.setItem('AUTH_TOKEN', t); log('Token saved'); } else { log('Enter a token'); }
+      };
+      document.getElementById('load').onclick = async () => {
+        const res = await fetch('/api/agent/settings', { headers: { Authorization: `Bearer ${bearer()}` } });
+        if (!res.ok) { log('Load failed', await res.text()); return; }
+        const s = await res.json();
+        document.getElementById('voice').value = s.voice || '';
+        document.getElementById('instructions').value = s.instructions || '';
+        log('Loaded');
+      };
+      document.getElementById('save').onclick = async () => {
+        const body = JSON.stringify({ voice: document.getElementById('voice').value, instructions: document.getElementById('instructions').value });
+        const res = await fetch('/api/agent/settings', { method: 'POST', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${bearer()}` }, body });
+        if (!res.ok) { log('Save failed', await res.text()); return; }
+        log('Saved');
+      };
+      document.getElementById('speak').onclick = async () => {
+        const room = document.getElementById('room').value.trim();
+        const text = document.getElementById('text').value.trim() || 'Say a brief hello in one sentence.';
+        if (!room) { log('Enter room'); return; }
+        const url = `/api/agent/demo-speak?room=${encodeURIComponent(room)}&text=${encodeURIComponent(text)}`;
+        const res = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${bearer()}` } });
+        log('Demo speak:', res.status);
+      };
+    </script>
+  </body>
+  </html>
+

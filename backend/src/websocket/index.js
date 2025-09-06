@@ -138,6 +138,7 @@ function createWebSocketServer(server) {
             oaWs.send(JSON.stringify({ type: 'session.update', session: { instructions: settings.instructions || 'You are a helpful assistant.', voice: settings.voice || undefined } }));
           } catch (_) {}
         });
+        let notified = false;
         oaWs.on('message', (data) => {
           try {
             const s = typeof data === 'string' ? data : data.toString('utf8');
@@ -145,6 +146,10 @@ function createWebSocketServer(server) {
             if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta) {
               const pcm24k = Buffer.from(m.delta, 'base64');
               publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+              if (!notified) {
+                notified = true;
+                try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
+              }
             }
           } catch (_) {}
         });

@@ -5,14 +5,15 @@ const router = express.Router();
 const { getSettings, setSettings } = require('../../config/agentSettings');
 const { createPublisher } = require('../../livekit/publisher');
 
-router.get('/settings', (req, res) => {
-  res.json(getSettings());
+router.get('/settings', async (req, res) => {
+  const s = await getSettings();
+  res.json(s);
 });
 
-router.post('/settings', (req, res) => {
+router.post('/settings', async (req, res) => {
   const { instructions, voice } = req.body || {};
-  setSettings({ instructions, voice });
-  res.json(getSettings());
+  const s = await setSettings({ instructions, voice }, 'api');
+  res.json(s);
 });
 
 // Demo: make the agent speak into a LiveKit room without Telnyx

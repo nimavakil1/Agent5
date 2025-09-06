@@ -96,6 +96,8 @@
   let audioCtx = null;
   let procNode = null;
   let ws = null;
+  let lastCommitAt = 0;
+  let latencyEl = null;
 
   function floatTo16BitPCM(input) {
     const out = new Int16Array(input.length);
@@ -121,6 +123,17 @@
       ws.onopen = () => log('Talk WS connected');
       ws.onclose = () => log('Talk WS closed');
       ws.onerror = (e) => log('Talk WS error');
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'first_audio_delta' && lastCommitAt) {
+            const dt = Date.now() - lastCommitAt;
+            if (!latencyEl) latencyEl = document.getElementById('latency');
+            if (latencyEl) latencyEl.textContent = `${dt} ms`;
+            log('Latency:', dt + ' ms');
+          }
+        } catch(_) {}
+      };
 
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
@@ -152,6 +165,7 @@
   async function stopTalk() {
     try {
       if (ws && ws.readyState === WebSocket.OPEN) {
+        lastCommitAt = Date.now();
         ws.send(JSON.stringify({ type: 'commit' }));
       }
       if (procNode) { try { procNode.disconnect(); } catch(_) {} procNode = null; }
@@ -165,4 +179,11 @@
 
   document.getElementById('talk').onclick = startTalk;
   document.getElementById('stopTalk').onclick = stopTalk;
+  // Create latency label
+  (function(){
+    const row = document.createElement('div'); row.className='row';
+    const lbl = document.createElement('strong'); lbl.textContent='Latency:'; row.appendChild(lbl);
+    const span = document.createElement('span'); span.id='latency'; span.style.marginLeft='8px'; span.textContent='--'; row.appendChild(span);
+    document.body.insertBefore(row, document.getElementById('logs').parentElement);
+  })();
 })();
