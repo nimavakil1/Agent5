@@ -123,7 +123,7 @@ function createWebSocketServer(server) {
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
         const at = new AccessToken(apiKey, apiSecret, { identity });
         at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
-        const token = at.toJwt();
+        const token = await at.toJwt();
         const publisher = await createPublisher({ host: livekitHost, token, roomName });
         if (!publisher) { telnyxWs.close(); return; }
 
