@@ -69,12 +69,20 @@ function int16ToLEBuffer(int16Arr) {
 
 async function createOpenAISession(customerRecord = null) {
   try {
-    let { instructions, voice } = agentSettings.getSettings();
-    if (!instructions) instructions = 'You are a helpful AI assistant for a call center.';
+    // Load saved agent settings (await the async accessor)
+    const saved = await agentSettings.getSettings();
+    let instructions = saved?.instructions || 'You are a helpful AI assistant for a call center.';
+    let voice = saved?.voice || undefined;
     if (customerRecord) {
       instructions += ` The customer's name is ${customerRecord.name}. Their preferred language is ${customerRecord.preferred_language || 'English'}. Their historical offers include: ${customerRecord.historical_offers.join(', ')}.`;
     }
+    // Small debug preview
+    try {
+      const preview = (instructions || '').slice(0, 160).replace(/\s+/g, ' ');
+      console.log('Agent-WS settings -> voice:', voice || '(default)', '| instructions:', preview || '(default)');
+    } catch (_) {}
 
+    const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
     const response = await fetch(OPENAI_REALTIME_SESSIONS_URL, {
       method: 'POST',
       headers: {
@@ -82,10 +90,10 @@ async function createOpenAISession(customerRecord = null) {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-realtime-preview', // Or 'gpt-realtime'
+        model,
         modalities: ['audio', 'text'],
         instructions,
-        voice: voice || undefined,
+        voice,
       }),
     });
 
@@ -118,7 +126,8 @@ function createWebSocketServer(server) {
 
         const { AccessToken } = require('livekit-server-sdk');
         const { createPublisher } = require('../livekit/publisher');
-        const settings = agentSettings.getSettings();
+        // Load saved settings for this bridge session
+        const settings = await agentSettings.getSettings();
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
         const at = new AccessToken(apiKey, apiSecret, { identity });
@@ -355,11 +364,12 @@ function createWebSocketServer(server) {
 
       openaiWs.on('open', () => {
         console.log('Connected to OpenAI Realtime API');
-        // Optionally prime a response with chosen voice
-        const { voice } = agentSettings.getSettings();
-        openaiWs.send(
-          JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'], voice: voice || undefined } })
-        );
+        // Prime a response with chosen voice from saved settings
+        try {
+          openaiWs.send(
+            JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'], voice: settings?.voice || undefined } })
+          );
+        } catch (_) {}
       });
 
       openaiWs.on('message', async (data) => {

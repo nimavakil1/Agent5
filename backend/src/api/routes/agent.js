@@ -57,7 +57,8 @@ router.post('/demo-speak', async (req, res) => {
         openaiWs.send(JSON.stringify({
           type: 'session.update',
           session: {
-            instructions: (instructions || 'You are a helpful assistant.') + ' Respond in English only.',
+            // Use saved instructions as-is (no forced language)
+            instructions: instructions || 'You are a helpful assistant.',
             voice: voice || undefined,
             input_audio_format: 'pcm16',
           },
