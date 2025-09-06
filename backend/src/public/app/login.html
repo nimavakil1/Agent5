@@ -31,7 +31,8 @@
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ email, password }),
+          credentials: 'include'
         });
         if (res.ok) { location.href = '/app/agent-studio.html'; }
         else { document.getElementById('msg').textContent = (await res.json()).message || 'Login failed'; }
@@ -39,4 +40,3 @@
     </script>
   </body>
   </html>
-

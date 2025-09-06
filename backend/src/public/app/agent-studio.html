@@ -86,14 +86,14 @@
     </main>
     <script>
       // Session info
-      fetch('/api/auth/me').then(r => r.ok ? r.json() : Promise.reject()).then(u => {
+      fetch('/api/auth/me', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject()).then(u => {
         document.getElementById('who').textContent = u.email;
       }).catch(() => location.href = '/app/login');
-      document.getElementById('logout').onclick = async () => { await fetch('/api/auth/logout', { method: 'POST' }); location.href = '/app/login'; };
+      document.getElementById('logout').onclick = async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); location.href = '/app/login'; };
 
       // Profiles
       async function loadProfiles() {
-        const res = await fetch('/api/agents');
+        const res = await fetch('/api/agents', { credentials: 'include' });
         const list = res.ok ? await res.json() : [];
         const sel = document.getElementById('profiles');
         sel.innerHTML = '';
@@ -102,7 +102,7 @@
         }
         sel.onchange = async () => {
           const id = sel.value; if (!id) return;
-          const p = await (await fetch('/api/agents/' + id)).json();
+          const p = await (await fetch('/api/agents/' + id, { credentials: 'include' })).json();
           document.getElementById('name').value = p.name || '';
           document.getElementById('voice').value = p.voice || '';
           document.getElementById('language').value = p.language || '';
@@ -125,8 +125,8 @@
         };
         const sel = document.getElementById('profiles');
         let res;
-        if (sel.value) res = await fetch('/api/agents/' + sel.value, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        else res = await fetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (sel.value) res = await fetch('/api/agents/' + sel.value, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
+        else res = await fetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
         if (res.ok) loadProfiles();
       };
 
