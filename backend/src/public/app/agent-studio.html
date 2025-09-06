@@ -160,7 +160,7 @@
         audioCtx = new (window.AudioContext||window.webkitAudioContext)({ sampleRate: 48000 });
         src = audioCtx.createMediaStreamSource(stream);
         proc = audioCtx.createScriptProcessor(1024,1,1);
-        let speaking=false; let vadDownAt=0;
+        let speaking=false; let vadDownAt=0; let above=0; let below=0;
         proc.onaudioprocess = (e)=>{
           if(!ws || ws.readyState!==WebSocket.OPEN) return;
           const input=e.inputBuffer.getChannelData(0);
@@ -171,9 +171,10 @@
           ws.send(JSON.stringify({ type:'audio', audio: btoa(String.fromCharCode(...buf)) }));
           // simple VAD threshold with debounce
           const now=Date.now();
-          if(rms>0.02 && !speaking){ speaking=true; ws.send(JSON.stringify({ type:'vad_start' })); setState('listening'); }
-          if(rms<0.01){ if(!vadDownAt) vadDownAt=now; if(speaking && now-vadDownAt>250){ speaking=false; vadDownAt=0; lastCommitAt=Date.now(); ws.send(JSON.stringify({ type:'vad_stop_commit' })); setState('thinking'); } }
-          else { vadDownAt=0; }
+          const speakTh=0.008, silentTh=0.003;
+          if(rms>speakTh){ above++; below=0; } else if(rms<silentTh){ below++; above=0; } else { above=0; below=0; }
+          if(above>=2 && !speaking){ speaking=true; ws.send(JSON.stringify({ type:'vad_start' })); setState('listening'); }
+          if(below>=10 && speaking){ speaking=false; lastCommitAt=Date.now(); ws.send(JSON.stringify({ type:'vad_stop_commit' })); setState('thinking'); }
         };
         src.connect(proc); proc.connect(audioCtx.destination);
       }

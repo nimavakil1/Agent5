@@ -102,6 +102,7 @@ async function createPublisher({ host, token, roomName }) {
     const FRAME_BYTES = FRAME_SAMPLES_48K * 2;
     let calleeTimer = null;
     let agentTimer = null;
+    let agentMuted = false;
 
     function startTimers() {
       if (!calleeTimer) {
@@ -131,6 +132,7 @@ async function createPublisher({ host, token, roomName }) {
       if (!agentTimer) {
         agentTimer = setInterval(() => {
           try {
+            if (agentMuted) { agentQueue = Buffer.alloc(0); return; }
             if (agentQueue.length >= FRAME_BYTES) {
               const frame = agentQueue.subarray(0, FRAME_BYTES);
               agentQueue = agentQueue.subarray(FRAME_BYTES);
@@ -193,6 +195,8 @@ async function createPublisher({ host, token, roomName }) {
           console.error('[LiveKit] pushAgentFrom48kInt16 error:', e);
         }
       },
+      muteAgent(mute = true) { agentMuted = !!mute; },
+      clearAgentQueue() { agentQueue = Buffer.alloc(0); },
       async close() {
         try {
           if (calleeTimer) clearInterval(calleeTimer);

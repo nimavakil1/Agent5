@@ -152,6 +152,7 @@ function createWebSocketServer(server) {
         });
         let currentResponseId = null;
         let bargeIn = false;
+        let agentSpeaking = false;
         oaWs.on('open', () => {
           try {
             // Apply saved settings as-is
@@ -184,6 +185,7 @@ function createWebSocketServer(server) {
               try { telnyxWs.send(JSON.stringify({ type: 'transcript_delta', text: m.delta })); } catch(_) {}
             }
             if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta) {
+              agentSpeaking = true;
               if (!bargeIn) {
                 const pcm24k = Buffer.from(m.delta, 'base64');
                 publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
@@ -193,6 +195,9 @@ function createWebSocketServer(server) {
                 try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
               }
             }
+            if (m.type === 'response.done') {
+              agentSpeaking = false;
+            }
           } catch (_) {}
         });
         const closeAll = async () => { try { oaWs.close(); } catch(_) {}; try { await publisher.close(); } catch(_) {} };
@@ -200,6 +205,18 @@ function createWebSocketServer(server) {
           try {
             const m = JSON.parse(raw.toString());
             if (m.type === 'audio' && m.audio && oaWs.readyState === WebSocket.OPEN) {
+              if (agentSpeaking && !bargeIn) {
+                // Implicit barge-in on incoming audio
+                bargeIn = true;
+                try { publisher.muteAgent(true); publisher.clearAgentQueue(); } catch(_) {}
+                try {
+                  if (currentResponseId) {
+                    oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId }, response_id: currentResponseId }));
+                  } else {
+                    oaWs.send(JSON.stringify({ type: 'response.cancel' }));
+                  }
+                } catch(_) {}
+              }
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
@@ -207,9 +224,14 @@ function createWebSocketServer(server) {
             } else if (m.type === 'vad_start' && oaWs.readyState === WebSocket.OPEN) {
               // User started speaking: cancel current agent response and duck audio
               bargeIn = true;
-              if (currentResponseId) {
-                try { oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId } })); } catch(_) {}
-              }
+              try { publisher.muteAgent(true); publisher.clearAgentQueue(); } catch(_) {}
+              try {
+                if (currentResponseId) {
+                  oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId }, response_id: currentResponseId }));
+                } else {
+                  oaWs.send(JSON.stringify({ type: 'response.cancel' }));
+                }
+              } catch(_) {}
             } else if (m.type === 'vad_stop_commit' && oaWs.readyState === WebSocket.OPEN) {
               // User stopped speaking: commit and ask for a new response
               try {
@@ -217,6 +239,8 @@ function createWebSocketServer(server) {
                 oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio','text'], voice: settings.voice || undefined } }));
               } catch(_) {}
               bargeIn = false;
+              agentSpeaking = false;
+              try { publisher.muteAgent(false); } catch(_) {}
             }
           } catch(_) {}
         });
