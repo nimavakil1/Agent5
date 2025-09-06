@@ -41,7 +41,7 @@ router.post('/demo-speak', async (req, res) => {
     const { instructions, voice } = getSettings();
     const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
     const OPENAI_REALTIME_WS_URL = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
-    const openaiWs = new WebSocket(OPENAI_REALTIME_WS_URL, {
+    const openaiWs = new WebSocket(OPENAI_REALTIME_WS_URL, 'openai-realtime', {
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         'OpenAI-Beta': 'realtime=v1',
@@ -79,6 +79,7 @@ router.post('/demo-speak', async (req, res) => {
       try {
         const str = typeof data === 'string' ? data : data.toString('utf8');
         const msg = JSON.parse(str);
+        if (msg.type) console.log('OpenAI msg type:', msg.type);
         if (msg.type === 'response.output_audio.delta' && msg.delta) {
           const pcm24k = Buffer.from(msg.delta, 'base64');
           publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
@@ -88,10 +89,12 @@ router.post('/demo-speak', async (req, res) => {
       }
     });
 
-    openaiWs.on('close', async () => {
+    openaiWs.on('close', async (code, reason) => {
+      console.log('OpenAI WS close', code, reason?.toString());
       try { await publisher.close(); } catch (_) {}
     });
-    openaiWs.on('error', async () => {
+    openaiWs.on('error', async (err) => {
+      console.error('OpenAI WS error', err?.message || err);
       try { await publisher.close(); } catch (_) {}
     });
 
