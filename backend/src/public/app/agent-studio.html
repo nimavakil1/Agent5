@@ -50,6 +50,7 @@
         <div class="mt-3 flex gap-2">
           <button id="saveProfile" class="bg-indigo-600 text-white rounded px-3 py-2">Save Profile</button>
           <button id="newProfile" class="bg-slate-100 rounded px-3 py-2">New</button>
+          <button id="deleteProfile" class="bg-red-600 text-white rounded px-3 py-2">Delete</button>
         </div>
         <div class="mt-4">
           <label class="block text-sm text-slate-600">Profiles</label>
@@ -167,6 +168,14 @@
         if (sel.value) { res = await fetch('/api/agents/' + sel.value, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) }); if (res.ok) doc = await res.json(); }
         else { res = await fetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) }); if (res.ok) doc = await res.json(); }
         if (doc && doc._id) { await loadProfiles(doc._id); }
+      };
+      document.getElementById('deleteProfile').onclick = async () => {
+        const sel = document.getElementById('profiles');
+        const id = sel.value;
+        if (!id) return;
+        if (!confirm('Delete this agent profile?')) return;
+        const res = await fetch('/api/agents/' + id, { method: 'DELETE', credentials: 'include' });
+        if (res.ok) { await loadProfiles(''); document.getElementById('name').value=''; document.getElementById('voice').value=''; document.getElementById('language').value=''; document.getElementById('instructions').value=''; }
       };
 
       // Talk unified — rely on server VAD
