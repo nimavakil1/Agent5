@@ -78,7 +78,7 @@ async function createOpenAISession(customerRecord = null) {
   try {
     // Load saved agent settings (await the async accessor)
     const saved = await agentSettings.getSettings();
-    let instructions = saved?.instructions;
+    let instructions = saved?.instructions || '';
     let voice = saved?.voice || undefined;
     if (customerRecord) {
       instructions += ` The customer's name is ${customerRecord.name}. Their preferred language is ${customerRecord.preferred_language || 'English'}. Their historical offers include: ${customerRecord.historical_offers.join(', ')}.`;
@@ -137,13 +137,25 @@ function createWebSocketServer(server) {
         const { createPublisher } = require('../livekit/publisher');
         // Load saved settings for this bridge session
         let settings = await agentSettings.getSettings();
+        console.log('Base settings loaded:', { hasInstructions: !!settings.instructions, voice: settings.voice });
         try {
           if (query.profile) {
+            console.log('Loading profile:', String(query.profile));
             const AgentProfile = require('../models/AgentProfile');
             const p = await AgentProfile.findById(String(query.profile)).lean();
-            if (p) settings = { instructions: p.instructions || settings.instructions, voice: p.voice || settings.voice };
+            if (p) {
+              console.log('Profile loaded:', { name: p.name, hasInstructions: !!p.instructions, voice: p.voice });
+              settings = { instructions: p.instructions || settings.instructions, voice: p.voice || settings.voice };
+            } else {
+              console.log('Profile not found');
+            }
+          } else {
+            console.log('No profile parameter provided');
           }
-        } catch (_) {}
+        } catch (e) {
+          console.error('Error loading profile:', e);
+        }
+        console.log('Final settings:', { hasInstructions: !!settings.instructions, instructionsLength: settings.instructions?.length, voice: settings.voice });
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
         let publisher = null;
@@ -181,15 +193,17 @@ function createWebSocketServer(server) {
             const tdThresh = Number(process.env.TURN_DETECTION_THRESHOLD || '0.60');
             const tdPrefix = Number(process.env.TURN_DETECTION_PREFIX_MS || '180');
             const tdSilence = Number(process.env.TURN_DETECTION_SILENCE_MS || '250');
-            oaWs.send(JSON.stringify({
+            const sessionData = {
               type: 'session.update',
               session: {
-                instructions: settings.instructions,
+                instructions: settings.instructions || '',
                 voice: settings.voice || undefined,
                 input_audio_format: 'pcm16',
                 turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence }
               }
-            }));
+            };
+            console.log('Sending session.update with instructions length:', sessionData.session.instructions.length);
+            oaWs.send(JSON.stringify(sessionData));
             // If a prime text was provided, send as an initial user message and request a response
             if (primeText && primeText.trim().length > 0) {
               const preview = primeText.slice(0, 160).replace(/\s+/g, ' ');
