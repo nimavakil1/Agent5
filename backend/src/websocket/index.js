@@ -233,7 +233,6 @@ function createWebSocketServer(server) {
               oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio'] } }));
             }
             // client VAD messages removed when using server_vad
-            }
           } catch(_) {}
         });
         telnyxWs.on('close', closeAll); telnyxWs.on('error', closeAll); oaWs.on('close', closeAll); oaWs.on('error', closeAll);
