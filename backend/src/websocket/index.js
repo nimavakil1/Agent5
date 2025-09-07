@@ -159,13 +159,20 @@ function createWebSocketServer(server) {
           headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' },
         });
         let currentResponseId = null;
-        let bargeIn = false;
         let agentSpeaking = false;
         let agentSpeakingSent = false;
         oaWs.on('open', () => {
           try {
             // Apply saved settings as-is
-            oaWs.send(JSON.stringify({ type: 'session.update', session: { instructions: settings.instructions || 'You are a helpful assistant.', voice: settings.voice || undefined, input_audio_format: 'pcm16' } }));
+            oaWs.send(JSON.stringify({
+              type: 'session.update',
+              session: {
+                instructions: settings.instructions || 'You are a helpful assistant.',
+                voice: settings.voice || undefined,
+                input_audio_format: 'pcm16',
+                turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 250, silence_duration_ms: 300 }
+              }
+            }));
             // If a prime text was provided, send as an initial user message and request a response
             if (primeText && primeText.trim().length > 0) {
               const preview = primeText.slice(0, 160).replace(/\s+/g, ' ');
@@ -189,6 +196,7 @@ function createWebSocketServer(server) {
             const m = JSON.parse(s);
             if (m.type === 'response.created' && m.response) {
               currentResponseId = m.response.id || null;
+              try { publisher.muteAgent(false); } catch(_) {}
             }
             if ((m.type === 'response.audio_transcript.delta' || m.type === 'response.output_text.delta') && m.delta) {
               try { telnyxWs.send(JSON.stringify({ type: 'transcript_delta', text: m.delta })); } catch(_) {}
@@ -199,10 +207,8 @@ function createWebSocketServer(server) {
                 agentSpeakingSent = true;
                 try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(_) {}
               }
-              if (!bargeIn) {
-                const pcm24k = Buffer.from(m.delta, 'base64');
-                publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
-              }
+              const pcm24k = Buffer.from(m.delta, 'base64');
+              publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
               if (!notified) {
                 notified = true;
                 try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
@@ -212,6 +218,7 @@ function createWebSocketServer(server) {
               agentSpeaking = false;
               agentSpeakingSent = false;
               try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(_) {}
+              try { publisher.muteAgent(false); } catch(_) {}
             }
           } catch (_) {}
         });
@@ -220,45 +227,12 @@ function createWebSocketServer(server) {
           try {
             const m = JSON.parse(raw.toString());
             if (m.type === 'audio' && m.audio && oaWs.readyState === WebSocket.OPEN) {
-              if (agentSpeaking && !bargeIn) {
-                // Implicit barge-in on incoming audio
-                bargeIn = true;
-                try { publisher.muteAgent(true); publisher.clearAgentQueue(); } catch(_) {}
-                try {
-                  if (currentResponseId) {
-                    oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId }, response_id: currentResponseId }));
-                  } else {
-                    oaWs.send(JSON.stringify({ type: 'response.cancel' }));
-                  }
-                } catch(_) {}
-                agentSpeaking = false;
-                if (agentSpeakingSent) { agentSpeakingSent = false; try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(_) {} }
-              }
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
               oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio'] } }));
-            } else if (m.type === 'vad_start' && oaWs.readyState === WebSocket.OPEN) {
-              // User started speaking: cancel current agent response and duck audio
-              bargeIn = true;
-              try { publisher.muteAgent(true); publisher.clearAgentQueue(); } catch(_) {}
-              try {
-                if (currentResponseId) {
-                  oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId }, response_id: currentResponseId }));
-                } else {
-                  oaWs.send(JSON.stringify({ type: 'response.cancel' }));
-                }
-              } catch(_) {}
-            } else if (m.type === 'vad_stop_commit' && oaWs.readyState === WebSocket.OPEN) {
-              // User stopped speaking: commit and ask for a new response
-              try {
-                oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-                oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio','text'], voice: settings.voice || undefined } }));
-              } catch(_) {}
-              bargeIn = false;
-              agentSpeaking = false;
-              try { publisher.muteAgent(false); } catch(_) {}
-              try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(_) {}
+            }
+            // client VAD messages removed when using server_vad
             }
           } catch(_) {}
         });
