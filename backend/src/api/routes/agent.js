@@ -54,14 +54,16 @@ router.post('/demo-speak', async (req, res) => {
     openaiWs.on('open', () => {
       try {
         // Update session settings (English-only). input_audio_format as string for compatibility.
+        const tdThresh = Number(process.env.TURN_DETECTION_THRESHOLD || '0.60');
+        const tdPrefix = Number(process.env.TURN_DETECTION_PREFIX_MS || '180');
+        const tdSilence = Number(process.env.TURN_DETECTION_SILENCE_MS || '250');
         openaiWs.send(JSON.stringify({
           type: 'session.update',
           session: {
-            // Use saved instructions as-is and enable server-side turn detection
             instructions: instructions || 'You are a helpful assistant.',
             voice: voice || undefined,
             input_audio_format: 'pcm16',
-            turn_detection: { type: 'server_vad', threshold: 0.38, prefix_padding_ms: 180, silence_duration_ms: 220 },
+            turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence },
           },
         }));
         // Log a short preview of the instructions used (for debugging)

@@ -167,22 +167,27 @@ function createWebSocketServer(server) {
         let currentResponseId = null;
         let agentSpeaking = false;
         let agentSpeakingSent = false;
-        // Simple server-side VAD for barge-in
+        // Simple server-side VAD for barge-in (raised thresholds to reduce false triggers)
         let userSpeaking = false;
         let aboveCnt = 0;
         let belowCnt = 0;
-        const speakTh = Number(process.env.SERVER_VAD_SPEAK_TH || '0.008');
-        const silentTh = Number(process.env.SERVER_VAD_SILENT_TH || '0.003');
+        const speakTh = Number(process.env.SERVER_VAD_SPEAK_TH || '0.020');
+        const silentTh = Number(process.env.SERVER_VAD_SILENT_TH || '0.006');
+        const onsetNeededBase = Number(process.env.SERVER_VAD_ONSET_FRAMES || '4');
+        const onsetNeededWhileAgent = Number(process.env.SERVER_VAD_ONSET_FRAMES_AGENT || '8');
         oaWs.on('open', () => {
           try {
             // Apply saved settings as-is
+            const tdThresh = Number(process.env.TURN_DETECTION_THRESHOLD || '0.60');
+            const tdPrefix = Number(process.env.TURN_DETECTION_PREFIX_MS || '180');
+            const tdSilence = Number(process.env.TURN_DETECTION_SILENCE_MS || '250');
             oaWs.send(JSON.stringify({
               type: 'session.update',
               session: {
                 instructions: settings.instructions || 'You are a helpful assistant.',
                 voice: settings.voice || undefined,
                 input_audio_format: 'pcm16',
-                turn_detection: { type: 'server_vad', threshold: 0.38, prefix_padding_ms: 180, silence_duration_ms: 220 }
+                turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence }
               }
             }));
             // If a prime text was provided, send as an initial user message and request a response
@@ -250,15 +255,16 @@ function createWebSocketServer(server) {
                   n++;
                 }
                 const rms = n ? Math.sqrt(sum / n) / 32768 : 0;
-                if (rms > speakTh) { aboveCnt++; belowCnt = 0; } else if (rms < silentTh) { belowCnt++; aboveCnt = 0; } else { aboveCnt = 0; belowCnt = 0; }
-                if (!userSpeaking && aboveCnt >= 2) {
+                if (rms > speakTh) { aboveCnt++; belowCnt = 0; } else if (rms < silentTh) { belowCnt++; aboveCnt = 0; } else { aboveCnt = 0; }
+                const need = agentSpeaking ? onsetNeededWhileAgent : onsetNeededBase;
+                if (!userSpeaking && aboveCnt >= need) {
                   userSpeaking = true; aboveCnt = 0;
                   // Cancel current agent response and flush playback
                   try { if (currentResponseId) { oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId }, response_id: currentResponseId })); } else { oaWs.send(JSON.stringify({ type: 'response.cancel' })); } } catch(_) {}
                   try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(_) {}
                   agentSpeaking = false; agentSpeakingSent = false;
                 }
-                if (userSpeaking && belowCnt >= 10) { userSpeaking = false; belowCnt = 0; }
+                if (userSpeaking && belowCnt >= 12) { userSpeaking = false; belowCnt = 0; }
               } catch(_) {}
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
