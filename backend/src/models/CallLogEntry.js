@@ -15,6 +15,9 @@ const callLogEntrySchema = new mongoose.Schema({
   audio_recording_url: { type: String },
   offers_recommended: [String],
   shopify_cart_link: { type: String },
+  cost_tracking_id: { type: String }, // Reference to CallCostTracking
+  onedrive_recording_url: { type: String }, // Direct OneDrive shareable link
+  transcription_summary: { type: String }, // Key conversation points
 });
 
 module.exports = mongoose.model('CallLogEntry', callLogEntrySchema);

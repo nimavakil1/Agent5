@@ -6,6 +6,9 @@ const { RoomServiceClient, AccessToken } = require('livekit-server-sdk'); // Imp
 const { createPublisher, toWsUrl } = require('../livekit/publisher');
 const CallLogEntry = require('../models/CallLogEntry'); // Import CallLogEntry model
 const CustomerRecord = require('../models/CustomerRecord'); // Import CustomerRecord model
+const CallCostTracking = require('../models/CallCostTracking'); // Import CallCostTracking model
+const costCalculationService = require('../services/costCalculationService');
+const onedriveService = require('../services/onedriveService');
 const fs = require('fs'); // Import file system module
 const path = require('path'); // Import path module
 
@@ -157,6 +160,11 @@ function createWebSocketServer(server) {
         }
         console.log('Final settings:', { hasInstructions: !!settings.instructions, instructionsLength: settings.instructions?.length, voice: settings.voice });
 
+        // Initialize cost tracking for this session
+        let sessionStartTime = new Date();
+        let sessionAudioInputMinutes = 0;
+        let sessionAudioOutputMinutes = 0;
+
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
         let publisher = null;
         if (process.env.AGENTSTREAM_PUBLISH_LIVEKIT === '1') {
@@ -261,7 +269,35 @@ function createWebSocketServer(server) {
             }
           } catch (_) {}
         });
-        const closeAll = async () => { try { oaWs.close(); } catch(_) {}; try { publisher && await publisher.close(); } catch(_) {} };
+        const closeAll = async () => { 
+          try { oaWs.close(); } catch(_) {};
+          try { publisher && await publisher.close(); } catch(_) {};
+          
+          // Calculate session duration and costs when closing
+          try {
+            const sessionEndTime = new Date();
+            const durationMinutes = (sessionEndTime - sessionStartTime) / (1000 * 60);
+            
+            // Create cost tracking record for agent studio session
+            await costCalculationService.updateCallCosts(roomName, 'agent_studio', {
+              llm: {
+                audio_input_minutes: sessionAudioInputMinutes,
+                audio_output_minutes: sessionAudioOutputMinutes,
+                input_tokens: 0, // Text tokens would be tracked separately
+                output_tokens: 0
+              },
+              transcription: {
+                full_text: '', // Would be populated if we had transcription
+                language_detected: 'auto',
+                confidence_score: 1.0
+              }
+            });
+            
+            console.log(`Agent studio session ${roomName} ended. Duration: ${durationMinutes.toFixed(2)} min`);
+          } catch (error) {
+            console.error('Error saving cost tracking for agent session:', error);
+          }
+        };
         telnyxWs.on('message', (raw) => {
           try {
             const m = JSON.parse(raw.toString());
@@ -322,6 +358,14 @@ function createWebSocketServer(server) {
     let livekitPublisher = null; // Node publisher into LiveKit
     let customerRecord = null; // Customer Record for personalization
     let currentTranscription = ''; // To accumulate transcription
+    
+    // Cost tracking variables
+    let callStartTime = new Date();
+    let audioInputMinutes = 0;
+    let audioOutputMinutes = 0;
+    let inputTokenCount = 0;
+    let outputTokenCount = 0;
+    
     // Recording stream state
     let audioFilePath = null;
     let audioWriteStream = null;
@@ -679,9 +723,89 @@ function createWebSocketServer(server) {
 
               const audioRecordingUrl = `/recordings/${path.basename(audioFilePath)}`;
               await ensureCallLogDefaults();
+              
+              // Upload to OneDrive and calculate costs
+              let onedriveUrl = '';
+              let costTrackingId = '';
+              try {
+                // Upload recording to OneDrive
+                const uploadResult = await onedriveService.uploadRecording(audioFilePath, roomName, callStartTime);
+                onedriveUrl = uploadResult.url;
+                console.log(`Recording uploaded to OneDrive: ${onedriveUrl}`);
+                
+                // Calculate call duration and costs
+                const callEndTime = new Date();
+                const durationMinutes = (callEndTime - callStartTime) / (1000 * 60);
+                
+                // Create comprehensive cost tracking
+                const costTracking = await costCalculationService.updateCallCosts(roomName, 'pstn', {
+                  llm: {
+                    audio_input_minutes: audioInputMinutes,
+                    audio_output_minutes: audioOutputMinutes,
+                    input_tokens: inputTokenCount,
+                    output_tokens: outputTokenCount
+                  },
+                  pstn: {
+                    duration_minutes: durationMinutes
+                  },
+                  recording: {
+                    local_path: audioFilePath,
+                    onedrive_url: onedriveUrl,
+                    onedrive_file_id: uploadResult.fileId,
+                    upload_status: 'uploaded'
+                  },
+                  transcription: {
+                    full_text: currentTranscription,
+                    language_detected: 'auto',
+                    confidence_score: 0.95
+                  }
+                });
+                
+                costTrackingId = costTracking.call_id;
+                console.log(`Call costs calculated: $${costTracking.total_cost_usd.toFixed(4)}`);
+              } catch (uploadError) {
+                console.error('OneDrive upload failed:', uploadError);
+                // Still create cost tracking without OneDrive info
+                try {
+                  const callEndTime = new Date();
+                  const durationMinutes = (callEndTime - callStartTime) / (1000 * 60);
+                  
+                  const costTracking = await costCalculationService.updateCallCosts(roomName, 'pstn', {
+                    llm: {
+                      audio_input_minutes: audioInputMinutes,
+                      audio_output_minutes: audioOutputMinutes,
+                      input_tokens: inputTokenCount,
+                      output_tokens: outputTokenCount
+                    },
+                    pstn: {
+                      duration_minutes: durationMinutes
+                    },
+                    recording: {
+                      local_path: audioFilePath,
+                      upload_status: 'failed'
+                    },
+                    transcription: {
+                      full_text: currentTranscription,
+                      language_detected: 'auto',
+                      confidence_score: 0.95
+                    }
+                  });
+                  
+                  costTrackingId = costTracking.call_id;
+                } catch (costError) {
+                  console.error('Cost calculation failed:', costError);
+                }
+              }
+              
+              // Update CallLogEntry with enhanced information
               await CallLogEntry.findOneAndUpdate(
                 { call_id: roomName },
-                { audio_recording_url: audioRecordingUrl },
+                { 
+                  audio_recording_url: audioRecordingUrl,
+                  onedrive_recording_url: onedriveUrl,
+                  cost_tracking_id: costTrackingId,
+                  transcription_summary: currentTranscription.slice(0, 500) // First 500 chars as summary
+                },
                 { new: true, runValidators: true }
               );
             }
