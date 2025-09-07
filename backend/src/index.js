@@ -19,13 +19,18 @@ const dashboardRouter = require('./api/routes/dashboard');
 const customersRouter = require('./api/routes/customers');
 const connectDB = require('./config/database');
 const validateEnv = require('./config/validateEnv');
+const ensureAdmin = require('./util/ensureAdmin');
 const auth = require('./middleware/auth');
 const { requireSession, allowBearerOrSession } = require('./middleware/sessionAuth');
 
 // Validate env & connect to MongoDB (skip DB in tests)
 if (process.env.NODE_ENV !== 'test') {
   validateEnv();
-  connectDB();
+  connectDB().then(async () => {
+    if (process.env.AUTO_SEED_ADMIN === '1') {
+      await ensureAdmin();
+    }
+  });
 }
 
 const app = express();
