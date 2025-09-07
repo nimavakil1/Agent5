@@ -509,12 +509,7 @@
               buf[i*2]=ds[i]&0xff; 
               buf[i*2+1]=(ds[i]>>8)&0xff; 
             }
-            ws.send(JSON.stringify({ 
-              type:'audio', 
-              audio: btoa(String.fromCharCode(...buf)),
-              vad_active: isActive,
-              rms_level: rms
-            }));
+            ws.send(JSON.stringify({ type:'audio', audio: btoa(String.fromCharCode(...buf)) }));
           }
           
           // Enhanced activity badge with VAD info
