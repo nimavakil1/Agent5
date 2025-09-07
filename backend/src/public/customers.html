@@ -1,0 +1,434 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Customer & Campaign Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .drag-drop-area {
+        border: 2px dashed #e2e8f0;
+        transition: all 0.3s ease;
+      }
+      .drag-drop-area.dragover {
+        border-color: #3b82f6;
+        background-color: #f0f9ff;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white shadow-sm">
+      <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <h1 class="text-lg font-semibold text-slate-800">Customer & Campaign Management</h1>
+        <div class="flex items-center gap-3">
+          <a href="/dashboard.html" class="text-sm text-indigo-600 hover:underline">Dashboard</a>
+          <a href="/app/agent-studio.html" class="text-sm text-indigo-600 hover:underline">Agent Studio</a>
+          <a href="/call-review.html" class="text-sm text-indigo-600 hover:underline">Call Review</a>
+          <span id="who" class="text-sm text-slate-500"></span>
+          <button id="logout" class="text-sm text-indigo-600 hover:underline">Logout</button>
+        </div>
+      </div>
+    </header>
+    <main class="max-w-6xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Customer Management -->
+      <section class="bg-white rounded-lg shadow p-4">
+        <h2 class="font-semibold text-slate-800 mb-3">Customer Management</h2>
+        
+        <!-- CSV Upload -->
+        <div class="mb-6">
+          <h3 class="text-sm font-medium text-slate-700 mb-2">Upload Customers (CSV)</h3>
+          <div id="dropArea" class="drag-drop-area rounded-lg p-6 text-center">
+            <input type="file" id="csvFile" accept=".csv" class="hidden" />
+            <div class="mb-2">
+              <svg class="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <p class="text-slate-600">Drop your CSV file here or <button type="button" class="text-indigo-600 hover:underline">browse</button></p>
+            <p class="text-xs text-slate-500 mt-1">Expected columns: name, phone_number, preferred_language</p>
+          </div>
+          <div class="mt-2 flex gap-2">
+            <button id="uploadCsv" class="bg-indigo-600 text-white rounded px-3 py-2" disabled>Upload CSV</button>
+            <button id="downloadSample" class="bg-slate-100 rounded px-3 py-2">Download Sample CSV</button>
+          </div>
+        </div>
+
+        <!-- Manual Customer Entry -->
+        <div class="mb-6">
+          <h3 class="text-sm font-medium text-slate-700 mb-2">Add Customer Manually</h3>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm text-slate-600">Name</label>
+              <input id="customerName" class="mt-1 w-full border rounded px-3 py-2" placeholder="Customer Name" />
+            </div>
+            <div>
+              <label class="block text-sm text-slate-600">Phone Number</label>
+              <input id="customerPhone" class="mt-1 w-full border rounded px-3 py-2" placeholder="+1234567890" />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm text-slate-600">Preferred Language</label>
+              <input id="customerLanguage" class="mt-1 w-full border rounded px-3 py-2" placeholder="en, es, de, etc." />
+            </div>
+          </div>
+          <button id="addCustomer" class="mt-2 bg-emerald-600 text-white rounded px-3 py-2">Add Customer</button>
+        </div>
+
+        <!-- Customer List -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-slate-700">Customer List</h3>
+            <button id="refreshCustomers" class="text-xs bg-slate-100 rounded px-2 py-1">Refresh</button>
+          </div>
+          <div id="customerList" class="space-y-2 max-h-64 overflow-auto border rounded p-2">
+            <div class="text-sm text-slate-500">Loading customers...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Campaign Management -->
+      <section class="bg-white rounded-lg shadow p-4">
+        <h2 class="font-semibold text-slate-800 mb-3">Campaign Management</h2>
+        
+        <!-- Campaign Form -->
+        <div class="mb-6">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="col-span-2">
+              <label class="block text-sm text-slate-600">Campaign Title</label>
+              <input id="campaignTitle" class="mt-1 w-full border rounded px-3 py-2" placeholder="Holiday Sale Campaign" />
+            </div>
+            <div>
+              <label class="block text-sm text-slate-600">Start Date</label>
+              <input id="campaignStartDate" type="date" class="mt-1 w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-sm text-slate-600">End Date</label>
+              <input id="campaignEndDate" type="date" class="mt-1 w-full border rounded px-3 py-2" />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm text-slate-600">Agent Profile</label>
+              <select id="campaignAgentProfile" class="mt-1 w-full border rounded px-3 py-2">
+                <option value="">Select Agent Profile</option>
+              </select>
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm text-slate-600">Products (comma-separated)</label>
+              <input id="campaignProducts" class="mt-1 w-full border rounded px-3 py-2" placeholder="product1, product2, product3" />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm text-slate-600">Custom Prompt</label>
+              <textarea id="campaignPrompt" class="mt-1 w-full border rounded px-3 py-2 h-24" placeholder="Special instructions for this campaign..."></textarea>
+            </div>
+          </div>
+          <div class="mt-3 flex gap-2">
+            <button id="saveCampaign" class="bg-indigo-600 text-white rounded px-3 py-2">Create Campaign</button>
+            <button id="newCampaign" class="bg-slate-100 rounded px-3 py-2">New</button>
+          </div>
+        </div>
+
+        <!-- Campaign List -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-slate-700">Campaigns</h3>
+            <button id="refreshCampaigns" class="text-xs bg-slate-100 rounded px-2 py-1">Refresh</button>
+          </div>
+          <div id="campaignList" class="space-y-2 max-h-64 overflow-auto border rounded p-2">
+            <div class="text-sm text-slate-500">Loading campaigns...</div>
+          </div>
+        </div>
+
+        <!-- Campaign Actions -->
+        <div class="mt-4">
+          <h3 class="text-sm font-medium text-slate-700 mb-2">Campaign Actions</h3>
+          <div class="flex gap-2">
+            <button id="triggerCalls" class="bg-green-600 text-white rounded px-3 py-2" disabled>Trigger Outbound Calls</button>
+            <button id="previewCalls" class="bg-yellow-600 text-white rounded px-3 py-2" disabled>Preview Call List</button>
+          </div>
+          <div id="callPreview" class="mt-2 hidden">
+            <h4 class="text-sm font-medium text-slate-700 mb-1">Call Preview</h4>
+            <div id="callPreviewList" class="bg-slate-50 border rounded p-2 max-h-32 overflow-auto text-sm"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script>
+      // Session info
+      fetch('/api/auth/me', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject()).then(u => {
+        document.getElementById('who').textContent = u.email;
+      }).catch(() => location.href = '/app/login');
+      document.getElementById('logout').onclick = async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); location.href = '/app/login'; };
+
+      // CSV Upload functionality
+      const dropArea = document.getElementById('dropArea');
+      const csvFileInput = document.getElementById('csvFile');
+      let selectedFile = null;
+
+      // Drag and drop handlers
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+      });
+
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, () => dropArea.classList.add('dragover'), false);
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, () => dropArea.classList.remove('dragover'), false);
+      });
+
+      dropArea.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+          handleFile(files[0]);
+        }
+      });
+
+      dropArea.addEventListener('click', () => csvFileInput.click());
+      csvFileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          handleFile(e.target.files[0]);
+        }
+      });
+
+      function handleFile(file) {
+        if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+          alert('Please select a CSV file');
+          return;
+        }
+        selectedFile = file;
+        dropArea.querySelector('p').textContent = `Selected: ${file.name}`;
+        document.getElementById('uploadCsv').disabled = false;
+      }
+
+      document.getElementById('downloadSample').onclick = () => {
+        const csvContent = 'name,phone_number,preferred_language\nJohn Doe,+1234567890,en\nMaria Garcia,+1987654321,es\nHans Mueller,+49123456789,de';
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'customer_sample.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+      };
+
+      document.getElementById('uploadCsv').onclick = async () => {
+        if (!selectedFile) return;
+        
+        const formData = new FormData();
+        formData.append('csv', selectedFile);
+
+        try {
+          const res = await fetch('/api/customers/upload-csv', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+          });
+          
+          if (res.ok) {
+            const result = await res.json();
+            alert(`Uploaded ${result.imported} customers successfully!`);
+            refreshCustomers();
+            selectedFile = null;
+            dropArea.querySelector('p').textContent = 'Drop your CSV file here or browse';
+            document.getElementById('uploadCsv').disabled = true;
+          } else {
+            const error = await res.json();
+            alert('Upload failed: ' + error.message);
+          }
+        } catch (err) {
+          alert('Upload failed: ' + err.message);
+        }
+      };
+
+      // Customer management
+      document.getElementById('addCustomer').onclick = async () => {
+        const name = document.getElementById('customerName').value.trim();
+        const phone = document.getElementById('customerPhone').value.trim();
+        const language = document.getElementById('customerLanguage').value.trim();
+
+        if (!name || !phone) {
+          alert('Name and phone number are required');
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/customers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ name, phone_number: phone, preferred_language: language || 'en' })
+          });
+
+          if (res.ok) {
+            alert('Customer added successfully!');
+            document.getElementById('customerName').value = '';
+            document.getElementById('customerPhone').value = '';
+            document.getElementById('customerLanguage').value = '';
+            refreshCustomers();
+          } else {
+            const error = await res.json();
+            alert('Failed to add customer: ' + error.message);
+          }
+        } catch (err) {
+          alert('Failed to add customer: ' + err.message);
+        }
+      };
+
+      async function refreshCustomers() {
+        try {
+          const res = await fetch('/api/customers', { credentials: 'include' });
+          const customers = res.ok ? await res.json() : [];
+          const listEl = document.getElementById('customerList');
+          listEl.innerHTML = '';
+
+          if (customers.length === 0) {
+            listEl.innerHTML = '<div class="text-sm text-slate-500">No customers found</div>';
+            return;
+          }
+
+          for (const customer of customers) {
+            const customerEl = document.createElement('div');
+            customerEl.className = 'bg-slate-50 rounded p-2 text-sm';
+            customerEl.innerHTML = `
+              <div class="font-medium">${customer.name}</div>
+              <div class="text-slate-500">${customer.phone_number} • ${customer.preferred_language}</div>
+            `;
+            listEl.appendChild(customerEl);
+          }
+        } catch (err) {
+          console.error('Failed to load customers:', err);
+        }
+      }
+
+      // Campaign management
+      async function loadAgentProfiles() {
+        try {
+          const res = await fetch('/api/agents', { credentials: 'include' });
+          const profiles = res.ok ? await res.json() : [];
+          const sel = document.getElementById('campaignAgentProfile');
+          sel.innerHTML = '<option value="">Select Agent Profile</option>';
+          for (const profile of profiles) {
+            const opt = document.createElement('option');
+            opt.value = profile._id;
+            opt.textContent = `${profile.name} — ${profile.voice || 'default'}`;
+            sel.appendChild(opt);
+          }
+        } catch (err) {
+          console.error('Failed to load agent profiles:', err);
+        }
+      }
+
+      document.getElementById('saveCampaign').onclick = async () => {
+        const title = document.getElementById('campaignTitle').value.trim();
+        const startDate = document.getElementById('campaignStartDate').value;
+        const endDate = document.getElementById('campaignEndDate').value;
+        const agentProfile = document.getElementById('campaignAgentProfile').value;
+        const products = document.getElementById('campaignProducts').value.trim().split(',').map(p => p.trim()).filter(p => p);
+        const customPrompt = document.getElementById('campaignPrompt').value.trim();
+
+        if (!title || !startDate || !endDate) {
+          alert('Title, start date, and end date are required');
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/campaigns', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              campaign_id: `campaign_${Date.now()}`,
+              title,
+              start_date: startDate,
+              end_date: endDate,
+              products,
+              custom_prompt: customPrompt,
+              agent_profile_id: agentProfile,
+              assigned_languages: ['en'],
+              behavioral_traits: [],
+              target_groups: []
+            })
+          });
+
+          if (res.ok) {
+            alert('Campaign created successfully!');
+            clearCampaignForm();
+            refreshCampaigns();
+          } else {
+            const error = await res.json();
+            alert('Failed to create campaign: ' + error.message);
+          }
+        } catch (err) {
+          alert('Failed to create campaign: ' + err.message);
+        }
+      };
+
+      function clearCampaignForm() {
+        document.getElementById('campaignTitle').value = '';
+        document.getElementById('campaignStartDate').value = '';
+        document.getElementById('campaignEndDate').value = '';
+        document.getElementById('campaignAgentProfile').value = '';
+        document.getElementById('campaignProducts').value = '';
+        document.getElementById('campaignPrompt').value = '';
+      }
+
+      document.getElementById('newCampaign').onclick = clearCampaignForm;
+
+      async function refreshCampaigns() {
+        try {
+          const res = await fetch('/api/campaigns', { credentials: 'include' });
+          const campaigns = res.ok ? await res.json() : [];
+          const listEl = document.getElementById('campaignList');
+          listEl.innerHTML = '';
+
+          if (campaigns.length === 0) {
+            listEl.innerHTML = '<div class="text-sm text-slate-500">No campaigns found</div>';
+            return;
+          }
+
+          for (const campaign of campaigns) {
+            const campaignEl = document.createElement('div');
+            campaignEl.className = 'bg-slate-50 rounded p-2 text-sm cursor-pointer hover:bg-slate-100';
+            campaignEl.innerHTML = `
+              <div class="font-medium">${campaign.title}</div>
+              <div class="text-slate-500">${campaign.campaign_id}</div>
+              <div class="text-xs text-slate-400">${new Date(campaign.start_date).toLocaleDateString()} - ${new Date(campaign.end_date).toLocaleDateString()}</div>
+            `;
+            campaignEl.onclick = () => selectCampaign(campaign);
+            listEl.appendChild(campaignEl);
+          }
+        } catch (err) {
+          console.error('Failed to load campaigns:', err);
+        }
+      }
+
+      let selectedCampaign = null;
+      
+      function selectCampaign(campaign) {
+        selectedCampaign = campaign;
+        document.getElementById('triggerCalls').disabled = false;
+        document.getElementById('previewCalls').disabled = false;
+        
+        // Highlight selected campaign
+        document.querySelectorAll('#campaignList > div').forEach(el => {
+          el.classList.remove('bg-indigo-100', 'border-indigo-300');
+          el.classList.add('bg-slate-50');
+        });
+        event.currentTarget.classList.remove('bg-slate-50');
+        event.currentTarget.classList.add('bg-indigo-100', 'border', 'border-indigo-300');
+      }
+
+      // Initialize page
+      document.getElementById('refreshCustomers').onclick = refreshCustomers;
+      document.getElementById('refreshCampaigns').onclick = refreshCampaigns;
+      
+      loadAgentProfiles();
+      refreshCustomers();
+      refreshCampaigns();
+    </script>
+  </body>
+</html>

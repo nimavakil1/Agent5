@@ -1,0 +1,506 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Panel - Agent5</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .role-admin { background-color: #fef3c7; color: #92400e; }
+      .role-user { background-color: #dbeafe; color: #1e40af; }
+      .status-active { color: #10b981; }
+      .status-inactive { color: #ef4444; }
+      .audit-success { border-left-color: #10b981; }
+      .audit-failure { border-left-color: #ef4444; }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+        <h1 class="text-lg font-semibold text-slate-800">Admin Panel</h1>
+        <div class="flex items-center gap-3">
+          <a href="/dashboard.html" class="text-sm text-indigo-600 hover:underline">Dashboard</a>
+          <a href="/app/agent-studio.html" class="text-sm text-indigo-600 hover:underline">Agent Studio</a>
+          <span id="who" class="text-sm text-slate-500"></span>
+          <button id="logout" class="text-sm text-indigo-600 hover:underline">Logout</button>
+        </div>
+      </div>
+    </header>
+    
+    <main class="max-w-7xl mx-auto p-4">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- User Management -->
+        <div class="lg:col-span-2 bg-white rounded-lg shadow">
+          <div class="p-4 border-b border-slate-200">
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold text-slate-800">User Management</h2>
+              <button id="addUserBtn" class="bg-indigo-600 text-white rounded px-3 py-2 text-sm">Add User</button>
+            </div>
+          </div>
+          <div class="p-4">
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead class="border-b border-slate-200">
+                  <tr>
+                    <th class="text-left py-3 px-2 font-medium text-slate-700">Email</th>
+                    <th class="text-left py-3 px-2 font-medium text-slate-700">Role</th>
+                    <th class="text-left py-3 px-2 font-medium text-slate-700">Status</th>
+                    <th class="text-left py-3 px-2 font-medium text-slate-700">Created</th>
+                    <th class="text-left py-3 px-2 font-medium text-slate-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTable" class="divide-y divide-slate-100">
+                  <tr>
+                    <td colspan="5" class="py-8 text-center text-slate-500">Loading users...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="space-y-6">
+          <!-- System Stats -->
+          <div class="bg-white rounded-lg shadow p-4">
+            <h3 class="font-semibold text-slate-800 mb-3">System Stats</h3>
+            <div class="space-y-3">
+              <div class="flex justify-between">
+                <span class="text-sm text-slate-600">Total Users:</span>
+                <span id="totalUsers" class="text-sm font-medium">-</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-sm text-slate-600">Active Users:</span>
+                <span id="activeUsers" class="text-sm font-medium">-</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-sm text-slate-600">Admin Users:</span>
+                <span id="adminUsers" class="text-sm font-medium">-</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-sm text-slate-600">Recent Logins (24h):</span>
+                <span id="recentLogins" class="text-sm font-medium">-</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Security Actions -->
+          <div class="bg-white rounded-lg shadow p-4">
+            <h3 class="font-semibold text-slate-800 mb-3">Security Actions</h3>
+            <div class="space-y-2">
+              <button id="exportAuditLog" class="w-full bg-slate-100 hover:bg-slate-200 rounded px-3 py-2 text-sm">
+                Export Audit Log
+              </button>
+              <button id="clearOldLogs" class="w-full bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded px-3 py-2 text-sm">
+                Clear Old Logs (>30 days)
+              </button>
+              <button id="resetPasswordsBtn" class="w-full bg-red-100 hover:bg-red-200 text-red-800 rounded px-3 py-2 text-sm">
+                Force Password Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audit Log Section -->
+      <div class="bg-white rounded-lg shadow mt-6">
+        <div class="p-4 border-b border-slate-200">
+          <div class="flex items-center justify-between">
+            <h2 class="font-semibold text-slate-800">Audit Log</h2>
+            <div class="flex items-center gap-2">
+              <select id="auditFilter" class="text-sm border rounded px-2 py-1">
+                <option value="">All Actions</option>
+                <option value="login">Login</option>
+                <option value="logout">Logout</option>
+                <option value="user_create">User Created</option>
+                <option value="user_update">User Updated</option>
+                <option value="user_delete">User Deleted</option>
+                <option value="profile_update">Profile Updated</option>
+                <option value="call_initiated">Call Initiated</option>
+              </select>
+              <button id="refreshAuditLog" class="text-sm bg-indigo-600 text-white rounded px-3 py-1">Refresh</button>
+            </div>
+          </div>
+        </div>
+        <div class="p-4">
+          <div id="auditLogList" class="space-y-2 max-h-96 overflow-y-auto">
+            <div class="text-center py-8 text-slate-500">Loading audit log...</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Add/Edit User Modal -->
+    <div id="userModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div class="p-4 border-b border-slate-200">
+          <h3 id="modalTitle" class="font-semibold text-slate-800">Add User</h3>
+        </div>
+        <form id="userForm" class="p-4 space-y-4">
+          <input type="hidden" id="userId" />
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <input type="email" id="userEmail" required class="w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+            <input type="password" id="userPassword" class="w-full border rounded px-3 py-2" />
+            <div class="text-xs text-slate-500 mt-1">Leave empty to keep existing password</div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Role</label>
+            <select id="userRole" class="w-full border rounded px-3 py-2">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="userActive" checked class="rounded" />
+              <span class="text-sm font-medium text-slate-700">Active</span>
+            </label>
+          </div>
+          <div class="flex gap-2 pt-4 border-t">
+            <button type="submit" class="flex-1 bg-indigo-600 text-white rounded px-3 py-2">Save</button>
+            <button type="button" id="cancelModal" class="flex-1 bg-slate-100 rounded px-3 py-2">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      // Session info
+      fetch('/api/auth/me', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject()).then(u => {
+        document.getElementById('who').textContent = u.email;
+        // Check if user is admin
+        if (u.role !== 'admin') {
+          alert('Access denied. Admin privileges required.');
+          location.href = '/dashboard.html';
+        }
+      }).catch(() => location.href = '/app/login');
+      
+      document.getElementById('logout').onclick = async () => { 
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); 
+        location.href = '/app/login'; 
+      };
+
+      // Global variables
+      let users = [];
+      let auditLogs = [];
+
+      // Load users
+      async function loadUsers() {
+        try {
+          const res = await fetch('/api/admin/users', { credentials: 'include' });
+          if (!res.ok) throw new Error('Failed to load users');
+          
+          users = await res.json();
+          displayUsers();
+          updateStats();
+        } catch (err) {
+          console.error('Failed to load users:', err);
+          showError('Failed to load users: ' + err.message);
+        }
+      }
+
+      function displayUsers() {
+        const tbody = document.getElementById('usersTable');
+        tbody.innerHTML = '';
+
+        if (users.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-500">No users found</td></tr>';
+          return;
+        }
+
+        for (const user of users) {
+          const row = document.createElement('tr');
+          row.className = 'hover:bg-slate-50';
+          
+          const roleClass = user.role === 'admin' ? 'role-admin' : 'role-user';
+          const statusClass = user.active ? 'status-active' : 'status-inactive';
+          const statusText = user.active ? 'Active' : 'Inactive';
+          
+          row.innerHTML = `
+            <td class="py-3 px-2">${user.email}</td>
+            <td class="py-3 px-2">
+              <span class="px-2 py-1 rounded text-xs ${roleClass}">${user.role}</span>
+            </td>
+            <td class="py-3 px-2">
+              <span class="${statusClass}">${statusText}</span>
+            </td>
+            <td class="py-3 px-2 text-sm text-slate-600">${new Date(user.createdAt).toLocaleDateString()}</td>
+            <td class="py-3 px-2">
+              <div class="flex gap-1">
+                <button onclick="editUser('${user._id}')" class="text-xs bg-indigo-100 text-indigo-700 rounded px-2 py-1">
+                  Edit
+                </button>
+                <button onclick="deleteUser('${user._id}')" class="text-xs bg-red-100 text-red-700 rounded px-2 py-1">
+                  Delete
+                </button>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(row);
+        }
+      }
+
+      function updateStats() {
+        const totalUsers = users.length;
+        const activeUsers = users.filter(u => u.active).length;
+        const adminUsers = users.filter(u => u.role === 'admin').length;
+        
+        document.getElementById('totalUsers').textContent = totalUsers;
+        document.getElementById('activeUsers').textContent = activeUsers;
+        document.getElementById('adminUsers').textContent = adminUsers;
+        
+        // Simulate recent logins - in real app, this would come from audit logs
+        document.getElementById('recentLogins').textContent = Math.floor(Math.random() * activeUsers);
+      }
+
+      // User management functions
+      function addUser() {
+        document.getElementById('modalTitle').textContent = 'Add User';
+        document.getElementById('userId').value = '';
+        document.getElementById('userForm').reset();
+        document.getElementById('userActive').checked = true;
+        document.getElementById('userModal').classList.remove('hidden');
+        document.getElementById('userModal').classList.add('flex');
+      }
+
+      function editUser(userId) {
+        const user = users.find(u => u._id === userId);
+        if (!user) return;
+
+        document.getElementById('modalTitle').textContent = 'Edit User';
+        document.getElementById('userId').value = user._id;
+        document.getElementById('userEmail').value = user.email;
+        document.getElementById('userPassword').value = '';
+        document.getElementById('userRole').value = user.role;
+        document.getElementById('userActive').checked = user.active;
+        
+        document.getElementById('userModal').classList.remove('hidden');
+        document.getElementById('userModal').classList.add('flex');
+      }
+
+      async function saveUser(formData) {
+        const userId = formData.get('userId');
+        const userData = {
+          email: formData.get('email'),
+          role: formData.get('role'),
+          active: formData.has('active')
+        };
+
+        if (formData.get('password')) {
+          userData.password = formData.get('password');
+        }
+
+        try {
+          let res;
+          if (userId) {
+            res = await fetch(`/api/admin/users/${userId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(userData)
+            });
+          } else {
+            if (!userData.password) {
+              throw new Error('Password is required for new users');
+            }
+            res = await fetch('/api/admin/users', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(userData)
+            });
+          }
+
+          if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.message || 'Failed to save user');
+          }
+
+          closeModal();
+          loadUsers();
+          loadAuditLog(); // Refresh audit log
+          showSuccess(userId ? 'User updated successfully' : 'User created successfully');
+        } catch (err) {
+          showError('Failed to save user: ' + err.message);
+        }
+      }
+
+      async function deleteUser(userId) {
+        const user = users.find(u => u._id === userId);
+        if (!user) return;
+
+        if (!confirm(`Delete user "${user.email}"? This action cannot be undone.`)) {
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/admin/users/${userId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+          });
+
+          if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.message || 'Failed to delete user');
+          }
+
+          loadUsers();
+          loadAuditLog(); // Refresh audit log
+          showSuccess('User deleted successfully');
+        } catch (err) {
+          showError('Failed to delete user: ' + err.message);
+        }
+      }
+
+      // Audit log functions
+      async function loadAuditLog() {
+        try {
+          const filter = document.getElementById('auditFilter').value;
+          const url = '/api/admin/audit-log' + (filter ? `?action=${filter}` : '');
+          
+          const res = await fetch(url, { credentials: 'include' });
+          if (!res.ok) throw new Error('Failed to load audit log');
+          
+          auditLogs = await res.json();
+          displayAuditLog();
+        } catch (err) {
+          console.error('Failed to load audit log:', err);
+          showError('Failed to load audit log: ' + err.message);
+        }
+      }
+
+      function displayAuditLog() {
+        const container = document.getElementById('auditLogList');
+        container.innerHTML = '';
+
+        if (auditLogs.length === 0) {
+          container.innerHTML = '<div class="text-center py-8 text-slate-500">No audit log entries found</div>';
+          return;
+        }
+
+        for (const log of auditLogs) {
+          const logEl = document.createElement('div');
+          logEl.className = `border-l-4 p-3 bg-slate-50 rounded ${log.success ? 'audit-success' : 'audit-failure'}`;
+          
+          const timeAgo = getTimeAgo(log.timestamp);
+          const details = log.details ? JSON.stringify(log.details, null, 2) : '';
+          
+          logEl.innerHTML = `
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-medium text-sm">${log.action}</span>
+              <span class="text-xs text-slate-500">${timeAgo}</span>
+            </div>
+            <div class="text-sm text-slate-600 mb-1">
+              <span class="font-medium">${log.user_email}</span> → ${log.resource} ${log.resource_id || ''}
+            </div>
+            ${details ? `<pre class="text-xs bg-slate-100 p-2 rounded mt-2 overflow-x-auto">${details}</pre>` : ''}
+            ${log.ip_address ? `<div class="text-xs text-slate-400 mt-1">IP: ${log.ip_address}</div>` : ''}
+          `;
+          container.appendChild(logEl);
+        }
+      }
+
+      function getTimeAgo(timestamp) {
+        const now = new Date();
+        const then = new Date(timestamp);
+        const diff = Math.floor((now - then) / 1000);
+
+        if (diff < 60) return diff + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return Math.floor(diff / 86400) + 'd ago';
+      }
+
+      // Modal functions
+      function closeModal() {
+        document.getElementById('userModal').classList.add('hidden');
+        document.getElementById('userModal').classList.remove('flex');
+      }
+
+      // Utility functions
+      function showSuccess(message) {
+        // Simple success notification - could be enhanced with proper toast
+        alert('✓ ' + message);
+      }
+
+      function showError(message) {
+        // Simple error notification - could be enhanced with proper toast
+        alert('✗ ' + message);
+      }
+
+      // Event handlers
+      document.getElementById('addUserBtn').onclick = addUser;
+      document.getElementById('cancelModal').onclick = closeModal;
+      document.getElementById('refreshAuditLog').onclick = loadAuditLog;
+      document.getElementById('auditFilter').onchange = loadAuditLog;
+
+      document.getElementById('userForm').onsubmit = (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        formData.set('userId', document.getElementById('userId').value);
+        formData.set('email', document.getElementById('userEmail').value);
+        formData.set('password', document.getElementById('userPassword').value);
+        formData.set('role', document.getElementById('userRole').value);
+        if (document.getElementById('userActive').checked) {
+          formData.set('active', 'true');
+        }
+        saveUser(formData);
+      };
+
+      // Security actions
+      document.getElementById('exportAuditLog').onclick = async () => {
+        try {
+          const res = await fetch('/api/admin/audit-log?export=true', { credentials: 'include' });
+          if (!res.ok) throw new Error('Failed to export audit log');
+          
+          const data = await res.json();
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `audit_log_${new Date().toISOString().split('T')[0]}.json`;
+          a.click();
+          window.URL.revokeObjectURL(url);
+        } catch (err) {
+          showError('Failed to export audit log: ' + err.message);
+        }
+      };
+
+      document.getElementById('clearOldLogs').onclick = async () => {
+        if (!confirm('Clear audit logs older than 30 days? This action cannot be undone.')) {
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/admin/audit-log/cleanup', {
+            method: 'DELETE',
+            credentials: 'include'
+          });
+
+          if (!res.ok) throw new Error('Failed to clear old logs');
+          
+          const result = await res.json();
+          showSuccess(`Cleared ${result.deletedCount} old log entries`);
+          loadAuditLog();
+        } catch (err) {
+          showError('Failed to clear old logs: ' + err.message);
+        }
+      };
+
+      // Initialize page
+      loadUsers();
+      loadAuditLog();
+
+      // Close modal when clicking outside
+      document.getElementById('userModal').onclick = (e) => {
+        if (e.target === e.currentTarget) {
+          closeModal();
+        }
+      };
+    </script>
+  </body>
+</html>

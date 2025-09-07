@@ -15,12 +15,15 @@
       <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <h1 class="text-lg font-semibold text-slate-800">Agent Studio</h1>
         <div class="flex items-center gap-3">
+          <a href="/dashboard.html" class="text-sm text-indigo-600 hover:underline">Dashboard</a>
+          <a href="/customers.html" class="text-sm text-indigo-600 hover:underline">Customers & Campaigns</a>
+          <a href="/call-review.html" class="text-sm text-indigo-600 hover:underline">Call Review</a>
           <span id="who" class="text-sm text-slate-500"></span>
           <button id="logout" class="text-sm text-indigo-600 hover:underline">Logout</button>
         </div>
       </div>
     </header>
-    <main class="max-w-6xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <main class="max-w-6xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
       <section class="bg-white rounded-lg shadow p-4">
         <h2 class="font-semibold text-slate-800 mb-3">Profile</h2>
         <div class="grid grid-cols-2 gap-3">
@@ -95,6 +98,82 @@
           </div>
         </div>
         
+        <!-- Audio Settings -->
+        <div class="mt-4">
+          <div class="text-sm text-slate-500 mb-2">Audio Settings</div>
+          <div class="space-y-2">
+            <!-- Echo Guard -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <label for="echoGuard" class="text-sm text-slate-700">Echo Guard</label>
+                <div class="group relative">
+                  <svg class="w-4 h-4 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <div class="hidden group-hover:block absolute bottom-6 left-0 bg-slate-800 text-white text-xs rounded px-2 py-1 w-48 z-10">
+                    Requires higher audio onset threshold when agent is speaking to prevent echo
+                  </div>
+                </div>
+              </div>
+              <input type="checkbox" id="echoGuard" checked class="rounded" />
+            </div>
+            
+            <!-- VAD Sensitivity -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <label for="vadSensitivity" class="text-sm text-slate-700">VAD Sensitivity</label>
+                <div class="group relative">
+                  <svg class="w-4 h-4 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <div class="hidden group-hover:block absolute bottom-6 left-0 bg-slate-800 text-white text-xs rounded px-2 py-1 w-48 z-10">
+                    Voice Activity Detection threshold: Low = more sensitive, High = less sensitive
+                  </div>
+                </div>
+              </div>
+              <select id="vadSensitivity" class="text-xs border rounded px-2 py-1">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            
+            <!-- Turn Detection -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <label for="turnDetection" class="text-sm text-slate-700">Turn Detection</label>
+                <div class="group relative">
+                  <svg class="w-4 h-4 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <div class="hidden group-hover:block absolute bottom-6 left-0 bg-slate-800 text-white text-xs rounded px-2 py-1 w-48 z-10">
+                    Automatically detect when it's your turn to speak based on silence duration
+                  </div>
+                </div>
+              </div>
+              <input type="checkbox" id="turnDetection" checked class="rounded" />
+            </div>
+            
+            <!-- Noise Suppression -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <label for="noiseSuppression" class="text-sm text-slate-700">Noise Suppression</label>
+              </div>
+              <input type="checkbox" id="noiseSuppression" checked class="rounded" />
+            </div>
+          </div>
+          
+          <!-- Quick Presets -->
+          <div class="mt-3">
+            <div class="text-xs text-slate-500 mb-2">Quick Presets</div>
+            <div class="flex gap-2">
+              <button id="safeDefaults" class="text-xs bg-green-100 text-green-700 rounded px-2 py-1">Safe Defaults</button>
+              <button id="highQuality" class="text-xs bg-blue-100 text-blue-700 rounded px-2 py-1">High Quality</button>
+              <button id="noisyEnvironment" class="text-xs bg-yellow-100 text-yellow-700 rounded px-2 py-1">Noisy Environment</button>
+            </div>
+          </div>
+        </div>
+        
         <div class="mt-4">
           <div class="text-sm text-slate-500 mb-1">Transcript</div>
           <pre id="transcript" class="bg-slate-50 border rounded p-2 h-40 overflow-auto"></pre>
@@ -109,6 +188,46 @@
             <button id="refreshRooms" class="text-xs bg-slate-100 rounded px-2 py-1">Refresh</button>
           </div>
           <div id="rooms" class="text-sm text-slate-700 flex flex-wrap gap-2"></div>
+        </div>
+      </section>
+      <section class="bg-white rounded-lg shadow p-4">
+        <h2 class="font-semibold text-slate-800 mb-3">Outbound Call Panel</h2>
+        <div class="grid grid-cols-1 gap-3">
+          <div>
+            <label class="block text-sm text-slate-600">Phone Number</label>
+            <input id="dialNumber" class="mt-1 w-full border rounded px-3 py-2" placeholder="+1234567890" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-600">Campaign (optional)</label>
+            <select id="dialCampaign" class="mt-1 w-full border rounded px-3 py-2">
+              <option value="">Select Campaign</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-slate-600">Customer Name (optional)</label>
+            <input id="dialCustomerName" class="mt-1 w-full border rounded px-3 py-2" placeholder="Customer Name" />
+          </div>
+        </div>
+        <div class="mt-3 flex gap-2">
+          <button id="dialCall" class="bg-green-600 text-white rounded px-3 py-2">Dial Number</button>
+          <button id="hangupCall" class="bg-red-600 text-white rounded px-3 py-2" disabled>Hang Up</button>
+        </div>
+        <div class="mt-4">
+          <div class="text-sm text-slate-500 mb-1">Call Status</div>
+          <div id="callStatus" class="font-medium text-slate-700">Ready</div>
+        </div>
+        <div class="mt-4">
+          <div class="text-sm text-slate-500 mb-1">Call Duration</div>
+          <div id="callDuration" class="font-medium text-slate-700">--:--</div>
+        </div>
+        <div class="mt-4">
+          <div class="text-sm text-slate-500 mb-1">Live Summary</div>
+          <div id="liveSummary" class="bg-slate-50 border rounded p-2 h-24 overflow-auto text-sm text-slate-700">No active call</div>
+        </div>
+        <div class="mt-4">
+          <div class="text-sm text-slate-500 mb-1">Call Log</div>
+          <div id="callLog" class="space-y-2 max-h-32 overflow-auto"></div>
+          <button id="refreshCallLog" class="mt-2 text-xs bg-slate-100 rounded px-2 py-1">Refresh Log</button>
         </div>
       </section>
     </main>
@@ -181,11 +300,54 @@
       // Talk unified — rely on server VAD
       let ws, audioCtx, src, proc, stream, lastCommitAt=0, currentState='idle';
       let lkRoom = null;
+      
+      // Audio settings and state
+      let audioSettings = {
+        echoGuard: true,
+        vadSensitivity: 'medium',
+        turnDetection: true,
+        noiseSuppression: true
+      };
+      let agentSpeaking = false;
+      let lastVadTime = 0;
+      let silenceStart = 0;
+      let backgroundNoiseLevel = 0;
+      let noiseCalibrationSamples = 0;
+      
       const stateEl = document.getElementById('state'); const latEl = document.getElementById('latency');
       function setState(s){ currentState=s; stateEl.textContent=s; }
       function floatTo16(input){ const out=new Int16Array(input.length); for(let i=0;i<input.length;i++){ let s=Math.max(-1,Math.min(1,input[i])); out[i]= s<0 ? s*0x8000 : s*0x7fff; } return out; }
       function down48to24(int16){ const out=new Int16Array(Math.floor(int16.length/2)); for(let i=0,j=0;j<out.length;i+=2,j++) out[j]=int16[i]; return out; }
       function energy(buf){ let sum=0; for(let i=0;i<buf.length;i++){ const v=buf[i]; sum+= v*v; } return Math.sqrt(sum/buf.length); }
+      
+      // Get VAD thresholds based on sensitivity setting
+      function getVadThresholds() {
+        const baseThreshold = backgroundNoiseLevel + 0.005; // Adaptive threshold above background noise
+        const multipliers = {
+          'low': 0.5,      // More sensitive
+          'medium': 1.0,   // Normal
+          'high': 2.0      // Less sensitive
+        };
+        
+        const multiplier = multipliers[audioSettings.vadSensitivity] || 1.0;
+        const echoMultiplier = audioSettings.echoGuard && agentSpeaking ? 2.5 : 1.0; // Much higher threshold when agent is speaking
+        
+        return {
+          onsetThreshold: Math.max(0.01, baseThreshold * multiplier * echoMultiplier),
+          offsetThreshold: Math.max(0.005, baseThreshold * 0.3) // Lower threshold for offset
+        };
+      }
+      
+      // Update background noise level (running average)
+      function updateBackgroundNoise(rms) {
+        if (noiseCalibrationSamples < 50) { // Initial calibration period
+          backgroundNoiseLevel = (backgroundNoiseLevel * noiseCalibrationSamples + rms) / (noiseCalibrationSamples + 1);
+          noiseCalibrationSamples++;
+        } else {
+          // Slow adaptation to background noise changes
+          backgroundNoiseLevel = backgroundNoiseLevel * 0.999 + rms * 0.001;
+        }
+      }
 
       function attachWs(room, prime){
         const proto = location.protocol==='https:'?'wss':'ws';
@@ -198,7 +360,7 @@
           try{ const m=JSON.parse(ev.data);
             if(m.type==='first_audio_delta' && lastCommitAt){ const dt=Date.now()-lastCommitAt; latEl.textContent=dt+' ms'; }
             if(m.type==='transcript_delta'){ const el=document.getElementById('transcript'); el.textContent+=m.text; el.scrollTop=el.scrollHeight; }
-            if(m.type==='agent_speaking'){ const ab=document.getElementById('agentBadge'); if(m.speaking){ ab.textContent='Agent: speaking'; ab.className='px-2 py-1 rounded text-xs bg-indigo-600 text-white'; } else { ab.textContent='Agent: idle'; ab.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600'; } }
+            if(m.type==='agent_speaking'){ const ab=document.getElementById('agentBadge'); agentSpeaking = m.speaking; if(m.speaking){ ab.textContent='Agent: speaking'; ab.className='px-2 py-1 rounded text-xs bg-indigo-600 text-white'; } else { ab.textContent='Agent: idle'; ab.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600'; } }
             if(m.type==='agent_audio_24k' && m.audio){ playAgent24k(m.audio); }
             if(m.type==='barge_in'){ duckAndFlush(); }
           }catch(_){}
@@ -292,18 +454,96 @@
         proc.onaudioprocess = (e)=>{
           if(!ws || ws.readyState!==WebSocket.OPEN) return;
           const input=e.inputBuffer.getChannelData(0);
-          const rms = energy(input);
+          
+          // Apply noise suppression if enabled
+          let processedInput = input;
+          if (audioSettings.noiseSuppression) {
+            processedInput = applyNoiseGate(input);
+          }
+          
+          const rms = energy(processedInput);
+          
+          // Update background noise level when not speaking
+          if (!agentSpeaking && rms < 0.02) {
+            updateBackgroundNoise(rms);
+          }
+          
+          // Get current VAD thresholds
+          const thresholds = getVadThresholds();
+          
           // update VU (map 0..0.1 -> 0..100%)
           const pct = Math.max(0, Math.min(100, Math.round((rms/0.1)*100)));
           if (vum) vum.style.width = pct + '%';
-          const int16=floatTo16(input); const ds=down48to24(int16);
-          // send audio
-          const buf=new Uint8Array(ds.length*2); for(let i=0;i<ds.length;i++){ buf[i*2]=ds[i]&0xff; buf[i*2+1]=(ds[i]>>8)&0xff; }
-          ws.send(JSON.stringify({ type:'audio', audio: btoa(String.fromCharCode(...buf)) }));
-          // simple activity badge
-          if (rms>0.01) { youBadge.textContent='You: speaking'; youBadge.className='px-2 py-1 rounded text-xs bg-emerald-600 text-white'; }
-          else { youBadge.textContent='You: silent'; youBadge.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600'; }
+          
+          const int16=floatTo16(processedInput); const ds=down48to24(int16);
+          
+          // Enhanced VAD logic
+          const now = Date.now();
+          const isActive = rms > thresholds.onsetThreshold;
+          
+          if (isActive) {
+            lastVadTime = now;
+            silenceStart = 0;
+          } else if (lastVadTime > 0 && silenceStart === 0) {
+            silenceStart = now;
+          }
+          
+          // Determine if we should send audio
+          let shouldSendAudio = true;
+          
+          // Echo guard: reduce transmission when agent is speaking
+          if (audioSettings.echoGuard && agentSpeaking && !isActive) {
+            shouldSendAudio = false;
+          }
+          
+          // Turn detection: pause transmission during detected silence periods
+          if (audioSettings.turnDetection && silenceStart > 0 && (now - silenceStart) > 1500) {
+            // After 1.5 seconds of silence, reduce audio transmission
+            shouldSendAudio = shouldSendAudio && (Math.random() < 0.1); // Only send 10% of packets
+          }
+          
+          // send audio (with optional filtering)
+          if (shouldSendAudio) {
+            const buf=new Uint8Array(ds.length*2); 
+            for(let i=0;i<ds.length;i++){ 
+              buf[i*2]=ds[i]&0xff; 
+              buf[i*2+1]=(ds[i]>>8)&0xff; 
+            }
+            ws.send(JSON.stringify({ 
+              type:'audio', 
+              audio: btoa(String.fromCharCode(...buf)),
+              vad_active: isActive,
+              rms_level: rms
+            }));
+          }
+          
+          // Enhanced activity badge with VAD info
+          const youBadge = document.getElementById('youBadge');
+          if (isActive) { 
+            youBadge.textContent=`You: speaking (${Math.round(rms*1000)})`; 
+            youBadge.className='px-2 py-1 rounded text-xs bg-emerald-600 text-white'; 
+          } else { 
+            const silenceDuration = silenceStart > 0 ? Math.round((now - silenceStart) / 1000) : 0;
+            youBadge.textContent=silenceDuration > 0 ? `You: silent (${silenceDuration}s)` : 'You: silent'; 
+            youBadge.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600'; 
+          }
         };
+        
+        // Simple noise gate implementation
+        function applyNoiseGate(input) {
+          const output = new Float32Array(input.length);
+          const threshold = Math.max(0.005, backgroundNoiseLevel * 1.5);
+          
+          for (let i = 0; i < input.length; i++) {
+            const sample = Math.abs(input[i]);
+            if (sample > threshold) {
+              output[i] = input[i];
+            } else {
+              output[i] = input[i] * 0.1; // Attenuate rather than completely gate
+            }
+          }
+          return output;
+        }
         src.connect(proc); proc.connect(audioCtx.destination);
       }
       async function stopTalk(){
@@ -343,6 +583,254 @@
       }
       document.getElementById('refreshRooms').onclick = listRooms;
       listRooms();
+
+      // Outbound Call Panel
+      let currentCall = null;
+      let callTimer = null;
+      let callStartTime = null;
+
+      // Load campaigns for the dropdown
+      async function loadCampaigns() {
+        try {
+          const res = await fetch('/api/campaigns', { credentials: 'include' });
+          const campaigns = res.ok ? await res.json() : [];
+          const sel = document.getElementById('dialCampaign');
+          sel.innerHTML = '<option value="">Select Campaign</option>';
+          for (const campaign of campaigns) {
+            const opt = document.createElement('option');
+            opt.value = campaign.campaign_id;
+            opt.textContent = `${campaign.title} (${campaign.campaign_id})`;
+            sel.appendChild(opt);
+          }
+        } catch (err) {
+          console.error('Failed to load campaigns:', err);
+        }
+      }
+      loadCampaigns();
+
+      function updateCallStatus(status) {
+        document.getElementById('callStatus').textContent = status;
+      }
+
+      function updateCallDuration() {
+        if (!callStartTime) return;
+        const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const seconds = (elapsed % 60).toString().padStart(2, '0');
+        document.getElementById('callDuration').textContent = `${minutes}:${seconds}`;
+      }
+
+      function startCallTimer() {
+        callStartTime = Date.now();
+        callTimer = setInterval(updateCallDuration, 1000);
+      }
+
+      function stopCallTimer() {
+        if (callTimer) {
+          clearInterval(callTimer);
+          callTimer = null;
+        }
+        callStartTime = null;
+        document.getElementById('callDuration').textContent = '--:--';
+      }
+
+      async function makeOutboundCall() {
+        const phoneNumber = document.getElementById('dialNumber').value.trim();
+        const campaign = document.getElementById('dialCampaign').value;
+        const customerName = document.getElementById('dialCustomerName').value.trim();
+        
+        if (!phoneNumber) {
+          alert('Please enter a phone number');
+          return;
+        }
+
+        try {
+          updateCallStatus('Dialing...');
+          document.getElementById('dialCall').disabled = true;
+          document.getElementById('hangupCall').disabled = false;
+
+          // Create the outbound call
+          const callRes = await fetch('/api/calls/outbound', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              to: phoneNumber,
+              campaign_id: campaign || undefined,
+              customer_name: customerName || undefined
+            })
+          });
+
+          if (!callRes.ok) {
+            throw new Error('Failed to create outbound call');
+          }
+
+          const callData = await callRes.json();
+          currentCall = callData;
+          
+          updateCallStatus('Connecting...');
+          startCallTimer();
+
+          // Auto-join the room for this call
+          const roomName = `call-${callData.call_id || Date.now()}`;
+          document.getElementById('room').value = roomName;
+          
+          // Start the agent session for this call
+          await startTalk();
+          
+          updateCallStatus('Connected');
+          document.getElementById('liveSummary').textContent = `Call started with ${phoneNumber}${customerName ? ` (${customerName})` : ''}`;
+
+        } catch (err) {
+          console.error('Failed to make outbound call:', err);
+          updateCallStatus('Failed');
+          document.getElementById('dialCall').disabled = false;
+          document.getElementById('hangupCall').disabled = true;
+          stopCallTimer();
+          alert('Failed to make outbound call: ' + err.message);
+        }
+      }
+
+      async function hangupCall() {
+        try {
+          updateCallStatus('Hanging up...');
+          
+          // Stop the talk session
+          await stopTalk();
+          
+          // If we have a current call, we might want to update its status
+          if (currentCall) {
+            // TODO: Call Telnyx API to hang up the call
+            // This would require implementing a hangup endpoint
+          }
+
+          currentCall = null;
+          stopCallTimer();
+          updateCallStatus('Ready');
+          document.getElementById('dialCall').disabled = false;
+          document.getElementById('hangupCall').disabled = true;
+          document.getElementById('liveSummary').textContent = 'No active call';
+
+        } catch (err) {
+          console.error('Failed to hang up call:', err);
+          updateCallStatus('Error');
+        }
+      }
+
+      async function refreshCallLog() {
+        try {
+          const res = await fetch('/api/calls/log', { credentials: 'include' });
+          const calls = res.ok ? await res.json() : [];
+          const logEl = document.getElementById('callLog');
+          logEl.innerHTML = '';
+          
+          if (calls.length === 0) {
+            logEl.innerHTML = '<div class="text-sm text-slate-500">No recent calls</div>';
+            return;
+          }
+
+          for (const call of calls.slice(0, 5)) { // Show last 5 calls
+            const callEl = document.createElement('div');
+            callEl.className = 'text-xs bg-slate-50 rounded p-2';
+            const duration = call.end_time && call.start_time ? 
+              Math.floor((new Date(call.end_time) - new Date(call.start_time)) / 1000) + 's' : 
+              'N/A';
+            callEl.innerHTML = `
+              <div class="font-medium">${call.customer_id}</div>
+              <div class="text-slate-500">${call.call_status} • ${duration} • ${new Date(call.start_time).toLocaleTimeString()}</div>
+            `;
+            logEl.appendChild(callEl);
+          }
+        } catch (err) {
+          console.error('Failed to refresh call log:', err);
+        }
+      }
+
+      document.getElementById('dialCall').onclick = makeOutboundCall;
+      document.getElementById('hangupCall').onclick = hangupCall;
+      document.getElementById('refreshCallLog').onclick = refreshCallLog;
+      
+      // Load call log on page load
+      refreshCallLog();
+      
+      // Audio settings event handlers
+      document.getElementById('echoGuard').onchange = (e) => {
+        audioSettings.echoGuard = e.target.checked;
+        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
+      };
+      
+      document.getElementById('vadSensitivity').onchange = (e) => {
+        audioSettings.vadSensitivity = e.target.value;
+        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
+      };
+      
+      document.getElementById('turnDetection').onchange = (e) => {
+        audioSettings.turnDetection = e.target.checked;
+        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
+      };
+      
+      document.getElementById('noiseSuppression').onchange = (e) => {
+        audioSettings.noiseSuppression = e.target.checked;
+        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
+      };
+      
+      // Preset buttons
+      document.getElementById('safeDefaults').onclick = () => {
+        audioSettings = {
+          echoGuard: true,
+          vadSensitivity: 'medium',
+          turnDetection: true,
+          noiseSuppression: true
+        };
+        applyAudioSettings();
+        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
+      };
+      
+      document.getElementById('highQuality').onclick = () => {
+        audioSettings = {
+          echoGuard: true,
+          vadSensitivity: 'low',
+          turnDetection: true,
+          noiseSuppression: false
+        };
+        applyAudioSettings();
+        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
+      };
+      
+      document.getElementById('noisyEnvironment').onclick = () => {
+        audioSettings = {
+          echoGuard: true,
+          vadSensitivity: 'high',
+          turnDetection: false,
+          noiseSuppression: true
+        };
+        applyAudioSettings();
+        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
+      };
+      
+      // Apply settings to UI controls
+      function applyAudioSettings() {
+        document.getElementById('echoGuard').checked = audioSettings.echoGuard;
+        document.getElementById('vadSensitivity').value = audioSettings.vadSensitivity;
+        document.getElementById('turnDetection').checked = audioSettings.turnDetection;
+        document.getElementById('noiseSuppression').checked = audioSettings.noiseSuppression;
+      }
+      
+      // Load saved settings
+      function loadAudioSettings() {
+        const saved = localStorage.getItem('audioSettings');
+        if (saved) {
+          try {
+            audioSettings = { ...audioSettings, ...JSON.parse(saved) };
+            applyAudioSettings();
+          } catch (e) {
+            console.warn('Failed to load audio settings:', e);
+          }
+        }
+      }
+      
+      // Initialize audio settings
+      loadAudioSettings();
     </script>
   </body>
   </html>

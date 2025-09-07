@@ -5,6 +5,7 @@ const router = express.Router();
 const { createOutboundCall } = require('../services/callService');
 const { createPrefilledCartLink } = require('../services/shopifyService');
 const { sendEmail } = require('../services/brevoService');
+const CallLogEntry = require('../../models/CallLogEntry');
 
 // Optional API key middleware for creating outbound calls
 function requireCreateCallsApiKey(req, res, next) {
@@ -23,14 +24,14 @@ const createCallLimiter = rateLimit({
 });
 
 router.post('/outbound', requireCreateCallsApiKey, createCallLimiter, async (req, res) => {
-  const { to } = req.body;
+  const { to, campaign_id, customer_name } = req.body;
 
   if (!to) {
     return res.status(400).json({ message: '"to" phone number is required' });
   }
 
   try {
-    const result = await createOutboundCall(to);
+    const result = await createOutboundCall(to, { campaign_id, customer_name });
     res.json(result);
   } catch (error) {
     res.status(500).json({ message: 'Failed to create outbound call', error: error.message });
@@ -64,6 +65,20 @@ router.post('/send-checkout-link', async (req, res) => {
     res.json({ message: 'Checkout link sent successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to send checkout link', error: error.message });
+  }
+});
+
+router.get('/log', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const callLogs = await CallLogEntry.find()
+      .sort({ start_time: -1 })
+      .limit(limit)
+      .lean();
+    
+    res.json(callLogs);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch call logs', error: error.message });
   }
 });
 

@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -17,6 +18,7 @@ const authRouter = require('./api/routes/auth');
 const agentsRouter = require('./api/routes/agents');
 const dashboardRouter = require('./api/routes/dashboard');
 const customersRouter = require('./api/routes/customers');
+const adminRouter = require('./api/routes/admin');
 const connectDB = require('./config/database');
 const validateEnv = require('./config/validateEnv');
 const ensureAdmin = require('./util/ensureAdmin');
@@ -31,6 +33,11 @@ if (process.env.NODE_ENV !== 'test') {
       await ensureAdmin();
     }
   });
+}
+
+// Ensure uploads directory exists
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads', { recursive: true });
 }
 
 const app = express();
@@ -133,6 +140,7 @@ app.use('/api/livekit', allowBearerOrSession, livekitRouter);
 app.use('/api/campaigns', allowBearerOrSession, campaignsRouter);
 app.use('/api/dashboard', allowBearerOrSession, dashboardRouter);
 app.use('/api/customers', allowBearerOrSession, customersRouter);
+app.use('/api/admin', requireSession, adminRouter);
 app.use('/api/agents', agentsRouter);
 
 if (process.env.NODE_ENV !== 'test') {

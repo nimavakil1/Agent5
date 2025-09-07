@@ -1,0 +1,506 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent5 Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      .status-online { color: #10b981; }
+      .status-offline { color: #ef4444; }
+      .status-idle { color: #f59e0b; }
+      .metric-card { transition: all 0.3s ease; }
+      .metric-card:hover { transform: translateY(-2px); }
+      .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .5; }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+        <h1 class="text-lg font-semibold text-slate-800">Agent5 Dashboard</h1>
+        <div class="flex items-center gap-3">
+          <a href="/app/agent-studio.html" class="text-sm text-indigo-600 hover:underline">Agent Studio</a>
+          <a href="/customers.html" class="text-sm text-indigo-600 hover:underline">Customers & Campaigns</a>
+          <a href="/call-review.html" class="text-sm text-indigo-600 hover:underline">Call Review</a>
+          <a id="adminLink" href="/admin.html" class="text-sm text-indigo-600 hover:underline hidden">Admin</a>
+          <div class="flex items-center gap-2 bg-slate-100 rounded-full px-3 py-1">
+            <div class="w-2 h-2 bg-green-500 rounded-full pulse-dot"></div>
+            <span class="text-xs text-slate-600">Live</span>
+          </div>
+          <span id="who" class="text-sm text-slate-500"></span>
+          <button id="logout" class="text-sm text-indigo-600 hover:underline">Logout</button>
+        </div>
+      </div>
+    </header>
+    
+    <main class="max-w-7xl mx-auto p-4">
+      <!-- KPI Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="metric-card bg-white rounded-lg shadow p-6">
+          <div class="flex items-center">
+            <div class="flex-1">
+              <p class="text-sm font-medium text-slate-600">Total Calls Today</p>
+              <p id="totalCallsToday" class="text-2xl font-semibold text-slate-900">-</p>
+            </div>
+            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+              <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21L6 10l4 4 .502-4.224a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.948V15a2 2 0 01-2 2h-1C9.716 17 3 10.284 3 6V5z"></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-card bg-white rounded-lg shadow p-6">
+          <div class="flex items-center">
+            <div class="flex-1">
+              <p class="text-sm font-medium text-slate-600">Success Rate</p>
+              <p id="successRate" class="text-2xl font-semibold text-slate-900">-</p>
+            </div>
+            <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+              <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-card bg-white rounded-lg shadow p-6">
+          <div class="flex items-center">
+            <div class="flex-1">
+              <p class="text-sm font-medium text-slate-600">Avg Duration</p>
+              <p id="avgDuration" class="text-2xl font-semibold text-slate-900">-</p>
+            </div>
+            <div class="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
+              <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-card bg-white rounded-lg shadow p-6">
+          <div class="flex items-center">
+            <div class="flex-1">
+              <p class="text-sm font-medium text-slate-600">Active Sessions</p>
+              <p id="activeSessions" class="text-2xl font-semibold text-slate-900">-</p>
+            </div>
+            <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+              <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Active Sessions -->
+        <div class="lg:col-span-2 bg-white rounded-lg shadow">
+          <div class="p-4 border-b border-slate-200">
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold text-slate-800">Active Sessions</h2>
+              <button id="refreshSessions" class="text-sm bg-indigo-600 text-white rounded px-3 py-1">Refresh</button>
+            </div>
+          </div>
+          <div class="p-4">
+            <div id="activeSessionsList" class="space-y-3">
+              <div class="text-center py-8 text-slate-500">Loading active sessions...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Language Distribution -->
+        <div class="bg-white rounded-lg shadow">
+          <div class="p-4 border-b border-slate-200">
+            <h2 class="font-semibold text-slate-800">Language Distribution</h2>
+          </div>
+          <div class="p-4">
+            <canvas id="languageChart" width="300" height="300"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <!-- Call Volume Over Time -->
+        <div class="bg-white rounded-lg shadow">
+          <div class="p-4 border-b border-slate-200">
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold text-slate-800">Call Volume (Last 24h)</h2>
+              <select id="timeRange" class="text-sm border rounded px-2 py-1">
+                <option value="24h">Last 24h</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+            </div>
+          </div>
+          <div class="p-4">
+            <canvas id="volumeChart" width="400" height="200"></canvas>
+          </div>
+        </div>
+
+        <!-- System Performance -->
+        <div class="bg-white rounded-lg shadow">
+          <div class="p-4 border-b border-slate-200">
+            <h2 class="font-semibold text-slate-800">System Performance</h2>
+          </div>
+          <div class="p-4">
+            <div class="space-y-4">
+              <!-- Average Latency -->
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span>Average Latency</span>
+                  <span id="avgLatency">-</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2">
+                  <div id="latencyBar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+              </div>
+              
+              <!-- Answer Rate -->
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span>Answer Rate</span>
+                  <span id="answerRate">-</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2">
+                  <div id="answerRateBar" class="bg-green-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+              </div>
+              
+              <!-- Error Rate -->
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span>Error Rate</span>
+                  <span id="errorRate">-</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2">
+                  <div id="errorRateBar" class="bg-red-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+              </div>
+
+              <!-- LiveKit Connection Status -->
+              <div class="pt-4 border-t">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-medium">LiveKit Status</span>
+                  <div class="flex items-center gap-2">
+                    <div id="livekitStatus" class="w-3 h-3 bg-gray-400 rounded-full"></div>
+                    <span id="livekitStatusText" class="text-sm text-slate-600">Checking...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Activities -->
+      <div class="bg-white rounded-lg shadow mt-6">
+        <div class="p-4 border-b border-slate-200">
+          <h2 class="font-semibold text-slate-800">Recent Activities</h2>
+        </div>
+        <div class="p-4">
+          <div id="recentActivities" class="space-y-3">
+            <div class="text-center py-8 text-slate-500">Loading activities...</div>
+          </div>
+        </div>
+      </div>
+    </main>
+    
+    <script>
+      // Session info
+      fetch('/api/auth/me', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject()).then(u => {
+        document.getElementById('who').textContent = u.email;
+        // Show admin link for admin users
+        if (u.role === 'admin') {
+          document.getElementById('adminLink').classList.remove('hidden');
+        }
+      }).catch(() => location.href = '/app/login');
+      document.getElementById('logout').onclick = async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); location.href = '/app/login'; };
+
+      // Global variables
+      let volumeChart, languageChart;
+      let refreshInterval;
+
+      // Initialize charts
+      function initializeCharts() {
+        // Volume Chart
+        const volumeCtx = document.getElementById('volumeChart').getContext('2d');
+        volumeChart = new Chart(volumeCtx, {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [{
+              label: 'Calls',
+              data: [],
+              borderColor: 'rgb(99, 102, 241)',
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              tension: 0.4,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: { beginAtZero: true }
+            }
+          }
+        });
+
+        // Language Chart
+        const languageCtx = document.getElementById('languageChart').getContext('2d');
+        languageChart = new Chart(languageCtx, {
+          type: 'doughnut',
+          data: {
+            labels: [],
+            datasets: [{
+              data: [],
+              backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6']
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom' }
+            }
+          }
+        });
+      }
+
+      // Load dashboard data
+      async function loadDashboardData() {
+        try {
+          const [kpiRes, sessionsRes] = await Promise.all([
+            fetch('/api/dashboard/kpi', { credentials: 'include' }),
+            fetch('/api/livekit/rooms', { credentials: 'include' })
+          ]);
+
+          const kpiData = kpiRes.ok ? await kpiRes.json() : {};
+          const sessions = sessionsRes.ok ? await sessionsRes.json() : [];
+
+          updateKPIs(kpiData);
+          updateActiveSessions(sessions);
+          updateCharts(kpiData);
+          updateSystemPerformance(kpiData);
+          loadRecentActivities();
+        } catch (err) {
+          console.error('Failed to load dashboard data:', err);
+        }
+      }
+
+      function updateKPIs(data) {
+        document.getElementById('totalCallsToday').textContent = data.totalCallsToday || '0';
+        document.getElementById('successRate').textContent = data.successRate ? data.successRate + '%' : '0%';
+        document.getElementById('avgDuration').textContent = data.avgDuration || '0:00';
+        document.getElementById('activeSessions').textContent = data.activeSessions || '0';
+      }
+
+      function updateActiveSessions(sessions) {
+        const container = document.getElementById('activeSessionsList');
+        container.innerHTML = '';
+
+        if (!sessions || sessions.length === 0) {
+          container.innerHTML = '<div class="text-center py-8 text-slate-500">No active sessions</div>';
+          return;
+        }
+
+        for (const session of sessions) {
+          const sessionEl = document.createElement('div');
+          sessionEl.className = 'flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50';
+          sessionEl.innerHTML = `
+            <div class="flex items-center gap-3">
+              <div class="w-3 h-3 bg-green-500 rounded-full pulse-dot"></div>
+              <div>
+                <div class="font-medium text-sm">${session.name}</div>
+                <div class="text-xs text-slate-500">${session.num_participants || 0} participants</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-500">${getTimeDiff(session.creation_time)}</span>
+              <button onclick="joinSession('${session.name}')" class="text-xs bg-indigo-600 text-white rounded px-2 py-1">
+                Join
+              </button>
+            </div>
+          `;
+          container.appendChild(sessionEl);
+        }
+      }
+
+      function updateCharts(data) {
+        // Update volume chart
+        if (data.volumeData) {
+          volumeChart.data.labels = data.volumeData.labels || [];
+          volumeChart.data.datasets[0].data = data.volumeData.values || [];
+          volumeChart.update();
+        }
+
+        // Update language chart
+        if (data.languageDistribution) {
+          languageChart.data.labels = Object.keys(data.languageDistribution);
+          languageChart.data.datasets[0].data = Object.values(data.languageDistribution);
+          languageChart.update();
+        }
+      }
+
+      function updateSystemPerformance(data) {
+        // Average Latency
+        const avgLatency = data.avgLatency || 0;
+        document.getElementById('avgLatency').textContent = avgLatency + 'ms';
+        document.getElementById('latencyBar').style.width = Math.min((avgLatency / 1000) * 100, 100) + '%';
+
+        // Answer Rate
+        const answerRate = data.answerRate || 0;
+        document.getElementById('answerRate').textContent = answerRate + '%';
+        document.getElementById('answerRateBar').style.width = answerRate + '%';
+
+        // Error Rate
+        const errorRate = data.errorRate || 0;
+        document.getElementById('errorRate').textContent = errorRate + '%';
+        document.getElementById('errorRateBar').style.width = errorRate + '%';
+
+        // LiveKit Status
+        updateLivekitStatus();
+      }
+
+      async function updateLivekitStatus() {
+        try {
+          const res = await fetch('/api/livekit/rooms', { credentials: 'include' });
+          const statusEl = document.getElementById('livekitStatus');
+          const textEl = document.getElementById('livekitStatusText');
+          
+          if (res.ok) {
+            statusEl.className = 'w-3 h-3 bg-green-500 rounded-full';
+            textEl.textContent = 'Connected';
+          } else {
+            statusEl.className = 'w-3 h-3 bg-red-500 rounded-full';
+            textEl.textContent = 'Disconnected';
+          }
+        } catch (err) {
+          document.getElementById('livekitStatus').className = 'w-3 h-3 bg-red-500 rounded-full';
+          document.getElementById('livekitStatusText').textContent = 'Error';
+        }
+      }
+
+      async function loadRecentActivities() {
+        try {
+          const res = await fetch('/api/calls/log?limit=10', { credentials: 'include' });
+          const activities = res.ok ? await res.json() : [];
+          const container = document.getElementById('recentActivities');
+          container.innerHTML = '';
+
+          if (activities.length === 0) {
+            container.innerHTML = '<div class="text-center py-8 text-slate-500">No recent activities</div>';
+            return;
+          }
+
+          for (const activity of activities) {
+            const activityEl = document.createElement('div');
+            activityEl.className = 'flex items-center gap-3 p-2 hover:bg-slate-50 rounded';
+            
+            const statusIcon = getStatusIcon(activity.call_status);
+            const timeAgo = getTimeDiff(activity.start_time);
+            
+            activityEl.innerHTML = `
+              <div class="flex-shrink-0">
+                ${statusIcon}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-slate-900">
+                  Call with ${activity.customer_id}
+                </div>
+                <div class="text-xs text-slate-500">
+                  ${activity.campaign_id} • ${activity.language_detected} • ${timeAgo}
+                </div>
+              </div>
+              <div class="flex-shrink-0">
+                <span class="px-2 py-1 text-xs rounded-full ${getStatusClass(activity.call_status)}">
+                  ${activity.call_status}
+                </span>
+              </div>
+            `;
+            container.appendChild(activityEl);
+          }
+        } catch (err) {
+          console.error('Failed to load recent activities:', err);
+        }
+      }
+
+      // Utility functions
+      function getTimeDiff(timestamp) {
+        const now = new Date();
+        const then = new Date(timestamp);
+        const diff = Math.floor((now - then) / 1000);
+
+        if (diff < 60) return diff + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return Math.floor(diff / 86400) + 'd ago';
+      }
+
+      function getStatusIcon(status) {
+        const icons = {
+          'success': '<div class="w-2 h-2 bg-green-500 rounded-full"></div>',
+          'failed': '<div class="w-2 h-2 bg-red-500 rounded-full"></div>',
+          'dropped': '<div class="w-2 h-2 bg-yellow-500 rounded-full"></div>',
+          'no_answer': '<div class="w-2 h-2 bg-gray-500 rounded-full"></div>'
+        };
+        return icons[status] || '<div class="w-2 h-2 bg-gray-500 rounded-full"></div>';
+      }
+
+      function getStatusClass(status) {
+        const classes = {
+          'success': 'bg-green-100 text-green-800',
+          'failed': 'bg-red-100 text-red-800',
+          'dropped': 'bg-yellow-100 text-yellow-800',
+          'no_answer': 'bg-gray-100 text-gray-800'
+        };
+        return classes[status] || 'bg-gray-100 text-gray-800';
+      }
+
+      function joinSession(roomName) {
+        // Navigate to agent studio with the room pre-filled
+        window.location.href = `/app/agent-studio.html?room=${encodeURIComponent(roomName)}`;
+      }
+
+      // Event handlers
+      document.getElementById('refreshSessions').onclick = loadDashboardData;
+      document.getElementById('timeRange').onchange = loadDashboardData;
+
+      // Auto-refresh every 30 seconds
+      function startAutoRefresh() {
+        refreshInterval = setInterval(loadDashboardData, 30000);
+      }
+
+      function stopAutoRefresh() {
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+          refreshInterval = null;
+        }
+      }
+
+      // Page visibility handling
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          stopAutoRefresh();
+        } else {
+          startAutoRefresh();
+          loadDashboardData(); // Refresh immediately when page becomes visible
+        }
+      });
+
+      // Initialize dashboard
+      initializeCharts();
+      loadDashboardData();
+      startAutoRefresh();
+
+      // Cleanup on page unload
+      window.addEventListener('beforeunload', stopAutoRefresh);
+    </script>
+  </body>
+</html>
