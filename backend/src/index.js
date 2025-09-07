@@ -116,10 +116,13 @@ app.get('/app/login', (req, res) => {
 // Protected: app shell and tools
 app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'app')));
 
-// Protected: root-level dashboard and management pages
-app.use(requireSession, express.static(path.join(__dirname, 'public'), {
-  extensions: ['html']
-}));
+// Protected: specific root-level management pages (avoiding login.html)
+const protectedPages = ['dashboard.html', 'customers.html', 'call-review.html', 'admin.html'];
+protectedPages.forEach(page => {
+  app.get(`/${page}`, requireSession, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', page));
+  });
+});
 
 // Remove broad root-protected static to avoid intercepting /api/auth/login
 // Legacy pages (monitor/admin) can be accessed during transition under /legacy if needed
