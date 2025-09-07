@@ -6,7 +6,18 @@ const { requireSession } = require('../../middleware/sessionAuth');
 
 const router = express.Router();
 
-// Protect all cost routes with authentication
+// Test OneDrive connection (public endpoint for setup testing)
+router.get('/onedrive/test', async (req, res) => {
+  try {
+    const testResult = await onedriveService.testConnection();
+    res.json(testResult);
+  } catch (error) {
+    console.error('OneDrive test error:', error);
+    res.status(500).json({ message: 'OneDrive test failed', error: error.message });
+  }
+});
+
+// Protect all other cost routes with authentication
 router.use(requireSession);
 
 // Get cost summary for dashboard
@@ -87,16 +98,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Test OneDrive connection
-router.get('/onedrive/test', async (req, res) => {
-  try {
-    const testResult = await onedriveService.testConnection();
-    res.json(testResult);
-  } catch (error) {
-    console.error('OneDrive test error:', error);
-    res.status(500).json({ message: 'OneDrive test failed', error: error.message });
-  }
-});
+// OneDrive test is now above the auth middleware
 
 // Manually update cost rates (admin only)
 router.put('/rates', async (req, res) => {
