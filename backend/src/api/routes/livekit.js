@@ -1,6 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
+const roomsStore = require('../../util/roomsStore');
+
+function toHttpUrl(u) {
+  if (!u) return '';
+  if (u.startsWith('https://') || u.startsWith('http://')) return u;
+  if (u.startsWith('wss://')) return 'https://' + u.slice(6);
+  if (u.startsWith('ws://')) return 'http://' + u.slice(5);
+  return u;
+}
 
 router.get('/token', async (req, res) => {
   try {
@@ -15,6 +24,7 @@ router.get('/token', async (req, res) => {
     const at = new AccessToken(apiKey, apiSecret, { identity });
     at.addGrant({ room, roomJoin: true, canPublish: false, canSubscribe: true });
     const token = await at.toJwt();
+    try { roomsStore.touch(room); } catch(_) {}
     res.json({ token, room, identity, host: process.env.LIVEKIT_SERVER_URL });
   } catch (e) {
     console.error('livekit token error', e);
@@ -25,7 +35,7 @@ router.get('/token', async (req, res) => {
 // List active rooms (server-side)
 router.get('/rooms', async (req, res) => {
   try {
-    const host = process.env.LIVEKIT_SERVER_URL;
+    const host = process.env.LIVEKIT_API_URL || toHttpUrl(process.env.LIVEKIT_SERVER_URL);
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
     if (!host || !apiKey || !apiSecret) return res.status(500).json({ message: 'LiveKit not configured' });
@@ -35,6 +45,8 @@ router.get('/rooms', async (req, res) => {
     res.json(rooms.map(r => ({ name: r.name, num_participants: r.numParticipants || r.num_participants, empty_timeout: r.emptyTimeout || r.empty_timeout, creation_time: r.creationTime || r.creation_time })));
   } catch (e) {
     console.error('livekit rooms error', e);
+    // Fallback to recent rooms in memory
+    try { return res.json(roomsStore.list()); } catch(_) {}
     res.status(500).json({ message: 'error' });
   }
 });
@@ -42,7 +54,7 @@ router.get('/rooms', async (req, res) => {
 // List participants for a given room
 router.get('/rooms/:name/participants', async (req, res) => {
   try {
-    const host = process.env.LIVEKIT_SERVER_URL;
+    const host = process.env.LIVEKIT_API_URL || toHttpUrl(process.env.LIVEKIT_SERVER_URL);
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
     if (!host || !apiKey || !apiSecret) return res.status(500).json({ message: 'LiveKit not configured' });
@@ -53,6 +65,11 @@ router.get('/rooms/:name/participants', async (req, res) => {
     console.error('livekit participants error', e);
     res.status(500).json({ message: 'error' });
   }
+});
+
+// Fallback: recent rooms seen by this backend (no admin API)
+router.get('/recent-rooms', (req, res) => {
+  try { res.json(roomsStore.list()); } catch (_) { res.json([]); }
 });
 
 module.exports = router;

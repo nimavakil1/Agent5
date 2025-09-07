@@ -16,7 +16,14 @@ const openai = new OpenAI({
 const OPENAI_REALTIME_SESSIONS_URL = 'https://api.openai.com/v1/realtime/sessions';
 
 // LiveKit configuration
-const livekitHost = process.env.LIVEKIT_SERVER_URL;
+function toHttpUrl(u) {
+  if (!u) return '';
+  if (u.startsWith('https://') || u.startsWith('http://')) return u;
+  if (u.startsWith('wss://')) return 'https://' + u.slice(6);
+  if (u.startsWith('ws://')) return 'http://' + u.slice(5);
+  return u;
+}
+const livekitHost = toHttpUrl(process.env.LIVEKIT_API_URL || process.env.LIVEKIT_SERVER_URL);
 const apiKey = process.env.LIVEKIT_API_KEY;
 const apiSecret = process.env.LIVEKIT_API_SECRET;
 const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
@@ -123,6 +130,7 @@ function createWebSocketServer(server) {
         const query = parsedUrl.query || {};
         const roomName = String(query.room || '').replace(/[^a-zA-Z0-9_-]/g, '');
         if (!roomName) { telnyxWs.close(); return; }
+        try { require('../util/roomsStore').touch(roomName); } catch(_) {}
         const primeText = typeof query.text === 'string' ? String(query.text) : '';
 
         const { AccessToken } = require('livekit-server-sdk');
