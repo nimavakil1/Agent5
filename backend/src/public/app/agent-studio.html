@@ -191,6 +191,7 @@
             if(m.type==='transcript_delta'){ const el=document.getElementById('transcript'); el.textContent+=m.text; el.scrollTop=el.scrollHeight; }
             if(m.type==='agent_speaking'){ const ab=document.getElementById('agentBadge'); if(m.speaking){ ab.textContent='Agent: speaking'; ab.className='px-2 py-1 rounded text-xs bg-indigo-600 text-white'; } else { ab.textContent='Agent: idle'; ab.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600'; } }
             if(m.type==='agent_audio_24k' && m.audio){ playAgent24k(m.audio); }
+            if(m.type==='barge_in'){ duckAndFlush(); }
           }catch(_){}
         };
         ws.onclose = ()=> setState('idle');
@@ -233,9 +234,12 @@
 
       // Direct audio playback of 24k PCM16 from WS
       let playHead = 0;
+      let agentGain = null;
+      let scheduled = [];
       function playAgent24k(b64){
         try{
           if(!audioCtx){ return; }
+          if(!agentGain){ agentGain = audioCtx.createGain(); agentGain.gain.setValueAtTime(1.0, audioCtx.currentTime); agentGain.connect(audioCtx.destination); }
           const bin = atob(b64);
           const len = (bin.length/2)|0;
           const buf = audioCtx.createBuffer(1, len, 24000);
@@ -246,10 +250,22 @@
             ch[i] = v / 32768;
           }
           const src = audioCtx.createBufferSource();
-          src.buffer = buf; src.connect(audioCtx.destination);
+          src.buffer = buf; src.connect(agentGain);
           const now = audioCtx.currentTime;
           if (playHead < now + 0.02) playHead = now + 0.02;
-          src.start(playHead); playHead += buf.duration;
+          src.start(playHead); scheduled.push(src); src.onended = () => { scheduled = scheduled.filter(x => x !== src); };
+          playHead += buf.duration;
+        }catch(_){ }
+      }
+      function duckAndFlush(){
+        try{
+          if(!audioCtx) return;
+          const now = audioCtx.currentTime;
+          if(agentGain){ agentGain.gain.cancelScheduledValues(now); agentGain.gain.setTargetAtTime(0.0, now, 0.02); }
+          for(const s of scheduled){ try{ s.stop(); } catch(_){} }
+          scheduled = [];
+          playHead = audioCtx.currentTime + 0.02;
+          if(agentGain){ agentGain.gain.setTargetAtTime(1.0, now+0.06, 0.05); }
         }catch(_){ }
       }
 

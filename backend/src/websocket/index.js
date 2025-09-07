@@ -167,6 +167,12 @@ function createWebSocketServer(server) {
         let currentResponseId = null;
         let agentSpeaking = false;
         let agentSpeakingSent = false;
+        // Simple server-side VAD for barge-in
+        let userSpeaking = false;
+        let aboveCnt = 0;
+        let belowCnt = 0;
+        const speakTh = Number(process.env.SERVER_VAD_SPEAK_TH || '0.008');
+        const silentTh = Number(process.env.SERVER_VAD_SILENT_TH || '0.003');
         oaWs.on('open', () => {
           try {
             // Apply saved settings as-is
@@ -176,7 +182,7 @@ function createWebSocketServer(server) {
                 instructions: settings.instructions || 'You are a helpful assistant.',
                 voice: settings.voice || undefined,
                 input_audio_format: 'pcm16',
-                turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 250, silence_duration_ms: 300 }
+                turn_detection: { type: 'server_vad', threshold: 0.38, prefix_padding_ms: 180, silence_duration_ms: 220 }
               }
             }));
             // If a prime text was provided, send as an initial user message and request a response
@@ -234,6 +240,26 @@ function createWebSocketServer(server) {
           try {
             const m = JSON.parse(raw.toString());
             if (m.type === 'audio' && m.audio && oaWs.readyState === WebSocket.OPEN) {
+              // Server VAD onset for barge-in
+              try {
+                const b = Buffer.from(m.audio, 'base64');
+                let sum = 0; let n = 0;
+                for (let i = 0; i + 1 < b.length; i += 2) {
+                  let v = b.readInt16LE(i);
+                  sum += (v * v);
+                  n++;
+                }
+                const rms = n ? Math.sqrt(sum / n) / 32768 : 0;
+                if (rms > speakTh) { aboveCnt++; belowCnt = 0; } else if (rms < silentTh) { belowCnt++; aboveCnt = 0; } else { aboveCnt = 0; belowCnt = 0; }
+                if (!userSpeaking && aboveCnt >= 2) {
+                  userSpeaking = true; aboveCnt = 0;
+                  // Cancel current agent response and flush playback
+                  try { if (currentResponseId) { oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId }, response_id: currentResponseId })); } else { oaWs.send(JSON.stringify({ type: 'response.cancel' })); } } catch(_) {}
+                  try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(_) {}
+                  agentSpeaking = false; agentSpeakingSent = false;
+                }
+                if (userSpeaking && belowCnt >= 10) { userSpeaking = false; belowCnt = 0; }
+              } catch(_) {}
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));

@@ -61,7 +61,7 @@ router.post('/demo-speak', async (req, res) => {
             instructions: instructions || 'You are a helpful assistant.',
             voice: voice || undefined,
             input_audio_format: 'pcm16',
-            turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 250, silence_duration_ms: 300 },
+            turn_detection: { type: 'server_vad', threshold: 0.38, prefix_padding_ms: 180, silence_duration_ms: 220 },
           },
         }));
         // Log a short preview of the instructions used (for debugging)
