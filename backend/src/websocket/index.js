@@ -229,6 +229,9 @@ function createWebSocketServer(server) {
             if (m.type === 'session.updated') {
               console.log('OpenAI session.updated:', JSON.stringify(m, null, 2));
             }
+            if (m.type === 'error') {
+              console.error('OpenAI ERROR:', JSON.stringify(m, null, 2));
+            }
             if (m.type === 'response.created' && m.response) {
               currentResponseId = m.response.id || null;
               try { publisher.muteAgent(false); } catch(_) {}
