@@ -146,11 +146,17 @@ function createWebSocketServer(server) {
         } catch (_) {}
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
-        const at = new AccessToken(apiKey, apiSecret, { identity });
-        at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
-        const token = await at.toJwt();
-        const publisher = await createPublisher({ host: livekitHost, token, roomName });
-        if (!publisher) { telnyxWs.close(); return; }
+        let publisher = null;
+        if (process.env.AGENTSTREAM_PUBLISH_LIVEKIT === '1') {
+          try {
+            const at = new AccessToken(apiKey, apiSecret, { identity });
+            at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
+            const token = await at.toJwt();
+            publisher = await createPublisher({ host: livekitHost, token, roomName });
+          } catch (e) {
+            console.error('LiveKit publisher error (continuing without LiveKit):', e?.message || e);
+          }
+        }
 
         // OpenAI Realtime WS
         const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
@@ -208,7 +214,8 @@ function createWebSocketServer(server) {
                 try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(_) {}
               }
               const pcm24k = Buffer.from(m.delta, 'base64');
-              publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+              if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+              try { telnyxWs.send(JSON.stringify({ type: 'agent_audio_24k', audio: m.delta })); } catch(_) {}
               if (!notified) {
                 notified = true;
                 try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
@@ -218,11 +225,11 @@ function createWebSocketServer(server) {
               agentSpeaking = false;
               agentSpeakingSent = false;
               try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(_) {}
-              try { publisher.muteAgent(false); } catch(_) {}
+              try { publisher && publisher.muteAgent(false); } catch(_) {}
             }
           } catch (_) {}
         });
-        const closeAll = async () => { try { oaWs.close(); } catch(_) {}; try { await publisher.close(); } catch(_) {} };
+        const closeAll = async () => { try { oaWs.close(); } catch(_) {}; try { publisher && await publisher.close(); } catch(_) {} };
         telnyxWs.on('message', (raw) => {
           try {
             const m = JSON.parse(raw.toString());

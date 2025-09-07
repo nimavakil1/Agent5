@@ -190,6 +190,7 @@
             if(m.type==='first_audio_delta' && lastCommitAt){ const dt=Date.now()-lastCommitAt; latEl.textContent=dt+' ms'; }
             if(m.type==='transcript_delta'){ const el=document.getElementById('transcript'); el.textContent+=m.text; el.scrollTop=el.scrollHeight; }
             if(m.type==='agent_speaking'){ const ab=document.getElementById('agentBadge'); if(m.speaking){ ab.textContent='Agent: speaking'; ab.className='px-2 py-1 rounded text-xs bg-indigo-600 text-white'; } else { ab.textContent='Agent: idle'; ab.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600'; } }
+            if(m.type==='agent_audio_24k' && m.audio){ playAgent24k(m.audio); }
           }catch(_){}
         };
         ws.onclose = ()=> setState('idle');
@@ -228,6 +229,28 @@
         } catch (_) {}
       }
       async function leaveLiveKit(){ try { if (lkRoom) { await lkRoom.disconnect(); lkRoom=null; document.getElementById('tracks').innerHTML=''; } } catch(_) {}
+      }
+
+      // Direct audio playback of 24k PCM16 from WS
+      let playHead = 0;
+      function playAgent24k(b64){
+        try{
+          if(!audioCtx){ return; }
+          const bin = atob(b64);
+          const len = (bin.length/2)|0;
+          const buf = audioCtx.createBuffer(1, len, 24000);
+          const ch = buf.getChannelData(0);
+          for(let i=0, j=0; i<len; i++, j+=2){
+            let v = (bin.charCodeAt(j) | (bin.charCodeAt(j+1) << 8));
+            if (v & 0x8000) v = v - 0x10000;
+            ch[i] = v / 32768;
+          }
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf; src.connect(audioCtx.destination);
+          const now = audioCtx.currentTime;
+          if (playHead < now + 0.02) playHead = now + 0.02;
+          src.start(playHead); playHead += buf.duration;
+        }catch(_){ }
       }
 
       async function startTalk(){
