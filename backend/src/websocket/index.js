@@ -78,7 +78,7 @@ async function createOpenAISession(customerRecord = null) {
   try {
     // Load saved agent settings (await the async accessor)
     const saved = await agentSettings.getSettings();
-    let instructions = saved?.instructions || 'You are a helpful AI assistant for a call center.';
+    let instructions = saved?.instructions;
     let voice = saved?.voice || undefined;
     if (customerRecord) {
       instructions += ` The customer's name is ${customerRecord.name}. Their preferred language is ${customerRecord.preferred_language || 'English'}. Their historical offers include: ${customerRecord.historical_offers.join(', ')}.`;
@@ -184,7 +184,7 @@ function createWebSocketServer(server) {
             oaWs.send(JSON.stringify({
               type: 'session.update',
               session: {
-                instructions: settings.instructions || 'You are a helpful assistant.',
+                instructions: settings.instructions,
                 voice: settings.voice || undefined,
                 input_audio_format: 'pcm16',
                 turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence }
