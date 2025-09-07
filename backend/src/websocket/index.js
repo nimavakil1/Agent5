@@ -225,6 +225,10 @@ function createWebSocketServer(server) {
           try {
             const s = typeof data === 'string' ? data : data.toString('utf8');
             const m = JSON.parse(s);
+            console.log('OpenAI message type:', m.type);
+            if (m.type === 'session.updated') {
+              console.log('OpenAI session.updated:', JSON.stringify(m, null, 2));
+            }
             if (m.type === 'response.created' && m.response) {
               currentResponseId = m.response.id || null;
               try { publisher.muteAgent(false); } catch(_) {}
