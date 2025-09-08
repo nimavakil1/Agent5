@@ -124,6 +124,35 @@ async function createOpenAISession(customerRecord = null) {
 function createWebSocketServer(server) {
   const wss = new WebSocket.Server({ server });
 
+  // --- Start Shared Audio Helpers ---
+  function linearToUlaw(sample) {
+    // Convert 16-bit PCM sample to 8-bit u-law
+    const BIAS = 0x84;
+    const CLIP = 32635;
+    let sign = (sample >> 8) & 0x80;
+    if (sign !== 0) sample = -sample;
+    if (sample > CLIP) sample = CLIP;
+    sample = sample + BIAS;
+    const exponent = ulaw_exponent_table[(sample >> 7) & 0xFF];
+    const mantissa = (sample >> (exponent + 3)) & 0x0F;
+    let ulawByte = ~(sign | (exponent << 4) | mantissa) & 0xFF;
+    return ulawByte;
+  }
+
+  // Precompute exponent table for u-law
+  const ulaw_exponent_table = new Uint8Array(256);
+  (function makeExpTable() {
+    let exp = 0;
+    for (let i = 0; i < 256; i++) {
+      if (i < 16) exp = 0;
+      else if (i < 32) exp = 1;
+      else if (i < 64) exp = 2;
+      else if (i < 128) exp = 3;
+      else exp = 4;
+      ulaw_exponent_table[i] = exp;
+    }
+  })();
+
   // Helper to convert 24kHz PCM to 8kHz u-law for recording browser audio
   function pcm24kToUlaw8k(pcm24kLeBuf) {
     const pcm16kArr = new Int16Array(pcm24kLeBuf.buffer, pcm24kLeBuf.byteOffset, pcm24kLeBuf.length / 2);
@@ -137,6 +166,7 @@ function createWebSocketServer(server) {
     }
     return ulaw;
   }
+  // --- End Shared Audio Helpers ---
 
   wss.on('connection', async (telnyxWs, req) => { // Add req parameter
     const parsedUrl = url.parse(req.url, true);
@@ -147,7 +177,7 @@ function createWebSocketServer(server) {
         const query = parsedUrl.query || {};
         const roomName = String(query.room || '').replace(/[^a-zA-Z0-9_-]/g, '');
         if (!roomName) { telnyxWs.close(); return; }
-        try { require('../util/roomsStore').touch(roomName); } catch(_) {}
+        try { require('../util/roomsStore').touch(roomName); } catch(e) { console.error('Error touching room store:', e); }
         const primeText = typeof query.text === 'string' ? String(query.text) : '';
 
         const { AccessToken } = require('livekit-server-sdk');
@@ -292,14 +322,14 @@ function createWebSocketServer(server) {
               }));
               oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio','text'], voice: settings.voice || undefined } }));
             }
-          } catch (_) {}
+          } catch (e) { console.error('Error on OA open:', e); }
         });
         let notified = false;
         oaWs.on('message', (data) => {
           try {
             const s = typeof data === 'string' ? data : data.toString('utf8');
             const m = JSON.parse(s);
-            console.log('OpenAI message type:', m.type);
+            // console.log('OpenAI message type:', m.type); // Too noisy
             if (m.type === 'session.updated') {
               console.log('OpenAI session.updated:', JSON.stringify(m, null, 2));
             }
@@ -308,37 +338,37 @@ function createWebSocketServer(server) {
             }
             if (m.type === 'response.created' && m.response) {
               currentResponseId = m.response.id || null;
-              try { publisher.muteAgent(false); } catch(_) {}
+              try { publisher.muteAgent(false); } catch(e) { console.error('Error muting agent:', e); }
             }
             if ((m.type === 'response.audio_transcript.delta' || m.type === 'response.output_text.delta') && m.delta) {
               currentTranscription += m.delta; // Accumulate transcription
-              try { telnyxWs.send(JSON.stringify({ type: 'transcript_delta', text: m.delta })); } catch(_) {}
+              try { telnyxWs.send(JSON.stringify({ type: 'transcript_delta', text: m.delta })); } catch(e) { console.error('Error sending transcript delta:', e); }
             }
             if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta) {
               agentSpeaking = true;
               if (!agentSpeakingSent) {
                 agentSpeakingSent = true;
-                try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(_) {}
+                try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(e) { console.error('Error sending agent_speaking=true:', e); }
               }
               const pcm24k = Buffer.from(m.delta, 'base64');
               if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
-              try { telnyxWs.send(JSON.stringify({ type: 'agent_audio_24k', audio: m.delta })); } catch(_) {}
+              try { telnyxWs.send(JSON.stringify({ type: 'agent_audio_24k', audio: m.delta })); } catch(e) { console.error('Error sending agent_audio_24k:', e); }
               if (!notified) {
                 notified = true;
-                try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
+                try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(e) { console.error('Error sending first_audio_delta:', e); }
               }
             }
             if (m.type === 'response.done') {
               agentSpeaking = false;
               agentSpeakingSent = false;
-              try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(_) {}
-              try { publisher && publisher.muteAgent(false); } catch(_) {}
+              try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(e) { console.error('Error sending agent_speaking=false:', e); }
+              try { publisher && publisher.muteAgent(false); } catch(e) { console.error('Error muting agent on done:', e); }
             }
-          } catch (_) {}
+          } catch (e) { console.error('Error processing OA message:', e); }
         });
         const closeAll = async () => { 
-          try { oaWs.close(); } catch(_) {};
-          try { publisher && await publisher.close(); } catch(_) {};
+          try { oaWs.close(); } catch(e) { console.error('Error closing OA ws:', e); };
+          try { publisher && await publisher.close(); } catch(e) { console.error('Error closing publisher:', e); };
           
           // --- Finalize browser call recording ---
           try {
@@ -407,10 +437,14 @@ function createWebSocketServer(server) {
               const pcm24kBuffer = Buffer.from(m.audio, 'base64');
 
               // --- Write to recording file ---
-              if (audioWriteStream) {
-                const ulaw8kBuffer = pcm24kToUlaw8k(pcm24kBuffer);
-                audioWriteStream.write(ulaw8kBuffer);
-                bytesWritten += ulaw8kBuffer.length;
+              try {
+                if (audioWriteStream) {
+                  const ulaw8kBuffer = pcm24kToUlaw8k(pcm24kBuffer);
+                  audioWriteStream.write(ulaw8kBuffer);
+                  bytesWritten += ulaw8kBuffer.length;
+                }
+              } catch (e) {
+                console.error('Error writing to recording file:', e);
               }
               // --- End write ---
 
@@ -428,22 +462,27 @@ function createWebSocketServer(server) {
                 if (!userSpeaking && aboveCnt >= need) {
                   userSpeaking = true; aboveCnt = 0;
                   // Cancel current agent response and flush playback
-                  try { if (currentResponseId) { oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId }, response_id: currentResponseId })); } else { oaWs.send(JSON.stringify({ type: 'response.cancel' })); } } catch(_) {}
-                  try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(_) {}
+                  try { if (currentResponseId) { oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId }, response_id: currentResponseId })); } else { oaWs.send(JSON.stringify({ type: 'response.cancel' })); } } catch(e) { console.error('Error sending response.cancel:', e); }
+                  try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(e) { console.error('Error sending barge_in:', e); }
                   agentSpeaking = false; agentSpeakingSent = false;
                 }
                 if (userSpeaking && belowCnt >= 12) { userSpeaking = false; belowCnt = 0; }
-              } catch(_) {}
+              } catch(e) { console.error('Error in VAD logic:', e); }
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
               oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio'] } }));
             }
             // client VAD messages removed when using server_vad
-          } catch(_) {}
+          } catch(e) {
+            console.error('Error in agent-stream message handler:', e);
+          }
         });
         telnyxWs.on('close', closeAll); telnyxWs.on('error', closeAll); oaWs.on('close', closeAll); oaWs.on('error', closeAll);
-      } catch (_) { try { telnyxWs.close(); } catch(_) {} }
+      } catch (e) { 
+        console.error('Error in agent-stream connection setup:', e);
+        try { telnyxWs.close(); } catch(e) { console.error('Error closing ws on setup fail:', e); } 
+      }
       return;
     }
     console.log('Telnyx WebSocket client connected');
@@ -487,34 +526,6 @@ function createWebSocketServer(server) {
     let aiPcmuQueue = Buffer.alloc(0);
     let aiSendTimer = null;
     const AI_FRAME_SAMPLES = 160; // 20ms @8kHz
-
-    function linearToUlaw(sample) {
-      // Convert 16-bit PCM sample to 8-bit u-law
-      const BIAS = 0x84;
-      const CLIP = 32635;
-      let sign = (sample >> 8) & 0x80;
-      if (sign !== 0) sample = -sample;
-      if (sample > CLIP) sample = CLIP;
-      sample = sample + BIAS;
-      const exponent = ulaw_exponent_table[(sample >> 7) & 0xFF];
-      const mantissa = (sample >> (exponent + 3)) & 0x0F;
-      let ulawByte = ~(sign | (exponent << 4) | mantissa) & 0xFF;
-      return ulawByte;
-    }
-
-    // Precompute exponent table for u-law
-    const ulaw_exponent_table = new Uint8Array(256);
-    (function makeExpTable() {
-      let exp = 0;
-      for (let i = 0; i < 256; i++) {
-        if (i < 16) exp = 0;
-        else if (i < 32) exp = 1;
-        else if (i < 64) exp = 2;
-        else if (i < 128) exp = 3;
-        else exp = 4;
-        ulaw_exponent_table[i] = exp;
-      }
-    })();
 
     function downsample24kTo8k(pcmLeBuf) {
       // Buffer of 16-bit LE samples at 24kHz -> Int16Array at 8kHz by decimation
@@ -601,11 +612,6 @@ function createWebSocketServer(server) {
       });
       const telnyxParticipantToken = telnyxParticipantAccessToken.toJwt();
 
-      // This part is tricky: LiveKit SDK is for server-side room management, not joining as a client.
-      // To join as a client, we'd typically use livekit-client SDK in a browser or a separate process.
-      // For a server-side bot, we'd use livekit-server-sdk to manage tracks.
-      // For now, we'll just ensure the room exists and log.
-      // Actual publishing will require a LiveKit client.
       try {
         livekitRoom = await roomService.getRoom(roomName);
         console.log(`LiveKit room ${roomName} exists.`);
@@ -645,20 +651,18 @@ function createWebSocketServer(server) {
           openaiWs.send(
             JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'], voice: settings?.voice || undefined } })
           );
-        } catch (_) {}
+        } catch (e) { console.error('Error priming OA response:', e); }
       });
 
       openaiWs.on('message', async (data) => {
         try {
           const str = typeof data === 'string' ? data : data.toString('utf8');
           const openaiResponse = JSON.parse(str);
-          console.log('Received from OpenAI:', openaiResponse);
+          // console.log('Received from OpenAI:', openaiResponse.type); // Too noisy
 
           // Text streaming per Realtime events
           if (openaiResponse.type === 'response.output_text.delta' && openaiResponse.delta) {
             const textContent = openaiResponse.delta;
-            console.log('OpenAI Text Output:', textContent);
-
             currentTranscription += textContent + ' '; // Append to transcription
 
             await ensureCallLogDefaults();
@@ -666,35 +670,6 @@ function createWebSocketServer(server) {
             await CallLogEntry.findOneAndUpdate(
               { call_id: roomName },
               { transcription: currentTranscription },
-              { new: true, runValidators: true }
-            );
-
-            // TODO: Language Detection and Switching
-            const detectedLanguage = 'en'; // Placeholder: Replace with actual detected language
-            console.log('Conceptual: Detected Language:', detectedLanguage);
-
-            // Store detected language in CallLogEntry
-            await CallLogEntry.findOneAndUpdate(
-              { call_id: roomName },
-              { language_detected: detectedLanguage },
-              { new: true, runValidators: true }
-            );
-
-            // TODO: Perform sentiment analysis on textContent
-            const sentiment = {
-              timestamp: new Date(),
-              sentiment: 'neutral', // Placeholder
-              score: 0.5, // Placeholder
-            };
-            console.log('Sentiment Analysis Result:', sentiment);
-
-            // Store sentiment in CallLogEntry
-            // This assumes a CallLogEntry already exists for this roomName/call_id
-            // In a real scenario, the CallLogEntry would be created when the call starts
-            // and updated throughout the call.
-            await CallLogEntry.findOneAndUpdate(
-              { call_id: roomName }, // Use roomName as call_id
-              { $push: { sentiment_scores: sentiment } },
               { new: true, runValidators: true }
             );
           }
@@ -795,9 +770,6 @@ function createWebSocketServer(server) {
               console.error('Error feeding callee audio to LiveKit:', e);
             }
           }
-
-          // TODO: Publish audio to LiveKit room via telnyxParticipant
-          // This would involve using LiveKit client SDK or a server-side bot framework
         } else if (data.event === 'stop') {
           console.log('Telnyx stream stopped:', data);
           // Stop AI sender
@@ -816,7 +788,7 @@ function createWebSocketServer(server) {
             openaiWs.close();
           }
           if (livekitPublisher) {
-            try { await livekitPublisher.close(); } catch (_) {}
+            try { await livekitPublisher.close(); } catch (e) { console.error('Error closing publisher on stop:', e); }
           }
           // Finalize WAV header and update DB
           try {
@@ -870,39 +842,9 @@ function createWebSocketServer(server) {
                 });
                 
                 costTrackingId = costTracking.call_id;
-                console.log(`Call costs calculated: $${costTracking.total_cost_usd.toFixed(4)}`);
+                console.log(`Call costs calculated: ${costTracking.total_cost_usd.toFixed(4)}`);
               } catch (costError) {
                 console.error('Cost calculation failed:', costError);
-                // Still update CallLogEntry with basic info
-                try {
-                  const callEndTime = new Date();
-                  const durationMinutes = (callEndTime - callStartTime) / (1000 * 60);
-                  
-                  const costTracking = await costCalculationService.updateCallCosts(roomName, 'pstn', {
-                    llm: {
-                      audio_input_minutes: audioInputMinutes,
-                      audio_output_minutes: audioOutputMinutes,
-                      input_tokens: inputTokenCount,
-                      output_tokens: outputTokenCount
-                    },
-                    pstn: {
-                      duration_minutes: durationMinutes
-                    },
-                    recording: {
-                      local_path: audioFilePath,
-                      upload_status: 'local_only'
-                    },
-                    transcription: {
-                      full_text: currentTranscription,
-                      language_detected: 'auto',
-                      confidence_score: 0.95
-                    }
-                  });
-                  
-                  costTrackingId = costTracking.call_id;
-                } catch (costError) {
-                  console.error('Cost calculation failed:', costError);
-                }
               }
               
               // Update CallLogEntry with enhanced information
@@ -920,7 +862,6 @@ function createWebSocketServer(server) {
           } catch (e) {
             console.error('Error finalizing WAV recording:', e);
           }
-          // TODO: Disconnect telnyxParticipant from LiveKit
         }
       } catch (error) {
         console.error('Error parsing Telnyx WebSocket message:', error);
@@ -937,7 +878,7 @@ function createWebSocketServer(server) {
         aiSendTimer = null;
       }
       if (livekitPublisher) {
-        try { await livekitPublisher.close(); } catch (_) {}
+        try { await livekitPublisher.close(); } catch (e) { console.error('Error closing publisher on close:', e); }
       }
 
       // Try to finalize header sizes if a file exists
@@ -959,7 +900,6 @@ function createWebSocketServer(server) {
       } catch (e) {
         console.error('Error finalizing WAV on close:', e);
       }
-      // TODO: Disconnect telnyxParticipant from LiveKit
     });
 
     telnyxWs.on('error', (error) => {
@@ -967,7 +907,6 @@ function createWebSocketServer(server) {
       if (openaiWs) {
         openaiWs.close();
       }
-      // TODO: Disconnect telnyxParticipant from LiveKit
     });
   });
 
