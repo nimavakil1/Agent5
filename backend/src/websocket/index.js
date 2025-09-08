@@ -724,14 +724,11 @@ function createWebSocketServer(server) {
               const audioRecordingUrl = `/recordings/${path.basename(audioFilePath)}`;
               await ensureCallLogDefaults();
               
-              // Upload to OneDrive and calculate costs
-              let onedriveUrl = '';
+              // Calculate costs (skip OneDrive upload)
+              let onedriveUrl = ''; // Will be empty for now
               let costTrackingId = '';
               try {
-                // Upload recording to OneDrive
-                const uploadResult = await onedriveService.uploadRecording(audioFilePath, roomName, callStartTime);
-                onedriveUrl = uploadResult.url;
-                console.log(`Recording uploaded to OneDrive: ${onedriveUrl}`);
+                console.log(`Recording saved locally: ${audioFilePath}`);
                 
                 // Calculate call duration and costs
                 const callEndTime = new Date();
@@ -750,9 +747,9 @@ function createWebSocketServer(server) {
                   },
                   recording: {
                     local_path: audioFilePath,
-                    onedrive_url: onedriveUrl,
-                    onedrive_file_id: uploadResult.fileId,
-                    upload_status: 'uploaded'
+                    onedrive_url: '', // Skip OneDrive for now
+                    onedrive_file_id: '',
+                    upload_status: 'local_only'
                   },
                   transcription: {
                     full_text: currentTranscription,
@@ -763,9 +760,9 @@ function createWebSocketServer(server) {
                 
                 costTrackingId = costTracking.call_id;
                 console.log(`Call costs calculated: $${costTracking.total_cost_usd.toFixed(4)}`);
-              } catch (uploadError) {
-                console.error('OneDrive upload failed:', uploadError);
-                // Still create cost tracking without OneDrive info
+              } catch (costError) {
+                console.error('Cost calculation failed:', costError);
+                // Still update CallLogEntry with basic info
                 try {
                   const callEndTime = new Date();
                   const durationMinutes = (callEndTime - callStartTime) / (1000 * 60);
@@ -782,7 +779,7 @@ function createWebSocketServer(server) {
                     },
                     recording: {
                       local_path: audioFilePath,
-                      upload_status: 'failed'
+                      upload_status: 'local_only'
                     },
                     transcription: {
                       full_text: currentTranscription,
