@@ -306,6 +306,8 @@ function createWebSocketServer(server) {
                 instructions: settings.instructions || '',
                 voice: settings.voice || undefined,
                 input_audio_format: 'pcm16',
+                input_audio_transcription: { model: 'whisper-1', language: settings.language || 'en' },
+                input_audio_transcription: { model: 'whisper-1', language: settings.language || 'en' },
                 input_audio_transcription: { language: settings.language || 'en' },
                 turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence }
               }
