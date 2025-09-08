@@ -104,82 +104,6 @@
           </div>
         </div>
         
-        <!-- Audio Settings -->
-        <div class="mt-4">
-          <div class="text-sm text-slate-500 mb-2">Audio Settings</div>
-          <div class="space-y-2">
-            <!-- Echo Guard -->
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <label for="echoGuard" class="text-sm text-slate-700">Echo Guard</label>
-                <div class="group relative">
-                  <svg class="w-4 h-4 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  <div class="hidden group-hover:block absolute bottom-6 left-0 bg-slate-800 text-white text-xs rounded px-2 py-1 w-48 z-10">
-                    Requires higher audio onset threshold when agent is speaking to prevent echo
-                  </div>
-                </div>
-              </div>
-              <input type="checkbox" id="echoGuard" checked class="rounded" />
-            </div>
-            
-            <!-- VAD Sensitivity -->
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <label for="vadSensitivity" class="text-sm text-slate-700">VAD Sensitivity</label>
-                <div class="group relative">
-                  <svg class="w-4 h-4 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  <div class="hidden group-hover:block absolute bottom-6 left-0 bg-slate-800 text-white text-xs rounded px-2 py-1 w-48 z-10">
-                    Voice Activity Detection threshold: Low = more sensitive, High = less sensitive
-                  </div>
-                </div>
-              </div>
-              <select id="vadSensitivity" class="text-xs border rounded px-2 py-1">
-                <option value="low">Low</option>
-                <option value="medium" selected>Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-            
-            <!-- Turn Detection -->
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <label for="turnDetection" class="text-sm text-slate-700">Turn Detection</label>
-                <div class="group relative">
-                  <svg class="w-4 h-4 text-slate-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  <div class="hidden group-hover:block absolute bottom-6 left-0 bg-slate-800 text-white text-xs rounded px-2 py-1 w-48 z-10">
-                    Automatically detect when it's your turn to speak based on silence duration
-                  </div>
-                </div>
-              </div>
-              <input type="checkbox" id="turnDetection" checked class="rounded" />
-            </div>
-            
-            <!-- Noise Suppression -->
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <label for="noiseSuppression" class="text-sm text-slate-700">Noise Suppression</label>
-              </div>
-              <input type="checkbox" id="noiseSuppression" checked class="rounded" />
-            </div>
-          </div>
-          
-          <!-- Quick Presets -->
-          <div class="mt-3">
-            <div class="text-xs text-slate-500 mb-2">Quick Presets</div>
-            <div class="flex gap-2">
-              <button id="safeDefaults" class="text-xs bg-green-100 text-green-700 rounded px-2 py-1">Safe Defaults</button>
-              <button id="highQuality" class="text-xs bg-blue-100 text-blue-700 rounded px-2 py-1">High Quality</button>
-              <button id="noisyEnvironment" class="text-xs bg-yellow-100 text-yellow-700 rounded px-2 py-1">Noisy Environment</button>
-            </div>
-          </div>
-        </div>
-        
         <div class="mt-4">
           <div class="text-sm text-slate-500 mb-1">Transcript</div>
           <pre id="transcript" class="bg-slate-50 border rounded p-2 h-40 overflow-auto"></pre>
@@ -307,53 +231,22 @@
       let ws, audioCtx, src, proc, stream, lastCommitAt=0, currentState='idle';
       let lkRoom = null;
       
-      // Audio settings and state
-      let audioSettings = {
-        echoGuard: true,
-        vadSensitivity: 'medium',
-        turnDetection: true,
-        noiseSuppression: true
-      };
+      // Fixed turn-taking parameters
+      const SERVER_VAD_SPEAK_TH = 0.020;
+      const SERVER_VAD_SILENT_TH = 0.006;
+      const SERVER_VAD_ONSET_FRAMES = 4;
+      const SERVER_VAD_ONSET_FRAMES_AGENT = 8;
+      const TURN_DETECTION_THRESHOLD = 0.60;
+      const TURN_DETECTION_PREFIX_MS = 180;
+      const TURN_DETECTION_SILENCE_MS = 250;
+      
       let agentSpeaking = false;
-      let lastVadTime = 0;
-      let silenceStart = 0;
-      let backgroundNoiseLevel = 0;
-      let noiseCalibrationSamples = 0;
       
       const stateEl = document.getElementById('state'); const latEl = document.getElementById('latency');
       function setState(s){ currentState=s; stateEl.textContent=s; }
       function floatTo16(input){ const out=new Int16Array(input.length); for(let i=0;i<input.length;i++){ let s=Math.max(-1,Math.min(1,input[i])); out[i]= s<0 ? s*0x8000 : s*0x7fff; } return out; }
       function down48to24(int16){ const out=new Int16Array(Math.floor(int16.length/2)); for(let i=0,j=0;j<out.length;i+=2,j++) out[j]=int16[i]; return out; }
       function energy(buf){ let sum=0; for(let i=0;i<buf.length;i++){ const v=buf[i]; sum+= v*v; } return Math.sqrt(sum/buf.length); }
-      
-      // Get VAD thresholds based on sensitivity setting
-      function getVadThresholds() {
-        const baseThreshold = backgroundNoiseLevel + 0.005; // Adaptive threshold above background noise
-        const multipliers = {
-          'low': 0.5,      // More sensitive
-          'medium': 1.0,   // Normal
-          'high': 2.0      // Less sensitive
-        };
-        
-        const multiplier = multipliers[audioSettings.vadSensitivity] || 1.0;
-        const echoMultiplier = audioSettings.echoGuard && agentSpeaking ? 2.5 : 1.0; // Much higher threshold when agent is speaking
-        
-        return {
-          onsetThreshold: Math.max(0.01, baseThreshold * multiplier * echoMultiplier),
-          offsetThreshold: Math.max(0.005, baseThreshold * 0.3) // Lower threshold for offset
-        };
-      }
-      
-      // Update background noise level (running average)
-      function updateBackgroundNoise(rms) {
-        if (noiseCalibrationSamples < 50) { // Initial calibration period
-          backgroundNoiseLevel = (backgroundNoiseLevel * noiseCalibrationSamples + rms) / (noiseCalibrationSamples + 1);
-          noiseCalibrationSamples++;
-        } else {
-          // Slow adaptation to background noise changes
-          backgroundNoiseLevel = backgroundNoiseLevel * 0.999 + rms * 0.001;
-        }
-      }
 
       function attachWs(room, prime){
         const proto = location.protocol==='https:'?'wss':'ws';
@@ -460,91 +353,36 @@
         proc.onaudioprocess = (e)=>{
           if(!ws || ws.readyState!==WebSocket.OPEN) return;
           const input=e.inputBuffer.getChannelData(0);
-          
-          // Apply noise suppression if enabled
-          let processedInput = input;
-          if (audioSettings.noiseSuppression) {
-            processedInput = applyNoiseGate(input);
-          }
-          
-          const rms = energy(processedInput);
-          
-          // Update background noise level when not speaking
-          if (!agentSpeaking && rms < 0.02) {
-            updateBackgroundNoise(rms);
-          }
-          
-          // Get current VAD thresholds
-          const thresholds = getVadThresholds();
+          const rms = energy(input);
           
           // update VU (map 0..0.1 -> 0..100%)
           const pct = Math.max(0, Math.min(100, Math.round((rms/0.1)*100)));
           if (vum) vum.style.width = pct + '%';
           
-          const int16=floatTo16(processedInput); const ds=down48to24(int16);
+          const int16=floatTo16(input); const ds=down48to24(int16);
           
-          // Enhanced VAD logic
-          const now = Date.now();
-          const isActive = rms > thresholds.onsetThreshold;
+          // Simple VAD with fixed thresholds
+          const isActive = rms > (agentSpeaking ? SERVER_VAD_SPEAK_TH * 2 : SERVER_VAD_SPEAK_TH);
           
-          if (isActive) {
-            lastVadTime = now;
-            silenceStart = 0;
-          } else if (lastVadTime > 0 && silenceStart === 0) {
-            silenceStart = now;
+          // send audio
+          const buf=new Uint8Array(ds.length*2); 
+          for(let i=0;i<ds.length;i++){ 
+            buf[i*2]=ds[i]&0xff; 
+            buf[i*2+1]=(ds[i]>>8)&0xff; 
           }
+          ws.send(JSON.stringify({ type:'audio', audio: btoa(String.fromCharCode(...buf)) }));
           
-          // Determine if we should send audio
-          let shouldSendAudio = true;
-          
-          // Echo guard: reduce transmission when agent is speaking
-          if (audioSettings.echoGuard && agentSpeaking && !isActive) {
-            shouldSendAudio = false;
-          }
-          
-          // Turn detection: pause transmission during detected silence periods
-          if (audioSettings.turnDetection && silenceStart > 0 && (now - silenceStart) > 1500) {
-            // After 1.5 seconds of silence, reduce audio transmission
-            shouldSendAudio = shouldSendAudio && (Math.random() < 0.1); // Only send 10% of packets
-          }
-          
-          // send audio (with optional filtering)
-          if (shouldSendAudio) {
-            const buf=new Uint8Array(ds.length*2); 
-            for(let i=0;i<ds.length;i++){ 
-              buf[i*2]=ds[i]&0xff; 
-              buf[i*2+1]=(ds[i]>>8)&0xff; 
-            }
-            ws.send(JSON.stringify({ type:'audio', audio: btoa(String.fromCharCode(...buf)) }));
-          }
-          
-          // Enhanced activity badge with VAD info
+          // Simple activity badge
           const youBadge = document.getElementById('youBadge');
           if (isActive) { 
-            youBadge.textContent=`You: speaking (${Math.round(rms*1000)})`; 
+            youBadge.textContent='You: speaking'; 
             youBadge.className='px-2 py-1 rounded text-xs bg-emerald-600 text-white'; 
           } else { 
-            const silenceDuration = silenceStart > 0 ? Math.round((now - silenceStart) / 1000) : 0;
-            youBadge.textContent=silenceDuration > 0 ? `You: silent (${silenceDuration}s)` : 'You: silent'; 
+            youBadge.textContent='You: silent'; 
             youBadge.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600'; 
           }
         };
         
-        // Simple noise gate implementation
-        function applyNoiseGate(input) {
-          const output = new Float32Array(input.length);
-          const threshold = Math.max(0.005, backgroundNoiseLevel * 1.5);
-          
-          for (let i = 0; i < input.length; i++) {
-            const sample = Math.abs(input[i]);
-            if (sample > threshold) {
-              output[i] = input[i];
-            } else {
-              output[i] = input[i] * 0.1; // Attenuate rather than completely gate
-            }
-          }
-          return output;
-        }
         src.connect(proc); proc.connect(audioCtx.destination);
       }
       async function stopTalk(){
@@ -753,85 +591,6 @@
       
       // Load call log on page load
       refreshCallLog();
-      
-      // Audio settings event handlers
-      document.getElementById('echoGuard').onchange = (e) => {
-        audioSettings.echoGuard = e.target.checked;
-        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
-      };
-      
-      document.getElementById('vadSensitivity').onchange = (e) => {
-        audioSettings.vadSensitivity = e.target.value;
-        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
-      };
-      
-      document.getElementById('turnDetection').onchange = (e) => {
-        audioSettings.turnDetection = e.target.checked;
-        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
-      };
-      
-      document.getElementById('noiseSuppression').onchange = (e) => {
-        audioSettings.noiseSuppression = e.target.checked;
-        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
-      };
-      
-      // Preset buttons
-      document.getElementById('safeDefaults').onclick = () => {
-        audioSettings = {
-          echoGuard: true,
-          vadSensitivity: 'medium',
-          turnDetection: true,
-          noiseSuppression: true
-        };
-        applyAudioSettings();
-        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
-      };
-      
-      document.getElementById('highQuality').onclick = () => {
-        audioSettings = {
-          echoGuard: true,
-          vadSensitivity: 'low',
-          turnDetection: true,
-          noiseSuppression: false
-        };
-        applyAudioSettings();
-        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
-      };
-      
-      document.getElementById('noisyEnvironment').onclick = () => {
-        audioSettings = {
-          echoGuard: true,
-          vadSensitivity: 'high',
-          turnDetection: false,
-          noiseSuppression: true
-        };
-        applyAudioSettings();
-        localStorage.setItem('audioSettings', JSON.stringify(audioSettings));
-      };
-      
-      // Apply settings to UI controls
-      function applyAudioSettings() {
-        document.getElementById('echoGuard').checked = audioSettings.echoGuard;
-        document.getElementById('vadSensitivity').value = audioSettings.vadSensitivity;
-        document.getElementById('turnDetection').checked = audioSettings.turnDetection;
-        document.getElementById('noiseSuppression').checked = audioSettings.noiseSuppression;
-      }
-      
-      // Load saved settings
-      function loadAudioSettings() {
-        const saved = localStorage.getItem('audioSettings');
-        if (saved) {
-          try {
-            audioSettings = { ...audioSettings, ...JSON.parse(saved) };
-            applyAudioSettings();
-          } catch (e) {
-            console.warn('Failed to load audio settings:', e);
-          }
-        }
-      }
-      
-      // Initialize audio settings
-      loadAudioSettings();
     </script>
   </body>
   </html>
