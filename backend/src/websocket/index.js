@@ -156,6 +156,9 @@ function createWebSocketServer(server) {
   // Helper to convert 24kHz PCM to 8kHz u-law for recording browser audio
   function pcm24kToUlaw8k(pcm24kLeBuf) {
     const pcm16kArr = new Int16Array(pcm24kLeBuf.buffer, pcm24kLeBuf.byteOffset, pcm24kLeBuf.length / 2);
+    if (pcm16kArr.length < 3) {
+      return Buffer.alloc(0); // Not enough data to downsample
+    }
     const pcm8k = new Int16Array(Math.floor(pcm16kArr.length / 3));
     for (let i = 0, j = 0; j < pcm8k.length; i += 3, j++) {
       pcm8k[j] = pcm16kArr[i];
@@ -320,16 +323,17 @@ function createWebSocketServer(server) {
                   content: [{ type: 'input_text', text: primeText }],
                 },
               }));
-              oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio','text'], voice: settings.voice || undefined } }));
+              oaWs.send(JSON.stringify({ type: 'response.create', modalities: ['audio','text'], voice: settings.voice || undefined }));
             }
           } catch (e) { console.error('Error on OA open:', e); }
         });
         let notified = false;
+        let lastSpeaker = ''; // To track turns for formatting
         oaWs.on('message', (data) => {
           try {
             const s = typeof data === 'string' ? data : data.toString('utf8');
             const m = JSON.parse(s);
-            // console.log('OpenAI message type:', m.type); // Too noisy
+            
             if (m.type === 'session.updated') {
               console.log('OpenAI session.updated:', JSON.stringify(m, null, 2));
             }
@@ -338,12 +342,28 @@ function createWebSocketServer(server) {
             }
             if (m.type === 'response.created' && m.response) {
               currentResponseId = m.response.id || null;
-              try { publisher.muteAgent(false); } catch(e) { console.error('Error muting agent:', e); }
+              try { if (publisher) publisher.muteAgent(false); } catch(e) { console.error('Error muting agent:', e); }
             }
+
+            // Handle USER transcription
+            if (m.type === 'conversation.item.input_audio_transcription.delta' && m.delta) {
+                if (lastSpeaker !== 'callee') {
+                    currentTranscription += (currentTranscription ? '\n---\n' : '') + 'Callee: ';
+                    lastSpeaker = 'callee';
+                }
+                currentTranscription += m.delta;
+            }
+
+            // Handle AGENT transcription
             if ((m.type === 'response.audio_transcript.delta' || m.type === 'response.output_text.delta') && m.delta) {
-              currentTranscription += m.delta; // Accumulate transcription
+              if (lastSpeaker !== 'agent') {
+                  currentTranscription += (currentTranscription ? '\n---\n' : '') + 'Agent: ';
+                  lastSpeaker = 'agent';
+              }
+              currentTranscription += m.delta;
               try { telnyxWs.send(JSON.stringify({ type: 'transcript_delta', text: m.delta })); } catch(e) { console.error('Error sending transcript delta:', e); }
             }
+
             if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta) {
               agentSpeaking = true;
               if (!agentSpeakingSent) {
@@ -362,7 +382,7 @@ function createWebSocketServer(server) {
               agentSpeaking = false;
               agentSpeakingSent = false;
               try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(e) { console.error('Error sending agent_speaking=false:', e); }
-              try { publisher && publisher.muteAgent(false); } catch(e) { console.error('Error muting agent on done:', e); }
+              try { if (publisher) publisher.muteAgent(false); } catch(e) { console.error('Error muting agent on done:', e); }
             }
           } catch (e) { console.error('Error processing OA message:', e); }
         });
@@ -471,7 +491,7 @@ function createWebSocketServer(server) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-              oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio'] } }));
+              oaWs.send(JSON.stringify({ type: 'response.create', modalities: ['audio'] }));
             }
             // client VAD messages removed when using server_vad
           } catch(e) {
