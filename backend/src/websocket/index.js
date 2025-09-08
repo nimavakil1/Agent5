@@ -195,7 +195,7 @@ function createWebSocketServer(server) {
             const p = await AgentProfile.findById(String(query.profile)).lean();
             if (p) {
               console.log('Profile loaded:', { name: p.name, hasInstructions: !!p.instructions, voice: p.voice });
-              settings = { instructions: p.instructions || settings.instructions, voice: p.voice || settings.voice };
+              settings = { instructions: p.instructions || settings.instructions, voice: p.voice || settings.voice, language: p.language || settings.language };
             } else {
               console.log('Profile not found');
             }
@@ -306,6 +306,7 @@ function createWebSocketServer(server) {
                 instructions: settings.instructions || '',
                 voice: settings.voice || undefined,
                 input_audio_format: 'pcm16',
+                input_audio_transcription: { language: settings.language || 'en' },
                 turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence }
               }
             };
@@ -323,7 +324,7 @@ function createWebSocketServer(server) {
                   content: [{ type: 'input_text', text: primeText }],
                 },
               }));
-              oaWs.send(JSON.stringify({ type: 'response.create', modalities: ['audio','text'], voice: settings.voice || undefined }));
+              oaWs.send(JSON.stringify({ type: 'response.create' }));
             }
           } catch (e) { console.error('Error on OA open:', e); }
         });
@@ -482,7 +483,7 @@ function createWebSocketServer(server) {
                 if (!userSpeaking && aboveCnt >= need) {
                   userSpeaking = true; aboveCnt = 0;
                   // Cancel current agent response and flush playback
-                  try { if (currentResponseId) { oaWs.send(JSON.stringify({ type: 'response.cancel', response: { id: currentResponseId }, response_id: currentResponseId })); } else { oaWs.send(JSON.stringify({ type: 'response.cancel' })); } } catch(e) { console.error('Error sending response.cancel:', e); }
+                  try { if (currentResponseId) { oaWs.send(JSON.stringify({ type: 'response.cancel', response_id: currentResponseId })); } else { oaWs.send(JSON.stringify({ type: 'response.cancel' })); } } catch(e) { console.error('Error sending response.cancel:', e); }
                   try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(e) { console.error('Error sending barge_in:', e); }
                   agentSpeaking = false; agentSpeakingSent = false;
                 }
@@ -491,7 +492,7 @@ function createWebSocketServer(server) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-              oaWs.send(JSON.stringify({ type: 'response.create', modalities: ['audio'] }));
+              oaWs.send(JSON.stringify({ type: 'response.create' }));
             }
             // client VAD messages removed when using server_vad
           } catch(e) {
