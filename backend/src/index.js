@@ -20,6 +20,7 @@ const dashboardRouter = require('./api/routes/dashboard');
 const customersRouter = require('./api/routes/customers');
 const adminRouter = require('./api/routes/admin');
 const costsRouter = require('./api/routes/costs');
+const emergencyRouter = require('./api/routes/emergency');
 const connectDB = require('./config/database');
 const validateEnv = require('./config/validateEnv');
 const ensureAdmin = require('./util/ensureAdmin');
@@ -153,6 +154,7 @@ app.use('/api/customers', allowBearerOrSession, customersRouter);
 app.use('/api/admin', requireSession, adminRouter);
 app.use('/api/agents', agentsRouter);
 app.use('/api/costs', costsRouter);
+app.use('/api/emergency', emergencyRouter);
 
 if (process.env.NODE_ENV !== 'test') {
   server.listen(port, () => {

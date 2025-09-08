@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node src/index.js",
     "test": "jest",
-    "seed-admin": "node scripts/seedAdmin.js"
+    "seed-admin": "node scripts/seedAdmin.js",
+    "fix-admin": "node scripts/fix-admin.js"
   },
   "keywords": [],
   "author": "",

@@ -3,23 +3,88 @@ const User = require('../models/User');
 
 async function ensureAdmin() {
   try {
-    const count = await User.countDocuments();
-    if (count > 0) return { created: false };
     const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
     const password = process.env.ADMIN_PASSWORD || '';
+    
     if (!email || !password) {
-      console.warn('[auth] No users exist but ADMIN_EMAIL/ADMIN_PASSWORD not set; skipping auto-seed');
+      console.warn('[auth] ADMIN_EMAIL/ADMIN_PASSWORD not set; skipping admin check');
       return { created: false, reason: 'missing env' };
     }
-    const passwordHash = await bcrypt.hash(password, 10);
-    await User.create({ email, passwordHash, role: 'admin', active: true });
-    console.log('[auth] Auto-seeded initial admin user:', email);
-    return { created: true };
+
+    // Check if the specific admin user exists
+    let adminUser = await User.findOne({ email: email });
+    
+    if (adminUser) {
+      // Admin user exists - ensure they have admin role and are active
+      let updated = false;
+      if (adminUser.role !== 'admin') {
+        adminUser.role = 'admin';
+        updated = true;
+      }
+      if (!adminUser.active) {
+        adminUser.active = true;
+        updated = true;
+      }
+      
+      if (updated) {
+        await adminUser.save();
+        console.log('[auth] Updated existing admin user:', email);
+        return { created: false, updated: true };
+      } else {
+        console.log('[auth] Admin user already exists and is properly configured:', email);
+        return { created: false, exists: true };
+      }
+    } else {
+      // Admin user doesn't exist - create it
+      const passwordHash = await bcrypt.hash(password, 10);
+      await User.create({ 
+        email, 
+        passwordHash, 
+        role: 'admin', 
+        active: true,
+        createdAt: new Date(),
+        lastLoginAt: null
+      });
+      console.log('[auth] Created admin user:', email);
+      return { created: true };
+    }
   } catch (e) {
-    console.warn('[auth] ensureAdmin failed:', e?.message || e);
-    return { created: false, error: true };
+    console.error('[auth] ensureAdmin failed:', e?.message || e);
+    return { created: false, error: true, message: e?.message };
+  }
+}
+
+// Additional function to force recreate admin (for emergency recovery)
+async function forceRecreateAdmin() {
+  try {
+    const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const password = process.env.ADMIN_PASSWORD || '';
+    
+    if (!email || !password) {
+      throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required');
+    }
+
+    // Delete existing admin user if exists
+    await User.deleteOne({ email: email });
+    
+    // Create new admin user
+    const passwordHash = await bcrypt.hash(password, 10);
+    const newAdmin = await User.create({ 
+      email, 
+      passwordHash, 
+      role: 'admin', 
+      active: true,
+      createdAt: new Date(),
+      lastLoginAt: null
+    });
+    
+    console.log('[auth] Force recreated admin user:', email);
+    return { success: true, user: { email: newAdmin.email, role: newAdmin.role } };
+  } catch (e) {
+    console.error('[auth] forceRecreateAdmin failed:', e?.message || e);
+    throw e;
   }
 }
 
 module.exports = ensureAdmin;
-
+module.exports.forceRecreateAdmin = forceRecreateAdmin;
