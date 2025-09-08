@@ -124,6 +124,20 @@ async function createOpenAISession(customerRecord = null) {
 function createWebSocketServer(server) {
   const wss = new WebSocket.Server({ server });
 
+  // Helper to convert 24kHz PCM to 8kHz u-law for recording browser audio
+  function pcm24kToUlaw8k(pcm24kLeBuf) {
+    const pcm16kArr = new Int16Array(pcm24kLeBuf.buffer, pcm24kLeBuf.byteOffset, pcm24kLeBuf.length / 2);
+    const pcm8k = new Int16Array(Math.floor(pcm16kArr.length / 3));
+    for (let i = 0, j = 0; j < pcm8k.length; i += 3, j++) {
+      pcm8k[j] = pcm16kArr[i];
+    }
+    const ulaw = Buffer.alloc(pcm8k.length);
+    for (let i = 0; i < pcm8k.length; i++) {
+      ulaw[i] = linearToUlaw(pcm8k[i]);
+    }
+    return ulaw;
+  }
+
   wss.on('connection', async (telnyxWs, req) => { // Add req parameter
     const parsedUrl = url.parse(req.url, true);
     const pathname = parsedUrl.pathname || '';
@@ -164,6 +178,58 @@ function createWebSocketServer(server) {
         let sessionStartTime = new Date();
         let sessionAudioInputMinutes = 0;
         let sessionAudioOutputMinutes = 0;
+
+        // --- Recording state for browser calls ---
+        let audioFilePath = null;
+        let audioWriteStream = null;
+        let bytesWritten = 0;
+        let currentTranscription = ''; // To accumulate transcription
+
+        // Prepare streaming WAV file (G.711 u-law @ 8kHz)
+        const recordingsDir = path.resolve(__dirname, '../../recordings');
+        if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
+        const audioFileName = `${roomName}-${Date.now()}.wav`;
+        audioFilePath = path.resolve(recordingsDir, audioFileName);
+        audioWriteStream = fs.createWriteStream(audioFilePath);
+
+        // Placeholder WAV header (44 bytes), patched on finalize
+        const sampleRate = 8000;
+        const numChannels = 1;
+        const bitsPerSample = 8; // u-law 8-bit
+        const wavHeader = Buffer.alloc(44);
+        wavHeader.write('RIFF', 0);
+        wavHeader.writeUInt32LE(0, 4); // Placeholder for file size
+        wavHeader.write('WAVE', 8);
+        wavHeader.write('fmt ', 12);
+        wavHeader.writeUInt32LE(16, 16); // PCM format
+        wavHeader.writeUInt16LE(7, 20); // u-law format
+        wavHeader.writeUInt16LE(numChannels, 22);
+        wavHeader.writeUInt32LE(sampleRate, 24);
+        const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+        const blockAlign = numChannels * (bitsPerSample / 8);
+        wavHeader.writeUInt32LE(byteRate, 28);
+        wavHeader.writeUInt16LE(blockAlign, 32);
+        wavHeader.writeUInt16LE(bitsPerSample, 34);
+        wavHeader.write('data', 36);
+        wavHeader.writeUInt32LE(0, 40); // Placeholder for data size
+        audioWriteStream.write(wavHeader);
+        bytesWritten = 44;
+
+        // Create a CallLogEntry for the browser session
+        await CallLogEntry.findOneAndUpdate(
+          { call_id: roomName },
+          {
+            $setOnInsert: {
+              call_id: roomName,
+              customer_id: 'agent_studio_user',
+              campaign_id: 'agent_studio',
+              start_time: sessionStartTime,
+              call_status: 'in-progress',
+            },
+          },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        // --- End Recording state ---
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
         let publisher = null;
@@ -245,6 +311,7 @@ function createWebSocketServer(server) {
               try { publisher.muteAgent(false); } catch(_) {}
             }
             if ((m.type === 'response.audio_transcript.delta' || m.type === 'response.output_text.delta') && m.delta) {
+              currentTranscription += m.delta; // Accumulate transcription
               try { telnyxWs.send(JSON.stringify({ type: 'transcript_delta', text: m.delta })); } catch(_) {}
             }
             if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta) {
@@ -273,6 +340,41 @@ function createWebSocketServer(server) {
           try { oaWs.close(); } catch(_) {};
           try { publisher && await publisher.close(); } catch(_) {};
           
+          // --- Finalize browser call recording ---
+          try {
+            if (audioWriteStream) {
+              await new Promise((resolve) => audioWriteStream.end(resolve));
+              const dataSize = Math.max(0, bytesWritten - 44);
+              const fileSize = dataSize + 36;
+              const fd = fs.openSync(audioFilePath, 'r+');
+              const buf4 = Buffer.alloc(4);
+              buf4.writeUInt32LE(fileSize, 0);
+              fs.writeSync(fd, buf4, 0, 4, 4);
+              buf4.writeUInt32LE(dataSize, 0);
+              fs.writeSync(fd, buf4, 0, 4, 40);
+              fs.closeSync(fd);
+              console.log(`Browser recording saved locally: ${audioFilePath}`);
+
+              const audioRecordingUrl = `/recordings/${path.basename(audioFilePath)}`;
+              const callEndTime = new Date();
+              
+              // Update CallLogEntry with final details
+              await CallLogEntry.findOneAndUpdate(
+                { call_id: roomName },
+                { 
+                  audio_recording_url: audioRecordingUrl,
+                  end_time: callEndTime,
+                  call_status: 'success', // Or determine based on events
+                  transcription: currentTranscription,
+                },
+                { new: true, runValidators: true }
+              );
+            }
+          } catch (e) {
+            console.error('Error finalizing browser WAV recording:', e);
+          }
+          // --- End finalization ---
+
           // Calculate session duration and costs when closing
           try {
             const sessionEndTime = new Date();
@@ -287,7 +389,7 @@ function createWebSocketServer(server) {
                 output_tokens: 0
               },
               transcription: {
-                full_text: '', // Would be populated if we had transcription
+                full_text: currentTranscription,
                 language_detected: 'auto',
                 confidence_score: 1.0
               }
@@ -302,12 +404,21 @@ function createWebSocketServer(server) {
           try {
             const m = JSON.parse(raw.toString());
             if (m.type === 'audio' && m.audio && oaWs.readyState === WebSocket.OPEN) {
+              const pcm24kBuffer = Buffer.from(m.audio, 'base64');
+
+              // --- Write to recording file ---
+              if (audioWriteStream) {
+                const ulaw8kBuffer = pcm24kToUlaw8k(pcm24kBuffer);
+                audioWriteStream.write(ulaw8kBuffer);
+                bytesWritten += ulaw8kBuffer.length;
+              }
+              // --- End write ---
+
               // Server VAD onset for barge-in
               try {
-                const b = Buffer.from(m.audio, 'base64');
                 let sum = 0; let n = 0;
-                for (let i = 0; i + 1 < b.length; i += 2) {
-                  let v = b.readInt16LE(i);
+                for (let i = 0; i + 1 < pcm24kBuffer.length; i += 2) {
+                  let v = pcm24kBuffer.readInt16LE(i);
                   sum += (v * v);
                   n++;
                 }
