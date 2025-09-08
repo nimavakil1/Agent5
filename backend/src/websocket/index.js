@@ -8,7 +8,7 @@ const CallLogEntry = require('../models/CallLogEntry'); // Import CallLogEntry m
 const CustomerRecord = require('../models/CustomerRecord'); // Import CustomerRecord model
 const CallCostTracking = require('../models/CallCostTracking'); // Import CallCostTracking model
 const costCalculationService = require('../services/costCalculationService');
-const onedriveService = require('../services/onedriveService');
+// const onedriveService = require('../services/onedriveService'); // Temporarily disabled due to dependency issues
 const fs = require('fs'); // Import file system module
 const path = require('path'); // Import path module
 

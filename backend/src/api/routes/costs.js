@@ -1,21 +1,21 @@
 const express = require('express');
 const CallCostTracking = require('../../models/CallCostTracking');
 const costCalculationService = require('../../services/costCalculationService');
-const onedriveService = require('../../services/onedriveService');
+// const onedriveService = require('../../services/onedriveService'); // Temporarily disabled due to dependency issues
 const { requireSession } = require('../../middleware/sessionAuth');
 
 const router = express.Router();
 
-// Test OneDrive connection (public endpoint for setup testing)
-router.get('/onedrive/test', async (req, res) => {
-  try {
-    const testResult = await onedriveService.testConnection();
-    res.json(testResult);
-  } catch (error) {
-    console.error('OneDrive test error:', error);
-    res.status(500).json({ message: 'OneDrive test failed', error: error.message });
-  }
-});
+// Test OneDrive connection (public endpoint for setup testing) - TEMPORARILY DISABLED
+// router.get('/onedrive/test', async (req, res) => {
+//   try {
+//     const testResult = await onedriveService.testConnection();
+//     res.json(testResult);
+//   } catch (error) {
+//     console.error('OneDrive test error:', error);
+//     res.status(500).json({ message: 'OneDrive test failed', error: error.message });
+//   }
+// });
 
 // Protect all other cost routes with authentication
 router.use(requireSession);
