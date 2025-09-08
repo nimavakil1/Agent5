@@ -110,7 +110,8 @@ app.get('/healthz', (req, res) => res.status(200).send('ok'));
 app.get('/readyz', (req, res) => res.status(200).json({ ready: true }));
 
 // Serve static monitor and call recordings (optionally protected)
-const recordingsDir = path.join(__dirname, 'recordings');
+// Save path is backend/recordings; __dirname is backend/src, so serve ../recordings
+const recordingsDir = path.join(__dirname, '..', 'recordings');
 // Public: login page
 app.get('/app/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'login.html'));
@@ -129,7 +130,8 @@ protectedPages.forEach(page => {
 // Remove broad root-protected static to avoid intercepting /api/auth/login
 // Legacy pages (monitor/admin) can be accessed during transition under /legacy if needed
 if (process.env.PROTECT_RECORDINGS === '1') {
-  app.use('/recordings', auth, express.static(recordingsDir));
+  // Protect with session cookie so the admin UI can access recordings without a bearer token
+  app.use('/recordings', requireSession, express.static(recordingsDir));
 } else {
   app.use('/recordings', express.static(recordingsDir));
 }

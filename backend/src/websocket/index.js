@@ -734,8 +734,8 @@ function createWebSocketServer(server) {
         if (data.event === 'start') {
           console.log('Telnyx stream started:', data);
           // Prepare streaming WAV file (G.711 u-law @ 8kHz)
-          const recordingsDir = path.resolve(__dirname, '../../recordings');
-          if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir);
+        const recordingsDir = path.resolve(__dirname, '../../recordings');
+        if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
           const audioFileName = `${roomName}.wav`;
           audioFilePath = path.resolve(recordingsDir, audioFileName);
           audioWriteStream = fs.createWriteStream(audioFilePath);
@@ -875,6 +875,8 @@ function createWebSocketServer(server) {
                   audio_recording_url: audioRecordingUrl,
                   onedrive_recording_url: onedriveUrl,
                   cost_tracking_id: costTrackingId,
+                  end_time: callEndTime,
+                  call_status: 'success',
                   transcription_summary: currentTranscription.slice(0, 500) // First 500 chars as summary
                 },
                 { new: true, runValidators: true }
