@@ -212,48 +212,17 @@ function createWebSocketServer(server) {
         let sessionAudioInputMinutes = 0;
         let sessionAudioOutputMinutes = 0;
 
-        // --- Recording state for browser calls ---
-        let audioFilePath = null;
-        let audioWriteStream = null;
-        let bytesWritten = 0;
-        let currentTranscription = ''; // To accumulate transcription
+        // --- Recording via LiveKit recorder for Agent Studio sessions ---
+        const uniqueSuffix = Date.now();
+        const callId = `${roomName}-${uniqueSuffix}`;
+        let currentTranscription = '';
 
-        // Prepare streaming WAV file (G.711 u-law @ 8kHz)
-        const recordingsDir = path.resolve(__dirname, '../../recordings');
-        if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
-        const audioFileName = `${roomName}-${Date.now()}.wav`;
-        audioFilePath = path.resolve(recordingsDir, audioFileName);
-        audioWriteStream = fs.createWriteStream(audioFilePath);
-
-        // Placeholder WAV header (44 bytes), patched on finalize
-        const sampleRate = 8000;
-        const numChannels = 1;
-        const bitsPerSample = 8; // u-law 8-bit
-        const wavHeader = Buffer.alloc(44);
-        wavHeader.write('RIFF', 0);
-        wavHeader.writeUInt32LE(0, 4); // Placeholder for file size
-        wavHeader.write('WAVE', 8);
-        wavHeader.write('fmt ', 12);
-        wavHeader.writeUInt32LE(16, 16); // PCM format
-        wavHeader.writeUInt16LE(7, 20); // u-law format
-        wavHeader.writeUInt16LE(numChannels, 22);
-        wavHeader.writeUInt32LE(sampleRate, 24);
-        const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-        const blockAlign = numChannels * (bitsPerSample / 8);
-        wavHeader.writeUInt32LE(byteRate, 28);
-        wavHeader.writeUInt16LE(blockAlign, 32);
-        wavHeader.writeUInt16LE(bitsPerSample, 34);
-        wavHeader.write('data', 36);
-        wavHeader.writeUInt32LE(0, 40); // Placeholder for data size
-        audioWriteStream.write(wavHeader);
-        bytesWritten = 44;
-
-        // Create a CallLogEntry for the browser session
+        // Create a CallLogEntry for the browser session (unique call_id)
         await CallLogEntry.findOneAndUpdate(
-          { call_id: roomName },
+          { call_id: callId },
           {
             $setOnInsert: {
-              call_id: roomName,
+              call_id: callId,
               customer_id: 'agent_studio_user',
               campaign_id: 'agent_studio',
               start_time: sessionStartTime,
@@ -266,12 +235,24 @@ function createWebSocketServer(server) {
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
         let publisher = null;
+        let recorder = null;
         if (process.env.AGENTSTREAM_PUBLISH_LIVEKIT === '1') {
           try {
             const at = new AccessToken(apiKey, apiSecret, { identity });
             at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
             const token = await at.toJwt();
             publisher = await createPublisher({ host: livekitHost, token, roomName });
+            // Start a recorder participant (subscribe-only)
+            try {
+              const recIdentity = `recorder-bot-${roomName}-${uniqueSuffix}`;
+              const recAt = new AccessToken(apiKey, apiSecret, { identity: recIdentity });
+              recAt.addGrant({ room: roomName, roomJoin: true, canPublish: false, canSubscribe: true });
+              const recToken = recAt.toJwt();
+              const { createRecorder } = require('../livekit/recorder');
+              recorder = await createRecorder({ host: livekitHost, token: recToken, roomName, outFileBase: callId });
+            } catch (e) {
+              console.error('Recorder init error (Agent Studio):', e?.message || e);
+            }
           } catch (e) {
             console.error('LiveKit publisher error (continuing without LiveKit):', e?.message || e);
           }
@@ -390,41 +371,25 @@ function createWebSocketServer(server) {
         const closeAll = async () => { 
           try { oaWs.close(); } catch(e) { console.error('Error closing OA ws:', e); };
           try { publisher && await publisher.close(); } catch(e) { console.error('Error closing publisher:', e); };
-          
-          // --- Finalize browser call recording ---
-          try {
-            if (audioWriteStream) {
-              await new Promise((resolve) => audioWriteStream.end(resolve));
-              const dataSize = Math.max(0, bytesWritten - 44);
-              const fileSize = dataSize + 36;
-              const fd = fs.openSync(audioFilePath, 'r+');
-              const buf4 = Buffer.alloc(4);
-              buf4.writeUInt32LE(fileSize, 0);
-              fs.writeSync(fd, buf4, 0, 4, 4);
-              buf4.writeUInt32LE(dataSize, 0);
-              fs.writeSync(fd, buf4, 0, 4, 40);
-              fs.closeSync(fd);
-              console.log(`Browser recording saved locally: ${audioFilePath}`);
+          try { recorder && await recorder.close(); } catch(e) { console.error('Error closing recorder:', e); };
 
-              const audioRecordingUrl = `/recordings/${path.basename(audioFilePath)}`;
-              const callEndTime = new Date();
-              
-              // Update CallLogEntry with final details
-              await CallLogEntry.findOneAndUpdate(
-                { call_id: roomName },
-                { 
-                  audio_recording_url: audioRecordingUrl,
-                  end_time: callEndTime,
-                  call_status: 'success', // Or determine based on events
-                  transcription: currentTranscription,
-                },
-                { new: true, runValidators: true }
-              );
-            }
+          // Update CallLogEntry with recorder file
+          try {
+            const audioRecordingUrl = recorder && recorder.outPath ? `/recordings/${path.basename(recorder.outPath)}` : '';
+            const callEndTime = new Date();
+            await CallLogEntry.findOneAndUpdate(
+              { call_id: callId },
+              { 
+                audio_recording_url: audioRecordingUrl,
+                end_time: callEndTime,
+                call_status: 'success',
+                transcription: currentTranscription,
+              },
+              { new: true, runValidators: true }
+            );
           } catch (e) {
-            console.error('Error finalizing browser WAV recording:', e);
+            console.error('Error updating call log with recorder file:', e);
           }
-          // --- End finalization ---
 
           // Calculate session duration and costs when closing
           try {
@@ -432,7 +397,7 @@ function createWebSocketServer(server) {
             const durationMinutes = (sessionEndTime - sessionStartTime) / (1000 * 60);
             
             // Create cost tracking record for agent studio session
-            await costCalculationService.updateCallCosts(roomName, 'agent_studio', {
+            await costCalculationService.updateCallCosts(callId, 'agent_studio', {
               llm: {
                 audio_input_minutes: sessionAudioInputMinutes,
                 audio_output_minutes: sessionAudioOutputMinutes,
@@ -456,18 +421,15 @@ function createWebSocketServer(server) {
             const m = JSON.parse(raw.toString());
             if (m.type === 'audio' && m.audio && oaWs.readyState === WebSocket.OPEN) {
               const pcm24kBuffer = Buffer.from(m.audio, 'base64');
-
-              // --- Write to recording file ---
+              // Publish callee (browser mic) into LiveKit so the recorder can capture it
               try {
-                if (audioWriteStream) {
-                  const ulaw8kBuffer = pcm24kToUlaw8k(pcm24kBuffer);
-                  audioWriteStream.write(ulaw8kBuffer);
-                  bytesWritten += ulaw8kBuffer.length;
+                if (publisher) {
+                  const pcm8k = downsample24kTo8k(pcm24kBuffer);
+                  publisher.pushCalleeFrom8kPcm16(pcm8k);
                 }
               } catch (e) {
-                console.error('Error writing to recording file:', e);
+                console.error('Error feeding callee to LiveKit (Agent Studio):', e);
               }
-              // --- End write ---
 
               // Server VAD onset for barge-in
               try {
