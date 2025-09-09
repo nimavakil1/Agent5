@@ -80,7 +80,8 @@ router.post('/login', async (req, res) => {
 router.post('/logout', requireSession, async (req, res) => {
   try {
     // Log logout event
-    await logAuditEvent(req.user._id.toString(), req.user.email, 'logout', 'auth', null, {}, req, true);
+    const uid = (req.user && (req.user.id || req.user._id)) ? String(req.user.id || req.user._id) : 'unknown';
+    await logAuditEvent(uid, req.user.email, 'logout', 'auth', null, {}, req, true);
     
     res.clearCookie('access_token', { path: '/' });
     res.json({ ok: true });
