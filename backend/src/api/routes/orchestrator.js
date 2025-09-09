@@ -21,6 +21,7 @@ router.post('/interpret', async (req, res) => {
 
     // Use OpenAI to extract structured plan
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    // JSON schema required by Responses API: set additionalProperties=false at all object levels
     const schema = {
       name: 'CampaignPlan',
       schema: {
@@ -30,22 +31,24 @@ router.post('/interpret', async (req, res) => {
           action: { type: 'string', enum: ['create_campaign'] },
           schedule: {
             type: 'object',
+            additionalProperties: false,
             properties: {
               start_time_iso: { type: 'string', description: 'ISO8601 in CET (Europe/Brussels) unless specified' },
-              timezone: { type: 'string', default: 'Europe/Brussels' }
+              timezone: { type: 'string' }
             },
             required: ['start_time_iso']
           },
           targeting: {
             type: 'object',
+            additionalProperties: false,
             properties: {
               city: { type: 'string' },
-              country: { type: 'string', default: 'BE' }
-            },
-            required: []
+              country: { type: 'string' }
+            }
           },
           product: {
             type: 'object',
+            additionalProperties: false,
             properties: {
               sku: { type: 'string' }
             },
@@ -53,20 +56,21 @@ router.post('/interpret', async (req, res) => {
           },
           goal: {
             type: 'object',
+            additionalProperties: false,
             properties: {
-              type: { type: 'string', enum: ['units_sold', 'calls_completed', 'leads_booked'], default: 'units_sold' },
+              type: { type: 'string', enum: ['units_sold', 'calls_completed', 'leads_booked'] },
               target: { type: 'number' }
             },
             required: ['type', 'target']
           },
-          channel: { type: 'string', enum: ['pstn', 'whatsapp'], default: 'pstn' },
+          channel: { type: 'string', enum: ['pstn', 'whatsapp'] },
           pacing: {
             type: 'object',
+            additionalProperties: false,
             properties: {
-              max_parallel_calls: { type: 'number', default: 3 },
-              rps: { type: 'number', default: 0.5 }
-            },
-            required: []
+              max_parallel_calls: { type: 'number' },
+              rps: { type: 'number' }
+            }
           },
           notes: { type: 'string' }
         },
