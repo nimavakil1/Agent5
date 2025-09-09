@@ -21,11 +21,13 @@ const customersRouter = require('./api/routes/customers');
 const adminRouter = require('./api/routes/admin');
 const costsRouter = require('./api/routes/costs');
 const emergencyRouter = require('./api/routes/emergency');
+const orchestratorRouter = require('./api/routes/orchestrator');
 const connectDB = require('./config/database');
 const validateEnv = require('./config/validateEnv');
 const ensureAdmin = require('./util/ensureAdmin');
 const auth = require('./middleware/auth');
 const { requireSession, allowBearerOrSession } = require('./middleware/sessionAuth');
+const scheduler = require('./scheduler');
 
 // Validate env & connect to MongoDB (skip DB in tests)
 if (process.env.NODE_ENV !== 'test') {
@@ -157,11 +159,14 @@ app.use('/api/admin', requireSession, adminRouter);
 app.use('/api/agents', agentsRouter);
 app.use('/api/costs', costsRouter);
 app.use('/api/emergency', emergencyRouter);
+app.use('/api/orchestrator', requireSession, orchestratorRouter);
 
 if (process.env.NODE_ENV !== 'test') {
   server.listen(port, () => {
     console.log(`Server is running on port ${port}`);
   });
+  // Start simple scheduler loop
+  try { scheduler.start(); } catch (e) { console.error('scheduler start error', e); }
 }
 
 module.exports = { app, server, wss };

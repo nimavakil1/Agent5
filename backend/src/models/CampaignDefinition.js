@@ -17,6 +17,12 @@ const campaignDefinitionSchema = new mongoose.Schema({
   },
   tone: { type: String },
   target_groups: [String],
+  // Orchestrator additions (optional)
+  status: { type: String, enum: ['scheduled', 'active', 'paused', 'completed'], default: 'scheduled' },
+  channel: { type: String, enum: ['pstn', 'whatsapp'], default: 'pstn' },
+  targeting: { type: mongoose.Schema.Types.Mixed },
+  pacing: { type: mongoose.Schema.Types.Mixed },
+  goal: { type: mongoose.Schema.Types.Mixed },
 });
 
 module.exports = mongoose.model('CampaignDefinition', campaignDefinitionSchema);
