@@ -387,8 +387,14 @@
           }
         };
         
-        // Connect mic to processor (for capture + VU), but do NOT monitor locally to avoid self-echo
+        // Connect mic to processor (for capture + VU)
         src.connect(proc);
+        // Keep the ScriptProcessor active by connecting it to a muted sink,
+        // so onaudioprocess fires without local monitoring (avoids self-echo)
+        const nullSink = audioCtx.createGain();
+        nullSink.gain.setValueAtTime(0.0, audioCtx.currentTime);
+        proc.connect(nullSink);
+        nullSink.connect(audioCtx.destination);
       }
       async function stopTalk(){
         try{ if(ws&&ws.readyState===WebSocket.OPEN){ ws.close(); } }catch(_){ }
