@@ -36,7 +36,7 @@ router.post('/interpret', async (req, res) => {
               start_time_iso: { type: 'string', description: 'ISO8601 in CET (Europe/Brussels) unless specified' },
               timezone: { type: 'string' }
             },
-            required: ['start_time_iso']
+            required: ['start_time_iso', 'timezone']
           },
           targeting: {
             type: 'object',
