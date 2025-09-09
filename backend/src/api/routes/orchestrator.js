@@ -83,13 +83,19 @@ Return ONLY valid JSON matching the provided schema. Use timezone Europe/Brussel
         { role: 'system', content: system },
         { role: 'user', content: instruction }
       ],
-      // Responses API now expects structured output under text.format
-      text: { format: { type: 'json_schema', json_schema: schema } },
+      // Structured output: name + schema at the format level
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'CampaignPlan',
+          schema: schema.schema,
+        }
+      },
     });
 
     let obj = null;
     try {
-      const content = resp.output[0]?.content?.[0]?.text || resp.output_text || '';
+      const content = resp.output_text || resp.output?.[0]?.content?.[0]?.text || '';
       obj = JSON.parse(content);
     } catch (e) {
       return res.status(422).json({ message: 'Failed to parse plan', error: e.message });
