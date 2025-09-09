@@ -249,7 +249,8 @@ function createWebSocketServer(server) {
               recAt.addGrant({ room: roomName, roomJoin: true, canPublish: false, canSubscribe: true });
               const recToken = recAt.toJwt();
               const { createRecorder } = require('../livekit/recorder');
-              recorder = await createRecorder({ host: livekitHost, token: recToken, roomName, outFileBase: callId });
+              // Use the same host provided to browser clients for consistency
+              recorder = await createRecorder({ host: process.env.LIVEKIT_SERVER_URL, token: recToken, roomName, outFileBase: callId });
             } catch (e) {
               console.error('Recorder init error (Agent Studio):', e?.message || e);
             }
@@ -622,7 +623,8 @@ function createWebSocketServer(server) {
           recAt.addGrant({ room: roomName, roomJoin: true, canPublish: false, canSubscribe: true });
           const recToken = recAt.toJwt();
           const { createRecorder } = require('../livekit/recorder');
-          livekitRecorder = await createRecorder({ host: livekitHost, token: recToken, roomName, outFileBase: roomName });
+          // Use the same host used by browser token responses
+          livekitRecorder = await createRecorder({ host: process.env.LIVEKIT_SERVER_URL, token: recToken, roomName, outFileBase: roomName });
         } catch (recErr) {
           console.error('Failed to start LiveKit recorder (PSTN):', recErr);
         }
