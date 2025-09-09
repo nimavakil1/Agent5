@@ -83,7 +83,8 @@ Return ONLY valid JSON matching the provided schema. Use timezone Europe/Brussel
         { role: 'system', content: system },
         { role: 'user', content: instruction }
       ],
-      response_format: { type: 'json_schema', json_schema: schema },
+      // Responses API now expects structured output under text.format
+      text: { format: { type: 'json_schema', json_schema: schema } },
     });
 
     let obj = null;
@@ -160,4 +161,3 @@ router.post('/commit', async (req, res) => {
 });
 
 module.exports = router;
-
