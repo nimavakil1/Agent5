@@ -32,6 +32,77 @@ const apiSecret = process.env.LIVEKIT_API_SECRET;
 const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
 const agentSettings = require('../config/agentSettings');
 
+// --- Simple server-side PCM16 mono mixer (24kHz) ---
+class Pcm16MonoMixer {
+  constructor(sampleRate = 24000) {
+    this.sampleRate = sampleRate;
+    this.agentQ = Buffer.alloc(0);   // 16-bit LE @ sampleRate
+    this.calleeQ = Buffer.alloc(0);  // 16-bit LE @ sampleRate
+    this.fd = null;
+    this.bytesWritten = 0;
+  }
+  start(filePath) {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    this.fd = fs.openSync(filePath, 'w');
+    const header = Buffer.alloc(44);
+    header.write('RIFF', 0);
+    header.writeUInt32LE(0, 4);
+    header.write('WAVE', 8);
+    header.write('fmt ', 12);
+    header.writeUInt32LE(16, 16);
+    header.writeUInt16LE(1, 20);
+    header.writeUInt16LE(1, 22); // mono
+    header.writeUInt32LE(this.sampleRate, 24);
+    const byteRate = this.sampleRate * 2;
+    header.writeUInt32LE(byteRate, 28);
+    header.writeUInt16LE(2, 32);
+    header.writeUInt16LE(16, 34);
+    header.write('data', 36);
+    header.writeUInt32LE(0, 40);
+    fs.writeSync(this.fd, header);
+    this.bytesWritten = 44;
+  }
+  appendAgent(buf24kLe) { if (buf24kLe?.length) { this.agentQ = Buffer.concat([this.agentQ, buf24kLe]); this._drain(); } }
+  appendCallee(buf24kLe) { if (buf24kLe?.length) { this.calleeQ = Buffer.concat([this.calleeQ, buf24kLe]); this._drain(); } }
+  _drain() {
+    if (!this.fd) return;
+    const CHUNK_SAMPLES = 2400; // 100ms @24k
+    const CHUNK_BYTES = CHUNK_SAMPLES * 2;
+    while (this.agentQ.length >= CHUNK_BYTES || this.calleeQ.length >= CHUNK_BYTES) {
+      const a = this.agentQ.length >= CHUNK_BYTES ? this.agentQ.subarray(0, CHUNK_BYTES) : null;
+      const c = this.calleeQ.length >= CHUNK_BYTES ? this.calleeQ.subarray(0, CHUNK_BYTES) : null;
+      if (!a && !c) break;
+      let out;
+      if (a && c) {
+        out = Buffer.alloc(CHUNK_BYTES);
+        for (let i = 0; i < CHUNK_BYTES; i += 2) {
+          const va = a.readInt16LE(i);
+          const vc = c.readInt16LE(i);
+          let s = va + vc; if (s > 32767) s = 32767; if (s < -32768) s = -32768;
+          out.writeInt16LE(s, i);
+        }
+        this.agentQ = this.agentQ.subarray(CHUNK_BYTES);
+        this.calleeQ = this.calleeQ.subarray(CHUNK_BYTES);
+      } else if (a) { out = a; this.agentQ = this.agentQ.subarray(CHUNK_BYTES); }
+      else { out = c; this.calleeQ = this.calleeQ.subarray(CHUNK_BYTES); }
+      fs.writeSync(this.fd, out);
+      this.bytesWritten += out.length;
+    }
+  }
+  async finalize() {
+    if (!this.fd) return;
+    this._drain();
+    const fd = this.fd; this.fd = null;
+    const dataSize = Math.max(0, this.bytesWritten - 44);
+    const fileSize = dataSize + 36;
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32LE(fileSize, 0); fs.writeSync(fd, buf, 0, 4, 4);
+    buf.writeUInt32LE(dataSize, 0); fs.writeSync(fd, buf, 0, 4, 40);
+    fs.closeSync(fd);
+  }
+}
+
 // --- Audio helpers: PCMU (G.711 u-law) -> PCM16, then upsample to 24kHz ---
 function ulawDecode(sample) {
   // u-law decode from 8-bit to 16-bit signed PCM
