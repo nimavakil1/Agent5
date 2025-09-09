@@ -489,6 +489,7 @@ function createWebSocketServer(server) {
     let livekitRoom = null; // LiveKit Room object
     let telnyxParticipant = null; // LiveKit Participant for Telnyx audio
     let livekitPublisher = null; // Node publisher into LiveKit
+    let livekitRecorder = null; // Recorder participant
     let customerRecord = null; // Customer Record for personalization
     let currentTranscription = ''; // To accumulate transcription
     
@@ -613,6 +614,17 @@ function createWebSocketServer(server) {
         livekitPublisher = await createPublisher({ host: livekitHost, token: bridgeToken, roomName });
         if (!livekitPublisher) {
           console.warn('LiveKit publisher not available. Proceeding without LiveKit audio publish.');
+        }
+        // Start recording participant (subscribe-only) to capture both sides from LiveKit
+        try {
+          const recIdentity = `recorder-bot-${roomName}-${Date.now()}`;
+          const recAt = new AccessToken(apiKey, apiSecret, { identity: recIdentity });
+          recAt.addGrant({ room: roomName, roomJoin: true, canPublish: false, canSubscribe: true });
+          const recToken = recAt.toJwt();
+          const { createRecorder } = require('../livekit/recorder');
+          livekitRecorder = await createRecorder({ host: livekitHost, token: recToken, roomName, outFileBase: roomName });
+        } catch (recErr) {
+          console.error('Failed to start LiveKit recorder (PSTN):', recErr);
         }
       } catch (e) {
         console.error('Failed to start LiveKit publisher:', e);
@@ -773,8 +785,13 @@ function createWebSocketServer(server) {
           if (livekitPublisher) {
             try { await livekitPublisher.close(); } catch (e) { console.error('Error closing publisher on stop:', e); }
           }
-          // Finalize WAV header and update DB
+          // Finalize recorder and update DB (prefer recorder output)
           try {
+            // Close recorder if active
+            let recorderPath = '';
+            try { if (livekitRecorder) { const outPath = await livekitRecorder.close(); recorderPath = outPath || ''; } } catch (e) { console.error('Error closing LiveKit recorder on stop:', e); }
+
+            // Finalize legacy u-law file header if present
             if (audioWriteStream) {
               await new Promise((resolve) => audioWriteStream.end(resolve));
               const dataSize = Math.max(0, bytesWritten - 44);
@@ -786,64 +803,51 @@ function createWebSocketServer(server) {
               buf4.writeUInt32LE(dataSize, 0);
               fs.writeSync(fd, buf4, 0, 4, 40);
               fs.closeSync(fd);
-
-              const audioRecordingUrl = `/recordings/${path.basename(audioFilePath)}`;
-              await ensureCallLogDefaults();
-              
-              // Calculate costs (skip OneDrive upload)
-              let onedriveUrl = ''; // Will be empty for now
-              let costTrackingId = '';
-              try {
-                console.log(`Recording saved locally: ${audioFilePath}`);
-                
-                // Calculate call duration and costs
-                const callEndTime = new Date();
-                const durationMinutes = (callEndTime - callStartTime) / (1000 * 60);
-                
-                // Create comprehensive cost tracking
-                const costTracking = await costCalculationService.updateCallCosts(roomName, 'pstn', {
-                  llm: {
-                    audio_input_minutes: audioInputMinutes,
-                    audio_output_minutes: audioOutputMinutes,
-                    input_tokens: inputTokenCount,
-                    output_tokens: outputTokenCount
-                  },
-                  pstn: {
-                    duration_minutes: durationMinutes
-                  },
-                  recording: {
-                    local_path: audioFilePath,
-                    onedrive_url: '', // Skip OneDrive for now
-                    onedrive_file_id: '',
-                    upload_status: 'local_only'
-                  },
-                  transcription: {
-                    full_text: currentTranscription,
-                    language_detected: 'auto',
-                    confidence_score: 0.95
-                  }
-                });
-                
-                costTrackingId = costTracking.call_id;
-                console.log(`Call costs calculated: ${costTracking.total_cost_usd.toFixed(4)}`);
-              } catch (costError) {
-                console.error('Cost calculation failed:', costError);
-              }
-              
-              // Update CallLogEntry with enhanced information
-              await CallLogEntry.findOneAndUpdate(
-                { call_id: roomName },
-                { 
-                  audio_recording_url: audioRecordingUrl,
-                  onedrive_recording_url: onedriveUrl,
-                  cost_tracking_id: costTrackingId,
-                  end_time: callEndTime,
-                  call_status: 'success',
-                  transcription_summary: currentTranscription.slice(0, 500) // First 500 chars as summary
-                },
-                { new: true, runValidators: true }
-              );
             }
+
+            await ensureCallLogDefaults();
+
+            // Calculate costs and update CallLogEntry
+            let onedriveUrl = '';
+            let costTrackingId = '';
+            const callEndTime = new Date();
+            try {
+              const durationMinutes = (callEndTime - callStartTime) / (1000 * 60);
+              const costTracking = await costCalculationService.updateCallCosts(roomName, 'pstn', {
+                llm: {
+                  audio_input_minutes: audioInputMinutes,
+                  audio_output_minutes: audioOutputMinutes,
+                  input_tokens: inputTokenCount,
+                  output_tokens: outputTokenCount
+                },
+                pstn: { duration_minutes: durationMinutes },
+                recording: {
+                  local_path: recorderPath || audioFilePath || '',
+                  onedrive_url: '',
+                  onedrive_file_id: '',
+                  upload_status: 'local_only'
+                },
+                transcription: { full_text: currentTranscription, language_detected: 'auto', confidence_score: 0.95 }
+              });
+              costTrackingId = costTracking.call_id;
+            } catch (costError) {
+              console.error('Cost calculation failed:', costError);
+            }
+
+            const chosenPath = recorderPath || audioFilePath || '';
+            const audioRecordingUrl = chosenPath ? `/recordings/${path.basename(chosenPath)}` : '';
+            await CallLogEntry.findOneAndUpdate(
+              { call_id: roomName },
+              { 
+                audio_recording_url: audioRecordingUrl,
+                onedrive_recording_url: onedriveUrl,
+                cost_tracking_id: costTrackingId,
+                end_time: callEndTime,
+                call_status: 'success',
+                transcription_summary: currentTranscription.slice(0, 500)
+              },
+              { new: true, runValidators: true }
+            );
           } catch (e) {
             console.error('Error finalizing WAV recording:', e);
           }
@@ -864,6 +868,9 @@ function createWebSocketServer(server) {
       }
       if (livekitPublisher) {
         try { await livekitPublisher.close(); } catch (e) { console.error('Error closing publisher on close:', e); }
+      }
+      if (livekitRecorder) {
+        try { await livekitRecorder.close(); } catch (e) { console.error('Error closing recorder on close:', e); }
       }
 
       // Try to finalize header sizes if a file exists
