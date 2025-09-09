@@ -215,6 +215,11 @@ function createWebSocketServer(server) {
         // --- Recording via LiveKit recorder for Agent Studio sessions ---
         const uniqueSuffix = Date.now();
         const callId = `${roomName}-${uniqueSuffix}`;
+        // Fallback server-side mixer (PCM16 mono @24k)
+        const studioRecordingsDir = path.resolve(__dirname, '../../recordings');
+        const studioMixPath = path.join(studioRecordingsDir, `${callId}.wav`);
+        const studioMixer = new Pcm16MonoMixer(24000);
+        try { studioMixer.start(studioMixPath); } catch (e) { console.error('Studio mixer start error:', e); }
         let currentTranscription = '';
 
         // Create a CallLogEntry for the browser session (unique call_id)
@@ -354,6 +359,7 @@ function createWebSocketServer(server) {
                 try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(e) { console.error('Error sending agent_speaking=true:', e); }
               }
               const pcm24k = Buffer.from(m.delta, 'base64');
+              try { studioMixer.appendAgent(pcm24k); } catch(_) {}
               if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
               try { telnyxWs.send(JSON.stringify({ type: 'agent_audio_24k', audio: m.delta })); } catch(e) { console.error('Error sending agent_audio_24k:', e); }
               if (!notified) {
@@ -373,10 +379,11 @@ function createWebSocketServer(server) {
           try { oaWs.close(); } catch(e) { console.error('Error closing OA ws:', e); };
           try { publisher && await publisher.close(); } catch(e) { console.error('Error closing publisher:', e); };
           try { recorder && await recorder.close(); } catch(e) { console.error('Error closing recorder:', e); };
+          try { await studioMixer.finalize(); } catch(e) { console.error('Studio mixer finalize error:', e); }
 
           // Update CallLogEntry with recorder file
           try {
-            const audioRecordingUrl = recorder && recorder.outPath ? `/recordings/${path.basename(recorder.outPath)}` : '';
+            const audioRecordingUrl = recorder && recorder.outPath ? `/recordings/${path.basename(recorder.outPath)}` : `/recordings/${path.basename(studioMixPath)}`;
             const callEndTime = new Date();
             await CallLogEntry.findOneAndUpdate(
               { call_id: callId },
@@ -422,6 +429,7 @@ function createWebSocketServer(server) {
             const m = JSON.parse(raw.toString());
             if (m.type === 'audio' && m.audio && oaWs.readyState === WebSocket.OPEN) {
               const pcm24kBuffer = Buffer.from(m.audio, 'base64');
+              try { studioMixer.appendCallee(pcm24kBuffer); } catch(_) {}
               // Publish callee (browser mic) into LiveKit so the recorder can capture it
               try {
                 if (publisher) {
@@ -506,6 +514,11 @@ function createWebSocketServer(server) {
     let audioWriteStream = null;
     let bytesWritten = 0;
     let telnyxStreamId = null; // Stream ID from Telnyx 'start' event
+    // PSTN mixer fallback (PCM16 mono @24k)
+    const pstnRecordingsDir = path.resolve(__dirname, '../../recordings');
+    const pstnMixPath = path.join(pstnRecordingsDir, `${roomName}-${Date.now()}-mix.wav`);
+    const pstnMixer = new Pcm16MonoMixer(24000);
+    try { pstnMixer.start(pstnMixPath); } catch (e) { console.error('PSTN mixer start error:', e); }
 
     // Outgoing AI speech queue (PCMU @8kHz)
     let aiPcmuQueue = Buffer.alloc(0);
@@ -683,6 +696,11 @@ function createWebSocketServer(server) {
             } catch (e) {
               console.error('Error feeding agent audio to LiveKit:', e);
             }
+            // also feed PSTN mixer (agent)
+            try {
+              const pcm24k = Buffer.from(audioBase64, 'base64');
+              pstnMixer.appendAgent(pcm24k);
+            } catch(_) {}
           }
 
         } catch (error) {
@@ -767,6 +785,13 @@ function createWebSocketServer(server) {
               console.error('Error feeding callee audio to LiveKit:', e);
             }
           }
+          // Feed mixer with callee upsampled to 24k
+          try {
+            const pcm8k = decodePCMUtoPCM16(audioBuffer);
+            const pcm24k = upsampleTo24kHz(pcm8k);
+            const buf24k = int16ToLEBuffer(pcm24k);
+            pstnMixer.appendCallee(buf24k);
+          } catch(_) {}
         } else if (data.event === 'stop') {
           console.log('Telnyx stream stopped:', data);
           // Stop AI sender
@@ -787,11 +812,12 @@ function createWebSocketServer(server) {
           if (livekitPublisher) {
             try { await livekitPublisher.close(); } catch (e) { console.error('Error closing publisher on stop:', e); }
           }
-          // Finalize recorder and update DB (prefer recorder output)
+          // Finalize recorder/mixer and update DB (prefer recorder output)
           try {
             // Close recorder if active
             let recorderPath = '';
             try { if (livekitRecorder) { const outPath = await livekitRecorder.close(); recorderPath = outPath || ''; } } catch (e) { console.error('Error closing LiveKit recorder on stop:', e); }
+            try { await pstnMixer.finalize(); } catch (e) { console.error('PSTN mixer finalize error:', e); }
 
             // Finalize legacy u-law file header if present
             if (audioWriteStream) {
@@ -836,7 +862,7 @@ function createWebSocketServer(server) {
               console.error('Cost calculation failed:', costError);
             }
 
-            const chosenPath = recorderPath || audioFilePath || '';
+            const chosenPath = recorderPath || pstnMixPath || audioFilePath || '';
             const audioRecordingUrl = chosenPath ? `/recordings/${path.basename(chosenPath)}` : '';
             await CallLogEntry.findOneAndUpdate(
               { call_id: roomName },
