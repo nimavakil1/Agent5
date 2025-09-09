@@ -427,6 +427,7 @@ function createWebSocketServer(server) {
             }
 
             if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta) {
+              if (studioSuppressAgentAudio) return;
               agentSpeaking = true;
               if (!agentSpeakingSent) {
                 agentSpeakingSent = true;
@@ -530,7 +531,7 @@ function createWebSocketServer(server) {
               // Cancel current agent response and flush playback
               try { if (currentResponseId) { oaWs.send(JSON.stringify({ type: 'response.cancel', response_id: currentResponseId })); } else { oaWs.send(JSON.stringify({ type: 'response.cancel' })); } } catch(e) { console.error('Error sending response.cancel:', e); }
               try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(e) { console.error('Error sending barge_in:', e); }
-              agentSpeaking = false; agentSpeakingSent = false;
+              agentSpeaking = false; agentSpeakingSent = false; studioSuppressAgentAudio = true;
               studioAppendedMs = 0;
             }
             // When user stops speaking for sustained frames, commit and ask for response
@@ -540,7 +541,7 @@ function createWebSocketServer(server) {
                 if (studioAppendedMs >= STUDIO_MIN_COMMIT_MS) {
                   oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
                   oaWs.send(JSON.stringify({ type: 'response.create' }));
-                  studioAppendedMs = 0;
+                  studioAppendedMs = 0; studioSuppressAgentAudio = false;
                 } else {
                   // Not enough audio to commit; wait for more frames
                 }
