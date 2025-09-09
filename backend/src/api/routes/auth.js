@@ -62,10 +62,11 @@ router.post('/login', async (req, res) => {
     await logAuditEvent(user._id.toString(), user.email, 'login', 'auth', null, { role: user.role }, req, true);
     
     const token = signJwt(user);
+    // In dev (http://localhost), Secure cookies won't set. Enable Secure only in production
     const cookieOpts = {
       httpOnly: true,
       sameSite: 'lax',
-      secure: true,
+      secure: (process.env.COOKIE_SECURE === '1') || (process.env.NODE_ENV === 'production'),
       maxAge: 15 * 60 * 1000,
       path: '/',
     };
