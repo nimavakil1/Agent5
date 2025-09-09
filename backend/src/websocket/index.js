@@ -529,7 +529,14 @@ function createWebSocketServer(server) {
                   try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(e) { console.error('Error sending barge_in:', e); }
                   agentSpeaking = false; agentSpeakingSent = false;
                 }
-                if (userSpeaking && belowCnt >= 12) { userSpeaking = false; belowCnt = 0; }
+                // When user stops speaking for sustained frames, commit and ask for response
+                if (userSpeaking && belowCnt >= 12) {
+                  userSpeaking = false; belowCnt = 0;
+                  try {
+                    oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+                    oaWs.send(JSON.stringify({ type: 'response.create' }));
+                  } catch (e) { console.error('Error auto-committing on silence (studio):', e); }
+                }
               } catch(e) { console.error('Error in VAD logic:', e); }
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
@@ -580,6 +587,16 @@ function createWebSocketServer(server) {
     let inputTokenCount = 0;
     let outputTokenCount = 0;
     
+    // PSTN turn-taking state
+    let pstnUserSpeaking = false;
+    let pstnAboveCnt = 0;
+    let pstnBelowCnt = 0;
+    let pstnAgentSpeaking = false;
+    const speakTh = Number(process.env.SERVER_VAD_SPEAK_TH || '0.020');
+    const silentTh = Number(process.env.SERVER_VAD_SILENT_TH || '0.006');
+    const onsetNeededBase = Number(process.env.SERVER_VAD_ONSET_FRAMES || '4');
+    const onsetNeededWhileAgent = Number(process.env.SERVER_VAD_ONSET_FRAMES_AGENT || '8');
+
     // Recording stream state
     let audioFilePath = null;
     let audioWriteStream = null;
@@ -772,7 +789,9 @@ function createWebSocketServer(server) {
               const pcm24k = Buffer.from(audioBase64, 'base64');
               pstnMixer.appendAgent(pcm24k);
             } catch(_) {}
+            pstnAgentSpeaking = true;
           }
+          if (openaiResponse.type === 'response.done') { pstnAgentSpeaking = false; }
 
         } catch (error) {
           console.error('Error processing OpenAI message:', error);
@@ -845,6 +864,29 @@ function createWebSocketServer(server) {
             const b64 = pcmBuf.toString('base64');
             // Append chunk to input buffer
             openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
+            // PSTN server-side VAD for barge-in + auto-commit
+            try {
+              // Compute RMS from pcm24k Int16Array via buffer
+              let sum = 0; let n = pcm24k.length;
+              for (let i = 0; i < n; i++) { const v = pcm24k[i]; sum += v * v; }
+              const rms = n ? Math.sqrt(sum / n) / 32768 : 0;
+              if (rms > speakTh) { pstnAboveCnt++; pstnBelowCnt = 0; } else if (rms < silentTh) { pstnBelowCnt++; pstnAboveCnt = 0; } else { pstnAboveCnt = 0; }
+              const need = pstnAgentSpeaking ? onsetNeededWhileAgent : onsetNeededBase;
+              if (!pstnUserSpeaking && pstnAboveCnt >= need) {
+                pstnUserSpeaking = true; pstnAboveCnt = 0;
+                // Cancel agent speech immediately
+                try { openaiWs.send(JSON.stringify({ type: 'response.cancel' })); } catch(e) { console.error('PSTN: error sending response.cancel:', e); }
+                // Also clear queued Telnyx agent frames
+                try { aiPcmuQueue = Buffer.alloc(0); } catch(_) {}
+              }
+              if (pstnUserSpeaking && pstnBelowCnt >= 12) {
+                pstnUserSpeaking = false; pstnBelowCnt = 0;
+                try {
+                  openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+                  openaiWs.send(JSON.stringify({ type: 'response.create' }));
+                } catch (e) { console.error('PSTN: error auto-committing on silence:', e); }
+              }
+            } catch(e) { console.error('PSTN VAD error:', e); }
           }
 
           // Also feed callee audio to LiveKit publisher
