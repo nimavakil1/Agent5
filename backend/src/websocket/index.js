@@ -529,9 +529,17 @@ function createWebSocketServer(server) {
             if (!userSpeaking && aboveCnt >= need) {
               userSpeaking = true; aboveCnt = 0;
               // Cancel current agent response and flush playback
-              try { if (currentResponseId) { oaWs.send(JSON.stringify({ type: 'response.cancel', response_id: currentResponseId })); } else { oaWs.send(JSON.stringify({ type: 'response.cancel' })); } } catch(e) { console.error('Error sending response.cancel:', e); }
+              try {
+                if (currentResponseId) {
+                  oaWs.send(JSON.stringify({ type: 'response.cancel', response_id: currentResponseId }));
+                } else {
+                  oaWs.send(JSON.stringify({ type: 'response.cancel' }));
+                }
+              } catch(e) { console.error('Error sending response.cancel:', e); }
               try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(e) { console.error('Error sending barge_in:', e); }
               agentSpeaking = false; agentSpeakingSent = false; studioSuppressAgentAudio = true;
+              // If publishing to LiveKit, immediately mute and clear the agent track queue
+              try { if (publisher) { publisher.muteAgent(true); publisher.clearAgentQueue(); } } catch (e) { console.error('Error muting LiveKit agent on barge-in:', e); }
               studioAppendedMs = 0;
             }
             // When user stops speaking for sustained frames, commit and ask for response
