@@ -388,6 +388,9 @@ function createWebSocketServer(server) {
         });
         let notified = false;
         let lastSpeaker = ''; // To track turns for formatting
+        let studioAppendedMs = 0; // ms of user audio since last commit
+        const STUDIO_FRAME_MS = 21; // ~1024/48k -> 512/24k ≈ 21ms
+        const STUDIO_MIN_COMMIT_MS = Number(process.env.MIN_COMMIT_MS || '120');
         oaWs.on('message', (data) => {
           try {
             const s = typeof data === 'string' ? data : data.toString('utf8');
@@ -522,23 +525,30 @@ function createWebSocketServer(server) {
                 const rms = n ? Math.sqrt(sum / n) / 32768 : 0;
                 if (rms > speakTh) { aboveCnt++; belowCnt = 0; } else if (rms < silentTh) { belowCnt++; aboveCnt = 0; } else { aboveCnt = 0; }
                 const need = agentSpeaking ? onsetNeededWhileAgent : onsetNeededBase;
-                if (!userSpeaking && aboveCnt >= need) {
-                  userSpeaking = true; aboveCnt = 0;
-                  // Cancel current agent response and flush playback
-                  try { if (currentResponseId) { oaWs.send(JSON.stringify({ type: 'response.cancel', response_id: currentResponseId })); } else { oaWs.send(JSON.stringify({ type: 'response.cancel' })); } } catch(e) { console.error('Error sending response.cancel:', e); }
-                  try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(e) { console.error('Error sending barge_in:', e); }
-                  agentSpeaking = false; agentSpeakingSent = false;
+            if (!userSpeaking && aboveCnt >= need) {
+              userSpeaking = true; aboveCnt = 0;
+              // Cancel current agent response and flush playback
+              try { if (currentResponseId) { oaWs.send(JSON.stringify({ type: 'response.cancel', response_id: currentResponseId })); } else { oaWs.send(JSON.stringify({ type: 'response.cancel' })); } } catch(e) { console.error('Error sending response.cancel:', e); }
+              try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(e) { console.error('Error sending barge_in:', e); }
+              agentSpeaking = false; agentSpeakingSent = false;
+              studioAppendedMs = 0;
+            }
+            // When user stops speaking for sustained frames, commit and ask for response
+            if (userSpeaking && belowCnt >= 12) {
+              userSpeaking = false; belowCnt = 0;
+              try {
+                if (studioAppendedMs >= STUDIO_MIN_COMMIT_MS) {
+                  oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+                  oaWs.send(JSON.stringify({ type: 'response.create' }));
+                  studioAppendedMs = 0;
+                } else {
+                  // Not enough audio to commit; wait for more frames
                 }
-                // When user stops speaking for sustained frames, commit and ask for response
-                if (userSpeaking && belowCnt >= 12) {
-                  userSpeaking = false; belowCnt = 0;
-                  try {
-                    oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-                    oaWs.send(JSON.stringify({ type: 'response.create' }));
-                  } catch (e) { console.error('Error auto-committing on silence (studio):', e); }
-                }
-              } catch(e) { console.error('Error in VAD logic:', e); }
-              oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
+              } catch (e) { console.error('Error auto-committing on silence (studio):', e); }
+            }
+          } catch(e) { console.error('Error in VAD logic:', e); }
+          oaWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: m.audio }));
+          studioAppendedMs += STUDIO_FRAME_MS;
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
               oaWs.send(JSON.stringify({ type: 'response.create' }));
@@ -592,6 +602,9 @@ function createWebSocketServer(server) {
     let pstnAboveCnt = 0;
     let pstnBelowCnt = 0;
     let pstnAgentSpeaking = false;
+    let pstnAppendedMs = 0;
+    const PSTN_FRAME_MS = 20; // Telnyx media frames are ~20ms
+    const PSTN_MIN_COMMIT_MS = Number(process.env.MIN_COMMIT_MS || '120');
     const speakTh = Number(process.env.SERVER_VAD_SPEAK_TH || '0.020');
     const silentTh = Number(process.env.SERVER_VAD_SILENT_TH || '0.006');
     const onsetNeededBase = Number(process.env.SERVER_VAD_ONSET_FRAMES || '4');
@@ -864,6 +877,7 @@ function createWebSocketServer(server) {
             const b64 = pcmBuf.toString('base64');
             // Append chunk to input buffer
             openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
+            pstnAppendedMs += PSTN_FRAME_MS;
             // PSTN server-side VAD for barge-in + auto-commit
             try {
               // Compute RMS from pcm24k Int16Array via buffer
@@ -882,8 +896,11 @@ function createWebSocketServer(server) {
               if (pstnUserSpeaking && pstnBelowCnt >= 12) {
                 pstnUserSpeaking = false; pstnBelowCnt = 0;
                 try {
-                  openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-                  openaiWs.send(JSON.stringify({ type: 'response.create' }));
+                  if (pstnAppendedMs >= PSTN_MIN_COMMIT_MS) {
+                    openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+                    openaiWs.send(JSON.stringify({ type: 'response.create' }));
+                    pstnAppendedMs = 0;
+                  }
                 } catch (e) { console.error('PSTN: error auto-committing on silence:', e); }
               }
             } catch(e) { console.error('PSTN VAD error:', e); }
