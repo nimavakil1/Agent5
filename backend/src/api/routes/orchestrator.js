@@ -21,65 +21,23 @@ router.post('/interpret', async (req, res) => {
 
     // Use OpenAI to extract structured plan
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    // JSON schema required by Responses API: set additionalProperties=false at all object levels
-    const schema = {
-      name: 'CampaignPlan',
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          action: { type: 'string', enum: ['create_campaign'] },
-          schedule: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              start_time_iso: { type: 'string', description: 'ISO8601 in CET (Europe/Brussels) unless specified' },
-              timezone: { type: 'string' }
-            },
-            required: ['start_time_iso', 'timezone']
-          },
-          targeting: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              city: { type: 'string' },
-              country: { type: 'string' }
-            }
-          },
-          product: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              sku: { type: 'string' }
-            },
-            required: ['sku']
-          },
-          goal: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              type: { type: 'string', enum: ['units_sold', 'calls_completed', 'leads_booked'] },
-              target: { type: 'number' }
-            },
-            required: ['type', 'target']
-          },
-          channel: { type: 'string', enum: ['pstn', 'whatsapp'] },
-          pacing: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              max_parallel_calls: { type: 'number' },
-              rps: { type: 'number' }
-            }
-          },
-          notes: { type: 'string' }
-        },
-        required: ['action', 'schedule', 'product', 'goal']
-      }
-    };
 
-    const system = `Extract a structured campaign plan from the user's instruction.
-Return ONLY valid JSON matching the provided schema. Use timezone Europe/Brussels.`;
+    const system = `You are a planner. Convert the user's instruction into JSON with this exact shape:
+{
+  "action": "create_campaign",
+  "schedule": { "start_time_iso": "YYYY-MM-DDTHH:mm:ssZ", "timezone": "Europe/Brussels" },
+  "targeting": { "city": "", "country": "BE" },
+  "product": { "sku": "" },
+  "goal": { "type": "units_sold", "target": 0 },
+  "channel": "pstn",
+  "pacing": { "max_parallel_calls": 3, "rps": 0.5 },
+  "notes": ""
+}
+Rules:
+- Always output valid JSON, no markdown, no comments.
+- If date is relative (e.g., next Monday), resolve to an ISO8601 date in Europe/Brussels.
+- If city/country missing, set city to "" and country to "BE".
+- goal.type defaults to "units_sold". channel defaults to "pstn".`;
 
     const resp = await client.responses.create({
       model: process.env.ORCHESTRATOR_MODEL || 'gpt-4o-mini',
@@ -87,14 +45,7 @@ Return ONLY valid JSON matching the provided schema. Use timezone Europe/Brussel
         { role: 'system', content: system },
         { role: 'user', content: instruction }
       ],
-      // Structured output: name + schema at the format level
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'CampaignPlan',
-          schema: schema.schema,
-        }
-      },
+      text: { format: 'json' },
     });
 
     let obj = null;
