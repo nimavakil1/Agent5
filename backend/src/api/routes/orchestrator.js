@@ -45,7 +45,7 @@ Rules:
         { role: 'system', content: system },
         { role: 'user', content: instruction }
       ],
-      text: { format: { type: 'json' } },
+      text: { format: { type: 'json_object' } },
     });
 
     let obj = null;
