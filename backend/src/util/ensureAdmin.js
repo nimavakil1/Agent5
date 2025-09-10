@@ -5,6 +5,7 @@ async function ensureAdmin() {
   try {
     const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
     const password = process.env.ADMIN_PASSWORD || '';
+    const desiredRole = (process.env.ADMIN_ROLE || 'superadmin').toLowerCase() === 'superadmin' ? 'superadmin' : 'admin';
     
     if (!email || !password) {
       console.warn('[auth] ADMIN_EMAIL/ADMIN_PASSWORD not set; skipping admin check');
@@ -17,7 +18,11 @@ async function ensureAdmin() {
     if (adminUser) {
       // Admin user exists - ensure they have admin role and are active
       let updated = false;
-      if (adminUser.role !== 'admin') {
+      // escalate to superadmin if desired
+      if (desiredRole === 'superadmin' && adminUser.role !== 'superadmin') {
+        adminUser.role = 'superadmin';
+        updated = true;
+      } else if (adminUser.role !== 'admin' && desiredRole === 'admin') {
         adminUser.role = 'admin';
         updated = true;
       }
@@ -40,7 +45,7 @@ async function ensureAdmin() {
       await User.create({ 
         email, 
         passwordHash, 
-        role: 'admin', 
+        role: desiredRole, 
         active: true,
         createdAt: new Date(),
         lastLoginAt: null
@@ -59,6 +64,7 @@ async function forceRecreateAdmin() {
   try {
     const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
     const password = process.env.ADMIN_PASSWORD || '';
+    const desiredRole = (process.env.ADMIN_ROLE || 'superadmin').toLowerCase() === 'superadmin' ? 'superadmin' : 'admin';
     
     if (!email || !password) {
       throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required');
@@ -72,7 +78,7 @@ async function forceRecreateAdmin() {
     const newAdmin = await User.create({ 
       email, 
       passwordHash, 
-      role: 'admin', 
+      role: desiredRole, 
       active: true,
       createdAt: new Date(),
       lastLoginAt: null

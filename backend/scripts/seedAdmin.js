@@ -8,6 +8,7 @@ const validateEnv = require('../src/config/validateEnv');
 async function main(){
   const email = process.env.ADMIN_EMAIL || process.argv[2];
   const password = process.env.ADMIN_PASSWORD || process.argv[3];
+  const desiredRole = (process.env.ADMIN_ROLE || 'superadmin').toLowerCase() === 'superadmin' ? 'superadmin' : 'admin';
   if (!email || !password) {
     console.error('Usage: ADMIN_EMAIL=... ADMIN_PASSWORD=... node scripts/seedAdmin.js');
     process.exit(1);
@@ -22,13 +23,20 @@ async function main(){
   const passwordHash = await bcrypt.hash(password, 10);
   if (exists) {
     if (process.env.FORCE_RESET === '1') {
-      await User.updateOne({ _id: exists._id }, { $set: { passwordHash, role: exists.role || 'admin', active: true } });
+      const role = exists.role === 'superadmin' ? 'superadmin' : desiredRole;
+      await User.updateOne({ _id: exists._id }, { $set: { passwordHash, role, active: true } });
       console.log('Admin password reset for:', email);
     } else {
-      console.log('User already exists');
+      // escalate role if needed
+      if (desiredRole === 'superadmin' && exists.role !== 'superadmin') {
+        await User.updateOne({ _id: exists._id }, { $set: { role: 'superadmin', active: true } });
+        console.log('User existed; escalated to superadmin:', email);
+      } else {
+        console.log('User already exists');
+      }
     }
   } else {
-    await User.create({ email: String(email).toLowerCase(), passwordHash, role: 'admin' });
+    await User.create({ email: String(email).toLowerCase(), passwordHash, role: desiredRole, active: true });
     console.log('Admin user created:', email);
   }
   await mongoose.disconnect();
