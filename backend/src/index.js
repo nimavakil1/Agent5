@@ -173,9 +173,9 @@ app.use('/api/products', productsRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
-// Express v5 uses path-to-regexp v6; wildcard must be a named param
-// Match /ui and any nested path like /ui/... and serve index.html
-app.get('/ui/:path*', requireSession, (req, res) => {
+// Express v5 (path-to-regexp v6) can be finicky with wildcard syntax.
+// Use a regex to match /ui and any nested path like /ui/... and serve index.html
+app.get(/^\/ui(?:\/.*)?$/, requireSession, (req, res) => {
   res.sendFile(path.join(uiDist, 'index.html'));
 });
 
