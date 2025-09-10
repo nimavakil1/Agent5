@@ -6,6 +6,9 @@ const {
   adminFetch,
   createCheckoutWebUrl,
 } = require('../services/shopifyService');
+const { syncEntries, syncAllowed } = require('../services/shopifySyncService');
+const AllowedProduct = require('../../models/AllowedProduct');
+const Product = require('../../models/Product');
 
 const router = express.Router();
 
@@ -95,6 +98,18 @@ router.post('/checkout', async (req, res) => {
   try {
     const { items, discount_code } = req.body || {};
     if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ message: 'items required' });
+    // Enforce allowed products
+    const variantIds = [];
+    for (const it of items) {
+      if (it.variant_id) variantIds.push(Number(it.variant_id));
+      else if (it.sku) {
+        const id = await getVariantIdBySku(it.sku);
+        variantIds.push(Number(id));
+      }
+    }
+    if (!variantIds.length) return res.status(400).json({ message: 'items must include variant_id or sku' });
+    const allowedCount = await Product.countDocuments({ variant_id: { $in: variantIds }, allowed: true });
+    if (allowedCount !== variantIds.length) return res.status(403).json({ message: 'one or more items not allowed' });
     const url = await createCheckoutWebUrl(items, discount_code || '');
     res.json({ checkout_url: url });
   } catch (e) {
@@ -116,6 +131,11 @@ router.post('/draft-order', async (req, res) => {
     if (!Array.isArray(line_items) || line_items.length === 0) {
       return res.status(400).json({ message: 'line_items required' });
     }
+    // Enforce allowed products
+    const variantIds = line_items.map(li => Number(li.variant_id)).filter(Boolean);
+    if (!variantIds.length) return res.status(400).json({ message: 'line_items require variant_id' });
+    const allowedCount = await Product.countDocuments({ variant_id: { $in: variantIds }, allowed: true });
+    if (allowedCount !== variantIds.length) return res.status(403).json({ message: 'one or more items not allowed' });
 
     const draft = { line_items };
     if (email) draft.email = String(email);
@@ -144,6 +164,36 @@ router.post('/draft-order', async (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ message: 'Failed to create draft order', error: e.message });
+  }
+});
+
+// Manage allowed list
+router.get('/allowed', async (req, res) => {
+  const list = await AllowedProduct.find({}).sort({ createdAt: 1 }).lean();
+  res.json(list);
+});
+
+router.post('/allowed', async (req, res) => {
+  try {
+    const items = req.body?.items;
+    if (!Array.isArray(items)) return res.status(400).json({ message: 'items array required' });
+    await AllowedProduct.deleteMany({});
+    const docs = items.map(it => ({ sku: it.sku || undefined, variant_id: it.variant_id || undefined, active: it.active !== false }));
+    await AllowedProduct.insertMany(docs);
+    res.status(201).json({ saved: docs.length });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to save allowed list', error: e.message });
+  }
+});
+
+// Trigger sync
+router.post('/sync', async (req, res) => {
+  try {
+    const entries = Array.isArray(req.body?.items) ? req.body.items : null;
+    const result = entries ? await syncEntries(entries) : await syncAllowed();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to sync products', error: e.message });
   }
 });
 

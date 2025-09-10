@@ -23,6 +23,7 @@ const costsRouter = require('./api/routes/costs');
 const emergencyRouter = require('./api/routes/emergency');
 const orchestratorRouter = require('./api/routes/orchestrator');
 const shopifyRouter = require('./api/routes/shopify');
+const productsRouter = require('./api/routes/products');
 const connectDB = require('./config/database');
 const validateEnv = require('./config/validateEnv');
 const ensureAdmin = require('./util/ensureAdmin');
@@ -162,6 +163,7 @@ app.use('/api/costs', costsRouter);
 app.use('/api/emergency', emergencyRouter);
 app.use('/api/orchestrator', requireSession, orchestratorRouter);
 app.use('/api/shopify', shopifyRouter);
+app.use('/api/products', productsRouter);
 
 if (process.env.NODE_ENV !== 'test') {
   server.listen(port, () => {
