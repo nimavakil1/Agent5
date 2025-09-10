@@ -1,6 +1,11 @@
 
 const SibApiV3Sdk = require('@sendinblue/client');
-const fetch = require('node-fetch');
+
+async function getFetch() {
+  if (typeof fetch !== 'undefined') return fetch; // Node 18+ global
+  const mod = await import('node-fetch');
+  return mod.default;
+}
 
 let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 let apiKey = apiInstance.authentications['apiKey'];
@@ -59,7 +64,8 @@ async function sendWhatsAppTemplate(recipientNumber, templateName, languageCode 
     }
   };
 
-  const resp = await fetch(url, {
+  const _fetch = await getFetch();
+  const resp = await _fetch(url, {
     method: 'POST',
     headers: {
       'api-key': apiKey,
