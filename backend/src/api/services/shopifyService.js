@@ -17,21 +17,76 @@ function adminHeaders() {
   };
 }
 
+function logDebug(label, payload) {
+  if (process.env.DEBUG_SHOPIFY === '1') {
+    try {
+      const safe = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      console.log(`[shopify] ${label}:`, safe.slice(0, 2000));
+    } catch (_) {}
+  }
+}
+
 async function adminFetch(path, options = {}) {
   const url = `${shopifyAdminBase()}${path}`;
-  const res = await fetch(url, { headers: { ...adminHeaders(), ...(options.headers || {}) }, method: options.method || 'GET', body: options.body ? JSON.stringify(options.body) : undefined });
+  const reqInit = { headers: { ...adminHeaders(), ...(options.headers || {}) }, method: options.method || 'GET', body: options.body ? JSON.stringify(options.body) : undefined };
+  logDebug('Admin REST request', { url, method: reqInit.method, body: reqInit.body });
+  const res = await fetch(url, reqInit);
+  logDebug('Admin REST response status', `${res.status} ${res.statusText}`);
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(`Shopify API ${res.status} ${res.statusText}: ${txt}`);
   }
-  return res.json();
+  const json = await res.json();
+  logDebug('Admin REST response json', json);
+  return json;
+}
+
+// Admin GraphQL for reliable SKU search
+function shopifyAdminGraphQLEndpoint() {
+  const domain = (process.env.SHOPIFY_STORE_DOMAIN || '').replace(/^https?:\/\//, '');
+  if (!domain) throw new Error('SHOPIFY_STORE_DOMAIN not set');
+  const version = process.env.SHOPIFY_API_VERSION || '2024-07';
+  return `https://${domain}/admin/api/${version}/graphql.json`;
+}
+
+async function adminGraphQL(query, variables = {}) {
+  const url = shopifyAdminGraphQLEndpoint();
+  const req = { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ query, variables }) };
+  logDebug('Admin GQL request', { url, query, variables });
+  const res = await fetch(url, req);
+  logDebug('Admin GQL response status', `${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`Shopify Admin GQL ${res.status} ${res.statusText}: ${txt}`);
+  }
+  const json = await res.json();
+  if (json.errors) throw new Error(`Shopify Admin GQL errors: ${JSON.stringify(json.errors)}`);
+  logDebug('Admin GQL response json', json);
+  return json.data;
+}
+
+function fromGid(gid) {
+  const m = String(gid || '').match(/ProductVariant\/(\d+)/);
+  return m ? Number(m[1]) : null;
 }
 
 async function getVariantIdBySku(sku) {
-  const data = await adminFetch(`/variants.json?sku=${encodeURIComponent(sku)}`);
-  const v = Array.isArray(data.variants) && data.variants[0];
-  if (!v) throw new Error(`Variant not found for SKU ${sku}`);
-  return v.id;
+  const query = `#graphql
+    query Vars($q: String!) {
+      productVariants(first: 10, query: $q) {
+        edges { node { id sku title product { id title status } } }
+      }
+    }
+  `;
+  const data = await adminGraphQL(query, { q: `sku:${JSON.stringify(String(sku))}` });
+  const edges = data?.productVariants?.edges || [];
+  if (!edges.length) throw new Error(`Variant not found for SKU ${sku}`);
+  // Find exact SKU match first
+  const exact = edges.map(e=>e.node).find(n => (n.sku || '').toString().trim().toLowerCase() === String(sku).trim().toLowerCase());
+  const node = exact || edges[0].node;
+  const id = fromGid(node.id);
+  if (!id) throw new Error(`Could not parse variant id for SKU ${sku}`);
+  return id;
 }
 
 async function createPrefilledCartLink(products) {
@@ -102,11 +157,14 @@ function storefrontHeaders() {
 }
 
 async function storefrontGraphQL(query, variables = {}) {
-  const res = await fetch(storefrontBase(), {
+  const resInit = {
     method: 'POST',
     headers: storefrontHeaders(),
     body: JSON.stringify({ query, variables }),
-  });
+  };
+  logDebug('Storefront request', { url: storefrontBase(), query, variables });
+  const res = await fetch(storefrontBase(), resInit);
+  logDebug('Storefront response status', `${res.status} ${res.statusText}`);
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(`Storefront ${res.status} ${res.statusText}: ${txt}`);
@@ -115,6 +173,7 @@ async function storefrontGraphQL(query, variables = {}) {
   if (json.errors) {
     throw new Error(`Storefront GraphQL errors: ${JSON.stringify(json.errors)}`);
   }
+  logDebug('Storefront response json', json);
   return json.data;
 }
 
