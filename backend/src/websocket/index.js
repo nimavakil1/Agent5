@@ -288,14 +288,10 @@ function createWebSocketServer(server) {
         let sessionAudioInputMinutes = 0;
         let sessionAudioOutputMinutes = 0;
 
-        // --- Recording via LiveKit recorder for Agent Studio sessions ---
+        // --- Recording via LiveKit Egress for Agent Studio sessions ---
         const uniqueSuffix = Date.now();
         const callId = `${roomName}-${uniqueSuffix}`;
-        // Fallback server-side mixer (PCM16 mono @24k)
-        const studioRecordingsDir = path.resolve(__dirname, '../../recordings');
-        const studioMixPath = path.join(studioRecordingsDir, `${callId}.wav`);
-        const studioMixer = new Pcm16MonoMixer(24000);
-        try { studioMixer.start(studioMixPath); } catch (e) { console.error('Studio mixer start error:', e); }
+        let egressId = null;
         let currentTranscription = '';
 
         // Create a CallLogEntry for the browser session (unique call_id)
@@ -316,25 +312,12 @@ function createWebSocketServer(server) {
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
         let publisher = null;
-        let recorder = null;
         if (process.env.AGENTSTREAM_PUBLISH_LIVEKIT === '1') {
           try {
             const at = new AccessToken(apiKey, apiSecret, { identity });
             at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
             const token = await at.toJwt();
             publisher = await createPublisher({ host: livekitHost, token, roomName });
-            // Start a recorder participant (subscribe-only)
-            try {
-              const recIdentity = `recorder-bot-${roomName}-${uniqueSuffix}`;
-              const recAt = new AccessToken(apiKey, apiSecret, { identity: recIdentity });
-              recAt.addGrant({ room: roomName, roomJoin: true, canPublish: false, canSubscribe: true });
-              const recToken = recAt.toJwt();
-              const { createRecorder } = require('../livekit/recorder');
-              // Use the same host provided to browser clients for consistency
-              recorder = await createRecorder({ host: process.env.LIVEKIT_SERVER_URL, token: recToken, roomName, outFileBase: callId });
-            } catch (e) {
-              console.error('Recorder init error (Agent Studio):', e?.message || e);
-            }
           } catch (e) {
             console.error('LiveKit publisher error (continuing without LiveKit):', e?.message || e);
           }
@@ -357,7 +340,7 @@ function createWebSocketServer(server) {
         const silentTh = Number(process.env.SERVER_VAD_SILENT_TH || '0.006');
         const onsetNeededBase = Number(process.env.SERVER_VAD_ONSET_FRAMES || '4');
         const onsetNeededWhileAgent = Number(process.env.SERVER_VAD_ONSET_FRAMES_AGENT || '8');
-        oaWs.on('open', () => {
+        oaWs.on('open', async () => {
           try {
             // Apply saved settings as-is
             const tdThresh = Number(process.env.TURN_DETECTION_THRESHOLD || '0.60');
@@ -375,6 +358,14 @@ function createWebSocketServer(server) {
             };
             console.log('Sending session.update with instructions length:', sessionData.session.instructions.length);
             oaWs.send(JSON.stringify(sessionData));
+            // Start LiveKit Egress (audio-only) for this room
+            try {
+              const eg = await startRoomAudioEgress(roomName);
+              egressId = eg?.egressId || eg?.egress_id || null;
+              console.log('LiveKit egress started (studio):', egressId || eg);
+            } catch (egErr) {
+              console.error('Failed to start LiveKit egress (studio):', egErr?.message || egErr);
+            }
             // If a prime text was provided, send as an initial user message and request a response
             if (primeText && primeText.trim().length > 0) {
               const preview = primeText.slice(0, 160).replace(/\s+/g, ' ');
@@ -439,7 +430,6 @@ function createWebSocketServer(server) {
                 try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(e) { console.error('Error sending agent_speaking=true:', e); }
               }
               const pcm24k = Buffer.from(m.delta, 'base64');
-              try { studioMixer.appendAgent(pcm24k); } catch(_) {}
               if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
               try { telnyxWs.send(JSON.stringify({ type: 'agent_audio_24k', audio: m.delta })); } catch(e) { console.error('Error sending agent_audio_24k:', e); }
               if (!notified) {
@@ -458,12 +448,26 @@ function createWebSocketServer(server) {
         const closeAll = async () => { 
           try { oaWs.close(); } catch(e) { console.error('Error closing OA ws:', e); };
           try { publisher && await publisher.close(); } catch(e) { console.error('Error closing publisher:', e); };
-          try { recorder && await recorder.close(); } catch(e) { console.error('Error closing recorder:', e); };
-          try { await studioMixer.finalize(); } catch(e) { console.error('Studio mixer finalize error:', e); }
+          // Stop LiveKit egress and capture file result
+          let egressFile = '';
+          if (egressId) {
+            try {
+              const info = await stopEgress(egressId);
+              const fr = info?.fileResults || info?.results || [];
+              if (Array.isArray(fr) && fr.length) {
+                egressFile = fr[0]?.filename || fr[0]?.filepath || '';
+              } else if (info?.file?.filename || info?.file?.filepath) {
+                egressFile = info.file.filename || info.file.filepath;
+              }
+              console.log('LiveKit egress stopped (studio):', egressId, 'file:', egressFile);
+            } catch (stopErr) {
+              console.error('Failed to stop LiveKit egress (studio):', stopErr?.message || stopErr);
+            }
+          }
 
-          // Update CallLogEntry with recorder file
+          // Update CallLogEntry with egress file
           try {
-            const audioRecordingUrl = recorder && recorder.outPath ? `/recordings/${path.basename(recorder.outPath)}` : `/recordings/${path.basename(studioMixPath)}`;
+            const audioRecordingUrl = egressFile || '';
             const callEndTime = new Date();
             await CallLogEntry.findOneAndUpdate(
               { call_id: callId },
@@ -509,7 +513,6 @@ function createWebSocketServer(server) {
             const m = JSON.parse(raw.toString());
             if (m.type === 'audio' && m.audio && oaWs.readyState === WebSocket.OPEN) {
               const pcm24kBuffer = Buffer.from(m.audio, 'base64');
-              try { studioMixer.appendCallee(pcm24kBuffer); } catch(_) {}
               // Publish callee (browser mic) into LiveKit so the recorder can capture it
               try {
                 if (publisher) {
