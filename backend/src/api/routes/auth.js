@@ -97,6 +97,46 @@ router.get('/me', requireSession, (req, res) => {
   res.json({ id: req.user.id, email: req.user.email, role: req.user.role });
 });
 
+// --- Admin user management ---
+router.get('/users', requireSession, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'forbidden' });
+    const users = await User.find({}).select('_id email role active createdAt updatedAt').sort({ createdAt: -1 }).lean();
+    res.json(users);
+  } catch (e) {
+    res.status(500).json({ message: 'error' });
+  }
+});
+
+router.put('/users/:id', requireSession, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'forbidden' });
+    const { role, active } = req.body || {};
+    const update = {};
+    if (role) update.role = role === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'user');
+    if (typeof active === 'boolean') update.active = active;
+    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select('_id email role active createdAt updatedAt');
+    if (!user) return res.status(404).json({ message: 'not found' });
+    res.json(user);
+  } catch (e) {
+    res.status(500).json({ message: 'error' });
+  }
+});
+
+router.post('/users/:id/reset-password', requireSession, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'forbidden' });
+    const { password } = req.body || {};
+    if (!password || String(password).length < 6) return res.status(400).json({ message: 'password too short' });
+    const passwordHash = await bcrypt.hash(String(password), 10);
+    const user = await User.findByIdAndUpdate(req.params.id, { passwordHash }, { new: true });
+    if (!user) return res.status(404).json({ message: 'not found' });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ message: 'error' });
+  }
+});
+
 // Admin-only: create user (seed minimal)
 router.post('/users', requireSession, async (req, res) => {
   try {

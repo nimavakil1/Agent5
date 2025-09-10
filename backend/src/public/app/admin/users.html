@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin · Users</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <img src="/assets/logo.png" onerror="this.src='/assets/placeholder-logo.svg'" class="h-7"/>
+        <div class="font-semibold text-slate-800">Admin · Users</div>
+      </div>
+      <a href="/app/index.html" class="text-sm text-indigo-600">Back to Dashboard</a>
+    </header>
+    <main class="max-w-6xl mx-auto p-4 grid gap-4">
+      <section class="bg-white rounded-lg shadow p-4">
+        <h2 class="font-medium text-slate-800 mb-3">Create User</h2>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <input id="email" class="border rounded px-3 py-2" placeholder="email"/>
+          <input id="password" class="border rounded px-3 py-2" placeholder="password"/>
+          <select id="role" class="border rounded px-3 py-2"><option>user</option><option>manager</option><option>admin</option></select>
+          <button id="create" class="bg-emerald-600 text-white rounded px-3 py-2">Create</button>
+        </div>
+      </section>
+      <section class="bg-white rounded-lg shadow p-4">
+        <div class="flex items-center justify-between mb-2"><h2 class="font-medium text-slate-800">Users</h2><button id="reload" class="bg-slate-100 rounded px-3 py-1">Reload</button></div>
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead><tr class="text-left text-slate-500"><th class="p-2">Email</th><th class="p-2">Role</th><th class="p-2">Active</th><th class="p-2">Actions</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script>
+      async function api(path, opts){ const r = await fetch(path, { credentials:'include', ...(opts||{}) }); const j = await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.message||'error'); return j; }
+      async function load(){ const u = await api('/api/auth/users'); const tbody = document.getElementById('rows'); tbody.innerHTML=''; for(const x of u){ const tr=document.createElement('tr'); tr.className='border-t'; tr.innerHTML = `<td class='p-2'>${x.email}</td>
+          <td class='p-2'><select data-id='${x._id}' class='role border rounded px-2 py-1'><option ${x.role==='user'?'selected':''}>user</option><option ${x.role==='manager'?'selected':''}>manager</option><option ${x.role==='admin'?'selected':''}>admin</option></select></td>
+          <td class='p-2'><input type='checkbox' data-id='${x._id}' class='act' ${x.active?'checked':''}/></td>
+          <td class='p-2'><button data-id='${x._id}' class='reset text-indigo-600'>Reset Password</button></td>`; tbody.appendChild(tr); }
+        document.querySelectorAll('.role').forEach(sel=> sel.onchange = async (e)=>{ const id=e.target.dataset.id; const role=e.target.value; await api('/api/auth/users/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ role })}); });
+        document.querySelectorAll('.act').forEach(cb=> cb.onchange = async (e)=>{ const id=e.target.dataset.id; const active=e.target.checked; await api('/api/auth/users/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ active })}); });
+        document.querySelectorAll('.reset').forEach(btn=> btn.onclick = async (e)=>{ const id=e.target.dataset.id; const p=prompt('New password (min 6 chars)'); if(!p) return; await api('/api/auth/users/'+id+'/reset-password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ password:p }) }); alert('Password updated'); });
+      }
+      document.getElementById('reload').onclick = load;
+      document.getElementById('create').onclick = async ()=>{
+        const email=document.getElementById('email').value.trim(); const password=document.getElementById('password').value; const role=document.getElementById('role').value;
+        if(!email||!password) return alert('email and password required');
+        const res = await api('/api/auth/users',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password, role })});
+        document.getElementById('email').value=''; document.getElementById('password').value=''; await load();
+      };
+      load();
+    </script>
+  </body>
+  </html>
+

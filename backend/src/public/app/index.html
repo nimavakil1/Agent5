@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ACROPAQ AI Platform · Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // fetch current user
+      async function getMe(){ const r=await fetch('/api/auth/me',{credentials:'include'}); return r.ok?await r.json():null; }
+    </script>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <div class="flex min-h-screen">
+      <!-- Sidebar -->
+      <aside class="w-64 bg-white border-r hidden md:block">
+        <div class="px-4 py-4 flex items-center gap-3 border-b">
+          <img src="/assets/logo.png" onerror="this.src='/assets/placeholder-logo.svg'" class="h-8" alt="ACROPAQ"/>
+          <span class="font-semibold text-slate-800">AI Platform</span>
+        </div>
+        <nav class="p-2 text-sm">
+          <a href="/app/index.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-800">Dashboard</a>
+          <a href="/app/products.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700">Products</a>
+          <a href="/app/agent-studio.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700">Agent Studio</a>
+          <a href="/dashboard.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700">Analytics</a>
+          <a href="/customers.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700">Customers</a>
+          <a href="/call-review.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700">Call Review</a>
+          <a id="nav-admin" href="/app/admin/users.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700 hidden">Admin</a>
+        </nav>
+      </aside>
+      <!-- Main -->
+      <main class="flex-1">
+        <header class="bg-white border-b px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-3 md:hidden">
+            <img src="/assets/logo.png" onerror="this.src='/assets/placeholder-logo.svg'" class="h-7" alt="ACROPAQ"/>
+            <span class="font-semibold text-slate-800">AI Platform</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="who" class="text-sm text-slate-600"></span>
+            <button id="logout" class="text-sm text-indigo-600">Logout</button>
+          </div>
+        </header>
+        <section class="p-4 grid gap-4 md:grid-cols-3">
+          <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-slate-500 text-sm">Quick Actions</div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <a class="px-3 py-2 rounded bg-indigo-600 text-white" href="/app/agent-studio.html">Open Agent Studio</a>
+              <a class="px-3 py-2 rounded bg-emerald-600 text-white" href="/app/products.html">Manage Products</a>
+              <a class="px-3 py-2 rounded bg-slate-100" href="/app/orchestrator.html">Orchestrator</a>
+            </div>
+          </div>
+          <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-slate-500 text-sm">Status</div>
+            <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <div><div class="text-slate-500">Calls Today</div><div id="metric-calls" class="text-lg font-semibold">--</div></div>
+              <div><div class="text-slate-500">Revenue</div><div id="metric-rev" class="text-lg font-semibold">--</div></div>
+            </div>
+          </div>
+          <div class="bg-white rounded-lg shadow p-4">
+            <div class="text-slate-500 text-sm">Links</div>
+            <ul class="mt-3 list-disc pl-5 text-sm text-slate-700">
+              <li><a class="text-indigo-600" href="/dashboard.html">Analytics Dashboard</a></li>
+              <li><a class="text-indigo-600" href="/customers.html">Customers & Campaigns</a></li>
+              <li><a class="text-indigo-600" href="/call-review.html">Call Review</a></li>
+            </ul>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script>
+      (async ()=>{
+        const me = await getMe();
+        const who = document.getElementById('who');
+        if (me) { who.textContent = `${me.email} · ${me.role}`; if (me.role==='admin') document.getElementById('nav-admin').classList.remove('hidden'); }
+        document.getElementById('logout').onclick = async ()=>{ try{ await fetch('/api/auth/logout',{method:'POST',credentials:'include'});}catch(_){} location.href='/app/login'; };
+        // simple metrics (placeholder)
+        try {
+          const r = await fetch('/api/dashboard/kpi',{credentials:'include'}); if (r.ok){ const k=await r.json(); document.getElementById('metric-calls').textContent = k?.totals?.calls ?? '--'; document.getElementById('metric-rev').textContent = k?.totals?.revenue ?? '--'; }
+        } catch(_){}
+      })();
+    </script>
+  </body>
+  </html>
+
