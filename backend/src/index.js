@@ -171,10 +171,11 @@ app.use('/api/orchestrator', requireSession, orchestratorRouter);
 app.use('/api/shopify', shopifyRouter);
 app.use('/api/products', productsRouter);
 
-// Serve new SPA under /ui (protected)
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
-app.get('/ui/*', requireSession, (req, res) => {
+// Express v5 uses path-to-regexp v6; wildcard must be a named param
+// Match /ui and any nested path like /ui/... and serve index.html
+app.get('/ui/:path*', requireSession, (req, res) => {
   res.sendFile(path.join(uiDist, 'index.html'));
 });
 
