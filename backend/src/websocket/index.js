@@ -805,6 +805,7 @@ function createWebSocketServer(server) {
             appendAiPcmuFromOpenAIBase64(audioBase64);
             try {
               if (livekitPublisher) {
+                try { livekitPublisher.muteAgent(false); } catch(_) {}
                 const pcm24k = Buffer.from(audioBase64, 'base64');
                 livekitPublisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
               }
@@ -908,6 +909,8 @@ function createWebSocketServer(server) {
                 try { openaiWs.send(JSON.stringify({ type: 'response.cancel' })); } catch(e) { console.error('PSTN: error sending response.cancel:', e); }
                 // Also clear queued Telnyx agent frames
                 try { aiPcmuQueue = Buffer.alloc(0); } catch(_) {}
+                // Mute and clear LiveKit agent audio immediately
+                try { if (livekitPublisher) { livekitPublisher.muteAgent(true); livekitPublisher.clearAgentQueue(); } } catch (e) { console.error('LiveKit mute/clear error:', e); }
               }
               if (pstnUserSpeaking && pstnBelowCnt >= 12) {
                 pstnUserSpeaking = false; pstnBelowCnt = 0;
