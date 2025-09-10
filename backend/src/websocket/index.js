@@ -842,44 +842,13 @@ function createWebSocketServer(server) {
         const data = JSON.parse(message);
         if (data.event === 'start') {
           console.log('Telnyx stream started:', data);
-          // Prepare streaming WAV file (G.711 u-law @ 8kHz)
-        const recordingsDir = path.resolve(__dirname, '../../recordings');
-        if (!fs.existsSync(recordingsDir)) fs.mkdirSync(recordingsDir, { recursive: true });
-          const audioFileName = `${roomName}.wav`;
-          audioFilePath = path.resolve(recordingsDir, audioFileName);
-          audioWriteStream = fs.createWriteStream(audioFilePath);
           telnyxStreamId = data.stream_id || data.streamId || (data.start && data.start.stream_id) || null;
-
-          // Placeholder WAV header (44 bytes), patched on finalize
-          const sampleRate = 8000;
-          const numChannels = 1;
-          const bitsPerSample = 8; // u-law 8-bit
-          const wavHeader = Buffer.alloc(44);
-          wavHeader.write('RIFF', 0);
-          wavHeader.writeUInt32LE(0, 4);
-          wavHeader.write('WAVE', 8);
-          wavHeader.write('fmt ', 12);
-          wavHeader.writeUInt32LE(16, 16);
-          wavHeader.writeUInt16LE(7, 20);
-          wavHeader.writeUInt16LE(numChannels, 22);
-          wavHeader.writeUInt32LE(sampleRate, 24);
-          const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-          const blockAlign = numChannels * (bitsPerSample / 8);
-          wavHeader.writeUInt32LE(byteRate, 28);
-          wavHeader.writeUInt16LE(blockAlign, 32);
-          wavHeader.writeUInt16LE(bitsPerSample, 34);
-          wavHeader.write('data', 36);
-          wavHeader.writeUInt32LE(0, 40);
-          audioWriteStream.write(wavHeader);
-          bytesWritten = 44;
+          bytesWritten = 0;
           await ensureCallLogDefaults();
         } else if (data.event === 'media') {
           const audioBase64 = data.media.payload;
           const audioBuffer = Buffer.from(audioBase64, 'base64');
-          if (audioWriteStream) {
-            audioWriteStream.write(audioBuffer);
-            bytesWritten += audioBuffer.length;
-          }
+          // Legacy raw recorder disabled
 
           // Transcode Telnyx PCMU 8kHz to OpenAI PCM16 24kHz mono and send to Realtime API
           if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
@@ -929,13 +898,7 @@ function createWebSocketServer(server) {
               console.error('Error feeding callee audio to LiveKit:', e);
             }
           }
-          // Feed mixer with callee upsampled to 24k
-          try {
-            const pcm8k = decodePCMUtoPCM16(audioBuffer);
-            const pcm24k = upsampleTo24kHz(pcm8k);
-            const buf24k = int16ToLEBuffer(pcm24k);
-            pstnMixer.appendCallee(buf24k);
-          } catch(_) {}
+          // PSTN mixer disabled
         } else if (data.event === 'stop') {
           console.log('Telnyx stream stopped:', data);
           // Stop AI sender
@@ -1001,7 +964,7 @@ function createWebSocketServer(server) {
               console.error('Cost calculation failed:', costError);
             }
 
-            // Prefer LiveKit Egress output; legacy files as fallback if any
+            // Prefer LiveKit Egress output only
             const chosenPath = egressFile || '';
             const audioRecordingUrl = chosenPath;
             await CallLogEntry.findOneAndUpdate(
