@@ -126,9 +126,9 @@ function toVariantGid(id) {
 }
 
 async function createCheckoutWebUrl(items = [], discountCode = '') {
-  // items: [{ variant_id or sku, quantity }]
+  // Use Storefront Cart API (modern) to get checkoutUrl
   if (!Array.isArray(items) || items.length === 0) throw new Error('items required');
-  const lineItems = [];
+  const lines = [];
   for (const it of items) {
     const qty = Number(it.quantity || 1) || 1;
     let vid = it.variant_id;
@@ -137,29 +137,29 @@ async function createCheckoutWebUrl(items = [], discountCode = '') {
       vid = numeric;
     }
     if (!vid) throw new Error('Each item must include variant_id or sku');
-    lineItems.push({ variantId: toVariantGid(vid), quantity: qty });
+    lines.push({ quantity: qty, merchandiseId: toVariantGid(vid) });
   }
 
   const mutation = `#graphql
-    mutation CheckoutCreate($input: CheckoutCreateInput!) {
-      checkoutCreate(input: $input) {
-        checkout { id webUrl }
+    mutation CartCreate($input: CartInput!) {
+      cartCreate(input: $input) {
+        cart { id checkoutUrl }
         userErrors { field message }
       }
     }
   `;
   const variables = {
     input: {
-      lineItems,
+      lines,
       discountCodes: discountCode ? [discountCode] : [],
     },
   };
   const data = await storefrontGraphQL(mutation, variables);
-  const out = data.checkoutCreate;
+  const out = data.cartCreate;
   const errs = out?.userErrors || [];
-  if (errs.length) throw new Error('checkoutCreate userErrors: ' + JSON.stringify(errs));
-  const url = out?.checkout?.webUrl;
-  if (!url) throw new Error('No webUrl returned');
+  if (errs.length) throw new Error('cartCreate userErrors: ' + JSON.stringify(errs));
+  const url = out?.cart?.checkoutUrl;
+  if (!url) throw new Error('No checkoutUrl returned');
   return url;
 }
 
