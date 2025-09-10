@@ -176,11 +176,36 @@ router.get('/allowed', async (req, res) => {
 router.post('/allowed', async (req, res) => {
   try {
     const items = req.body?.items;
+    const replace = (req.body?.replace === true || req.query.mode === 'replace') && process.env.PROTECT_DATA !== '1';
     if (!Array.isArray(items)) return res.status(400).json({ message: 'items array required' });
-    await AllowedProduct.deleteMany({});
-    const docs = items.map(it => ({ sku: it.sku || undefined, variant_id: it.variant_id || undefined, active: it.active !== false }));
-    await AllowedProduct.insertMany(docs);
-    res.status(201).json({ saved: docs.length });
+
+    // Upsert each provided item; default merge behavior (non-provided remain unchanged)
+    const ops = [];
+    const seenVariantIds = new Set();
+    const seenSkus = new Set();
+    for (const it of items) {
+      const filter = it.variant_id ? { variant_id: Number(it.variant_id) } : (it.sku ? { sku: String(it.sku) } : null);
+      if (!filter) continue;
+      if (filter.variant_id) seenVariantIds.add(Number(it.variant_id));
+      if (filter.sku) seenSkus.add(String(it.sku));
+      const update = { $set: { active: it.active !== false } };
+      if (filter.variant_id && it.sku) update.$set.sku = String(it.sku);
+      if (filter.sku && it.variant_id) update.$set.variant_id = Number(it.variant_id);
+      ops.push({ updateOne: { filter, update, upsert: true } });
+    }
+    if (ops.length) await AllowedProduct.bulkWrite(ops, { ordered: false });
+
+    // If replace mode explicitly requested (and not protected), deactivate anything not provided
+    if (replace) {
+      const cond = { $or: [] };
+      if (seenVariantIds.size) cond.$or.push({ variant_id: { $nin: Array.from(seenVariantIds) } });
+      if (seenSkus.size) cond.$or.push({ sku: { $nin: Array.from(seenSkus) } });
+      if (cond.$or.length) {
+        await AllowedProduct.updateMany(cond, { $set: { active: false } });
+      }
+    }
+
+    res.status(201).json({ saved: ops.length, mode: replace ? 'replace' : 'merge' });
   } catch (e) {
     res.status(500).json({ message: 'Failed to save allowed list', error: e.message });
   }
