@@ -79,7 +79,9 @@ class Pcm16MonoMixer {
         for (let i = 0; i < CHUNK_BYTES; i += 2) {
           const va = a.readInt16LE(i);
           const vc = c.readInt16LE(i);
-          let s = va + vc; if (s > 32767) s = 32767; if (s < -32768) s = -32768;
+          // -6 dB per source to avoid clipping then sum
+          let s = (va >> 1) + (vc >> 1);
+          if (s > 32767) s = 32767; if (s < -32768) s = -32768;
           out.writeInt16LE(s, i);
         }
         this.agentQ = this.agentQ.subarray(CHUNK_BYTES);
@@ -128,14 +130,17 @@ function decodePCMUtoPCM16(ulawBuf) {
 }
 
 function upsampleTo24kHz(pcm8k) {
-  // naive upsample x3 (nearest-neighbor)
-  const out = new Int16Array(pcm8k.length * 3);
-  for (let i = 0; i < pcm8k.length; i++) {
-    const v = pcm8k[i];
+  // Linear interpolation upsample x3 for smoother audio
+  const n = pcm8k.length;
+  const out = new Int16Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const v0 = pcm8k[i];
+    const v1 = i + 1 < n ? pcm8k[i + 1] : v0;
     const j = i * 3;
-    out[j] = v;
-    out[j + 1] = v;
-    out[j + 2] = v;
+    out[j] = v0;
+    // Insert two interpolated samples between v0 and v1
+    out[j + 1] = ((2 * v0 + v1) / 3) | 0;
+    out[j + 2] = ((v0 + 2 * v1) / 3) | 0;
   }
   return out;
 }
@@ -808,8 +813,10 @@ function createWebSocketServer(server) {
             }
             // also feed PSTN mixer (agent)
             try {
-              const pcm24k = Buffer.from(audioBase64, 'base64');
-              pstnMixer.appendAgent(pcm24k);
+              if (!pstnUserSpeaking) { // drop agent frames during barge-in
+                const pcm24k = Buffer.from(audioBase64, 'base64');
+                pstnMixer.appendAgent(pcm24k);
+              }
             } catch(_) {}
             pstnAgentSpeaking = true;
           }
@@ -1001,7 +1008,8 @@ function createWebSocketServer(server) {
               console.error('Cost calculation failed:', costError);
             }
 
-            const chosenPath = recorderPath || pstnMixPath || audioFilePath || '';
+            // Prefer PSTN mix as it reflects actual audio after barge-in cancellation
+            const chosenPath = pstnMixPath || recorderPath || audioFilePath || '';
             const audioRecordingUrl = chosenPath ? `/recordings/${path.basename(chosenPath)}` : '';
             await CallLogEntry.findOneAndUpdate(
               { call_id: roomName },
