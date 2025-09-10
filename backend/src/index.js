@@ -171,6 +171,13 @@ app.use('/api/orchestrator', requireSession, orchestratorRouter);
 app.use('/api/shopify', shopifyRouter);
 app.use('/api/products', productsRouter);
 
+// Serve new SPA under /ui (protected)
+const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
+app.use('/ui', requireSession, express.static(uiDist));
+app.get('/ui/*', requireSession, (req, res) => {
+  res.sendFile(path.join(uiDist, 'index.html'));
+});
+
 if (process.env.NODE_ENV !== 'test') {
   server.listen(port, () => {
     console.log(`Server is running on port ${port}`);
