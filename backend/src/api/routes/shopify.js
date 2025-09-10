@@ -4,6 +4,7 @@ const {
   createPrefilledCartLink,
   getVariantIdBySku,
   adminFetch,
+  createCheckoutWebUrl,
 } = require('../services/shopifyService');
 
 const router = express.Router();
@@ -88,5 +89,17 @@ router.post('/cart-link', async (req, res) => {
   }
 });
 
-module.exports = router;
+// POST /api/shopify/checkout
+// body: { items: [{ sku or variant_id, quantity }], discount_code? }
+router.post('/checkout', async (req, res) => {
+  try {
+    const { items, discount_code } = req.body || {};
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ message: 'items required' });
+    const url = await createCheckoutWebUrl(items, discount_code || '');
+    res.json({ checkout_url: url });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to create checkout', error: e.message });
+  }
+});
 
+module.exports = router;
