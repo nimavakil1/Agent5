@@ -3,6 +3,7 @@ const OpenAI = require('openai');
 // use global fetch (Node >= 18)
 const url = require('url'); // Import url module
 const { RoomServiceClient, AccessToken } = require('livekit-server-sdk'); // Import LiveKit SDK
+const { startRoomAudioEgress, stopEgress } = require('../livekit/egress');
 const { createPublisher, toWsUrl } = require('../livekit/publisher');
 const CallLogEntry = require('../models/CallLogEntry'); // Import CallLogEntry model
 const CustomerRecord = require('../models/CustomerRecord'); // Import CustomerRecord model
