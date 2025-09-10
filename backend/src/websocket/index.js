@@ -40,6 +40,10 @@ class Pcm16MonoMixer {
     this.calleeQ = Buffer.alloc(0);  // 16-bit LE @ sampleRate
     this.fd = null;
     this.bytesWritten = 0;
+    this.agentActive = false;
+    this.calleeActive = false;
+    this.fadeASamples = 0;
+    this.fadeCSamples = 0;
   }
   start(filePath) {
     const dir = path.dirname(filePath);
@@ -67,18 +71,35 @@ class Pcm16MonoMixer {
   appendCallee(buf24kLe) { if (buf24kLe?.length) { this.calleeQ = Buffer.concat([this.calleeQ, buf24kLe]); this._drain(); } }
   _drain() {
     if (!this.fd) return;
-    const CHUNK_SAMPLES = 2400; // 100ms @24k
+    // Use 20ms chunks to align with typical frame boundaries and reduce jitter pops
+    const CHUNK_SAMPLES = 480; // 20ms @24k
     const CHUNK_BYTES = CHUNK_SAMPLES * 2;
     while (this.agentQ.length >= CHUNK_BYTES || this.calleeQ.length >= CHUNK_BYTES) {
       const a = this.agentQ.length >= CHUNK_BYTES ? this.agentQ.subarray(0, CHUNK_BYTES) : null;
       const c = this.calleeQ.length >= CHUNK_BYTES ? this.calleeQ.subarray(0, CHUNK_BYTES) : null;
       if (!a && !c) break;
       let out;
+      // Track appearance for gentle fade-in to avoid clicks
+      const FADE_SAMPLES = 120; // 5ms
+      if (a && !this.agentActive) { this.fadeASamples = FADE_SAMPLES; this.agentActive = true; }
+      if (!a && this.agentActive) { this.agentActive = false; }
+      if (c && !this.calleeActive) { this.fadeCSamples = FADE_SAMPLES; this.calleeActive = true; }
+      if (!c && this.calleeActive) { this.calleeActive = false; }
+
       if (a && c) {
         out = Buffer.alloc(CHUNK_BYTES);
         for (let i = 0; i < CHUNK_BYTES; i += 2) {
-          const va = a.readInt16LE(i);
-          const vc = c.readInt16LE(i);
+          let va = a.readInt16LE(i);
+          let vc = c.readInt16LE(i);
+          // Apply fade-in ramps if streams just appeared
+          if (this.fadeASamples > 0) {
+            const gain = (FADE_SAMPLES - this.fadeASamples + 1);
+            va = Math.floor((va * gain) / FADE_SAMPLES);
+          }
+          if (this.fadeCSamples > 0) {
+            const gain = (FADE_SAMPLES - this.fadeCSamples + 1);
+            vc = Math.floor((vc * gain) / FADE_SAMPLES);
+          }
           // -6 dB per source to avoid clipping then sum
           let s = (va >> 1) + (vc >> 1);
           if (s > 32767) s = 32767; if (s < -32768) s = -32768;
@@ -86,10 +107,31 @@ class Pcm16MonoMixer {
         }
         this.agentQ = this.agentQ.subarray(CHUNK_BYTES);
         this.calleeQ = this.calleeQ.subarray(CHUNK_BYTES);
-      } else if (a) { out = a; this.agentQ = this.agentQ.subarray(CHUNK_BYTES); }
-      else { out = c; this.calleeQ = this.calleeQ.subarray(CHUNK_BYTES); }
+      } else if (a) {
+        out = Buffer.from(a); this.agentQ = this.agentQ.subarray(CHUNK_BYTES);
+        if (this.fadeASamples > 0) {
+          for (let i = 0; i < CHUNK_BYTES; i += 2) {
+            let v = out.readInt16LE(i);
+            const gain = (FADE_SAMPLES - this.fadeASamples + 1);
+            v = Math.floor((v * gain) / FADE_SAMPLES);
+            out.writeInt16LE(v, i);
+          }
+        }
+      } else {
+        out = Buffer.from(c); this.calleeQ = this.calleeQ.subarray(CHUNK_BYTES);
+        if (this.fadeCSamples > 0) {
+          for (let i = 0; i < CHUNK_BYTES; i += 2) {
+            let v = out.readInt16LE(i);
+            const gain = (FADE_SAMPLES - this.fadeCSamples + 1);
+            v = Math.floor((v * gain) / FADE_SAMPLES);
+            out.writeInt16LE(v, i);
+          }
+        }
+      }
       fs.writeSync(this.fd, out);
       this.bytesWritten += out.length;
+      if (this.fadeASamples > 0) this.fadeASamples -= Math.min(this.fadeASamples, CHUNK_SAMPLES);
+      if (this.fadeCSamples > 0) this.fadeCSamples -= Math.min(this.fadeCSamples, CHUNK_SAMPLES);
     }
   }
   async finalize() {
