@@ -73,11 +73,12 @@
         </section>
       </main>
     </div>
+    <script src="/app/shell.js"></script>
     <script>
       (async ()=>{
         const me = await getMe();
         const who = document.getElementById('who');
-        if (me) { who.textContent = `${me.email} · ${me.role}`; if (me.role==='admin') document.getElementById('nav-admin').classList.remove('hidden'); }
+        if (me) { who.textContent = `${me.email} · ${me.role}`; if (me.role==='admin' || me.role==='superadmin') document.getElementById('nav-admin').classList.remove('hidden'); }
         document.getElementById('logout').onclick = async ()=>{ try{ await fetch('/api/auth/logout',{method:'POST',credentials:'include'});}catch(_){} location.href='/app/login'; };
         // simple metrics (placeholder)
         try {

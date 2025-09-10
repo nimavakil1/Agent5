@@ -34,7 +34,7 @@
           body: JSON.stringify({ email, password }),
           credentials: 'include'
         });
-        if (res.ok) { location.href = '/app/index.html'; }
+        if (res.ok) { location.href = '/dashboard.html'; }
         else { document.getElementById('msg').textContent = (await res.json()).message || 'Login failed'; }
       };
     </script>

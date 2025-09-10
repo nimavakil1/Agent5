@@ -100,7 +100,7 @@ router.get('/me', requireSession, (req, res) => {
 // --- Admin user management ---
 router.get('/users', requireSession, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') return res.status(403).json({ message: 'forbidden' });
+    if (!['admin','superadmin'].includes(req.user.role)) return res.status(403).json({ message: 'forbidden' });
     const users = await User.find({}).select('_id email role active createdAt updatedAt').sort({ createdAt: -1 }).lean();
     res.json(users);
   } catch (e) {
@@ -110,11 +110,19 @@ router.get('/users', requireSession, async (req, res) => {
 
 router.put('/users/:id', requireSession, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') return res.status(403).json({ message: 'forbidden' });
+    if (!['admin','superadmin'].includes(req.user.role)) return res.status(403).json({ message: 'forbidden' });
     const { role, active } = req.body || {};
     const update = {};
-    if (role) update.role = role === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'user');
+    if (role) {
+      // do not allow setting superadmin via API
+      if (role === 'superadmin') return res.status(400).json({ message: 'cannot assign superadmin' });
+      update.role = role === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'user');
+    }
     if (typeof active === 'boolean') update.active = active;
+    // prevent modifying superadmin record
+    const target = await User.findById(req.params.id).lean();
+    if (!target) return res.status(404).json({ message: 'not found' });
+    if (target.role === 'superadmin') return res.status(403).json({ message: 'superadmin immutable' });
     const user = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select('_id email role active createdAt updatedAt');
     if (!user) return res.status(404).json({ message: 'not found' });
     res.json(user);
@@ -125,12 +133,35 @@ router.put('/users/:id', requireSession, async (req, res) => {
 
 router.post('/users/:id/reset-password', requireSession, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') return res.status(403).json({ message: 'forbidden' });
+    if (!['admin','superadmin'].includes(req.user.role)) return res.status(403).json({ message: 'forbidden' });
     const { password } = req.body || {};
     if (!password || String(password).length < 6) return res.status(400).json({ message: 'password too short' });
+    const target = await User.findById(req.params.id).lean();
+    if (!target) return res.status(404).json({ message: 'not found' });
+    if (target.role === 'superadmin' && String(target._id) !== String(req.user.id)) return res.status(403).json({ message: 'cannot reset superadmin' });
     const passwordHash = await bcrypt.hash(String(password), 10);
     const user = await User.findByIdAndUpdate(req.params.id, { passwordHash }, { new: true });
     if (!user) return res.status(404).json({ message: 'not found' });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ message: 'error' });
+  }
+});
+
+// Self password change
+router.post('/me/password', requireSession, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body || {};
+    if (!new_password || String(new_password).length < 6) return res.status(400).json({ message: 'password too short' });
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'not found' });
+    // if a current password is provided, verify
+    if (current_password) {
+      const ok = await bcrypt.compare(String(current_password), user.passwordHash);
+      if (!ok) return res.status(400).json({ message: 'current password invalid' });
+    }
+    user.passwordHash = await bcrypt.hash(String(new_password), 10);
+    await user.save();
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ message: 'error' });

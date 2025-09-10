@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My Profile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>async function me(){const r=await fetch('/api/auth/me',{credentials:'include'});return r.ok?await r.json():null;}</script>
+  </head>
+  <body class="min-h-screen bg-slate-50">
+    <header class="bg-white border-b px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <picture><source srcset="/assets/logo.webp" type="image/webp"><img src="/assets/logo.png" onerror="this.src='/assets/placeholder-logo.svg'" class="h-7"/></picture>
+        <a href="/dashboard.html" class="font-semibold text-slate-800">ACROPAQ AI Platform</a>
+      </div>
+    </header>
+    <main class="max-w-xl mx-auto p-4 grid gap-4">
+      <section class="bg-white rounded-lg shadow p-4">
+        <h2 class="font-medium text-slate-800 mb-2">Account</h2>
+        <div id="info" class="text-sm text-slate-600"></div>
+      </section>
+      <section class="bg-white rounded-lg shadow p-4">
+        <h2 class="font-medium text-slate-800 mb-2">Change Password</h2>
+        <div class="grid gap-2">
+          <input id="current" type="password" class="border rounded px-3 py-2" placeholder="Current password (optional)"/>
+          <input id="nextp" type="password" class="border rounded px-3 py-2" placeholder="New password (min 6)"/>
+          <button id="save" class="bg-indigo-600 text-white rounded px-3 py-2">Update Password</button>
+          <div id="msg" class="text-sm"></div>
+        </div>
+      </section>
+    </main>
+    <script>
+      (async()=>{
+        const u=await me(); if(u){ document.getElementById('info').textContent = `${u.email} · ${u.role}`; }
+        document.getElementById('save').onclick = async ()=>{
+          const current=document.getElementById('current').value; const nextp=document.getElementById('nextp').value;
+          const r=await fetch('/api/auth/me/password',{method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ current_password: current, new_password: nextp })});
+          const j=await r.json().catch(()=>({})); const msg=document.getElementById('msg');
+          if(r.ok){ msg.textContent='Password updated'; msg.className='text-sm text-emerald-700'; document.getElementById('current').value=''; document.getElementById('nextp').value=''; }
+          else { msg.textContent=j.message||'Error'; msg.className='text-sm text-red-600'; }
+        };
+      })();
+    </script>
+  </body>
+  </html>
+
