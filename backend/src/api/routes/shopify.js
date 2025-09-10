@@ -102,4 +102,49 @@ router.post('/checkout', async (req, res) => {
   }
 });
 
+// POST /api/shopify/draft-order
+// body: {
+//   line_items: [{ variant_id: number, quantity: number }],
+//   email?: string,
+//   customer_id?: number,
+//   shipping_address?: object,
+//   discount?: { type: 'percentage'|'fixed_amount', value: number, title?: string, description?: string }
+// }
+router.post('/draft-order', async (req, res) => {
+  try {
+    const { line_items, email, customer_id, shipping_address, discount } = req.body || {};
+    if (!Array.isArray(line_items) || line_items.length === 0) {
+      return res.status(400).json({ message: 'line_items required' });
+    }
+
+    const draft = { line_items };
+    if (email) draft.email = String(email);
+    if (customer_id) draft.customer = { id: customer_id };
+    if (shipping_address && typeof shipping_address === 'object') draft.shipping_address = shipping_address;
+
+    if (discount && discount.value) {
+      const vt = discount.type === 'fixed_amount' ? 'fixed_amount' : 'percentage';
+      draft.applied_discount = {
+        value_type: vt,
+        value: String(Math.abs(Number(discount.value) || 0)),
+        title: discount.title || 'manual_discount',
+        description: discount.description || '',
+      };
+    }
+
+    const payload = { draft_order: draft };
+    const data = await adminFetch('/draft_orders.json', { method: 'POST', body: payload });
+    const out = data.draft_order || data;
+    return res.status(201).json({
+      id: out.id,
+      name: out.name,
+      invoice_url: out.invoice_url || null,
+      status: out.status,
+      draft_order: out,
+    });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to create draft order', error: e.message });
+  }
+});
+
 module.exports = router;
