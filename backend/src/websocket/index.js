@@ -1008,8 +1008,8 @@ function createWebSocketServer(server) {
               console.error('Cost calculation failed:', costError);
             }
 
-            // Prefer PSTN mix as it reflects actual audio after barge-in cancellation
-            const chosenPath = pstnMixPath || recorderPath || audioFilePath || '';
+            // Prefer LiveKit recorder (cleaner audio), then PSTN mix, then raw μ-law
+            const chosenPath = recorderPath || pstnMixPath || audioFilePath || '';
             const audioRecordingUrl = chosenPath ? `/recordings/${path.basename(chosenPath)}` : '';
             await CallLogEntry.findOneAndUpdate(
               { call_id: roomName },
