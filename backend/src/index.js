@@ -122,6 +122,8 @@ app.get('/app/login', (req, res) => {
 });
 // Protected: app shell and tools
 app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'app')));
+// Static assets (logos, images)
+app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
 
 // Protected: specific root-level management pages (avoiding login.html)
 const protectedPages = ['dashboard.html', 'customers.html', 'call-review.html', 'admin.html'];

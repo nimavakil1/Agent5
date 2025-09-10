@@ -9,7 +9,10 @@
   <body class="min-h-screen bg-slate-50">
     <header class="bg-white border-b px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <img src="/assets/logo.png" onerror="this.src='/assets/placeholder-logo.svg'" class="h-7"/>
+        <picture>
+          <source srcset="/assets/logo.webp" type="image/webp">
+          <img src="/assets/logo.png" onerror="this.src='/assets/placeholder-logo.svg'" class="h-7"/>
+        </picture>
         <div class="font-semibold text-slate-800">Admin · Users</div>
       </div>
       <a href="/app/index.html" class="text-sm text-indigo-600">Back to Dashboard</a>
@@ -55,4 +58,3 @@
     </script>
   </body>
   </html>
-
