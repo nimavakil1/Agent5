@@ -19,7 +19,7 @@
     <main class="max-w-6xl mx-auto p-4 grid gap-4">
       <section class="bg-white rounded-lg shadow p-4">
         <h2 class="font-medium text-slate-800 mb-2">Allowed List</h2>
-        <p class="text-sm text-slate-600 mb-2">Paste SKUs or variant IDs (one per line). Mixing is allowed. Save, then Sync to pull details from Shopify.</p>
+        <p class="text-sm text-slate-600 mb-2">Paste SKUs (one per line). To use a variant ID explicitly, prefix with <span class="font-mono">vid:</span> (e.g., <span class="font-mono">vid:40757434318906</span>). Save, then Sync to pull details from Shopify.</p>
         <textarea id="allowed" class="w-full border rounded px-3 py-2 h-28 font-mono" placeholder="e.g.\nP0063\n40757434318906"></textarea>
         <div class="mt-3 flex gap-2">
           <button id="save" class="bg-indigo-600 text-white rounded px-3 py-2">Save Allowed</button>
@@ -53,7 +53,10 @@
       }
       async function saveAllowed(){
         const raw = document.getElementById('allowed').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-        const items = raw.map(s=> /^\d+$/.test(s) ? { variant_id: Number(s) } : { sku: s });
+        const items = raw.map(s=> {
+          if (/^vid:\s*(\d+)$/i.test(s)) { const m = s.match(/^vid:\s*(\d+)$/i); return { variant_id: Number(m[1]) }; }
+          return { sku: s };
+        });
         const res = await fetch('/api/shopify/allowed', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ items })});
         const data = await res.json(); document.getElementById('msg').textContent = res.ok ? `Saved ${data.saved}` : (data.message||'Error');
       }
@@ -86,4 +89,3 @@
     </script>
   </body>
   </html>
-
