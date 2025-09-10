@@ -120,7 +120,11 @@ const recordingsDir = path.join(__dirname, '..', 'recordings');
 app.get('/app/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'login.html'));
 });
-// Protected: app shell and tools
+// Public: shell script needed to render global sidebar (no secrets inside)
+app.get('/app/shell.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app', 'shell.js'));
+});
+// Protected: app shell and tools (everything else under /app)
 app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'app')));
 // Static assets (logos, images)
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
