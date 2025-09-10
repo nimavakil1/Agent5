@@ -104,26 +104,31 @@ async function createPublisher({ host, token, roomName }) {
     let agentTimer = null;
     let agentMuted = false;
 
+    function emptyFrame() {
+      // Return a zeroed 10ms frame @48k mono
+      return Buffer.alloc(FRAME_BYTES);
+    }
+
     function startTimers() {
       if (!calleeTimer) {
         calleeTimer = setInterval(() => {
           try {
-            if (calleeQueue.length >= FRAME_BYTES) {
-              const frame = calleeQueue.subarray(0, FRAME_BYTES);
-              calleeQueue = calleeQueue.subarray(FRAME_BYTES);
-              const samples = new Int16Array(FRAME_SAMPLES_48K);
-              for (let i = 0; i < FRAME_SAMPLES_48K; i++) {
-                samples[i] = frame.readInt16LE(i * 2);
-              }
-              calleeSource.onData({
-                samples,
-                sampleRate: 48000,
-                bitsPerSample: 16,
-                numberOfFrames: FRAME_SAMPLES_48K,
-                numberOfChannels: 1,
-                channelCount: 1,
-              });
+            const frame = calleeQueue.length >= FRAME_BYTES
+              ? (calleeQueue.subarray(0, FRAME_BYTES))
+              : emptyFrame();
+            if (calleeQueue.length >= FRAME_BYTES) calleeQueue = calleeQueue.subarray(FRAME_BYTES);
+            const samples = new Int16Array(FRAME_SAMPLES_48K);
+            for (let i = 0; i < FRAME_SAMPLES_48K; i++) {
+              samples[i] = frame.readInt16LE(i * 2);
             }
+            calleeSource.onData({
+              samples,
+              sampleRate: 48000,
+              bitsPerSample: 16,
+              numberOfFrames: FRAME_SAMPLES_48K,
+              numberOfChannels: 1,
+              channelCount: 1,
+            });
           } catch (e) {
             console.error('[LiveKit] callee push error:', e);
           }
@@ -132,23 +137,22 @@ async function createPublisher({ host, token, roomName }) {
       if (!agentTimer) {
         agentTimer = setInterval(() => {
           try {
-            if (agentMuted) { agentQueue = Buffer.alloc(0); return; }
-            if (agentQueue.length >= FRAME_BYTES) {
-              const frame = agentQueue.subarray(0, FRAME_BYTES);
-              agentQueue = agentQueue.subarray(FRAME_BYTES);
-              const samples = new Int16Array(FRAME_SAMPLES_48K);
-              for (let i = 0; i < FRAME_SAMPLES_48K; i++) {
-                samples[i] = frame.readInt16LE(i * 2);
-              }
-              agentSource.onData({
-                samples,
-                sampleRate: 48000,
-                bitsPerSample: 16,
-                numberOfFrames: FRAME_SAMPLES_48K,
-                numberOfChannels: 1,
-                channelCount: 1,
-              });
+            const frame = (agentMuted || agentQueue.length < FRAME_BYTES)
+              ? emptyFrame()
+              : agentQueue.subarray(0, FRAME_BYTES);
+            if (!agentMuted && agentQueue.length >= FRAME_BYTES) agentQueue = agentQueue.subarray(FRAME_BYTES);
+            const samples = new Int16Array(FRAME_SAMPLES_48K);
+            for (let i = 0; i < FRAME_SAMPLES_48K; i++) {
+              samples[i] = frame.readInt16LE(i * 2);
             }
+            agentSource.onData({
+              samples,
+              sampleRate: 48000,
+              bitsPerSample: 16,
+              numberOfFrames: FRAME_SAMPLES_48K,
+              numberOfChannels: 1,
+              channelCount: 1,
+            });
           } catch (e) {
             console.error('[LiveKit] agent push error:', e);
           }
@@ -158,12 +162,18 @@ async function createPublisher({ host, token, roomName }) {
 
     startTimers();
 
-    function upsampleInt16Nearest(int16, factor) {
-      const out = new Int16Array(int16.length * factor);
-      for (let i = 0; i < int16.length; i++) {
-        const v = int16[i];
+    function upsampleInt16Linear(int16, factor) {
+      const n = int16.length;
+      const out = new Int16Array(n * factor);
+      for (let i = 0; i < n; i++) {
+        const v0 = int16[i];
+        const v1 = i + 1 < n ? int16[i + 1] : v0;
         const j = i * factor;
-        for (let k = 0; k < factor; k++) out[j + k] = v;
+        out[j] = v0;
+        for (let k = 1; k < factor; k++) {
+          // linear interpolation between v0 and v1
+          out[j + k] = (((factor - k) * v0 + k * v1) / factor) | 0;
+        }
       }
       return Buffer.from(out.buffer);
     }
@@ -171,7 +181,7 @@ async function createPublisher({ host, token, roomName }) {
     return {
       pushCalleeFrom8kPcm16(int16Array8k) {
         try {
-          const buf48k = upsampleInt16Nearest(int16Array8k, 6); // 8k -> 48k
+          const buf48k = upsampleInt16Linear(int16Array8k, 6); // 8k -> 48k (smoother)
           calleeQueue = Buffer.concat([calleeQueue, buf48k]);
         } catch (e) {
           console.error('[LiveKit] pushCalleeFrom8kPcm16 error:', e);
@@ -181,7 +191,7 @@ async function createPublisher({ host, token, roomName }) {
         try {
           // buf -> Int16Array length/2 samples
           const int16 = new Int16Array(pcm24kBuf.buffer, pcm24kBuf.byteOffset, Math.floor(pcm24kBuf.length / 2));
-          const buf48k = upsampleInt16Nearest(int16, 2); // 24k -> 48k
+          const buf48k = upsampleInt16Linear(int16, 2); // 24k -> 48k (smoother)
           agentQueue = Buffer.concat([agentQueue, buf48k]);
         } catch (e) {
           console.error('[LiveKit] pushAgentFrom24k error:', e);
