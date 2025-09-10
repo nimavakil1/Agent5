@@ -629,11 +629,9 @@ function createWebSocketServer(server) {
     let audioWriteStream = null;
     let bytesWritten = 0;
     let telnyxStreamId = null; // Stream ID from Telnyx 'start' event
-    // PSTN mixer fallback (PCM16 mono @24k)
-    const pstnRecordingsDir = path.resolve(__dirname, '../../recordings');
-    const pstnMixPath = path.join(pstnRecordingsDir, `${roomName}-${Date.now()}-mix.wav`);
-    const pstnMixer = new Pcm16MonoMixer(24000);
-    try { pstnMixer.start(pstnMixPath); } catch (e) { console.error('PSTN mixer start error:', e); }
+    // Disable legacy PSTN mixer (we use LiveKit Egress)
+    const pstnMixPath = '';
+    const pstnMixer = { appendAgent() {}, appendCallee() {}, async finalize() {} };
 
     // Outgoing AI speech queue (PCMU @8kHz)
     let aiPcmuQueue = Buffer.alloc(0);
@@ -744,18 +742,7 @@ function createWebSocketServer(server) {
         if (!livekitPublisher) {
           console.warn('LiveKit publisher not available. Proceeding without LiveKit audio publish.');
         }
-        // Start recording participant (subscribe-only) to capture both sides from LiveKit
-        try {
-          const recIdentity = `recorder-bot-${roomName}-${Date.now()}`;
-          const recAt = new AccessToken(apiKey, apiSecret, { identity: recIdentity });
-          recAt.addGrant({ room: roomName, roomJoin: true, canPublish: false, canSubscribe: true });
-          const recToken = recAt.toJwt();
-          const { createRecorder } = require('../livekit/recorder');
-          // Use the same host used by browser token responses
-          livekitRecorder = await createRecorder({ host: process.env.LIVEKIT_SERVER_URL, token: recToken, roomName, outFileBase: roomName });
-        } catch (recErr) {
-          console.error('Failed to start LiveKit recorder (PSTN):', recErr);
-        }
+        // Remove legacy in-room recorder; we will use LiveKit Egress instead
       } catch (e) {
         console.error('Failed to start LiveKit publisher:', e);
       }
@@ -769,7 +756,7 @@ function createWebSocketServer(server) {
         headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
       });
 
-      openaiWs.on('open', () => {
+      openaiWs.on('open', async () => {
         console.log('Connected to OpenAI Realtime API');
         // Prime a response with chosen voice from saved settings
         try {
@@ -777,6 +764,14 @@ function createWebSocketServer(server) {
             JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'], voice: settings?.voice || undefined } })
           );
         } catch (e) { console.error('Error priming OA response:', e); }
+        // Start LiveKit Room Composite Egress (audio-only)
+        try {
+          const eg = await startRoomAudioEgress(roomName);
+          egressId = eg?.egressId || eg?.egress_id || null;
+          console.log('LiveKit egress started:', egressId || eg);
+        } catch (egErr) {
+          console.error('Failed to start LiveKit egress:', egErr?.message || egErr);
+        }
       });
 
       openaiWs.on('message', async (data) => {
@@ -958,28 +953,23 @@ function createWebSocketServer(server) {
             }
             openaiWs.close();
           }
-          if (livekitPublisher) {
-            try { await livekitPublisher.close(); } catch (e) { console.error('Error closing publisher on stop:', e); }
-          }
-          // Finalize recorder/mixer and update DB (prefer recorder output)
+          if (livekitPublisher) { try { await livekitPublisher.close(); } catch (e) { console.error('Error closing publisher on stop:', e); } }
+          // Stop egress and update DB with resulting file
           try {
-            // Close recorder if active
-            let recorderPath = '';
-            try { if (livekitRecorder) { const outPath = await livekitRecorder.close(); recorderPath = outPath || ''; } } catch (e) { console.error('Error closing LiveKit recorder on stop:', e); }
-            try { await pstnMixer.finalize(); } catch (e) { console.error('PSTN mixer finalize error:', e); }
-
-            // Finalize legacy u-law file header if present
-            if (audioWriteStream) {
-              await new Promise((resolve) => audioWriteStream.end(resolve));
-              const dataSize = Math.max(0, bytesWritten - 44);
-              const fileSize = dataSize + 36;
-              const fd = fs.openSync(audioFilePath, 'r+');
-              const buf4 = Buffer.alloc(4);
-              buf4.writeUInt32LE(fileSize, 0);
-              fs.writeSync(fd, buf4, 0, 4, 4);
-              buf4.writeUInt32LE(dataSize, 0);
-              fs.writeSync(fd, buf4, 0, 4, 40);
-              fs.closeSync(fd);
+            let egressFile = '';
+            if (egressId) {
+              try {
+                const info = await stopEgress(egressId);
+                const fr = info?.fileResults || info?.results || [];
+                if (Array.isArray(fr) && fr.length) {
+                  egressFile = fr[0]?.filename || fr[0]?.filepath || '';
+                } else if (info?.file?.filename || info?.file?.filepath) {
+                  egressFile = info.file.filename || info.file.filepath;
+                }
+                console.log('LiveKit egress stopped:', egressId, 'file:', egressFile);
+              } catch (stopErr) {
+                console.error('Failed to stop LiveKit egress:', stopErr?.message || stopErr);
+              }
             }
 
             await ensureCallLogDefaults();
@@ -1011,9 +1001,9 @@ function createWebSocketServer(server) {
               console.error('Cost calculation failed:', costError);
             }
 
-            // Prefer LiveKit recorder (cleaner audio), then PSTN mix, then raw μ-law
-            const chosenPath = recorderPath || pstnMixPath || audioFilePath || '';
-            const audioRecordingUrl = chosenPath ? `/recordings/${path.basename(chosenPath)}` : '';
+            // Prefer LiveKit Egress output; legacy files as fallback if any
+            const chosenPath = egressFile || '';
+            const audioRecordingUrl = chosenPath;
             await CallLogEntry.findOneAndUpdate(
               { call_id: roomName },
               { 
