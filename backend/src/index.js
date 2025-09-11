@@ -25,6 +25,7 @@ const orchestratorRouter = require('./api/routes/orchestrator');
 const shopifyRouter = require('./api/routes/shopify');
 const productsRouter = require('./api/routes/products');
 const notificationsRouter = require('./api/routes/notifications');
+const prospectsRouter = require('./api/routes/prospects');
 const connectDB = require('./config/database');
 const validateEnv = require('./config/validateEnv');
 const ensureAdmin = require('./util/ensureAdmin');
@@ -172,6 +173,7 @@ app.use('/api/orchestrator', requireSession, orchestratorRouter);
 app.use('/api/shopify', shopifyRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/notifications', allowBearerOrSession, notificationsRouter);
+app.use('/api/prospects', prospectsRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
