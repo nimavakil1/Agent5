@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  livekit-egress:
+    image: livekit/egress:latest
+    container_name: livekit-egress
+    restart: unless-stopped
+    env_file:
+      - .env.egress
+    environment:
+      # Optional: local file output directory inside container
+      - FILE_OUTPUT_LOCAL=/var/lib/livekit-egress-out
+      # Optional log level (debug|info|warn|error)
+      - LK_LOG_LEVEL=info
+    volumes:
+      # Local output folder (only used when FILE_OUTPUT_LOCAL is set)
+      - ./output:/var/lib/livekit-egress-out
+    ports:
+      # Optional: metrics/debug if you need it; safe to remove
+      - "7880:7880"
+
