@@ -29,8 +29,14 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
   const errors = [];
   let imported = 0;
   try {
+    // Auto-detect delimiter (supports ";" and ","), strip BOM, trim headers
+    const raw = fs.readFileSync(req.file.path, 'utf8');
+    const hasSemicolon = (raw.indexOf(';') !== -1);
+    const hasComma = (raw.indexOf(',') !== -1);
+    const separator = hasSemicolon && (!hasComma || raw.split(';').length >= raw.split(',').length) ? ';' : ',';
+
     fs.createReadStream(req.file.path)
-      .pipe(csv())
+      .pipe(csv({ separator, mapHeaders: ({ header }) => header.replace(/\uFEFF/g, '').trim(), mapValues: ({ value }) => (typeof value === 'string' ? value.trim() : value) }))
       .on('data', (row) => results.push(row))
       .on('end', async () => {
         for (let i = 0; i < results.length; i++) {
@@ -38,7 +44,8 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
           try {
             const invPhone = normalizeToE164(r.invoice_phone || '');
             const delPhone = normalizeToE164(r.delivery_1_phone || '');
-            if (!r.invoice_name && !invPhone) {
+            // Require at least invoice name OR company OR phone
+            if (!((r.invoice_name && r.invoice_name.length) || (r.invoice_company && r.invoice_company.length) || invPhone)) {
               errors.push(`Row ${i+1}: missing invoice_name and invoice_phone`);
               continue;
             }
@@ -80,8 +87,12 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
             );
 
             // DNC handling per-phone via opt_out flags
-            const invOpt = (r.invoice_opt_out==='1' || String(r.invoice_opt_out||'').toLowerCase()==='true');
-            const delOpt = (r.delivery_1_opt_out==='1' || String(r.delivery_1_opt_out||'').toLowerCase()==='true');
+            const toBool = (v)=>{
+              const s = String(v||'').trim().toLowerCase();
+              return s==='1'||s==='true'||s==='yes'||s==='y';
+            };
+            const invOpt = toBool(r.invoice_opt_out);
+            const delOpt = toBool(r.delivery_1_opt_out);
             if (invOpt && invPhone) await Dnc.updateOne({ phone_e164: invPhone }, { $set: { phone_e164: invPhone, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
             if (delOpt && delPhone) await Dnc.updateOne({ phone_e164: delPhone }, { $set: { phone_e164: delPhone, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
 
@@ -140,4 +151,3 @@ router.patch('/phone/:e164/opt-out', requireSession, async (req, res) => {
 });
 
 module.exports = router;
-
