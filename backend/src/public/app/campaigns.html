@@ -6,16 +6,356 @@
     <title>Campaigns</title>
     <style>
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color:#0f172a; }
+      a { color:#2563eb; text-decoration: none; }
+      a:hover { text-decoration: underline; }
       .card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:16px; margin: 12px 0; }
       .muted { color:#64748b; font-size: 14px; }
+      .btn { display:inline-block; background:#2563eb; color:#fff; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; }
+      .btn.secondary { background:#0f172a; }
+      .btn.muted { background:#64748b; }
+      .btn.warn { background:#b91c1c; }
+      .btn:hover { filter: brightness(0.95); }
+      .row { display:flex; gap:16px; align-items:center; }
+      input[type=text], input[type=datetime-local], select, textarea { padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box; }
+      table { width:100%; border-collapse:collapse; }
+      th, td { padding:8px; vertical-align:top; }
+      thead tr { border-bottom:1px solid #e2e8f0; text-align:left; }
+      tr { border-bottom:1px solid #f1f5f9; }
+      .modal { position:fixed; inset:0; background:rgba(15,23,42,0.4); display:none; align-items:center; justify-content:center; }
+      .modal .panel { background:#fff; width:880px; max-width:95vw; border-radius:8px; border:1px solid #e2e8f0; }
+      .modal header, .modal footer { padding:12px 16px; border-bottom:1px solid #e2e8f0; }
+      .modal footer { border-top:1px solid #e2e8f0; border-bottom:0; display:flex; gap:8px; justify-content:flex-end; }
+      .modal main { padding:16px; max-height:70vh; overflow:auto; }
+      label { display:block; font-size:12px; color:#475569; margin-top:8px; }
+      .grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+      .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+      .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#e2e8f0; color:#0f172a; font-size:12px; }
+      .status-running { background:#dcfce7; color:#166534; }
+      .status-paused { background:#fee2e2; color:#991b1b; }
+      .status-scheduled { background:#e0e7ff; color:#3730a3; }
+      .status-ended { background:#e5e7eb; color:#374151; }
+      .windows { border:1px solid #e2e8f0; border-radius:6px; padding:8px; }
+      .windows table { width:100%; border-collapse:collapse; }
+      .windows th, .windows td { padding:6px; border-bottom:1px solid #f1f5f9; }
     </style>
   </head>
   <body>
     <h1>Campaigns</h1>
     <div class="card">
-      <h2>Campaign Management</h2>
-      <p class="muted">This page will host the campaigns list and builder (schedules, audiences, start/pause/stop). Prospects have been moved to <a href="/app/prospects.html">Prospects</a>.</p>
+      <div class="row" style="justify-content:space-between; align-items:flex-start;">
+        <div class="row" style="gap:8px;">
+          <button class="btn" id="newBtn">New Campaign</button>
+          <button class="btn secondary" id="refreshBtn">Refresh</button>
+          <span class="muted">Prospects moved to <a href="/app/prospects.html">Prospects</a></span>
+        </div>
+        <div style="max-width:520px; width:100%;">
+          <label>Describe campaign (NL prefill)</label>
+          <textarea id="nlInput" rows="3" placeholder="E.g., Run weekdays 9-17 Brussels time, target delivery phones tagged 'promo', 2 attempts with 24h cooldown."></textarea>
+          <div class="row" style="justify-content:flex-end; margin-top:8px;">
+            <button class="btn" id="nlFillBtn">Fill From Description</button>
+          </div>
+        </div>
+      </div>
+      <table style="margin-top:12px;">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Windows</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
     </div>
-    <script>/* Campaigns-only page */</script>
+
+    <div class="modal" id="editModal">
+      <div class="panel">
+        <header><strong id="editTitle">New Campaign</strong></header>
+        <main>
+          <form id="form">
+            <div class="grid-2">
+              <div>
+                <label>Name
+                  <input type="text" id="f_name" />
+                </label>
+                <label>Description
+                  <input type="text" id="f_description" />
+                </label>
+                <label>Target
+                  <select id="f_target">
+                    <option value="invoice">Invoice</option>
+                    <option value="delivery">Delivery</option>
+                  </select>
+                </label>
+                <label>Include tags (comma-separated)
+                  <input type="text" id="f_include_tags" placeholder="e.g. promo, belgium" />
+                </label>
+                <label>Exclude tags (comma-separated)
+                  <input type="text" id="f_exclude_tags" placeholder="e.g. vip" />
+                </label>
+                <label>Field filters (JSON array)
+                  <input type="text" id="f_field_filters" placeholder='e.g. [{"key":"segment","op":"=","value":"A"}]' />
+                </label>
+              </div>
+              <div>
+                <label>Time zone (IANA)
+                  <input type="text" id="f_tz" placeholder="Europe/Brussels" />
+                </label>
+                <div class="windows">
+                  <div class="row" style="justify-content:space-between;">
+                    <strong>Windows</strong>
+                    <button class="btn" type="button" id="addWindowBtn">Add window</button>
+                  </div>
+                  <table>
+                    <thead><tr><th>Day</th><th>Start</th><th>End</th><th></th></tr></thead>
+                    <tbody id="winRows"></tbody>
+                  </table>
+                </div>
+                <div class="grid-2">
+                  <label>Start at
+                    <input type="datetime-local" id="f_start_at" />
+                  </label>
+                  <label>End at
+                    <input type="datetime-local" id="f_end_at" />
+                  </label>
+                </div>
+                <div class="grid-2">
+                  <label>Max attempts
+                    <input type="text" id="f_max_attempts" value="1" />
+                  </label>
+                  <label>Cooldown (hours)
+                    <input type="text" id="f_cooldown" value="24" />
+                  </label>
+                </div>
+                <div class="grid-2">
+                  <label>Daily cap
+                    <input type="text" id="f_daily_cap" value="0" />
+                  </label>
+                  <label>Hourly cap
+                    <input type="text" id="f_hourly_cap" value="0" />
+                  </label>
+                </div>
+                <label>Script profile
+                  <input type="text" id="f_script_profile" placeholder="e.g. sales_v1" />
+                </label>
+                <label>Notes
+                  <input type="text" id="f_notes" />
+                </label>
+              </div>
+            </div>
+          </form>
+        </main>
+        <footer>
+          <button class="btn" id="saveBtn">Save</button>
+          <button class="btn muted" id="closeBtn">Close</button>
+        </footer>
+      </div>
+    </div>
+
+    <script>
+      const rows = document.getElementById('rows');
+      const newBtn = document.getElementById('newBtn');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const nlBtn = document.getElementById('nlFillBtn');
+      const nlInput = document.getElementById('nlInput');
+      const modal = document.getElementById('editModal');
+      const form = document.getElementById('form');
+      const winRows = document.getElementById('winRows');
+      const editTitle = document.getElementById('editTitle');
+      const saveBtn = document.getElementById('saveBtn');
+      const closeBtn = document.getElementById('closeBtn');
+
+      let currentId = null;
+      const dayOpts = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+      function htmlesc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+      async function load(){
+        rows.innerHTML = '<tr><td colspan="6" class="muted">Loading…</td></tr>';
+        const r = await fetch('/api/campaigns', { credentials:'include' });
+        const list = await r.json();
+        rows.innerHTML = '';
+        if(!Array.isArray(list) || !list.length){ rows.innerHTML='<tr><td colspan="6" class="muted">No campaigns</td></tr>'; return; }
+        for(const c of list){
+          const windows = (c.schedule?.windows||[]).map(w=> `${w.day} ${w.start}-${w.end}`).join('<br/>');
+          const status = c.status||'draft';
+          const pillCls = 'pill status-' + status;
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${htmlesc(c.name||c.title||'(untitled)')}</td>
+            <td><span class="${pillCls}">${htmlesc(status)}</span></td>
+            <td>${windows||'<span class="muted">—</span>'}</td>
+            <td>${c.schedule?.start_at ? new Date(c.schedule.start_at).toLocaleString() : '—'}</td>
+            <td>${c.schedule?.end_at ? new Date(c.schedule.end_at).toLocaleString() : '—'}</td>
+            <td>
+              <div class="row" style="gap:6px;">
+                <button class="btn" data-act="edit" data-id="${c._id}">Edit</button>
+                <button class="btn secondary" data-act="stats" data-id="${c._id}">Stats</button>
+                <button class="btn" data-act="start" data-id="${c._id}">Start</button>
+                <button class="btn muted" data-act="pause" data-id="${c._id}">Pause</button>
+                <button class="btn warn" data-act="stop" data-id="${c._id}">Stop</button>
+                <button class="btn warn" data-act="del" data-id="${c._id}">Delete</button>
+              </div>
+            </td>
+          `;
+          rows.appendChild(tr);
+        }
+        rows.querySelectorAll('button[data-act]').forEach(btn=>{
+          btn.onclick = (ev)=> handleRowAction(ev.currentTarget.getAttribute('data-act'), ev.currentTarget.getAttribute('data-id'));
+        });
+      }
+
+      function openNew(){
+        currentId = null;
+        editTitle.textContent = 'New Campaign';
+        form.reset(); winRows.innerHTML='';
+        addWindowRow('Mon','09:00','17:00');
+        modal.style.display='flex';
+      }
+
+      function addWindowRow(day='',start='',end=''){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><select>${dayOpts.map(d=>`<option ${d===day?'selected':''}>${d}</option>`).join('')}</select></td>
+          <td><input type="text" placeholder="09:00" value="${htmlesc(start)}"/></td>
+          <td><input type="text" placeholder="17:00" value="${htmlesc(end)}"/></td>
+          <td><button type="button" class="btn warn">X</button></td>
+        `;
+        tr.querySelector('button').onclick = ()=> tr.remove();
+        winRows.appendChild(tr);
+      }
+
+      function fillForm(c){
+        document.getElementById('f_name').value = c.name||'';
+        document.getElementById('f_description').value = c.description||'';
+        document.getElementById('f_target').value = c.audience?.target||'invoice';
+        document.getElementById('f_include_tags').value = (c.audience?.include_tags||[]).join(', ');
+        document.getElementById('f_exclude_tags').value = (c.audience?.exclude_tags||[]).join(', ');
+        document.getElementById('f_field_filters').value = c.audience?.field_filters ? JSON.stringify(c.audience.field_filters) : '';
+        document.getElementById('f_tz').value = c.schedule?.tz||'';
+        winRows.innerHTML = '';
+        (c.schedule?.windows||[]).forEach(w=> addWindowRow(w.day, w.start, w.end));
+        const sa = c.schedule?.start_at ? new Date(c.schedule.start_at) : null;
+        const ea = c.schedule?.end_at ? new Date(c.schedule.end_at) : null;
+        document.getElementById('f_start_at').value = sa ? toLocalInput(sa) : '';
+        document.getElementById('f_end_at').value = ea ? toLocalInput(ea) : '';
+        document.getElementById('f_max_attempts').value = c.dialer?.max_attempts ?? 1;
+        document.getElementById('f_cooldown').value = c.dialer?.cooldown_hours ?? 24;
+        document.getElementById('f_daily_cap').value = c.dialer?.daily_cap ?? 0;
+        document.getElementById('f_hourly_cap').value = c.dialer?.hourly_cap ?? 0;
+        document.getElementById('f_script_profile').value = c.script_profile||'';
+        document.getElementById('f_notes').value = c.notes||'';
+      }
+
+      function toLocalInput(d){
+        const pad=(n)=> String(n).padStart(2,'0');
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
+
+      function collectForm(){
+        const inc = document.getElementById('f_include_tags').value.split(',').map(s=>s.trim()).filter(Boolean);
+        const exc = document.getElementById('f_exclude_tags').value.split(',').map(s=>s.trim()).filter(Boolean);
+        let filters = [];
+        const ff = document.getElementById('f_field_filters').value.trim();
+        if (ff) {
+          try { filters = JSON.parse(ff); } catch(e) { alert('Field filters must be JSON'); throw e; }
+        }
+        const windows = Array.from(winRows.querySelectorAll('tr')).map(tr=>{
+          const tds = tr.querySelectorAll('td');
+          return { day: tds[0].querySelector('select').value, start: tds[1].querySelector('input').value, end: tds[2].querySelector('input').value };
+        }).filter(w=> w.day && w.start && w.end);
+        const startAt = document.getElementById('f_start_at').value;
+        const endAt = document.getElementById('f_end_at').value;
+        return {
+          name: document.getElementById('f_name').value,
+          description: document.getElementById('f_description').value,
+          audience: {
+            include_tags: inc,
+            exclude_tags: exc,
+            field_filters: filters,
+            target: document.getElementById('f_target').value
+          },
+          schedule: {
+            tz: document.getElementById('f_tz').value,
+            windows,
+            start_at: startAt ? new Date(startAt).toISOString() : undefined,
+            end_at: endAt ? new Date(endAt).toISOString() : undefined,
+          },
+          dialer: {
+            max_attempts: Number(document.getElementById('f_max_attempts').value)||1,
+            cooldown_hours: Number(document.getElementById('f_cooldown').value)||24,
+            daily_cap: Number(document.getElementById('f_daily_cap').value)||0,
+            hourly_cap: Number(document.getElementById('f_hourly_cap').value)||0,
+          },
+          script_profile: document.getElementById('f_script_profile').value,
+          notes: document.getElementById('f_notes').value,
+        };
+      }
+
+      async function handleRowAction(act, id){
+        if (act==='edit') return openEdit(id);
+        if (act==='stats') {
+          const r = await fetch(`/api/campaigns/${id}/stats`, { credentials:'include' });
+          const j = await r.json();
+          alert(`Calls: ${j.calls_total}\nConnects: ${j.connects}\nConversions: ${j.conversions}\nCost: ${j.cost}`);
+          return;
+        }
+        if (act==='del') {
+          if (!confirm('Delete this campaign?')) return;
+          const r = await fetch(`/api/campaigns/${id}`, { method:'DELETE', credentials:'include' });
+          if(!r.ok) return alert('Delete failed');
+          return load();
+        }
+        const r = await fetch(`/api/campaigns/${id}/${act}`, { method:'POST', credentials:'include' });
+        if(!r.ok) return alert(act+' failed');
+        load();
+      }
+
+      async function openEdit(id){
+        currentId = id || null;
+        if (!id) { openNew(); return; }
+        const r = await fetch('/api/campaigns', { credentials:'include' });
+        const list = await r.json();
+        const c = list.find(x=> x._id===id);
+        if (!c) return alert('Not found');
+        editTitle.textContent = 'Edit Campaign';
+        fillForm(c);
+        modal.style.display='flex';
+      }
+
+      async function save(){
+        let body;
+        try { body = collectForm(); } catch(_) { return; }
+        const method = currentId ? 'PUT' : 'POST';
+        const url = currentId ? `/api/campaigns/${currentId}` : '/api/campaigns';
+        const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) });
+        if(!r.ok){ const j = await r.json().catch(()=>({})); return alert('Save failed: '+(j.message||r.status)); }
+        modal.style.display='none';
+        load();
+      }
+
+      async function nlFill(){
+        const text = nlInput.value.trim();
+        if (!text) return alert('Enter a description');
+        const r = await fetch('/api/campaigns/nl-fill', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ text }) });
+        if(!r.ok){ const j = await r.json().catch(()=>({})); return alert('NL fill failed: '+(j.message||r.status)); }
+        const c = await r.json();
+        // Open new form and populate
+        openNew();
+        fillForm(c);
+      }
+
+      newBtn.onclick = ()=> openNew();
+      refreshBtn.onclick = ()=> load();
+      saveBtn.onclick = ()=> save();
+      closeBtn.onclick = ()=> modal.style.display='none';
+      document.getElementById('addWindowBtn').onclick = ()=> addWindowRow('Mon','09:00','17:00');
+      nlBtn.onclick = ()=> nlFill();
+
+      load();
+    </script>
   </body>
   </html>
