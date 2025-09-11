@@ -58,4 +58,9 @@ const customerRecordSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Indexes per design
+customerRecordSchema.index({ 'invoice.phone': 1 }, { unique: true, sparse: true });
+customerRecordSchema.index({ 'delivery_addresses.phone': 1 });
+customerRecordSchema.index({ tags: 1 });
+
 module.exports = mongoose.model('CustomerRecord', customerRecordSchema);

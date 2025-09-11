@@ -10,7 +10,7 @@ async function runDueJobs(now = new Date()) {
       if (job.type === 'start_campaign') {
         const id = job.payload?.campaignObjectId;
         if (id) {
-          await CampaignDefinition.findByIdAndUpdate(id, { status: 'active' });
+          await CampaignDefinition.findByIdAndUpdate(id, { status: 'running' });
           console.log(`[scheduler] Campaign ${id} started`);
           // Schedule first goal check in 1 minute
           const next = new Date(Date.now() + 60 * 1000);
@@ -25,7 +25,7 @@ async function runDueJobs(now = new Date()) {
           // For MVP: keep checking; do not complete automatically.
           console.log(`[scheduler] Goal check for ${id} (MVP placeholder)`);
           // Re-schedule another check in 5 minutes if still active
-          if (camp.status === 'active') {
+          if (camp.status === 'running') {
             const next = new Date(Date.now() + 5 * 60 * 1000);
             await ScheduledJob.create({ type: 'goal_check', run_at: next, payload: { campaignObjectId: id } });
           }
@@ -33,7 +33,7 @@ async function runDueJobs(now = new Date()) {
       } else if (job.type === 'stop_campaign') {
         const id = job.payload?.campaignObjectId;
         if (id) {
-          await CampaignDefinition.findByIdAndUpdate(id, { status: 'completed' });
+          await CampaignDefinition.findByIdAndUpdate(id, { status: 'ended' });
           console.log(`[scheduler] Campaign ${id} stopped`);
         }
       }
@@ -57,4 +57,3 @@ function start() {
 }
 
 module.exports = { start };
-

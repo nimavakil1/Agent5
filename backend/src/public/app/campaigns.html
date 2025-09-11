@@ -6,116 +6,16 @@
     <title>Campaigns</title>
     <style>
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color:#0f172a; }
-      a { color:#2563eb; text-decoration: none; }
-      a:hover { text-decoration: underline; }
       .card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:16px; margin: 12px 0; }
       .muted { color:#64748b; font-size: 14px; }
-      .btn { display:inline-block; background:#2563eb; color:#fff; padding:8px 12px; border-radius:6px; }
-      .btn:hover { background:#1d4ed8; }
-      .row { display:flex; gap:16px; align-items:center; }
-      input[type=file] { padding:8px; border:1px solid #cbd5e1; border-radius:6px; }
     </style>
   </head>
   <body>
     <h1>Campaigns</h1>
     <div class="card">
-      <h2>Prospects</h2>
-      <p class="muted">Upload prospect lists and manage phone-level opt-out (DNC). The template reflects the current field definitions.</p>
-      <p>
-        <a class="btn" href="/api/prospects/template.csv">Download Template CSV</a>
-      </p>
-      <div class="row">
-        <form id="uploadForm" method="post" action="/api/prospects/upload" enctype="multipart/form-data">
-          <input type="file" name="csv" accept=".csv" required />
-          <button class="btn" type="submit">Upload CSV</button>
-        </form>
-      </div>
-      <div id="prospects" style="margin-top:16px;">
-        <div class="muted" style="margin-bottom:8px;">Prospects (invoice and delivery phones)</div>
-        <table id="prospectsTable" style="width:100%; border-collapse:collapse;">
-          <thead>
-            <tr style="text-align:left; border-bottom:1px solid #e2e8f0">
-              <th style="padding:8px;">Type</th>
-              <th style="padding:8px;">Customer</th>
-              <th style="padding:8px;">Phone</th>
-              <th style="padding:8px;">Language</th>
-              <th style="padding:8px;">Confirmed</th>
-              <th style="padding:8px;">Opt-out</th>
-              <th style="padding:8px;">Action</th>
-            </tr>
-          </thead>
-          <tbody id="prospectsRows"></tbody>
-        </table>
-      </div>
+      <h2>Campaign Management</h2>
+      <p class="muted">This page will host the campaigns list and builder (schedules, audiences, start/pause/stop). Prospects have been moved to <a href="/app/prospects.html">Prospects</a>.</p>
     </div>
-
-    <div class="card">
-      <h2>Create Campaign</h2>
-      <p class="muted">The campaign builder UI will go here. For now, campaigns will be added as a separate task.</p>
-    </div>
-
-    <script>
-      const form = document.getElementById('uploadForm');
-      form.addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        const fd = new FormData(form);
-        try {
-          const r = await fetch('/api/prospects/upload', { method:'POST', body: fd, credentials:'include' });
-          const j = await r.json();
-          if (!r.ok) throw new Error(j.message || 'Upload failed');
-          alert(`Imported ${j.imported} of ${j.total}.` + (j.errors? `\nErrors:\n${j.errors.join('\n')}`:''));
-          await loadProspects();
-        } catch (err) {
-          alert('Upload error: ' + err.message);
-        }
-      });
-
-      async function loadProspects(){
-        const tbody = document.getElementById('prospectsRows');
-        tbody.innerHTML = '<tr><td colspan="7" class="muted" style="padding:8px;">Loading…</td></tr>';
-        try {
-          const r = await fetch('/api/prospects', { credentials:'include' });
-          const list = await r.json();
-          tbody.innerHTML = '';
-          if (!Array.isArray(list) || list.length===0){
-            tbody.innerHTML = '<tr><td colspan="7" class="muted" style="padding:8px;">No prospects yet</td></tr>';
-            return;
-          }
-          for (const row of list){
-            const tr = document.createElement('tr');
-            tr.style.borderBottom = '1px solid #f1f5f9';
-            const phone = row.phone || '';
-            const optTxt = row.opt_out ? 'Yes' : 'No';
-            tr.innerHTML = `
-              <td style="padding:8px;">${row.type}${row.code? ' · '+row.code:''}</td>
-              <td style="padding:8px;">${(row.name||'').replace(/</g,'&lt;')}</td>
-              <td style="padding:8px;">${phone}</td>
-              <td style="padding:8px;">${row.language||''}</td>
-              <td style="padding:8px;">${row.language_confirmed? '✔️':'—'}</td>
-              <td style="padding:8px;">${optTxt}</td>
-              <td style="padding:8px;"><button class="btn" data-phone="${encodeURIComponent(phone)}" data-opt="${row.opt_out?0:1}">${row.opt_out?'Allow':'Opt-out'}</button></td>
-            `;
-            tbody.appendChild(tr);
-          }
-          // attach handlers
-          tbody.querySelectorAll('button.btn').forEach(btn=>{
-            btn.addEventListener('click', async (ev)=>{
-              const p = ev.currentTarget.getAttribute('data-phone');
-              const to = ev.currentTarget.getAttribute('data-opt')==='1';
-              try{
-                const r = await fetch(`/api/prospects/phone/${p}/opt-out`, { method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ opt_out: to }) });
-                if (!r.ok) throw new Error('Failed');
-                await loadProspects();
-              }catch(err){ alert('Update failed'); }
-            });
-          });
-        } catch (e){
-          tbody.innerHTML = '<tr><td colspan="7" class="muted" style="padding:8px;">Failed to load prospects</td></tr>';
-        }
-      }
-
-      // Initial load
-      loadProspects();
-    </script>
+    <script>/* Campaigns-only page */</script>
   </body>
   </html>

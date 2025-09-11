@@ -4,19 +4,88 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const CustomerRecord = require('../../models/CustomerRecord');
 const Dnc = require('../../models/Dnc');
+const ProspectFieldDef = require('../../models/ProspectFieldDef');
 const { normalizeToE164 } = require('../../util/phone');
 const { requireSession } = require('../../middleware/sessionAuth');
 
 const router = express.Router();
 const upload = multer({ dest: 'uploads/' });
 
+// --- Field Definitions CRUD ---
+const REQUIRE_ADMIN = (req) => (req.user && (req.user.role === 'admin' || req.user.role === 'superadmin'));
+
+router.get('/field-defs', requireSession, async (req, res) => {
+  const defs = await ProspectFieldDef.find({}).sort({ order: 1, createdAt: 1 }).lean();
+  res.json(defs);
+});
+
+router.post('/field-defs', requireSession, async (req, res) => {
+  try {
+    if (!REQUIRE_ADMIN(req)) return res.status(403).json({ message: 'forbidden' });
+    const { key, label, type, required, options, regex, default: def, visibility, order } = req.body || {};
+    if (!key || !/^[a-z0-9_]+$/.test(String(key))) return res.status(400).json({ message: 'invalid key' });
+    if (!label) return res.status(400).json({ message: 'label required' });
+    const allowed = ['string','number','date','enum','boolean','phone','email'];
+    if (!allowed.includes(type)) return res.status(400).json({ message: 'invalid type' });
+    const doc = await ProspectFieldDef.create({ key, label, type, required: !!required, options: Array.isArray(options)?options:undefined, regex, default: def, visibility: visibility||'invoice', order: Number.isFinite(order)?order:0 });
+    res.status(201).json(doc);
+  } catch (e) {
+    if (String(e.message||'').includes('duplicate key')) return res.status(409).json({ message: 'key exists' });
+    res.status(500).json({ message: 'error', error: e.message });
+  }
+});
+
+router.patch('/field-defs/:id', requireSession, async (req, res) => {
+  try {
+    if (!REQUIRE_ADMIN(req)) return res.status(403).json({ message: 'forbidden' });
+    const update = {};
+    const b = req.body || {};
+    const allowed = ['string','number','date','enum','boolean','phone','email'];
+    if (b.key !== undefined) {
+      if (!b.key || !/^[a-z0-9_]+$/.test(String(b.key))) return res.status(400).json({ message: 'invalid key' });
+      update.key = b.key;
+    }
+    if (b.label !== undefined) update.label = b.label;
+    if (b.type !== undefined) {
+      if (!allowed.includes(b.type)) return res.status(400).json({ message: 'invalid type' });
+      update.type = b.type;
+    }
+    if (b.required !== undefined) update.required = !!b.required;
+    if (b.options !== undefined) update.options = Array.isArray(b.options) ? b.options : [];
+    if (b.regex !== undefined) update.regex = b.regex;
+    if (b.default !== undefined) update.default = b.default;
+    if (b.visibility !== undefined) update.visibility = b.visibility;
+    if (b.order !== undefined) update.order = Number(b.order)||0;
+    const doc = await ProspectFieldDef.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!doc) return res.status(404).json({ message: 'not found' });
+    res.json(doc);
+  } catch (e) {
+    res.status(500).json({ message: 'error', error: e.message });
+  }
+});
+
+router.delete('/field-defs/:id', requireSession, async (req, res) => {
+  try {
+    if (!REQUIRE_ADMIN(req)) return res.status(403).json({ message: 'forbidden' });
+    const r = await ProspectFieldDef.findByIdAndDelete(req.params.id);
+    if (!r) return res.status(404).json({ message: 'not found' });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ message: 'error', error: e.message });
+  }
+});
+
 // Download CSV template
 router.get('/template.csv', requireSession, async (req, res) => {
-  const header = [
-    'invoice_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_phone','invoice_language','invoice_language_confirmed','invoice_tags', 'invoice_opt_out',
+  const defs = await ProspectFieldDef.find({}).sort({ order: 1, createdAt: 1 }).lean();
+  const base = [
+    'invoice_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_phone','invoice_language','invoice_language_confirmed','invoice_tags','invoice_opt_out',
     'delivery_1_name','delivery_1_address','delivery_1_city','delivery_1_postal_code','delivery_1_country','delivery_1_email','delivery_1_phone','delivery_1_language','delivery_1_language_confirmed','delivery_1_tags','delivery_1_opt_out',
     'notes'
   ];
+  const dynInvoice = defs.filter(d=>d.visibility==='invoice' || d.visibility==='both').map(d=>`custom_${d.key}`);
+  const dynDelivery = defs.filter(d=>d.visibility==='delivery' || d.visibility==='both').map(d=>`delivery_1_custom_${d.key}`);
+  const header = base.concat(dynInvoice).concat(dynDelivery);
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="prospects_template.csv"');
   res.send(header.join(',') + '\n');
@@ -39,6 +108,9 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
       .pipe(csv({ separator, mapHeaders: ({ header }) => header.replace(/\uFEFF/g, '').trim(), mapValues: ({ value }) => (typeof value === 'string' ? value.trim() : value) }))
       .on('data', (row) => results.push(row))
       .on('end', async () => {
+        const defs = await ProspectFieldDef.find({}).lean();
+        const invKeys = new Set(defs.filter(d=>d.visibility==='invoice' || d.visibility==='both').map(d=>d.key));
+        const delKeys = new Set(defs.filter(d=>d.visibility==='delivery' || d.visibility==='both').map(d=>d.key));
         for (let i = 0; i < results.length; i++) {
           const r = results[i];
           try {
@@ -63,6 +135,18 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               language: (r.invoice_language||'').trim(),
               language_confirmed: String(r.invoice_language_confirmed||'').toLowerCase()==='true' || r.invoice_language_confirmed==='1'
             };
+            // dynamic custom fields from CSV
+            const invoiceCustom = {};
+            invKeys.forEach(k=>{
+              const col = `custom_${k}`;
+              if (r[col] !== undefined && r[col] !== '') invoiceCustom[k] = r[col];
+            });
+            const deliveryCustom = {};
+            delKeys.forEach(k=>{
+              const col = `delivery_1_custom_${k}`;
+              if (r[col] !== undefined && r[col] !== '') deliveryCustom[k] = r[col];
+            });
+
             const delivery1 = delPhone ? [{
               code: 'delivery_1',
               name: (r.delivery_1_name||'').trim(),
@@ -74,7 +158,8 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               phone: delPhone,
               language: (r.delivery_1_language||'').trim(),
               language_confirmed: String(r.delivery_1_language_confirmed||'').toLowerCase()==='true' || r.delivery_1_language_confirmed==='1',
-              tags: (r.delivery_1_tags||'').split(';').map(s=>s.trim()).filter(Boolean)
+              tags: (r.delivery_1_tags||'').split(';').map(s=>s.trim()).filter(Boolean),
+              custom: Object.keys(deliveryCustom).length ? deliveryCustom : undefined,
             }] : [];
 
             const tags = (r.invoice_tags||'').split(';').map(s=>s.trim()).filter(Boolean);
@@ -83,7 +168,7 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
             const findCond = invPhone ? { 'invoice.phone': invPhone } : { 'invoice.name': invoice.name, 'invoice.email': invoice.email };
             const doc = await CustomerRecord.findOneAndUpdate(
               findCond,
-              { $set: { invoice }, $addToSet: { tags: { $each: tags } }, $push: { delivery_addresses: { $each: delivery1 } } },
+              { $set: { invoice: { ...invoice, custom: Object.keys(invoiceCustom).length ? invoiceCustom : undefined } }, $addToSet: { tags: { $each: tags } }, $push: { delivery_addresses: { $each: delivery1 } } },
               { upsert: true, new: true }
             );
 
@@ -115,21 +200,47 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
 router.get('/', requireSession, async (req, res) => {
   try {
     const q = String(req.query.q||'').trim();
-    const scope = (req.query.scope||'invoice'); // invoice|delivery
-    const customers = await CustomerRecord.find(q?{ 'invoice.name': new RegExp(q,'i') }:{}).lean();
+    const scope = (req.query.scope||'invoice'); // invoice|delivery|both
+    const tags = String(req.query.tags||'').split(/[;,]/).map(s=>s.trim()).filter(Boolean);
+    const lang = String(req.query.lang||'').trim();
+    const langConfirmed = req.query.lang_confirmed === '1' ? true : req.query.lang_confirmed === '0' ? false : undefined;
+    const optOutFilter = req.query.opt_out === '1' ? true : req.query.opt_out === '0' ? false : undefined;
+
+    const find = {};
+    if (q) {
+      find.$or = [
+        { 'invoice.name': new RegExp(q,'i') },
+        { 'invoice.company': new RegExp(q,'i') },
+        { 'invoice.email': new RegExp(q,'i') },
+        { 'invoice.phone': new RegExp(q.replace(/[^0-9+]/g,''),'i') },
+      ];
+    }
+    if (tags.length) {
+      find.tags = { $all: tags };
+    }
+    // lang/lang_confirmed filter applied after shape because of per-scope fields
+    const customers = await CustomerRecord.find(find).lean();
     const phones = new Set();
     customers.forEach(c=>{ if (c.invoice?.phone) phones.add(c.invoice.phone); (c.delivery_addresses||[]).forEach(d=>{ if (d.phone) phones.add(d.phone); }); });
     const dncSet = new Set((await Dnc.find({ phone_e164: { $in: Array.from(phones) } }).lean()).map(x=>x.phone_e164));
     const rows = [];
     for (const c of customers) {
-      if (scope==='invoice') {
-        rows.push({ type:'invoice', id:c._id, name:c.invoice?.name||c.name, phone:c.invoice?.phone||c.phone_number, language:c.invoice?.language||c.preferred_language, language_confirmed: !!c.invoice?.language_confirmed, tags:c.tags||[], opt_out: dncSet.has(c.invoice?.phone||'') });
-      }
+      const invRow = { type:'invoice', id:c._id, name:c.invoice?.name||c.name, phone:c.invoice?.phone||c.phone_number, language:c.invoice?.language||c.preferred_language, language_confirmed: !!c.invoice?.language_confirmed, tags:c.tags||[], opt_out: dncSet.has(c.invoice?.phone||'') };
+      const addInv = (scope==='invoice' || scope==='both');
+      if (addInv) rows.push(invRow);
       (c.delivery_addresses||[]).forEach(d=>{
-        rows.push({ type:'delivery', id:c._id, code:d.code, name:d.name, phone:d.phone, language:d.language, language_confirmed: !!d.language_confirmed, tags:d.tags||[], opt_out: dncSet.has(d.phone||'') });
+        const drow = { type:'delivery', id:c._id, code:d.code, name:d.name, phone:d.phone, language:d.language, language_confirmed: !!d.language_confirmed, tags:d.tags||[], opt_out: dncSet.has(d.phone||'') };
+        if (scope==='delivery' || scope==='both') rows.push(drow);
       });
     }
-    res.json(rows);
+    // apply post filters for language/lang_confirmed and opt_out
+    const filtered = rows.filter(r=>{
+      if (lang && (r.language||'') !== lang) return false;
+      if (langConfirmed !== undefined && !!r.language_confirmed !== langConfirmed) return false;
+      if (optOutFilter !== undefined && !!r.opt_out !== optOutFilter) return false;
+      return true;
+    });
+    res.json(filtered);
   } catch (e) {
     res.status(500).json({ message:'Failed to fetch prospects', error: e.message });
   }
