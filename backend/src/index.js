@@ -132,11 +132,16 @@ app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'a
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
 
 // Protected: specific root-level management pages (avoiding login.html)
-const protectedPages = ['dashboard.html', 'customers.html', 'call-review.html', 'admin.html'];
+const protectedPages = ['dashboard.html', 'call-review.html', 'admin.html'];
 protectedPages.forEach(page => {
   app.get(`/${page}`, requireSession, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', page));
   });
+});
+
+// Redirect legacy customers page to new Campaigns UI
+app.get('/customers.html', requireSession, (req, res) => {
+  res.redirect(302, '/app/campaigns.html');
 });
 
 // Remove broad root-protected static to avoid intercepting /api/auth/login
