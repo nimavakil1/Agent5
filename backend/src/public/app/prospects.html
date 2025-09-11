@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prospects</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color:#0f172a; }
+      a { color:#2563eb; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:16px; margin: 12px 0; }
+      .muted { color:#64748b; font-size: 14px; }
+      .btn { display:inline-block; background:#2563eb; color:#fff; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; }
+      .btn:hover { background:#1d4ed8; }
+      .row { display:flex; gap:16px; align-items:center; }
+      input[type=file], input[type=text] { padding:8px; border:1px solid #cbd5e1; border-radius:6px; }
+      table { width:100%; border-collapse:collapse; }
+      th, td { padding:8px; }
+      thead tr { border-bottom:1px solid #e2e8f0; text-align:left; }
+      tr { border-bottom:1px solid #f1f5f9; }
+      .modal { position:fixed; inset:0; background:rgba(15,23,42,0.4); display:none; align-items:center; justify-content:center; }
+      .modal .panel { background:#fff; width:680px; max-width:90vw; border-radius:8px; border:1px solid #e2e8f0; }
+      .modal header, .modal footer { padding:12px 16px; border-bottom:1px solid #e2e8f0; }
+      .modal footer { border-top:1px solid #e2e8f0; border-bottom:0; display:flex; gap:8px; justify-content:flex-end; }
+      .modal main { padding:16px; }
+      label { display:block; font-size:12px; color:#475569; margin-top:8px; }
+      .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Prospects</h1>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <a class="btn" href="/api/prospects/template.csv">Download Template CSV</a>
+        </div>
+        <form id="uploadForm" method="post" action="/api/prospects/upload" enctype="multipart/form-data">
+          <input type="file" name="csv" accept=".csv" required />
+          <button class="btn" type="submit">Upload CSV</button>
+        </form>
+      </div>
+      <p class="muted">Upload prospects (invoice + deliveries). Toggle opt‑out per phone below.</p>
+      <div class="row" style="margin:8px 0;">
+        <input id="q" type="text" placeholder="Search name…" />
+        <button class="btn" id="searchBtn">Search</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Customer</th>
+            <th>Phone</th>
+            <th>Language</th>
+            <th>Confirmed</th>
+            <th>Opt-out</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <div class="modal" id="editModal">
+      <div class="panel">
+        <header><strong id="editTitle">Edit</strong></header>
+        <main>
+          <form id="editForm">
+            <div class="grid">
+              <div>
+                <label>Name
+                  <input type="text" id="f_name" />
+                </label>
+                <label>Company
+                  <input type="text" id="f_company" />
+                </label>
+                <label>VAT
+                  <input type="text" id="f_vat" />
+                </label>
+                <label>Email
+                  <input type="text" id="f_email" />
+                </label>
+              </div>
+              <div>
+                <label>Phone
+                  <input type="text" id="f_phone" />
+                </label>
+                <label>Language
+                  <input type="text" id="f_language" />
+                </label>
+                <label>Language confirmed
+                  <input type="checkbox" id="f_lang_conf" />
+                </label>
+              </div>
+            </div>
+            <div class="grid">
+              <label>Address
+                <input type="text" id="f_address" />
+              </label>
+              <label>City
+                <input type="text" id="f_city" />
+              </label>
+              <label>Postal Code
+                <input type="text" id="f_postal" />
+              </label>
+              <label>Country
+                <input type="text" id="f_country" />
+              </label>
+            </div>
+          </form>
+        </main>
+        <footer>
+          <button class="btn" id="saveBtn">Save</button>
+          <button class="btn" id="closeBtn" style="background:#64748b;">Close</button>
+        </footer>
+      </div>
+    </div>
+
+    <script>
+      const rows = document.getElementById('rows');
+      const q = document.getElementById('q');
+      document.getElementById('searchBtn').onclick = ()=> loadProspects();
+      const modal = document.getElementById('editModal');
+      const editTitle = document.getElementById('editTitle');
+      const formEl = document.getElementById('editForm');
+      let currentEdit = null; // { id, type, code }
+
+      document.getElementById('closeBtn').onclick = ()=> modal.style.display='none';
+      document.getElementById('saveBtn').onclick = saveEdit;
+
+      document.getElementById('uploadForm').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        const r = await fetch('/api/prospects/upload', { method:'POST', body: fd, credentials:'include' });
+        const j = await r.json();
+        if(!r.ok) { alert(j.message||'Upload failed'); return; }
+        alert(`Imported ${j.imported} of ${j.total}.` + (j.errors? `\nErrors:\n${j.errors.join('\n')}`:''));
+        loadProspects();
+      });
+
+      async function loadProspects(){
+        rows.innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>';
+        const r = await fetch('/api/prospects'+(q.value? ('?q='+encodeURIComponent(q.value)) : ''), { credentials:'include' });
+        const list = await r.json();
+        rows.innerHTML = '';
+        if(!Array.isArray(list) || !list.length){ rows.innerHTML='<tr><td colspan="7" class="muted">No prospects</td></tr>'; return; }
+        for (const row of list){
+          const tr = document.createElement('tr');
+          const phone = row.phone||'';
+          tr.innerHTML = `
+            <td>${row.type}${row.code? ' · '+row.code:''}</td>
+            <td>${(row.name||'').replace(/</g,'&lt;')}</td>
+            <td>${phone}</td>
+            <td>${row.language||''}</td>
+            <td>${row.language_confirmed? '✔️':'—'}</td>
+            <td>${row.opt_out? 'Yes':'No'}</td>
+            <td>
+              <button class="btn" data-act="toggle" data-phone="${encodeURIComponent(phone)}" data-opt="${row.opt_out?0:1}">${row.opt_out?'Allow':'Opt‑out'}</button>
+              <button class="btn" data-act="edit" data-id="${row.id}" data-type="${row.type}" data-code="${row.code||''}">Edit</button>
+            </td>
+          `;
+          rows.appendChild(tr);
+        }
+        rows.querySelectorAll('button[data-act="toggle"]').forEach(btn=>{
+          btn.onclick = async (ev)=>{
+            const p = ev.currentTarget.getAttribute('data-phone');
+            const to = ev.currentTarget.getAttribute('data-opt')==='1';
+            const r = await fetch(`/api/prospects/phone/${p}/opt-out`, { method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ opt_out: to }) });
+            if(!r.ok) alert('Failed'); else loadProspects();
+          };
+        });
+        rows.querySelectorAll('button[data-act="edit"]').forEach(btn=>{
+          btn.onclick = (ev)=> openEdit(ev.currentTarget.getAttribute('data-id'), ev.currentTarget.getAttribute('data-type'), ev.currentTarget.getAttribute('data-code'));
+        });
+      }
+
+      async function openEdit(id, type, code){
+        const r = await fetch(`/api/prospects/${id}`, { credentials:'include' });
+        const doc = await r.json();
+        currentEdit = { id, type, code };
+        if(type==='invoice'){
+          editTitle.textContent = 'Edit Invoice';
+          fillForm(doc.invoice||{});
+        } else {
+          editTitle.textContent = `Edit Delivery ${code||''}`;
+          const d = (doc.delivery_addresses||[]).find(x=> x.code===code) || {};
+          fillForm(d);
+        }
+        modal.style.display='flex';
+      }
+
+      function fillForm(obj){
+        formEl.querySelector('#f_name').value = obj.name||'';
+        formEl.querySelector('#f_company').value = obj.company||'';
+        formEl.querySelector('#f_vat').value = obj.vat||'';
+        formEl.querySelector('#f_email').value = obj.email||'';
+        formEl.querySelector('#f_phone').value = obj.phone||'';
+        formEl.querySelector('#f_language').value = obj.language||'';
+        formEl.querySelector('#f_lang_conf').checked = !!obj.language_confirmed;
+        formEl.querySelector('#f_address').value = obj.address||'';
+        formEl.querySelector('#f_city').value = obj.city||'';
+        formEl.querySelector('#f_postal').value = obj.postal_code||'';
+        formEl.querySelector('#f_country').value = obj.country||'';
+      }
+
+      async function saveEdit(){
+        if(!currentEdit) return;
+        const body = {
+          name: formEl.querySelector('#f_name').value,
+          company: formEl.querySelector('#f_company').value,
+          vat: formEl.querySelector('#f_vat').value,
+          email: formEl.querySelector('#f_email').value,
+          phone: formEl.querySelector('#f_phone').value,
+          language: formEl.querySelector('#f_language').value,
+          language_confirmed: formEl.querySelector('#f_lang_conf').checked,
+          address: formEl.querySelector('#f_address').value,
+          city: formEl.querySelector('#f_city').value,
+          postal_code: formEl.querySelector('#f_postal').value,
+          country: formEl.querySelector('#f_country').value,
+        };
+        let url = '';
+        if(currentEdit.type==='invoice') url = `/api/prospects/${currentEdit.id}/invoice`;
+        else url = `/api/prospects/${currentEdit.id}/delivery/${encodeURIComponent(currentEdit.code||'')}`;
+        const r = await fetch(url, { method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) });
+        if(!r.ok){ alert('Save failed'); return; }
+        modal.style.display='none';
+        loadProspects();
+      }
+
+      loadProspects();
+    </script>
+  </body>
+  </html>
+

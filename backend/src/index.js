@@ -139,9 +139,9 @@ protectedPages.forEach(page => {
   });
 });
 
-// Redirect legacy customers page to new Campaigns UI
+// Redirect legacy customers page to Prospects UI
 app.get('/customers.html', requireSession, (req, res) => {
-  res.redirect(302, '/app/campaigns.html');
+  res.redirect(302, '/app/prospects.html');
 });
 
 // Remove broad root-protected static to avoid intercepting /api/auth/login

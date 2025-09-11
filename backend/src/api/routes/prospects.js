@@ -13,7 +13,7 @@ const upload = multer({ dest: 'uploads/' });
 // Download CSV template
 router.get('/template.csv', requireSession, async (req, res) => {
   const header = [
-    'invoice_name','invoice_company','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_phone','invoice_language','invoice_language_confirmed','invoice_tags', 'invoice_opt_out',
+    'invoice_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_phone','invoice_language','invoice_language_confirmed','invoice_tags', 'invoice_opt_out',
     'delivery_1_name','delivery_1_address','delivery_1_city','delivery_1_postal_code','delivery_1_country','delivery_1_email','delivery_1_phone','delivery_1_language','delivery_1_language_confirmed','delivery_1_tags','delivery_1_opt_out',
     'notes'
   ];
@@ -53,6 +53,7 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
             const invoice = {
               name: (r.invoice_name||'').trim(),
               company: (r.invoice_company||'').trim(),
+              vat: (r.invoice_vat||'').trim(),
               address: (r.invoice_address||'').trim(),
               city: (r.invoice_city||'').trim(),
               postal_code: (r.invoice_postal_code||'').trim(),
@@ -147,6 +148,56 @@ router.patch('/phone/:e164/opt-out', requireSession, async (req, res) => {
     res.json({ phone, opt_out: !!opt_out });
   } catch (e) {
     res.status(500).json({ message:'Failed to update opt-out', error: e.message });
+  }
+});
+
+// Get full prospect by id
+router.get('/:id', requireSession, async (req, res) => {
+  try {
+    const doc = await CustomerRecord.findById(req.params.id).lean();
+    if (!doc) return res.status(404).json({ message:'not found' });
+    res.json(doc);
+  } catch (e) {
+    res.status(500).json({ message:'Failed to fetch prospect', error: e.message });
+  }
+});
+
+// Update invoice details
+router.patch('/:id/invoice', requireSession, async (req, res) => {
+  try {
+    const b = req.body||{};
+    const set = {};
+    const fields = ['name','company','vat','address','city','postal_code','country','email','language','language_confirmed'];
+    fields.forEach(k=>{ if (b[k]!==undefined) set[`invoice.${k}`]=b[k]; });
+    if (b.phone!==undefined) set['invoice.phone'] = normalizeToE164(b.phone||'');
+    const doc = await CustomerRecord.findByIdAndUpdate(req.params.id, { $set: set }, { new:true });
+    if (!doc) return res.status(404).json({ message:'not found' });
+    res.json({ ok:true });
+  } catch (e) {
+    res.status(500).json({ message:'Failed to update invoice', error:e.message });
+  }
+});
+
+// Update delivery by code
+router.patch('/:id/delivery/:code', requireSession, async (req, res) => {
+  try {
+    const code = String(req.params.code);
+    const b = req.body||{};
+    const set = {};
+    const base = 'delivery_addresses.$.';
+    const fields = ['name','address','city','postal_code','country','email','language','language_confirmed','notes'];
+    fields.forEach(k=>{ if (b[k]!==undefined) set[base+k]=b[k]; });
+    if (b.phone!==undefined) set[base+'phone'] = normalizeToE164(b.phone||'');
+    if (Array.isArray(b.tags)) set[base+'tags']=b.tags;
+    const doc = await CustomerRecord.findOneAndUpdate(
+      { _id: req.params.id, 'delivery_addresses.code': code },
+      { $set: set },
+      { new:true }
+    );
+    if (!doc) return res.status(404).json({ message:'not found' });
+    res.json({ ok:true });
+  } catch (e) {
+    res.status(500).json({ message:'Failed to update delivery', error:e.message });
   }
 });
 
