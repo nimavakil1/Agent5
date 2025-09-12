@@ -80,7 +80,7 @@ router.get('/template.csv', requireSession, async (req, res) => {
   const defs = await ProspectFieldDef.find({}).sort({ order: 1, createdAt: 1 }).lean();
   const base = [
     'invoice_contact_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_website','invoice_phone','invoice_mobile_nr','invoice_language','invoice_language_confirmed','invoice_wa_preferred','invoice_tags','invoice_opt_out',
-    'delivery1_contact_name','delivery_1_address','delivery_1_city','delivery_1_postal_code','delivery_1_country','delivery_1_email','delivery_1_phone','delivery1_mobile_nr','delivery_1_language','delivery_1_language_confirmed','delivery1_wa_preferred','delivery_1_tags','delivery_1_opt_out',
+    'delivery1_contact_name','delivery1_company','delivery_1_address','delivery_1_city','delivery_1_postal_code','delivery_1_country','delivery_1_email','delivery_1_phone','delivery1_mobile_nr','delivery_1_language','delivery_1_language_confirmed','delivery1_wa_preferred','delivery_1_tags','delivery_1_opt_out',
     'notes'
   ];
   const dynInvoice = defs.filter(d=>d.visibility==='invoice' || d.visibility==='both').map(d=>`custom_${d.key}`);
@@ -152,9 +152,10 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               if (r[col] !== undefined && r[col] !== '') deliveryCustom[k] = r[col];
             });
 
-            const delivery1 = (delLandline || delMobile) ? [{
+            const delivery1 = (delLandline || delMobile || (r.delivery1_contact_name||'').trim()) ? [{
               code: 'delivery_1',
               name: (r.delivery1_contact_name||r.delivery_1_name||'').trim(),
+              company: (r.delivery1_company||'').trim(),
               address: (r.delivery_1_address||'').trim(),
               city: (r.delivery_1_city||'').trim(),
               postal_code: (r.delivery_1_postal_code||'').trim(),
@@ -339,7 +340,7 @@ router.patch('/:id/delivery/:code', requireSession, async (req, res) => {
     const b = req.body||{};
     const set = {};
     const base = 'delivery_addresses.$.';
-    const fields = ['name','address','city','postal_code','country','email','language','language_confirmed','notes','wa_preferred'];
+    const fields = ['name','company','address','city','postal_code','country','email','language','language_confirmed','notes','wa_preferred'];
     fields.forEach(k=>{ if (b[k]!==undefined) set[base+k]=b[k]; });
     if (b.phone!==undefined) set[base+'phone'] = normalizeToE164(b.phone||'');
     if (b.mobile!==undefined) set[base+'mobile'] = normalizeToE164(b.mobile||'');

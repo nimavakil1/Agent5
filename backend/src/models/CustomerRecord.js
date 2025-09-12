@@ -5,6 +5,7 @@ const deliveryAddressSchema = new mongoose.Schema(
   {
     code: { type: String }, // optional identifier
     name: { type: String },
+    company: { type: String },
     address: { type: String },
     city: { type: String },
     postal_code: { type: String },
