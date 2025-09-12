@@ -10,7 +10,8 @@ const deliveryAddressSchema = new mongoose.Schema(
     postal_code: { type: String },
     country: { type: String },
     email: { type: String },
-    phone: { type: String },
+    phone: { type: String }, // landline
+    mobile: { type: String },
     wa_preferred: { type: Boolean, default: false },
     language: { type: String },
     language_confirmed: { type: Boolean, default: false },
@@ -48,7 +49,8 @@ const customerRecordSchema = new mongoose.Schema(
       country: { type: String },
       email: { type: String },
       website: { type: String },
-      phone: { type: String },
+      phone: { type: String }, // landline
+      mobile: { type: String },
       language: { type: String },
       language_confirmed: { type: Boolean, default: false },
       custom: { type: mongoose.Schema.Types.Mixed }, // dynamic fields (invoice scope)

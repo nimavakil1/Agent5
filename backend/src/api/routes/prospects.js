@@ -79,8 +79,8 @@ router.delete('/field-defs/:id', requireSession, async (req, res) => {
 router.get('/template.csv', requireSession, async (req, res) => {
   const defs = await ProspectFieldDef.find({}).sort({ order: 1, createdAt: 1 }).lean();
   const base = [
-    'invoice_contact_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_website','invoice_mobile_nr','invoice_language','invoice_language_confirmed','invoice_wa_preferred','invoice_tags','invoice_opt_out',
-    'delivery1_contact_name','delivery_1_address','delivery_1_city','delivery_1_postal_code','delivery_1_country','delivery_1_email','delivery1_mobile_nr','delivery_1_language','delivery_1_language_confirmed','delivery1_wa_preferred','delivery_1_tags','delivery_1_opt_out',
+    'invoice_contact_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_website','invoice_phone','invoice_mobile_nr','invoice_language','invoice_language_confirmed','invoice_wa_preferred','invoice_tags','invoice_opt_out',
+    'delivery1_contact_name','delivery_1_address','delivery_1_city','delivery_1_postal_code','delivery_1_country','delivery_1_email','delivery_1_phone','delivery1_mobile_nr','delivery_1_language','delivery_1_language_confirmed','delivery1_wa_preferred','delivery_1_tags','delivery_1_opt_out',
     'notes'
   ];
   const dynInvoice = defs.filter(d=>d.visibility==='invoice' || d.visibility==='both').map(d=>`custom_${d.key}`);
@@ -114,8 +114,10 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
         for (let i = 0; i < results.length; i++) {
           const r = results[i];
           try {
-            const invPhone = normalizeToE164(r.invoice_mobile_nr || r.invoice_phone || '');
-            const delPhone = normalizeToE164(r.delivery1_mobile_nr || r.delivery_1_phone || '');
+            const invLandline = normalizeToE164(r.invoice_phone || '');
+            const invMobile = normalizeToE164(r.invoice_mobile_nr || '');
+            const delLandline = normalizeToE164(r.delivery_1_phone || '');
+            const delMobile = normalizeToE164(r.delivery1_mobile_nr || '');
             // Require at least invoice name OR company OR phone
             if (!((r.invoice_name && r.invoice_name.length) || (r.invoice_company && r.invoice_company.length) || invPhone)) {
               errors.push(`Row ${i+1}: missing invoice_name and invoice_phone`);
@@ -132,7 +134,8 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               country: (r.invoice_country||'').trim(),
               email: (r.invoice_email||'').trim(),
               website: (r.invoice_website||'').trim(),
-              phone: invPhone,
+              phone: invLandline,
+              mobile: invMobile,
               language: (r.invoice_language||'').trim(),
               language_confirmed: String(r.invoice_language_confirmed||'').toLowerCase()==='true' || r.invoice_language_confirmed==='1',
               wa_preferred: String(r.invoice_wa_preferred||'').toLowerCase()==='true' || r.invoice_wa_preferred==='1'
@@ -149,7 +152,7 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               if (r[col] !== undefined && r[col] !== '') deliveryCustom[k] = r[col];
             });
 
-            const delivery1 = delPhone ? [{
+            const delivery1 = (delLandline || delMobile) ? [{
               code: 'delivery_1',
               name: (r.delivery1_contact_name||r.delivery_1_name||'').trim(),
               address: (r.delivery_1_address||'').trim(),
@@ -157,7 +160,8 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               postal_code: (r.delivery_1_postal_code||'').trim(),
               country: (r.delivery_1_country||'').trim(),
               email: (r.delivery_1_email||'').trim(),
-              phone: delPhone,
+              phone: delLandline,
+              mobile: delMobile,
               language: (r.delivery_1_language||'').trim(),
               language_confirmed: String(r.delivery_1_language_confirmed||'').toLowerCase()==='true' || r.delivery_1_language_confirmed==='1',
               wa_preferred: String(r.delivery1_wa_preferred||r.delivery_1_wa_preferred||'').toLowerCase()==='true' || r.delivery1_wa_preferred==='1',
@@ -168,7 +172,7 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
             const tags = (r.invoice_tags||'').split(';').map(s=>s.trim()).filter(Boolean);
 
             // Upsert by invoice phone if present, else by name+email tuple
-            const findCond = invPhone ? { 'invoice.phone': invPhone } : { 'invoice.name': invoice.name, 'invoice.email': invoice.email };
+            const findCond = (invLandline || invMobile) ? { 'invoice.phone': (invLandline || invMobile) } : { 'invoice.name': invoice.name, 'invoice.email': invoice.email };
             const doc = await CustomerRecord.findOneAndUpdate(
               findCond,
               { $set: { invoice: { ...invoice, custom: Object.keys(invoiceCustom).length ? invoiceCustom : undefined } }, $addToSet: { tags: { $each: tags } }, $push: { delivery_addresses: { $each: delivery1 } } },
@@ -182,8 +186,14 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
             };
             const invOpt = toBool(r.invoice_opt_out);
             const delOpt = toBool(r.delivery_1_opt_out);
-            if (invOpt && invPhone) await Dnc.updateOne({ phone_e164: invPhone }, { $set: { phone_e164: invPhone, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
-            if (delOpt && delPhone) await Dnc.updateOne({ phone_e164: delPhone }, { $set: { phone_e164: delPhone, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
+            if (invOpt) {
+              if (invLandline) await Dnc.updateOne({ phone_e164: invLandline }, { $set: { phone_e164: invLandline, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
+              if (invMobile) await Dnc.updateOne({ phone_e164: invMobile }, { $set: { phone_e164: invMobile, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
+            }
+            if (delOpt) {
+              if (delLandline) await Dnc.updateOne({ phone_e164: delLandline }, { $set: { phone_e164: delLandline, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
+              if (delMobile) await Dnc.updateOne({ phone_e164: delMobile }, { $set: { phone_e164: delMobile, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
+            }
 
             imported++;
           } catch (e) {
@@ -313,6 +323,7 @@ router.patch('/:id/invoice', requireSession, async (req, res) => {
     const fields = ['name','company','vat','address','city','postal_code','country','email','website','language','language_confirmed','wa_preferred'];
     fields.forEach(k=>{ if (b[k]!==undefined) set[`invoice.${k}`]=b[k]; });
     if (b.phone!==undefined) set['invoice.phone'] = normalizeToE164(b.phone||'');
+    if (b.mobile!==undefined) set['invoice.mobile'] = normalizeToE164(b.mobile||'');
     const doc = await CustomerRecord.findByIdAndUpdate(req.params.id, { $set: set }, { new:true });
     if (!doc) return res.status(404).json({ message:'not found' });
     res.json({ ok:true });
@@ -331,6 +342,7 @@ router.patch('/:id/delivery/:code', requireSession, async (req, res) => {
     const fields = ['name','address','city','postal_code','country','email','language','language_confirmed','notes','wa_preferred'];
     fields.forEach(k=>{ if (b[k]!==undefined) set[base+k]=b[k]; });
     if (b.phone!==undefined) set[base+'phone'] = normalizeToE164(b.phone||'');
+    if (b.mobile!==undefined) set[base+'mobile'] = normalizeToE164(b.mobile||'');
     if (Array.isArray(b.tags)) set[base+'tags']=b.tags;
     const doc = await CustomerRecord.findOneAndUpdate(
       { _id: req.params.id, 'delivery_addresses.code': code },
