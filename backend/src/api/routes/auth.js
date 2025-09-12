@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../../models/User');
 const AuditLog = require('../../models/AuditLog');
 const { requireSession } = require('../../middleware/sessionAuth');
+const { requirePrivilege } = require('../../middleware/priv');
+const Role = require('../../models/Role');
 
 const router = express.Router();
 
@@ -98,22 +100,26 @@ router.get('/me', requireSession, (req, res) => {
 });
 
 // --- Admin user management ---
-router.get('/users', requireSession, async (req, res) => {
+router.get('/users', requireSession, requirePrivilege('users.view'), async (req, res) => {
   try {
-    if (!['admin','superadmin'].includes(req.user.role)) return res.status(403).json({ message: 'forbidden' });
-    const users = await User.find({}).select('_id email role active createdAt updatedAt').sort({ createdAt: -1 }).lean();
-    res.json(users);
+    const users = await User.find({}).select('_id email role roleId active createdAt updatedAt').sort({ createdAt: -1 }).lean();
+    // attach role names if ref present
+    const ids = users.map(u=>u.roleId).filter(Boolean);
+    const roleMap = new Map((await Role.find({ _id: { $in: ids } }).lean()).map(r=>[String(r._id), r.name]));
+    const out = users.map(u=> ({...u, roleName: u.roleId ? roleMap.get(String(u.roleId)) || u.role : u.role }));
+    res.json(out);
   } catch (e) {
     res.status(500).json({ message: 'error' });
   }
 });
 
-router.put('/users/:id', requireSession, async (req, res) => {
+router.put('/users/:id', requireSession, requirePrivilege('users.manage'), async (req, res) => {
   try {
-    if (!['admin','superadmin'].includes(req.user.role)) return res.status(403).json({ message: 'forbidden' });
-    const { role, active } = req.body || {};
+    const { role, roleId, active } = req.body || {};
     const update = {};
-    if (role) {
+    if (roleId) {
+      update.roleId = roleId;
+    } else if (role) {
       // do not allow setting superadmin via API
       if (role === 'superadmin') return res.status(400).json({ message: 'cannot assign superadmin' });
       update.role = role === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'user');
@@ -123,7 +129,7 @@ router.put('/users/:id', requireSession, async (req, res) => {
     const target = await User.findById(req.params.id).lean();
     if (!target) return res.status(404).json({ message: 'not found' });
     if (target.role === 'superadmin') return res.status(403).json({ message: 'superadmin immutable' });
-    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select('_id email role active createdAt updatedAt');
+    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select('_id email role roleId active createdAt updatedAt');
     if (!user) return res.status(404).json({ message: 'not found' });
     res.json(user);
   } catch (e) {
@@ -169,15 +175,16 @@ router.post('/me/password', requireSession, async (req, res) => {
 });
 
 // Admin-only: create user (seed minimal)
-router.post('/users', requireSession, async (req, res) => {
+router.post('/users', requireSession, requirePrivilege('users.manage'), async (req, res) => {
   try {
-    if (req.user.role !== 'admin') return res.status(403).json({ message: 'forbidden' });
-    const { email, password, role } = req.body || {};
+    const { email, password, role, roleId } = req.body || {};
     if (!email || !password) return res.status(400).json({ message: 'email and password required' });
     const exists = await User.findOne({ email: String(email).toLowerCase() });
     if (exists) return res.status(409).json({ message: 'user exists' });
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ email: String(email).toLowerCase(), passwordHash, role: role === 'admin' ? 'admin' : 'user' });
+    const body = { email: String(email).toLowerCase(), passwordHash };
+    if (roleId) body.roleId = roleId; else body.role = role === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'user');
+    const user = await User.create(body);
     res.status(201).json({ id: user._id, email: user.email, role: user.role });
   } catch (e) {
     console.error('create user error', e);

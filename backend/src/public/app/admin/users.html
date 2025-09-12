@@ -3,59 +3,185 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Admin · Users</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Admin · Users & Roles</title>
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="/app/shell.js"></script>
   </head>
-  <body class="min-h-screen bg-slate-50">
-    <header class="bg-white border-b px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <picture>
-          <source srcset="/assets/logo.webp" type="image/webp">
-          <img src="/assets/logo.png" onerror="this.src='/assets/placeholder-logo.svg'" class="h-7"/>
-        </picture>
-        <div class="font-semibold text-slate-800">Admin · Users</div>
+  <body class="min-h-screen bg-[#111418] text-gray-100">
+    <main class="max-w-6xl mx-auto p-6">
+      <h1 class="text-2xl font-bold mb-4">Administration</h1>
+      <div class="flex gap-2 mb-4">
+        <button id="tabUsers" class="btn btn-primary">Users</button>
+        <button id="tabRoles" class="btn btn-secondary">Roles</button>
       </div>
-      <div class="text-sm text-slate-600"></div>
-    </header>
-    <main class="max-w-6xl mx-auto p-4 grid gap-4">
-      <section class="bg-white rounded-lg shadow p-4">
-        <h2 class="font-medium text-slate-800 mb-3">Create User</h2>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <input id="email" class="border rounded px-3 py-2" placeholder="email"/>
-          <input id="password" class="border rounded px-3 py-2" placeholder="password"/>
-          <select id="role" class="border rounded px-3 py-2"><option>user</option><option>manager</option><option>admin</option></select>
-          <button id="create" class="bg-emerald-600 text-white rounded px-3 py-2">Create</button>
+      <section id="usersSec" class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-white">Users</h2>
+          <div class="flex gap-2 items-center">
+            <input id="q" class="inp w-64" placeholder="Search email"/>
+            <button id="newUser" class="btn btn-primary">New User</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-[#1b2127]"><tr><th class="p-2 text-left">Email</th><th class="p-2 text-left">Role</th><th class="p-2">Active</th><th class="p-2">Actions</th></tr></thead>
+            <tbody id="userRows" class="divide-y divide-[#283039]"></tbody>
+          </table>
         </div>
       </section>
-      <section class="bg-white rounded-lg shadow p-4">
-        <div class="flex items-center justify-between mb-2"><h2 class="font-medium text-slate-800">Users</h2><button id="reload" class="bg-slate-100 rounded px-3 py-1">Reload</button></div>
-        <div class="overflow-auto">
-          <table class="min-w-full text-sm">
-            <thead><tr class="text-left text-slate-500"><th class="p-2">Email</th><th class="p-2">Role</th><th class="p-2">Active</th><th class="p-2">Actions</th></tr></thead>
-            <tbody id="rows"></tbody>
+
+      <section id="rolesSec" class="card p-4 hidden">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-white">Roles</h2>
+          <button id="newRole" class="btn btn-primary">New Role</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-[#1b2127]"><tr><th class="p-2 text-left">Name</th><th class="p-2 text-left">Description</th><th class="p-2">Users</th><th class="p-2">Protected</th><th class="p-2">Actions</th></tr></thead>
+            <tbody id="roleRows" class="divide-y divide-[#283039]"></tbody>
           </table>
         </div>
       </section>
     </main>
-    <script src="/app/shell.js"></script>
+
+    <!-- User Modal -->
+    <div id="userModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+      <div class="w-[560px] max-w-[95vw] card p-4">
+        <div class="flex items-center justify-between mb-3"><strong id="userTitle">New User</strong><button id="userClose">✕</button></div>
+        <div class="grid gap-3">
+          <label class="text-sm muted">Email<input id="u_email" class="inp"/></label>
+          <label class="text-sm muted">Password<input id="u_pass" class="inp"/></label>
+          <label class="text-sm muted">Role<select id="u_roleId" class="inp"></select></label>
+          <label class="text-sm muted inline-flex items-center gap-2"><input type="checkbox" id="u_active" checked/> Active</label>
+        </div>
+        <div class="mt-4 flex justify-end gap-2"><button id="userSave" class="btn btn-primary">Save</button></div>
+      </div>
+    </div>
+
+    <!-- Role Modal -->
+    <div id="roleModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+      <div class="w-[760px] max-w-[95vw] card p-4">
+        <div class="flex items-center justify-between mb-3"><strong id="roleTitle">New Role</strong><button id="roleClose">✕</button></div>
+        <div class="grid gap-3">
+          <label class="text-sm muted">Name<input id="r_name" class="inp"/></label>
+          <label class="text-sm muted">Description<input id="r_desc" class="inp"/></label>
+          <div>
+            <div class="text-sm muted mb-2">Privileges</div>
+            <div id="r_privs" class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[50vh] overflow-auto"></div>
+          </div>
+        </div>
+        <div class="mt-4 flex justify-end gap-2"><button id="roleSave" class="btn btn-primary">Save</button></div>
+      </div>
+    </div>
+
     <script>
-      async function api(path, opts){ const r = await fetch(path, { credentials:'include', ...(opts||{}) }); const j = await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.message||'error'); return j; }
-      async function load(){ const u = await api('/api/auth/users'); const tbody = document.getElementById('rows'); tbody.innerHTML=''; for(const x of u){ const tr=document.createElement('tr'); tr.className='border-t'; tr.innerHTML = `<td class='p-2'>${x.email}</td>
-          <td class='p-2'><select data-id='${x._id}' class='role border rounded px-2 py-1'><option ${x.role==='user'?'selected':''}>user</option><option ${x.role==='manager'?'selected':''}>manager</option><option ${x.role==='admin'?'selected':''}>admin</option></select></td>
-          <td class='p-2'><input type='checkbox' data-id='${x._id}' class='act' ${x.active?'checked':''}/></td>
-          <td class='p-2'><button data-id='${x._id}' class='reset text-indigo-600'>Reset Password</button></td>`; tbody.appendChild(tr); }
-        document.querySelectorAll('.role').forEach(sel=> sel.onchange = async (e)=>{ const id=e.target.dataset.id; const role=e.target.value; await api('/api/auth/users/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ role })}); });
-        document.querySelectorAll('.act').forEach(cb=> cb.onchange = async (e)=>{ const id=e.target.dataset.id; const active=e.target.checked; await api('/api/auth/users/'+id,{method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ active })}); });
-        document.querySelectorAll('.reset').forEach(btn=> btn.onclick = async (e)=>{ const id=e.target.dataset.id; const p=prompt('New password (min 6 chars)'); if(!p) return; await api('/api/auth/users/'+id+'/reset-password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ password:p }) }); alert('Password updated'); });
+      const usersSec = document.getElementById('usersSec');
+      const rolesSec = document.getElementById('rolesSec');
+      document.getElementById('tabUsers').onclick = ()=>{ usersSec.classList.remove('hidden'); rolesSec.classList.add('hidden'); };
+      document.getElementById('tabRoles').onclick = ()=>{ rolesSec.classList.remove('hidden'); usersSec.classList.add('hidden'); };
+
+      // Users
+      async function loadRolesSelect(sel){
+        const r = await fetch('/api/admin/roles', { credentials:'include' });
+        const list = await r.json(); sel.innerHTML='';
+        for (const role of list){ const o=document.createElement('option'); o.value=role._id; o.textContent=role.name; sel.appendChild(o); }
       }
-      document.getElementById('reload').onclick = load;
-      document.getElementById('create').onclick = async ()=>{
-        const email=document.getElementById('email').value.trim(); const password=document.getElementById('password').value; const role=document.getElementById('role').value;
-        if(!email||!password) return alert('email and password required');
-        const res = await api('/api/auth/users',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password, role })});
-        document.getElementById('email').value=''; document.getElementById('password').value=''; await load();
-      };
-      load();
+      async function loadUsers(){
+        const q = document.getElementById('q').value.trim();
+        const r = await fetch('/api/auth/users', { credentials:'include' });
+        let list = await r.json();
+        if (q) list = list.filter(u=> (u.email||'').includes(q));
+        const tb = document.getElementById('userRows'); tb.innerHTML='';
+        for (const u of list){
+          const tr=document.createElement('tr'); tr.innerHTML=`
+            <td class="p-2">${u.email}</td>
+            <td class="p-2">${u.roleName||u.role||''}</td>
+            <td class="p-2 text-center">${u.active? 'Yes':'No'}</td>
+            <td class="p-2"><div class="flex gap-2 justify-center">
+              <button class="btn btn-secondary" data-act="edit" data-id="${u._id}">Edit</button>
+            </div></td>`;
+          tb.appendChild(tr);
+        }
+        tb.querySelectorAll('[data-act="edit"]').forEach(b=> b.onclick=()=> openUser(b.getAttribute('data-id')));
+      }
+      document.getElementById('q').oninput = ()=> loadUsers();
+      document.getElementById('newUser').onclick = ()=> openUser();
+
+      const userModal = document.getElementById('userModal');
+      document.getElementById('userClose').onclick = ()=> userModal.classList.add('hidden');
+      document.getElementById('userSave').onclick = saveUser;
+      async function openUser(id){
+        userModal.classList.remove('hidden');
+        document.getElementById('userTitle').textContent = id? 'Edit User':'New User';
+        const sel = document.getElementById('u_roleId'); await loadRolesSelect(sel);
+        if (!id){ document.getElementById('u_email').value=''; document.getElementById('u_pass').value=''; document.getElementById('u_active').checked=true; return; }
+        const r = await fetch('/api/auth/users', { credentials:'include' });
+        const list = await r.json(); const u=list.find(x=>x._id===id); if(!u) return;
+        document.getElementById('u_email').value = u.email;
+        document.getElementById('u_pass').value = '';
+        document.getElementById('u_active').checked = !!u.active;
+        if (u.roleId) sel.value = u.roleId;
+      }
+      async function saveUser(){
+        const title = document.getElementById('userTitle').textContent;
+        const isEdit = title.includes('Edit');
+        const body = { email: document.getElementById('u_email').value.trim(), active: document.getElementById('u_active').checked, roleId: document.getElementById('u_roleId').value };
+        if (!isEdit) body.password = document.getElementById('u_pass').value;
+        const id = (await (await fetch('/api/auth/users', { credentials:'include' })).json()).find(u=>u.email===body.email)?._id;
+        if (isEdit && id){ await fetch('/api/auth/users/'+id, { method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) }); }
+        else { await fetch('/api/auth/users', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) }); }
+        userModal.classList.add('hidden'); loadUsers();
+      }
+
+      // Roles
+      const roleModal = document.getElementById('roleModal');
+      document.getElementById('roleClose').onclick = ()=> roleModal.classList.add('hidden');
+      document.getElementById('newRole').onclick = ()=> openRole();
+      document.getElementById('roleSave').onclick = saveRole;
+      async function loadRoles(){
+        const r = await fetch('/api/admin/roles', { credentials:'include' });
+        const list = await r.json(); const tb = document.getElementById('roleRows'); tb.innerHTML='';
+        for (const ro of list){
+          const tr=document.createElement('tr'); tr.innerHTML=`
+            <td class="p-2">${ro.name}</td>
+            <td class="p-2">${ro.description||''}</td>
+            <td class="p-2 text-center">${ro.users||0}</td>
+            <td class="p-2 text-center">${ro.protected? 'Yes':'No'}</td>
+            <td class="p-2"><div class="flex gap-2 justify-center">
+              <button class="btn btn-secondary" data-act="edit" data-id="${ro._id}">Edit</button>
+              ${ro.protected? '' : `<button class="btn btn-danger" data-act="del" data-id="${ro._id}">Delete</button>`}
+            </div></td>`;
+          tb.appendChild(tr);
+        }
+        tb.querySelectorAll('[data-act="edit"]').forEach(b=> b.onclick = ()=> openRole(b.getAttribute('data-id')));
+        tb.querySelectorAll('[data-act="del"]').forEach(b=> b.onclick = ()=> deleteRole(b.getAttribute('data-id')));
+      }
+      async function openRole(id){
+        roleModal.classList.remove('hidden');
+        const title = document.getElementById('roleTitle');
+        const nameEl = document.getElementById('r_name'); const descEl = document.getElementById('r_desc'); const privsEl = document.getElementById('r_privs');
+        const allPrivs = await (await fetch('/api/admin/roles/privileges/list', { credentials:'include' })).json();
+        privsEl.innerHTML=''; for (const p of allPrivs){ const lab=document.createElement('label'); lab.className='text-sm muted inline-flex items-center gap-2'; lab.innerHTML=`<input type="checkbox" value="${p}"> ${p}`; privsEl.appendChild(lab);}        
+        if (!id){ title.textContent='New Role'; nameEl.value=''; descEl.value=''; return; }
+        const list = await (await fetch('/api/admin/roles', { credentials:'include' })).json(); const ro=list.find(x=>x._id===id); if(!ro) return;
+        title.textContent='Edit Role'; nameEl.value=ro.name; nameEl.disabled = !!ro.protected; descEl.value=ro.description||'';
+        privsEl.querySelectorAll('input[type="checkbox"]').forEach(cb=> cb.checked = (ro.privileges||[]).includes(cb.value));
+        roleModal.dataset.id = id;
+      }
+      async function saveRole(){
+        const id = roleModal.dataset.id || '';
+        const name = document.getElementById('r_name').value.trim(); const description=document.getElementById('r_desc').value.trim();
+        const privileges = Array.from(document.querySelectorAll('#r_privs input[type="checkbox"]:checked')).map(cb=>cb.value);
+        const body = { name, description, privileges };
+        if (id) await fetch('/api/admin/roles/'+id, { method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ description, privileges }) });
+        else await fetch('/api/admin/roles', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) });
+        roleModal.classList.add('hidden'); delete roleModal.dataset.id; loadRoles();
+      }
+      async function deleteRole(id){ if(!confirm('Delete role?')) return; await fetch('/api/admin/roles/'+id, { method:'DELETE', credentials:'include' }); loadRoles(); }
+
+      loadUsers(); loadRoles();
     </script>
   </body>
   </html>

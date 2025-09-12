@@ -19,6 +19,7 @@ const agentsRouter = require('./api/routes/agents');
 const dashboardRouter = require('./api/routes/dashboard');
 const customersRouter = require('./api/routes/customers');
 const adminRouter = require('./api/routes/admin');
+const rolesRouter = require('./api/routes/roles');
 const costsRouter = require('./api/routes/costs');
 const emergencyRouter = require('./api/routes/emergency');
 const orchestratorRouter = require('./api/routes/orchestrator');
@@ -29,6 +30,7 @@ const prospectsRouter = require('./api/routes/prospects');
 const connectDB = require('./config/database');
 const validateEnv = require('./config/validateEnv');
 const ensureAdmin = require('./util/ensureAdmin');
+const { ensureDefaultRoles } = require('./util/ensureRoles');
 const auth = require('./middleware/auth');
 const { requireSession, allowBearerOrSession } = require('./middleware/sessionAuth');
 const scheduler = require('./scheduler');
@@ -37,6 +39,7 @@ const scheduler = require('./scheduler');
 if (process.env.NODE_ENV !== 'test') {
   validateEnv();
   connectDB().then(async () => {
+    try { await ensureDefaultRoles(); } catch(e) { console.error('roles seed error', e); }
     if (process.env.AUTO_SEED_ADMIN === '1') {
       await ensureAdmin();
     }
@@ -176,6 +179,7 @@ app.use('/api/campaigns', allowBearerOrSession, campaignsRouter);
 app.use('/api/dashboard', allowBearerOrSession, dashboardRouter);
 app.use('/api/customers', allowBearerOrSession, customersRouter);
 app.use('/api/admin', requireSession, adminRouter);
+app.use('/api/admin/roles', requireSession, rolesRouter);
 app.use('/api/agents', agentsRouter);
 app.use('/api/costs', costsRouter);
 app.use('/api/emergency', emergencyRouter);
