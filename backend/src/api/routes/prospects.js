@@ -340,11 +340,11 @@ router.get('/', requireSession, async (req, res) => {
     const dncSet = new Set((await Dnc.find({ phone_e164: { $in: Array.from(phones) } }).lean()).map(x=>x.phone_e164));
     const rows = [];
     for (const c of customers) {
-      const invRow = { type:'invoice', id:c._id, name:c.invoice?.name||c.name, phone:c.invoice?.phone||c.phone_number, language:c.invoice?.language||c.preferred_language, language_confirmed: !!c.invoice?.language_confirmed, tags:c.tags||[], opt_out: dncSet.has(c.invoice?.phone||''), archived: !!c.archived };
+      const invRow = { type:'invoice', id:c._id, name:c.invoice?.name||c.name, company: c.invoice?.company||'', phone:c.invoice?.phone||c.phone_number, language:c.invoice?.language||c.preferred_language, language_confirmed: !!c.invoice?.language_confirmed, tags:c.tags||[], opt_out: dncSet.has(c.invoice?.phone||''), archived: !!c.archived };
       const addInv = (scope==='invoice' || scope==='both');
       if (addInv) rows.push(invRow);
       (c.delivery_addresses||[]).forEach(d=>{
-        const drow = { type:'delivery', id:c._id, code:d.code, name:d.name, phone:d.phone, language:d.language, language_confirmed: !!d.language_confirmed, tags:d.tags||[], opt_out: dncSet.has(d.phone||''), archived: !!c.archived };
+        const drow = { type:'delivery', id:c._id, code:d.code, name:d.name, company: d.company||'', phone:d.phone, language:d.language, language_confirmed: !!d.language_confirmed, tags:d.tags||[], opt_out: dncSet.has(d.phone||''), archived: !!c.archived };
         if (scope==='delivery' || scope==='both') rows.push(drow);
       });
     }
@@ -355,6 +355,16 @@ router.get('/', requireSession, async (req, res) => {
       if (optOutFilter !== undefined && !!r.opt_out !== optOutFilter) return false;
       return true;
     });
+    // Pagination (optional)
+    if (req.query.paged === '1') {
+      const page = Math.max(1, parseInt(req.query.page||'1',10));
+      const pageSize = Math.max(1, parseInt(req.query.page_size||'50',10));
+      const total = filtered.length;
+      const startIdx = (page-1)*pageSize;
+      const endIdx = Math.min(startIdx + pageSize, total);
+      const items = filtered.slice(startIdx, endIdx);
+      return res.json({ items, total, page, page_size: pageSize });
+    }
     res.json(filtered);
   } catch (e) {
     res.status(500).json({ message:'Failed to fetch prospects', error: e.message });

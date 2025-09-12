@@ -41,16 +41,27 @@
         <button class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="searchBtn"><span class="material-symbols-outlined">manage_search</span>Search</button>
         <label class="text-sm text-gray-400 inline-flex items-center gap-2 ml-2"><input type="checkbox" id="showArchived"/> Show archived</label>
       </div>
+      <div class="flex items-center justify-between mb-2">
+        <div id="resultsMeta" class="text-sm text-gray-400">0–0 of 0</div>
+        <div class="flex items-center gap-2">
+          <button id="prevPage" class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90" disabled>
+            <span class="material-symbols-outlined">chevron_left</span>Prev
+          </button>
+          <span id="pageInfo" class="text-xs text-gray-400">Page 1</span>
+          <button id="nextPage" class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90" disabled>
+            Next<span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+      </div>
       <div class="overflow-x-auto rounded-md border border-[#3b4754]">
         <table class="w-full text-left">
           <thead class="bg-[#1b2127]">
             <tr>
               <th class="p-3 text-sm font-medium text-white">Type</th>
-              <th class="p-3 text-sm font-medium text-white">Customer</th>
-              <th class="p-3 text-sm font-medium text-white">Phone</th>
+              <th class="p-3 text-sm font-medium text-white">Company</th>
               <th class="p-3 text-sm font-medium text-white">Language</th>
               <th class="p-3 text-sm font-medium text-white">Confirmed</th>
-              <th class="p-3 text-sm font-medium text-white">Opt-out</th>
+              <th class="p-3 text-sm font-medium text-white">Tags</th>
               <th class="p-3 text-sm font-medium text-white">Actions</th>
             </tr>
           </thead>
@@ -152,23 +163,49 @@
         loadProspects();
       });
 
+      let currentPage = 1;
+      const pageSize = 50;
+      let lastTotal = 0;
+
       async function loadProspects(){
-        rows.innerHTML = '<tr><td colspan="7" class="p-3 text-[#9cabba]">Loading…</td></tr>';
-        const params = new URLSearchParams(); if(q.value) params.set('q', q.value); if (document.getElementById('showArchived').checked) params.set('show_archived','1');
+        rows.innerHTML = '<tr><td colspan="6" class="p-3 text-[#9cabba]">Loading…</td></tr>';
+        const params = new URLSearchParams();
+        if(q.value) params.set('q', q.value);
+        if (document.getElementById('showArchived').checked) params.set('show_archived','1');
+        params.set('paged','1');
+        params.set('page', String(currentPage));
+        params.set('page_size', String(pageSize));
         const r = await fetch('/api/prospects'+(params.toString()? ('?'+params.toString()):''), { credentials:'include' });
-        const list = await r.json();
+        const payload = await r.json();
         rows.innerHTML = '';
-        if(!Array.isArray(list) || !list.length){ rows.innerHTML='<tr><td colspan="7" class="p-3 text-[#9cabba]">No prospects</td></tr>'; return; }
-        for (const row of list){
+        const items = Array.isArray(payload)? payload : (payload.items||[]);
+        lastTotal = Array.isArray(payload)? items.length : (payload.total||0);
+        if(!Array.isArray(items) || !items.length){
+          document.getElementById('resultsMeta').textContent = `0–0 of ${lastTotal}`;
+          document.getElementById('pageInfo').textContent = `Page ${currentPage}`;
+          document.getElementById('prevPage').disabled = currentPage<=1;
+          document.getElementById('nextPage').disabled = (currentPage*pageSize)>=lastTotal;
+          rows.innerHTML='<tr><td colspan="6" class="p-3 text-[#9cabba]">No prospects</td></tr>';
+          return;
+        }
+        const start = (currentPage-1)*pageSize + 1;
+        const end = Math.min(currentPage*pageSize, lastTotal);
+        document.getElementById('resultsMeta').textContent = `${start}–${end} of ${lastTotal}`;
+        const totalPages = Math.max(1, Math.ceil(lastTotal / pageSize));
+        document.getElementById('pageInfo').textContent = `Page ${currentPage} / ${totalPages}`;
+        document.getElementById('prevPage').disabled = currentPage<=1;
+        document.getElementById('nextPage').disabled = currentPage>=totalPages;
+        for (const row of items){
           const tr = document.createElement('tr');
           const phone = row.phone||'';
+          const tags = Array.isArray(row.tags)? row.tags.filter(Boolean) : [];
+          const tagsHtml = tags.length ? tags.map(t=>`<span class=\"inline-flex items-center rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-300 mr-1\">${t.replace(/</g,'&lt;')}</span>`).join('') : '<span class="text-[#9cabba]">—</span>';
           tr.innerHTML = `
             <td class="p-3 text-sm">${row.type}${row.code? ' · '+row.code:''}</td>
-            <td class="p-3 text-sm">${(row.name||'').replace(/</g,'&lt;')} ${row.archived? '<span class=\'ml-2 inline-flex items-center rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-300\'>Archived</span>':''}</td>
-            <td class="p-3 text-sm text-[#9cabba]">${phone}</td>
+            <td class="p-3 text-sm">${(row.company||'').replace(/</g,'&lt;')} ${row.archived? '<span class=\'ml-2 inline-flex items-center rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-300\'>Archived</span>':''}</td>
             <td class="p-3 text-sm">${row.language||''}</td>
             <td class="p-3 text-sm">${row.language_confirmed? '✔️':'—'}</td>
-            <td class="p-3 text-sm">${row.opt_out? '<span class="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-300">Yes</span>' : '<span class="inline-flex items-center rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-300">No</span>'}</td>
+            <td class="p-3 text-sm">${tagsHtml}</td>
             <td class="p-3">
               <div class="flex items-center gap-2">
                 <button class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90" data-act="toggle" data-phone="${encodeURIComponent(phone)}" data-opt="${row.opt_out?0:1}">${row.opt_out?'Allow':'Opt‑out'}</button>
@@ -314,7 +351,10 @@
         loadProspects();
       }
 
-      document.getElementById('showArchived').onchange = ()=> loadProspects();
+      document.getElementById('showArchived').onchange = ()=> { currentPage=1; loadProspects(); };
+      document.getElementById('searchBtn').onclick = ()=> { currentPage=1; loadProspects(); };
+      document.getElementById('prevPage').onclick = ()=> { if (currentPage>1){ currentPage--; loadProspects(); } };
+      document.getElementById('nextPage').onclick = ()=> { const totalPages=Math.max(1, Math.ceil(lastTotal/pageSize)); if (currentPage<totalPages){ currentPage++; loadProspects(); } };
       loadProspects();
     </script>
   </body>
