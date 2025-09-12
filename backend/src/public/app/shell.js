@@ -1,14 +1,21 @@
 (() => {
   const PRIMARY = '#0d7ff2';
   async function getMe(){ try{ const r=await fetch('/api/auth/me',{credentials:'include'}); if(!r.ok) return null; return await r.json(); }catch(_){ return null; } }
+  function ensureIconFont(){
+    if (!document.querySelector('link[href*="Material+Symbols"]')){
+      const l=document.createElement('link'); l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined'; document.head.appendChild(l);
+      const style=document.createElement('style'); style.textContent = `.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}`; document.head.appendChild(style);
+    }
+  }
   function currentPath(){ return location.pathname; }
   function navItem(href, icon, label, active=false){
-    const base = 'flex items-center gap-3 rounded-md px-3 py-2 transition-colors';
+    const base = 'flex items-center gap-3 rounded-md px-3 py-2 transition-colors overflow-hidden';
     const cls = active? 'bg-[#283039] text-white' : 'text-[#9cabba] hover:bg-[#1b2127] hover:text-white';
-    return `<a href="${href}" class="${base} ${cls}"><span class="material-symbols-outlined"> ${icon} </span><span class="text-sm font-medium">${label}</span></a>`;
+    return `<a href="${href}" class="${base} ${cls}"><span class="material-symbols-outlined shrink-0">${icon}</span><span class="text-sm font-medium whitespace-nowrap truncate">${label}</span></a>`;
   }
   function injectShell(me){
     if(document.getElementById('acq-shell')) return; // once
+    ensureIconFont();
     const p = currentPath();
     const is = (k)=> p.endsWith(k);
     const aside = document.createElement('div');
@@ -29,14 +36,14 @@
           ${navItem('/dashboard.html','dashboard','Dashboard', is('/dashboard.html'))}
           ${navItem('/app/campaigns.html','campaign','Campaigns', is('/app/campaigns.html'))}
           ${navItem('/app/prospects.html','group','Prospects', is('/app/prospects.html'))}
-          ${navItem('/app/monitor.html','call','Live Calls', is('/app/monitor.html'))}
+          ${navItem('/monitor.html','call','Live Calls', is('/monitor.html'))}
           ${navItem('/call-review.html','analytics','Call Review', is('/call-review.html'))}
           ${navItem('/app/products.html','inventory_2','Products', is('/app/products.html'))}
           ${navItem('/app/profile.html','settings','Settings', is('/app/profile.html'))}
           ${(me && (me.role==='admin'||me.role==='superadmin'))? navItem('/app/admin/users.html','admin_panel_settings','Admin · Users', is('/app/admin/users.html')):''}
         </nav>
-        <div class="mt-8 text-[#9cabba] text-sm">
-          <div class="flex items-center gap-2"><span class="material-symbols-outlined">account_circle</span><span>${me? (me.email||'') : ''}</span></div>
+        <div class="mt-8 text-[#9cabba] text-sm overflow-hidden">
+          <div class="flex items-center gap-2 overflow-hidden"><span class="material-symbols-outlined shrink-0">account_circle</span><span class="truncate" title="${me? (me.email||'') : ''}">${me? (me.email||'') : ''}</span></div>
           <button id="acq-logout" class="mt-3 btn">Logout</button>
         </div>
       </aside>
