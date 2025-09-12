@@ -180,8 +180,17 @@
     try {
       const bearer = localStorage.getItem('AUTH_TOKEN') || '';
       let r = await fetch('/api/livekit/rooms', { headers: { Authorization: `Bearer ${bearer}` } });
-      if (!r.ok) r = await fetch('/api/livekit/recent-rooms', { headers: { Authorization: `Bearer ${bearer}` } });
-      const rooms = await r.json();
+      let rooms = [];
+      if (r.ok) {
+        rooms = await r.json();
+        if (!Array.isArray(rooms) || rooms.length === 0) {
+          const r2 = await fetch('/api/livekit/recent-rooms', { headers: { Authorization: `Bearer ${bearer}` } });
+          if (r2.ok) rooms = await r2.json();
+        }
+      } else {
+        const r2 = await fetch('/api/livekit/recent-rooms', { headers: { Authorization: `Bearer ${bearer}` } });
+        if (r2.ok) rooms = await r2.json();
+      }
       renderRooms(Array.isArray(rooms) ? rooms : []);
     } catch (e) {
       console.error('loadRooms error', e);
