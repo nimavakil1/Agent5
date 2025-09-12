@@ -97,4 +97,28 @@ router.post('/rooms/:name/mute_agent', async (req, res) => {
   }
 });
 
+// Diagnostics: connectivity, recent rooms, sessions
+router.get('/debug', async (req, res) => {
+  const out = { ok: true, api: {}, recent_rooms: [], sessions: [] };
+  try {
+    const host = process.env.LIVEKIT_API_URL || toHttpUrl(process.env.LIVEKIT_SERVER_URL);
+    out.api.host = host || null;
+    out.api.hasKeys = !!(process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET);
+    if (host && out.api.hasKeys) {
+      try {
+        const svc = new RoomServiceClient(host, process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET);
+        const rooms = await svc.listRooms();
+        out.api.listRooms = { ok: true, count: rooms.length };
+      } catch (e) {
+        out.api.listRooms = { ok: false, error: e.message };
+      }
+    }
+  } catch (e) {
+    out.api.error = e.message;
+  }
+  try { out.recent_rooms = roomsStore.list(); } catch (_) {}
+  try { out.sessions = sessionRegistry._list(); } catch (_) {}
+  res.json(out);
+});
+
 module.exports = router;

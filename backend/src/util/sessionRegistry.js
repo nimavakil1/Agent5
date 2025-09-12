@@ -58,4 +58,18 @@ function setAgentMute(room, mute) {
 }
 
 module.exports = { set, get, remove, stopAI, sendPcmuToPstn, setAgentMute };
-
+// For diagnostics
+module.exports._list = function list() {
+  const out = [];
+  for (const [room, s] of sessions.entries()) {
+    out.push({
+      room,
+      hasTelnyx: !!s.telnyxWs,
+      hasOpenai: !!s.openaiWs,
+      hasPublisher: !!s.livekitPublisher,
+      telnyxStreamId: s.telnyxStreamId || null,
+      aiStopped: !!s.aiStopped,
+    });
+  }
+  return out;
+};

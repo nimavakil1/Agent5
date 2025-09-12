@@ -890,6 +890,7 @@ function createWebSocketServer(server) {
           console.log('Telnyx stream started:', data);
           telnyxStreamId = data.stream_id || data.streamId || (data.start && data.start.stream_id) || null;
           try { sessionRegistry.set(roomName, { telnyxWs, telnyxStreamId }); } catch(_) {}
+          try { require('../util/roomsStore').touch(roomName); } catch(_) {}
           bytesWritten = 0;
           await ensureCallLogDefaults();
         } else if (data.event === 'media') {
