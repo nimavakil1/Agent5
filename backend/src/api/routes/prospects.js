@@ -78,14 +78,12 @@ router.delete('/field-defs/:id', requireSession, async (req, res) => {
 // Download CSV template
 router.get('/template.csv', requireSession, async (req, res) => {
   const defs = await ProspectFieldDef.find({}).sort({ order: 1, createdAt: 1 }).lean();
+  // Contacts template: invoice-only columns (deliveries are available via deliveries_template.csv)
   const base = [
-    'invoice_contact_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_website','invoice_phone','invoice_mobile_nr','invoice_language','invoice_language_confirmed','invoice_wa_preferred','invoice_tags','invoice_opt_out',
-    'delivery1_contact_name','delivery1_company','delivery_1_address','delivery_1_city','delivery_1_postal_code','delivery_1_country','delivery_1_email','delivery_1_phone','delivery1_mobile_nr','delivery_1_language','delivery_1_language_confirmed','delivery1_wa_preferred','delivery_1_tags','delivery_1_opt_out',
-    'notes'
+    'invoice_contact_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_website','invoice_phone','invoice_mobile_nr','invoice_language','invoice_language_confirmed','invoice_wa_preferred','invoice_tags','invoice_opt_out'
   ];
   const dynInvoice = defs.filter(d=>d.visibility==='invoice' || d.visibility==='both').map(d=>`custom_${d.key}`);
-  const dynDelivery = defs.filter(d=>d.visibility==='delivery' || d.visibility==='both').map(d=>`delivery_1_custom_${d.key}`);
-  const header = base.concat(dynInvoice).concat(dynDelivery);
+  const header = base.concat(dynInvoice);
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="prospects_template.csv"');
   res.send(header.join(',') + '\n');
@@ -233,6 +231,27 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               custom: Object.keys(deliveryCustom).length ? deliveryCustom : undefined,
             }] : [];
 
+            // Additional deliveries: delivery2_*, delivery_2_* … up to 10
+            const extra = [];
+            for (let di=2; di<=10; di++){
+              const nm = (r[`delivery${di}_contact_name`] || r[`delivery_${di}_name`] || '').trim();
+              const comp = (r[`delivery${di}_company`] || '').trim();
+              const addr = (r[`delivery_${di}_address`] || '').trim();
+              const city = (r[`delivery_${di}_city`] || '').trim();
+              const pc = (r[`delivery_${di}_postal_code`] || '').trim();
+              const ctry = (r[`delivery_${di}_country`] || '').trim();
+              const em = (r[`delivery_${di}_email`] || '').trim();
+              const ph = normalizeToE164(r[`delivery_${di}_phone`] || '');
+              const mob = normalizeToE164(r[`delivery${di}_mobile_nr`] || '');
+              const lang = (r[`delivery_${di}_language`] || '').trim();
+              const lconf = String(r[`delivery_${di}_language_confirmed`]||'').toLowerCase()==='true' || r[`delivery_${di}_language_confirmed`]==='1';
+              const wa = String(r[`delivery${di}_wa_preferred`]||'').toLowerCase()==='true' || r[`delivery${di}_wa_preferred`]==='1';
+              const tagsDi = (r[`delivery_${di}_tags`]||'').split(';').map(s=>s.trim()).filter(Boolean);
+              const any = nm || comp || addr || city || pc || ctry || em || ph || mob;
+              if (!any) continue;
+              extra.push({ code:`delivery_${di}`, name:nm, company:comp, address:addr, city, postal_code:pc, country:ctry, email:em, phone:ph, mobile:mob, language:lang, language_confirmed:lconf, wa_preferred:wa, tags:tagsDi });
+            }
+
             const tags = (r.invoice_tags||'').split(';').map(s=>s.trim()).filter(Boolean);
 
             // Upsert by invoice phone if present, else by name+email tuple
@@ -242,6 +261,19 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               { $set: { invoice: { ...invoice, custom: Object.keys(invoiceCustom).length ? invoiceCustom : undefined } }, $addToSet: { tags: { $each: tags } }, $push: { delivery_addresses: { $each: delivery1 } } },
               { upsert: true, new: true }
             );
+
+            // Upsert DeliveryContact(s) for delivery1 + extras
+            if (delivery1.length){
+              const d = delivery1[0];
+              await DeliveryContact.updateOne({ parentId: doc._id, code: 'delivery_1' }, { $set: {
+                parentId: doc._id, code: 'delivery_1', contact_name: d.name, company: d.company, address: d.address, city: d.city, postal_code: d.postal_code, country: d.country, email: d.email, phone: d.phone, mobile: d.mobile, language: d.language, language_confirmed: d.language_confirmed, wa_preferred: d.wa_preferred, tags: d.tags, custom: d.custom||{}
+              } }, { upsert: true });
+            }
+            for (const d of extra){
+              await DeliveryContact.updateOne({ parentId: doc._id, code: d.code }, { $set: {
+                parentId: doc._id, code: d.code, contact_name: d.name, company: d.company, address: d.address, city: d.city, postal_code: d.postal_code, country: d.country, email: d.email, phone: d.phone, mobile: d.mobile, language: d.language, language_confirmed: d.language_confirmed, wa_preferred: d.wa_preferred, tags: d.tags
+              } }, { upsert: true });
+            }
 
             // DNC handling per-phone via opt_out flags
             const toBool = (v)=>{
@@ -257,6 +289,10 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
             if (delOpt) {
               if (delLandline) await Dnc.updateOne({ phone_e164: delLandline }, { $set: { phone_e164: delLandline, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
               if (delMobile) await Dnc.updateOne({ phone_e164: delMobile }, { $set: { phone_e164: delMobile, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
+              for (const d of extra){
+                if (d.phone) await Dnc.updateOne({ phone_e164: d.phone }, { $set: { phone_e164: d.phone, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
+                if (d.mobile) await Dnc.updateOne({ phone_e164: d.mobile }, { $set: { phone_e164: d.mobile, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
+              }
             }
 
             imported++;
