@@ -46,6 +46,7 @@ const customerRecordSchema = new mongoose.Schema(
       postal_code: { type: String },
       country: { type: String },
       email: { type: String },
+      website: { type: String },
       phone: { type: String },
       language: { type: String },
       language_confirmed: { type: Boolean, default: false },

@@ -63,6 +63,7 @@
               <label class="text-sm text-gray-300">Company<input type="text" id="f_company" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
               <label class="text-sm text-gray-300">VAT<input type="text" id="f_vat" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
               <label class="text-sm text-gray-300">Email<input type="text" id="f_email" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+              <div id="row_website"><label class="text-sm text-gray-300">Website<input type="text" id="f_website" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder="https://..."/></label></div>
             </div>
             <div>
               <label class="text-sm text-gray-300">Phone<input type="text" id="f_phone" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
@@ -161,10 +162,12 @@
         if(type==='invoice'){
           editTitle.textContent = 'Edit Invoice';
           fillForm(doc.invoice||{});
+          const rw=document.getElementById('row_website'); if(rw) rw.style.display='block';
         } else {
           editTitle.textContent = `Edit Delivery ${code||''}`;
           const d = (doc.delivery_addresses||[]).find(x=> x.code===code) || {};
           fillForm(d);
+          const rw=document.getElementById('row_website'); if(rw) rw.style.display='none';
         }
         modal.classList.remove('hidden');
         loadLogs(id);
@@ -193,6 +196,7 @@
         formEl.querySelector('#f_company').value = obj.company||'';
         formEl.querySelector('#f_vat').value = obj.vat||'';
         formEl.querySelector('#f_email').value = obj.email||'';
+        const wEl = formEl.querySelector('#f_website'); if (wEl) wEl.value = obj.website||'';
         formEl.querySelector('#f_phone').value = obj.phone||'';
         formEl.querySelector('#f_language').value = obj.language||'';
         formEl.querySelector('#f_lang_conf').checked = !!obj.language_confirmed;
@@ -217,6 +221,7 @@
           postal_code: formEl.querySelector('#f_postal').value,
           country: formEl.querySelector('#f_country').value,
         };
+        if(currentEdit && currentEdit.type==='invoice') body.website = (document.getElementById('f_website')?.value||'');
         let url = '';
         if(currentEdit.type==='invoice') url = `/api/prospects/${currentEdit.id}/invoice`;
         else url = `/api/prospects/${currentEdit.id}/delivery/${encodeURIComponent(currentEdit.code||'')}`;

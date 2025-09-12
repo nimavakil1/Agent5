@@ -79,7 +79,7 @@ router.delete('/field-defs/:id', requireSession, async (req, res) => {
 router.get('/template.csv', requireSession, async (req, res) => {
   const defs = await ProspectFieldDef.find({}).sort({ order: 1, createdAt: 1 }).lean();
   const base = [
-    'invoice_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_phone','invoice_language','invoice_language_confirmed','invoice_tags','invoice_opt_out',
+    'invoice_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_website','invoice_phone','invoice_language','invoice_language_confirmed','invoice_tags','invoice_opt_out',
     'delivery_1_name','delivery_1_address','delivery_1_city','delivery_1_postal_code','delivery_1_country','delivery_1_email','delivery_1_phone','delivery_1_language','delivery_1_language_confirmed','delivery_1_tags','delivery_1_opt_out',
     'notes'
   ];
@@ -131,6 +131,7 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               postal_code: (r.invoice_postal_code||'').trim(),
               country: (r.invoice_country||'').trim(),
               email: (r.invoice_email||'').trim(),
+              website: (r.invoice_website||'').trim(),
               phone: invPhone,
               language: (r.invoice_language||'').trim(),
               language_confirmed: String(r.invoice_language_confirmed||'').toLowerCase()==='true' || r.invoice_language_confirmed==='1'
@@ -307,7 +308,7 @@ router.patch('/:id/invoice', requireSession, async (req, res) => {
   try {
     const b = req.body||{};
     const set = {};
-    const fields = ['name','company','vat','address','city','postal_code','country','email','language','language_confirmed'];
+    const fields = ['name','company','vat','address','city','postal_code','country','email','website','language','language_confirmed'];
     fields.forEach(k=>{ if (b[k]!==undefined) set[`invoice.${k}`]=b[k]; });
     if (b.phone!==undefined) set['invoice.phone'] = normalizeToE164(b.phone||'');
     const doc = await CustomerRecord.findByIdAndUpdate(req.params.id, { $set: set }, { new:true });
