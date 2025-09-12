@@ -3,95 +3,73 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Agent5 Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Dashboard · ACROPAQ AI</title>
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/app/shell.js"></script>
     <style>
-      .status-online { color: #10b981; }
-      .status-offline { color: #ef4444; }
-      .status-idle { color: #f59e0b; }
-      .metric-card { transition: all 0.3s ease; }
-      .metric-card:hover { transform: translateY(-2px); }
+      body { font-family: Inter, "Noto Sans", sans-serif; }
+      .metric-card { transition: all 0.2s ease; }
+      .metric-card:hover { transform: translateY(-1px); }
       .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: .5; }
-      }
+      @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
     </style>
   </head>
-  <body class="min-h-screen bg-slate-50">
-    <header class="bg-white shadow-sm">
-      <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-        <h1 class="text-lg font-semibold text-slate-800">Agent5 Dashboard</h1>
-        <div class="flex items-center gap-3">
-          <a href="/app/agent-studio.html" class="text-sm text-indigo-600 hover:underline">Agent Studio</a>
-          <a href="/customers.html" class="text-sm text-indigo-600 hover:underline">Customers & Campaigns</a>
-          <a href="/call-review.html" class="text-sm text-indigo-600 hover:underline">Call Review</a>
-          <a id="adminLink" href="/admin.html" class="text-sm text-indigo-600 hover:underline hidden">Admin</a>
-          <div class="flex items-center gap-2 bg-slate-100 rounded-full px-3 py-1">
-            <div class="w-2 h-2 bg-green-500 rounded-full pulse-dot"></div>
-            <span class="text-xs text-slate-600">Live</span>
-          </div>
-          <span id="who" class="text-sm text-slate-500"></span>
-          <button id="logout" class="text-sm text-indigo-600 hover:underline">Logout</button>
-        </div>
-      </div>
-    </header>
-    
-    <main class="max-w-7xl mx-auto p-4">
+  <body class="min-h-screen bg-[#111418] text-gray-100">
+    <main class="max-w-7xl mx-auto p-6">
+      <h1 class="text-3xl font-bold mb-6">Dashboard</h1>
+
       <!-- KPI Cards -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="metric-card bg-white rounded-lg shadow p-6">
+        <div class="metric-card bg-[#181C20] border border-[#283039] rounded-lg p-6">
           <div class="flex items-center">
             <div class="flex-1">
-              <p class="text-sm font-medium text-slate-600">Total Calls Today</p>
-              <p id="totalCallsToday" class="text-2xl font-semibold text-slate-900">-</p>
+              <p class="text-sm font-medium text-gray-300">Total Calls Today</p>
+              <p id="totalCallsToday" class="text-2xl font-semibold text-white">-</p>
             </div>
-            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-              <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
+              <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21L6 10l4 4 .502-4.224a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.948V15a2 2 0 01-2 2h-1C9.716 17 3 10.284 3 6V5z"></path>
               </svg>
             </div>
           </div>
         </div>
-
-        <div class="metric-card bg-white rounded-lg shadow p-6">
+        <div class="metric-card bg-[#181C20] border border-[#283039] rounded-lg p-6">
           <div class="flex items-center">
             <div class="flex-1">
-              <p class="text-sm font-medium text-slate-600">Success Rate</p>
-              <p id="successRate" class="text-2xl font-semibold text-slate-900">-</p>
+              <p class="text-sm font-medium text-gray-300">Success Rate</p>
+              <p id="successRate" class="text-2xl font-semibold text-white">-</p>
             </div>
-            <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-              <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center">
+              <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
             </div>
           </div>
         </div>
-
-        <div class="metric-card bg-white rounded-lg shadow p-6">
+        <div class="metric-card bg-[#181C20] border border-[#283039] rounded-lg p-6">
           <div class="flex items-center">
             <div class="flex-1">
-              <p class="text-sm font-medium text-slate-600">Avg Duration</p>
-              <p id="avgDuration" class="text-2xl font-semibold text-slate-900">-</p>
+              <p class="text-sm font-medium text-gray-300">Avg Duration</p>
+              <p id="avgDuration" class="text-2xl font-semibold text-white">-</p>
             </div>
-            <div class="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-8 h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center">
+              <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
             </div>
           </div>
         </div>
-
-        <div class="metric-card bg-white rounded-lg shadow p-6">
+        <div class="metric-card bg-[#181C20] border border-[#283039] rounded-lg p-6">
           <div class="flex items-center">
             <div class="flex-1">
-              <p class="text-sm font-medium text-slate-600">Active Sessions</p>
-              <p id="activeSessions" class="text-2xl font-semibold text-slate-900">-</p>
+              <p class="text-sm font-medium text-gray-300">Active Sessions</p>
+              <p id="activeSessions" class="text-2xl font-semibold text-white">-</p>
             </div>
-            <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-              <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="w-8 h-8 bg-purple-500/10 rounded-lg flex items-center justify-center">
+              <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
               </svg>
             </div>
@@ -101,24 +79,24 @@
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Active Sessions -->
-        <div class="lg:col-span-2 bg-white rounded-lg shadow">
-          <div class="p-4 border-b border-slate-200">
+        <div class="lg:col-span-2 bg-[#181C20] border border-[#283039] rounded-lg">
+          <div class="p-4 border-b border-[#283039]">
             <div class="flex items-center justify-between">
-              <h2 class="font-semibold text-slate-800">Active Sessions</h2>
-              <button id="refreshSessions" class="text-sm bg-indigo-600 text-white rounded px-3 py-1">Refresh</button>
+              <h2 class="font-semibold text-white">Active Sessions</h2>
+              <button id="refreshSessions" class="text-sm bg-[var(--primary-color)] text-white rounded px-3 py-1">Refresh</button>
             </div>
           </div>
           <div class="p-4">
             <div id="activeSessionsList" class="space-y-3">
-              <div class="text-center py-8 text-slate-500">Loading active sessions...</div>
+              <div class="text-center py-8 text-gray-400">Loading active sessions...</div>
             </div>
           </div>
         </div>
 
         <!-- Language Distribution -->
-        <div class="bg-white rounded-lg shadow">
-          <div class="p-4 border-b border-slate-200">
-            <h2 class="font-semibold text-slate-800">Language Distribution</h2>
+        <div class="bg-[#181C20] border border-[#283039] rounded-lg">
+          <div class="p-4 border-b border-[#283039]">
+            <h2 class="font-semibold text-white">Language Distribution</h2>
           </div>
           <div class="p-4">
             <canvas id="languageChart" width="300" height="300"></canvas>
@@ -128,11 +106,11 @@
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <!-- Call Volume Over Time -->
-        <div class="bg-white rounded-lg shadow">
-          <div class="p-4 border-b border-slate-200">
+        <div class="bg-[#181C20] border border-[#283039] rounded-lg">
+          <div class="p-4 border-b border-[#283039]">
             <div class="flex items-center justify-between">
-              <h2 class="font-semibold text-slate-800">Call Volume (Last 24h)</h2>
-              <select id="timeRange" class="text-sm border rounded px-2 py-1">
+              <h2 class="font-semibold text-white">Call Volume (Last 24h)</h2>
+              <select id="timeRange" class="text-sm rounded-md border border-[#283039] bg-[#111418] px-2 py-1">
                 <option value="24h">Last 24h</option>
                 <option value="7d">Last 7 days</option>
                 <option value="30d">Last 30 days</option>
@@ -145,52 +123,52 @@
         </div>
 
         <!-- System Performance -->
-        <div class="bg-white rounded-lg shadow">
-          <div class="p-4 border-b border-slate-200">
-            <h2 class="font-semibold text-slate-800">System Performance</h2>
+        <div class="bg-[#181C20] border border-[#283039] rounded-lg">
+          <div class="p-4 border-b border-[#283039]">
+            <h2 class="font-semibold text-white">System Performance</h2>
           </div>
           <div class="p-4">
             <div class="space-y-4">
               <!-- Average Latency -->
               <div>
                 <div class="flex justify-between text-sm mb-1">
-                  <span>Average Latency</span>
+                  <span class="text-gray-300">Average Latency</span>
                   <span id="avgLatency">-</span>
                 </div>
-                <div class="w-full bg-slate-200 rounded-full h-2">
-                  <div id="latencyBar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                <div class="w-full bg-[#283039] rounded-full h-2">
+                  <div id="latencyBar" class="bg-blue-500 h-2 rounded-full" style="width: 0%"></div>
                 </div>
               </div>
               
               <!-- Answer Rate -->
               <div>
                 <div class="flex justify-between text-sm mb-1">
-                  <span>Answer Rate</span>
+                  <span class="text-gray-300">Answer Rate</span>
                   <span id="answerRate">-</span>
                 </div>
-                <div class="w-full bg-slate-200 rounded-full h-2">
-                  <div id="answerRateBar" class="bg-green-600 h-2 rounded-full" style="width: 0%"></div>
+                <div class="w-full bg-[#283039] rounded-full h-2">
+                  <div id="answerRateBar" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
                 </div>
               </div>
               
               <!-- Error Rate -->
               <div>
                 <div class="flex justify-between text-sm mb-1">
-                  <span>Error Rate</span>
+                  <span class="text-gray-300">Error Rate</span>
                   <span id="errorRate">-</span>
                 </div>
-                <div class="w-full bg-slate-200 rounded-full h-2">
-                  <div id="errorRateBar" class="bg-red-600 h-2 rounded-full" style="width: 0%"></div>
+                <div class="w-full bg-[#283039] rounded-full h-2">
+                  <div id="errorRateBar" class="bg-red-500 h-2 rounded-full" style="width: 0%"></div>
                 </div>
               </div>
 
               <!-- LiveKit Connection Status -->
-              <div class="pt-4 border-t">
+              <div class="pt-4 border-t border-[#283039]">
                 <div class="flex items-center justify-between">
-                  <span class="text-sm font-medium">LiveKit Status</span>
+                  <span class="text-sm font-medium text-gray-300">LiveKit Status</span>
                   <div class="flex items-center gap-2">
                     <div id="livekitStatus" class="w-3 h-3 bg-gray-400 rounded-full"></div>
-                    <span id="livekitStatusText" class="text-sm text-slate-600">Checking...</span>
+                    <span id="livekitStatusText" class="text-sm text-slate-300">Checking...</span>
                   </div>
                 </div>
               </div>
@@ -200,29 +178,19 @@
       </div>
 
       <!-- Recent Activities -->
-      <div class="bg-white rounded-lg shadow mt-6">
-        <div class="p-4 border-b border-slate-200">
-          <h2 class="font-semibold text-slate-800">Recent Activities</h2>
+      <div class="bg-[#181C20] border border-[#283039] rounded-lg mt-6">
+        <div class="p-4 border-b border-[#283039]">
+          <h2 class="font-semibold text-white">Recent Activities</h2>
         </div>
         <div class="p-4">
           <div id="recentActivities" class="space-y-3">
-            <div class="text-center py-8 text-slate-500">Loading activities...</div>
+            <div class="text-center py-8 text-gray-400">Loading activities...</div>
           </div>
         </div>
       </div>
     </main>
-    
-    <script>
-      // Session info
-      fetch('/api/auth/me', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject()).then(u => {
-        document.getElementById('who').textContent = u.email;
-        // Show admin link for admin users
-        if (u.role === 'admin') {
-          document.getElementById('adminLink').classList.remove('hidden');
-        }
-      }).catch(() => location.href = '/app/login');
-      document.getElementById('logout').onclick = async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); location.href = '/app/login'; };
 
+    <script>
       // Global variables
       let volumeChart, languageChart;
       let refreshInterval;
@@ -261,20 +229,13 @@
             labels: [],
             datasets: [{
               data: [],
-              backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6']
+              backgroundColor: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa'],
             }]
           },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { position: 'bottom' }
-            }
-          }
+          options: { responsive: true, maintainAspectRatio: false }
         });
       }
 
-      // Load dashboard data
       async function loadDashboardData() {
         try {
           const [kpiRes, sessionsRes] = await Promise.all([
@@ -307,26 +268,24 @@
         container.innerHTML = '';
 
         if (!sessions || sessions.length === 0) {
-          container.innerHTML = '<div class="text-center py-8 text-slate-500">No active sessions</div>';
+          container.innerHTML = '<div class="text-center py-8 text-gray-400">No active sessions</div>';
           return;
         }
 
         for (const session of sessions) {
           const sessionEl = document.createElement('div');
-          sessionEl.className = 'flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50';
+          sessionEl.className = 'flex items-center justify-between p-3 border border-[#283039] rounded-lg hover:bg-[#15191e]';
           sessionEl.innerHTML = `
             <div class="flex items-center gap-3">
               <div class="w-3 h-3 bg-green-500 rounded-full pulse-dot"></div>
               <div>
-                <div class="font-medium text-sm">${session.name}</div>
-                <div class="text-xs text-slate-500">${session.num_participants || 0} participants</div>
+                <div class="font-medium text-sm text-white">${session.name}</div>
+                <div class="text-xs text-gray-400">${session.num_participants || 0} participants</div>
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-xs text-slate-500">${getTimeDiff(session.creation_time)}</span>
-              <button onclick="joinSession('${session.name}')" class="text-xs bg-indigo-600 text-white rounded px-2 py-1">
-                Join
-              </button>
+              <span class="text-xs text-gray-400">${getTimeDiff(session.creation_time)}</span>
+              <button onclick="joinSession('${session.name}')" class="text-xs bg-[var(--primary-color)] text-white rounded px-2 py-1">Join</button>
             </div>
           `;
           container.appendChild(sessionEl);
@@ -396,35 +355,26 @@
           container.innerHTML = '';
 
           if (activities.length === 0) {
-            container.innerHTML = '<div class="text-center py-8 text-slate-500">No recent activities</div>';
+            container.innerHTML = '<div class="text-center py-8 text-gray-400">No recent activities</div>';
             return;
           }
 
           for (const activity of activities) {
             const activityEl = document.createElement('div');
-            activityEl.className = 'flex items-center gap-3 p-2 hover:bg-slate-50 rounded';
+            activityEl.className = 'flex items-center gap-3 p-2 hover:bg-[#15191e] rounded';
             
             const statusIcon = getStatusIcon(activity.call_status);
             const timeAgo = getTimeDiff(activity.start_time);
             
             activityEl.innerHTML = `
-              <div class="flex-shrink-0">
-                ${statusIcon}
-              </div>
+              <div class="flex-shrink-0">${statusIcon}</div>
               <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-slate-900">
-                  Call with ${activity.customer_id}
-                </div>
-                <div class="text-xs text-slate-500">
-                  ${activity.campaign_id} • ${activity.language_detected} • ${timeAgo}
-                </div>
+                <div class="text-sm font-medium text-white">Call with ${activity.customer_id}</div>
+                <div class="text-xs text-gray-400">${activity.campaign_id} • ${activity.language_detected} • ${timeAgo}</div>
               </div>
               <div class="flex-shrink-0">
-                <span class="px-2 py-1 text-xs rounded-full ${getStatusClass(activity.call_status)}">
-                  ${activity.call_status}
-                </span>
-              </div>
-            `;
+                <span class="px-2 py-1 text-xs rounded-full ${getStatusClass(activity.call_status)}">${activity.call_status}</span>
+              </div>`;
             container.appendChild(activityEl);
           }
         } catch (err) {
@@ -437,7 +387,6 @@
         const now = new Date();
         const then = new Date(timestamp);
         const diff = Math.floor((now - then) / 1000);
-
         if (diff < 60) return diff + 's ago';
         if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
         if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
@@ -456,16 +405,15 @@
 
       function getStatusClass(status) {
         const classes = {
-          'success': 'bg-green-100 text-green-800',
-          'failed': 'bg-red-100 text-red-800',
-          'dropped': 'bg-yellow-100 text-yellow-800',
-          'no_answer': 'bg-gray-100 text-gray-800'
+          'success': 'bg-green-900/40 text-green-300',
+          'failed': 'bg-red-900/40 text-red-300',
+          'dropped': 'bg-yellow-900/40 text-yellow-300',
+          'no_answer': 'bg-gray-700 text-gray-300'
         };
-        return classes[status] || 'bg-gray-100 text-gray-800';
+        return classes[status] || 'bg-gray-700 text-gray-300';
       }
 
       function joinSession(roomName) {
-        // Navigate to agent studio with the room pre-filled
         window.location.href = `/app/agent-studio.html?room=${encodeURIComponent(roomName)}`;
       }
 
@@ -474,33 +422,16 @@
       document.getElementById('timeRange').onchange = loadDashboardData;
 
       // Auto-refresh every 30 seconds
-      function startAutoRefresh() {
-        refreshInterval = setInterval(loadDashboardData, 30000);
-      }
-
-      function stopAutoRefresh() {
-        if (refreshInterval) {
-          clearInterval(refreshInterval);
-          refreshInterval = null;
-        }
-      }
+      function startAutoRefresh() { refreshInterval = setInterval(loadDashboardData, 30000); }
+      function stopAutoRefresh() { if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; } }
 
       // Page visibility handling
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-          stopAutoRefresh();
-        } else {
-          startAutoRefresh();
-          loadDashboardData(); // Refresh immediately when page becomes visible
-        }
-      });
+      document.addEventListener('visibilitychange', () => { if (document.hidden) { stopAutoRefresh(); } else { startAutoRefresh(); loadDashboardData(); } });
 
       // Initialize dashboard
       initializeCharts();
       loadDashboardData();
       startAutoRefresh();
-
-      // Cleanup on page unload
       window.addEventListener('beforeunload', stopAutoRefresh);
     </script>
   </body>
