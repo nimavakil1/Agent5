@@ -340,6 +340,12 @@ function createWebSocketServer(server) {
         // --- End Recording state ---
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
+        // Ensure room exists for monitor/egress
+        try {
+          await roomService.getRoom(roomName);
+        } catch {
+          try { await roomService.createRoom({ name: roomName }); } catch (e) { console.error('createRoom error:', e?.message || e); }
+        }
         let publisher = null;
         if (process.env.AGENTSTREAM_PUBLISH_LIVEKIT !== '0') {
           try {
