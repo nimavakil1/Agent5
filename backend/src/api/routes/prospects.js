@@ -79,8 +79,8 @@ router.delete('/field-defs/:id', requireSession, async (req, res) => {
 router.get('/template.csv', requireSession, async (req, res) => {
   const defs = await ProspectFieldDef.find({}).sort({ order: 1, createdAt: 1 }).lean();
   const base = [
-    'invoice_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_website','invoice_phone','invoice_language','invoice_language_confirmed','invoice_tags','invoice_opt_out',
-    'delivery_1_name','delivery_1_address','delivery_1_city','delivery_1_postal_code','delivery_1_country','delivery_1_email','delivery_1_phone','delivery_1_language','delivery_1_language_confirmed','delivery_1_tags','delivery_1_opt_out',
+    'invoice_contact_name','invoice_company','invoice_vat','invoice_address','invoice_city','invoice_postal_code','invoice_country','invoice_email','invoice_website','invoice_mobile_nr','invoice_language','invoice_language_confirmed','invoice_wa_preferred','invoice_tags','invoice_opt_out',
+    'delivery1_contact_name','delivery_1_address','delivery_1_city','delivery_1_postal_code','delivery_1_country','delivery_1_email','delivery1_mobile_nr','delivery_1_language','delivery_1_language_confirmed','delivery1_wa_preferred','delivery_1_tags','delivery_1_opt_out',
     'notes'
   ];
   const dynInvoice = defs.filter(d=>d.visibility==='invoice' || d.visibility==='both').map(d=>`custom_${d.key}`);
@@ -114,8 +114,8 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
         for (let i = 0; i < results.length; i++) {
           const r = results[i];
           try {
-            const invPhone = normalizeToE164(r.invoice_phone || '');
-            const delPhone = normalizeToE164(r.delivery_1_phone || '');
+            const invPhone = normalizeToE164(r.invoice_mobile_nr || r.invoice_phone || '');
+            const delPhone = normalizeToE164(r.delivery1_mobile_nr || r.delivery_1_phone || '');
             // Require at least invoice name OR company OR phone
             if (!((r.invoice_name && r.invoice_name.length) || (r.invoice_company && r.invoice_company.length) || invPhone)) {
               errors.push(`Row ${i+1}: missing invoice_name and invoice_phone`);
@@ -123,7 +123,7 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
             }
 
             const invoice = {
-              name: (r.invoice_name||'').trim(),
+              name: (r.invoice_contact_name||r.invoice_name||'').trim(),
               company: (r.invoice_company||'').trim(),
               vat: (r.invoice_vat||'').trim(),
               address: (r.invoice_address||'').trim(),
@@ -134,7 +134,8 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               website: (r.invoice_website||'').trim(),
               phone: invPhone,
               language: (r.invoice_language||'').trim(),
-              language_confirmed: String(r.invoice_language_confirmed||'').toLowerCase()==='true' || r.invoice_language_confirmed==='1'
+              language_confirmed: String(r.invoice_language_confirmed||'').toLowerCase()==='true' || r.invoice_language_confirmed==='1',
+              wa_preferred: String(r.invoice_wa_preferred||'').toLowerCase()==='true' || r.invoice_wa_preferred==='1'
             };
             // dynamic custom fields from CSV
             const invoiceCustom = {};
@@ -150,7 +151,7 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
 
             const delivery1 = delPhone ? [{
               code: 'delivery_1',
-              name: (r.delivery_1_name||'').trim(),
+              name: (r.delivery1_contact_name||r.delivery_1_name||'').trim(),
               address: (r.delivery_1_address||'').trim(),
               city: (r.delivery_1_city||'').trim(),
               postal_code: (r.delivery_1_postal_code||'').trim(),
@@ -159,6 +160,7 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               phone: delPhone,
               language: (r.delivery_1_language||'').trim(),
               language_confirmed: String(r.delivery_1_language_confirmed||'').toLowerCase()==='true' || r.delivery_1_language_confirmed==='1',
+              wa_preferred: String(r.delivery1_wa_preferred||r.delivery_1_wa_preferred||'').toLowerCase()==='true' || r.delivery1_wa_preferred==='1',
               tags: (r.delivery_1_tags||'').split(';').map(s=>s.trim()).filter(Boolean),
               custom: Object.keys(deliveryCustom).length ? deliveryCustom : undefined,
             }] : [];
@@ -228,11 +230,11 @@ router.get('/', requireSession, async (req, res) => {
     const dncSet = new Set((await Dnc.find({ phone_e164: { $in: Array.from(phones) } }).lean()).map(x=>x.phone_e164));
     const rows = [];
     for (const c of customers) {
-      const invRow = { type:'invoice', id:c._id, name:c.invoice?.name||c.name, phone:c.invoice?.phone||c.phone_number, language:c.invoice?.language||c.preferred_language, language_confirmed: !!c.invoice?.language_confirmed, tags:c.tags||[], opt_out: dncSet.has(c.invoice?.phone||'') };
+      const invRow = { type:'invoice', id:c._id, name:c.invoice?.name||c.name, phone:c.invoice?.phone||c.phone_number, language:c.invoice?.language||c.preferred_language, language_confirmed: !!c.invoice?.language_confirmed, tags:c.tags||[], opt_out: dncSet.has(c.invoice?.phone||''), archived: !!c.archived };
       const addInv = (scope==='invoice' || scope==='both');
       if (addInv) rows.push(invRow);
       (c.delivery_addresses||[]).forEach(d=>{
-        const drow = { type:'delivery', id:c._id, code:d.code, name:d.name, phone:d.phone, language:d.language, language_confirmed: !!d.language_confirmed, tags:d.tags||[], opt_out: dncSet.has(d.phone||'') };
+        const drow = { type:'delivery', id:c._id, code:d.code, name:d.name, phone:d.phone, language:d.language, language_confirmed: !!d.language_confirmed, tags:d.tags||[], opt_out: dncSet.has(d.phone||''), archived: !!c.archived };
         if (scope==='delivery' || scope==='both') rows.push(drow);
       });
     }
@@ -308,7 +310,7 @@ router.patch('/:id/invoice', requireSession, async (req, res) => {
   try {
     const b = req.body||{};
     const set = {};
-    const fields = ['name','company','vat','address','city','postal_code','country','email','website','language','language_confirmed'];
+    const fields = ['name','company','vat','address','city','postal_code','country','email','website','language','language_confirmed','wa_preferred'];
     fields.forEach(k=>{ if (b[k]!==undefined) set[`invoice.${k}`]=b[k]; });
     if (b.phone!==undefined) set['invoice.phone'] = normalizeToE164(b.phone||'');
     const doc = await CustomerRecord.findByIdAndUpdate(req.params.id, { $set: set }, { new:true });
@@ -326,7 +328,7 @@ router.patch('/:id/delivery/:code', requireSession, async (req, res) => {
     const b = req.body||{};
     const set = {};
     const base = 'delivery_addresses.$.';
-    const fields = ['name','address','city','postal_code','country','email','language','language_confirmed','notes'];
+    const fields = ['name','address','city','postal_code','country','email','language','language_confirmed','notes','wa_preferred'];
     fields.forEach(k=>{ if (b[k]!==undefined) set[base+k]=b[k]; });
     if (b.phone!==undefined) set[base+'phone'] = normalizeToE164(b.phone||'');
     if (Array.isArray(b.tags)) set[base+'tags']=b.tags;

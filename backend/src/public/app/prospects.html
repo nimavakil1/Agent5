@@ -59,16 +59,17 @@
         <div class="p-4">
           <form id="editForm" class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label class="text-sm text-gray-300">Name<input type="text" id="f_name" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+              <label class="text-sm text-gray-300">Contact Name<input type="text" id="f_name" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
               <label class="text-sm text-gray-300">Company<input type="text" id="f_company" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
               <label class="text-sm text-gray-300">VAT<input type="text" id="f_vat" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
               <label class="text-sm text-gray-300">Email<input type="text" id="f_email" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
               <div id="row_website"><label class="text-sm text-gray-300">Website<input type="text" id="f_website" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder="https://..."/></label></div>
             </div>
             <div>
-              <label class="text-sm text-gray-300">Phone<input type="text" id="f_phone" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+              <label class="text-sm text-gray-300">Mobile<input type="text" id="f_phone" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
               <label class="text-sm text-gray-300">Language<input type="text" id="f_language" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
               <label class="text-sm text-gray-300 flex items-center gap-2">Language confirmed<input type="checkbox" id="f_lang_conf" class="h-4 w-4"/></label>
+              <label class="text-sm text-gray-300 flex items-center gap-2">WhatsApp preferred<input type="checkbox" id="f_wa_pref" class="h-4 w-4"/></label>
             </div>
             <label class="text-sm text-gray-300">Address<input type="text" id="f_address" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
             <label class="text-sm text-gray-300">City<input type="text" id="f_city" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
@@ -120,7 +121,7 @@
           const phone = row.phone||'';
           tr.innerHTML = `
             <td class="p-3 text-sm">${row.type}${row.code? ' · '+row.code:''}</td>
-            <td class="p-3 text-sm">${(row.name||'').replace(/</g,'&lt;')}</td>
+            <td class="p-3 text-sm">${(row.name||'').replace(/</g,'&lt;')} ${row.archived? '<span class=\'ml-2 inline-flex items-center rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-300\'>Archived</span>':''}</td>
             <td class="p-3 text-sm text-[#9cabba]">${phone}</td>
             <td class="p-3 text-sm">${row.language||''}</td>
             <td class="p-3 text-sm">${row.language_confirmed? '✔️':'—'}</td>
@@ -129,7 +130,7 @@
               <div class="flex items-center gap-2">
                 <button class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90" data-act="toggle" data-phone="${encodeURIComponent(phone)}" data-opt="${row.opt_out?0:1}">${row.opt_out?'Allow':'Opt‑out'}</button>
                 <button class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90" data-act="edit" data-id="${row.id}" data-type="${row.type}" data-code="${row.code||''}">Edit</button>
-                <button class="inline-flex items-center gap-2 rounded-md bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-600" data-act="archive" data-id="${row.id}">Archive</button>
+                <button class="inline-flex items-center gap-2 rounded-md ${row.archived? 'bg-emerald-700 hover:bg-emerald-600':'bg-gray-700 hover:bg-gray-600'} px-3 py-1.5 text-xs font-medium text-white" data-act="archive" data-arch="${row.archived?0:1}" data-id="${row.id}">${row.archived? 'Unarchive':'Archive'}</button>
               </div>
             </td>
           `;
@@ -149,7 +150,8 @@
         rows.querySelectorAll('button[data-act="archive"]').forEach(btn=>{
           btn.onclick = async (ev)=>{
             const id = ev.currentTarget.getAttribute('data-id');
-            await fetch(`/api/prospects/${id}/archive`, { method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ archived: true }) });
+            const to = ev.currentTarget.getAttribute('data-arch') === '1';
+            await fetch(`/api/prospects/${id}/archive`, { method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ archived: to }) });
             loadProspects();
           };
         });
@@ -163,11 +165,13 @@
           editTitle.textContent = 'Edit Invoice';
           fillForm(doc.invoice||{});
           const rw=document.getElementById('row_website'); if(rw) rw.style.display='block';
+          document.getElementById('f_wa_pref').checked = !!(doc.invoice && doc.invoice.wa_preferred);
         } else {
           editTitle.textContent = `Edit Delivery ${code||''}`;
           const d = (doc.delivery_addresses||[]).find(x=> x.code===code) || {};
           fillForm(d);
           const rw=document.getElementById('row_website'); if(rw) rw.style.display='none';
+          document.getElementById('f_wa_pref').checked = !!d.wa_preferred;
         }
         modal.classList.remove('hidden');
         loadLogs(id);
@@ -221,7 +225,8 @@
           postal_code: formEl.querySelector('#f_postal').value,
           country: formEl.querySelector('#f_country').value,
         };
-        if(currentEdit && currentEdit.type==='invoice') body.website = (document.getElementById('f_website')?.value||'');
+        if(currentEdit && currentEdit.type==='invoice') { body.website = (document.getElementById('f_website')?.value||''); body.wa_preferred = document.getElementById('f_wa_pref').checked; }
+        else { body.wa_preferred = document.getElementById('f_wa_pref').checked; }
         let url = '';
         if(currentEdit.type==='invoice') url = `/api/prospects/${currentEdit.id}/invoice`;
         else url = `/api/prospects/${currentEdit.id}/delivery/${encodeURIComponent(currentEdit.code||'')}`;

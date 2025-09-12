@@ -11,6 +11,7 @@ const deliveryAddressSchema = new mongoose.Schema(
     country: { type: String },
     email: { type: String },
     phone: { type: String },
+    wa_preferred: { type: Boolean, default: false },
     language: { type: String },
     language_confirmed: { type: Boolean, default: false },
     tags: [{ type: String }],
