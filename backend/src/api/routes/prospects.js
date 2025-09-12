@@ -3,6 +3,7 @@ const multer = require('multer');
 const fs = require('fs');
 const csv = require('csv-parser');
 const CustomerRecord = require('../../models/CustomerRecord');
+const DeliveryContact = require('../../models/DeliveryContact');
 const Dnc = require('../../models/Dnc');
 const ProspectFieldDef = require('../../models/ProspectFieldDef');
 const { normalizeToE164 } = require('../../util/phone');
@@ -103,6 +104,8 @@ router.get('/deliveries_template.csv', requireSession, async (req, res) => {
 router.post('/upload_deliveries', requireSession, upload.single('csv'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No CSV file uploaded (field name: csv)' });
   const rows=[]; const errors=[]; let imported=0;
+  const imported_items = [];
+  const failed_items = [];
   try {
     const raw = fs.readFileSync(req.file.path,'utf8');
     const sep = (raw.split(';').length >= raw.split(',').length) ? ';' : ',';
@@ -116,9 +119,9 @@ router.post('/upload_deliveries', requireSession, upload.single('csv'), async (r
             const keyPhone = normalizeToE164(r.parent_invoice_phone||'');
             const keyMobile = normalizeToE164(r.parent_invoice_mobile||'');
             const find = keyPhone? { 'invoice.phone': keyPhone } : (keyMobile? { 'invoice.mobile': keyMobile } : (r.parent_email? { 'invoice.email': r.parent_email } : null));
-            if (!find) { errors.push(`Row ${i+1}: missing parent key`); continue; }
+            if (!find) { const msg='missing parent key'; errors.push(`Row ${i+1}: ${msg}`); failed_items.push({ row:i+1, error_code:'MISSING_PARENT_KEY', error_message: msg, parent_key:'' }); continue; }
             const parent = await CustomerRecord.findOne(find).lean();
-            if (!parent) { errors.push(`Row ${i+1}: parent not found`); continue; }
+            if (!parent) { const msg='parent not found'; errors.push(`Row ${i+1}: ${msg}`); failed_items.push({ row:i+1, error_code:'PARENT_NOT_FOUND', error_message: msg, parent_key: (keyPhone||keyMobile||r.parent_email||'') }); continue; }
             const payload = {
               parentId: parent._id,
               code: 'delivery_'+Date.now()+('_'+i),
@@ -136,7 +139,7 @@ router.post('/upload_deliveries', requireSession, upload.single('csv'), async (r
               wa_preferred: String(r.delivery_wa_preferred||'').toLowerCase()==='true' || r.delivery_wa_preferred==='1',
               tags: (r.delivery_tags||'').split(';').map(s=>s.trim()).filter(Boolean),
             };
-            await DeliveryContact.create(payload);
+            const created = await DeliveryContact.create(payload);
             // DNC handling for phone/mobile
             const toBool = (v)=>{ const s=String(v||'').trim().toLowerCase(); return s==='1'||s==='true'||s==='yes'||s==='y'; };
             if (toBool(r.delivery_opt_out)){
@@ -144,10 +147,16 @@ router.post('/upload_deliveries', requireSession, upload.single('csv'), async (r
               if (payload.mobile) await Dnc.updateOne({ phone_e164: payload.mobile }, { $set: { phone_e164: payload.mobile, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
             }
             imported++;
-          } catch(e){ errors.push(`Row ${i+1}: ${e.message}`); }
+            imported_items.push({ row: i+1, parent_id: String(parent._id), delivery_id: String(created._id), code: created.code, company: created.company||'', phone: created.phone||'', mobile: created.mobile||'' });
+          } catch(e){
+            const msg = e.message||'error';
+            const code = (String(msg).includes('duplicate key') ? 'DUPLICATE_KEY' : 'UNKNOWN_ERROR');
+            errors.push(`Row ${i+1}: ${msg}`);
+            failed_items.push({ row: i+1, error_code: code, error_message: msg });
+          }
         }
         fs.unlink(req.file.path, ()=>{});
-        res.json({ imported, total: rows.length, errors: errors.length?errors:undefined });
+        res.json({ imported, total: rows.length, imported_items, failed_items, errors: errors.length?errors:undefined });
       });
   } catch(e){ fs.unlink(req.file.path,()=>{}); res.status(500).json({ message:'Failed to process CSV', error: e.message }); }
 });
@@ -158,6 +167,8 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
   const results = [];
   const errors = [];
   let imported = 0;
+  const imported_items = [];
+  const failed_items = [];
   try {
     // Auto-detect delimiter (supports ";" and ","), strip BOM, trim headers
     const raw = fs.readFileSync(req.file.path, 'utf8');
@@ -180,8 +191,10 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
             const delLandline = normalizeToE164(r.delivery_1_phone || '');
             const delMobile = normalizeToE164(r.delivery1_mobile_nr || '');
             // Require at least invoice name OR company OR phone
-            if (!((r.invoice_name && r.invoice_name.length) || (r.invoice_company && r.invoice_company.length) || invPhone)) {
-              errors.push(`Row ${i+1}: missing invoice_name and invoice_phone`);
+            if (!((r.invoice_name && r.invoice_name.length) || (r.invoice_company && r.invoice_company.length) || invLandline || invMobile)) {
+              const msg = 'missing invoice_name and invoice_phone';
+              errors.push(`Row ${i+1}: ${msg}`);
+              failed_items.push({ row: i+1, error_code:'MISSING_REQUIRED', error_message: msg, invoice_name: (r.invoice_contact_name||r.invoice_name||''), invoice_phone: (r.invoice_phone||'') });
               continue;
             }
 
@@ -296,12 +309,16 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
             }
 
             imported++;
+            imported_items.push({ row: i+1, id: String(doc._id), invoice_phone: (doc.invoice?.phone||''), invoice_email: (doc.invoice?.email||''), invoice_name: (doc.invoice?.name||'') });
           } catch (e) {
-            errors.push(`Row ${i+1}: ${e.message}`);
+            const msg = e.message||'error';
+            const code = (String(msg).includes('duplicate key') ? 'DUPLICATE_KEY' : 'UNKNOWN_ERROR');
+            errors.push(`Row ${i+1}: ${msg}`);
+            failed_items.push({ row: i+1, error_code: code, error_message: msg, invoice_name: (r.invoice_contact_name||r.invoice_name||''), invoice_phone: (r.invoice_phone||'') });
           }
         }
         fs.unlink(req.file.path, ()=>{});
-        res.json({ imported, total: results.length, errors: errors.length?errors:undefined });
+        res.json({ imported, total: results.length, imported_items, failed_items, errors: errors.length?errors:undefined });
       });
   } catch (e) {
     fs.unlink(req.file.path, ()=>{});

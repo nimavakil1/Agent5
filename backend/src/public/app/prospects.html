@@ -33,6 +33,10 @@
         </div>
       </div>
       <p class="text-sm text-gray-400 mb-4">Upload contacts (invoice + first delivery) or use the deliveries template for bulk deliveries. Toggle opt‑out per phone below.</p>
+      <div id="importReport" class="hidden rounded-md border border-[#3b4754] bg-[#161b20] mb-4">
+        <div class="border-b border-[#3b4754] px-4 py-2"><strong class="text-sm">Import Report</strong></div>
+        <div id="importReportBody" class="p-3 text-sm text-gray-200"></div>
+      </div>
       <div class="flex items-center gap-2 mb-4">
         <label class="relative flex-1">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">search</span>
@@ -142,7 +146,7 @@
         const r = await fetch('/api/prospects/upload_deliveries',{ method:'POST', body: fd, credentials:'include' });
         const j = await r.json();
         if(!r.ok){ alert(j.message||'Upload failed'); return; }
-        alert(`Imported ${j.imported} of ${j.total}.` + (j.errors? `\nErrors:\n${j.errors.join('\n')}`:''));
+        renderImportReport(j, 'deliveries');
         loadProspects();
       };
       const modal = document.getElementById('editModal');
@@ -159,9 +163,43 @@
         const r = await fetch('/api/prospects/upload', { method:'POST', body: fd, credentials:'include' });
         const j = await r.json();
         if(!r.ok) { alert(j.message||'Upload failed'); return; }
-        alert(`Imported ${j.imported} of ${j.total}.` + (j.errors? `\nErrors:\n${j.errors.join('\n')}`:''));
+        renderImportReport(j, 'contacts');
         loadProspects();
       });
+
+      function renderImportReport(payload, kind){
+        const box = document.getElementById('importReport');
+        const body = document.getElementById('importReportBody');
+        const total = payload.total||0; const ok = payload.imported||0;
+        const imported = Array.isArray(payload.imported_items)? payload.imported_items: [];
+        const failed = Array.isArray(payload.failed_items)? payload.failed_items: [];
+        const errs = Array.isArray(payload.errors)? payload.errors: [];
+        let html = '';
+        html += `<div class=\"mb-2\"><span class=\"text-gray-400\">Type:</span> ${kind}</div>`;
+        html += `<div class=\"mb-2\"><span class=\"text-gray-400\">Summary:</span> Imported ${ok} of ${total}. Failed ${Math.max(0,total-ok)}.</div>`;
+        if(imported.length){
+          html += '<div class="mt-2"><div class="text-gray-300 font-medium mb-1">Imported</div>';
+          html += '<div class="max-h-40 overflow-auto border border-[#283039] rounded">';
+          html += imported.map(it=>{
+            if (kind==='deliveries') return `<div class=\"px-2 py-1 text-xs\">Row ${it.row}: parent=${(it.parent_id||'').slice(-6)} · delivery=${(it.delivery_id||'').slice(-6)} · ${it.company||''} · ${it.phone||''}</div>`;
+            return `<div class=\"px-2 py-1 text-xs\">Row ${it.row}: id=${(it.id||'').slice(-6)} · ${it.invoice_name||''} · ${it.invoice_phone||''}</div>`;
+          }).join('');
+          html += '</div></div>';
+        }
+        if(failed.length || errs.length){
+          html += '<div class="mt-3"><div class="text-red-300 font-medium mb-1">Failed</div>';
+          html += '<div class="max-h-40 overflow-auto border border-red-900 rounded">';
+          if (failed.length){
+            html += failed.map(it=> `<div class=\"px-2 py-1 text-xs\">Row ${it.row}: [${it.error_code||'ERROR'}] ${it.error_message||''}</div>`).join('');
+          } else {
+            html += errs.map(e=> `<div class=\"px-2 py-1 text-xs\">${String(e||'')}</div>`).join('');
+          }
+          html += '</div></div>';
+        }
+        body.innerHTML = html;
+        box.classList.remove('hidden');
+        box.scrollIntoView({ behavior:'smooth', block:'center' });
+      }
 
       let currentPage = 1;
       const pageSize = 50;
