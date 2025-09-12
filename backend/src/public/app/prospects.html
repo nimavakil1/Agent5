@@ -177,6 +177,9 @@
         let html = '';
         html += `<div class=\"mb-2\"><span class=\"text-gray-400\">Type:</span> ${kind}</div>`;
         html += `<div class=\"mb-2\"><span class=\"text-gray-400\">Summary:</span> Imported ${ok} of ${total}. Failed ${Math.max(0,total-ok)}.</div>`;
+        if (failed.length){
+          html += `<div class=\"mb-2\"><button id=\"dlFailed\" class=\"inline-flex items-center gap-2 rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600\"><span class=\"material-symbols-outlined\">download</span>Download failed CSV</button></div>`;
+        }
         if(imported.length){
           html += '<div class="mt-2"><div class="text-gray-300 font-medium mb-1">Imported</div>';
           html += '<div class="max-h-40 overflow-auto border border-[#283039] rounded">';
@@ -199,6 +202,49 @@
         body.innerHTML = html;
         box.classList.remove('hidden');
         box.scrollIntoView({ behavior:'smooth', block:'center' });
+
+        // Attach download for failed CSV
+        const btn = document.getElementById('dlFailed');
+        if (btn) {
+          btn.onclick = ()=> downloadFailedCsv(failed, kind);
+        }
+      }
+
+      function downloadFailedCsv(failed, kind){
+        if (!Array.isArray(failed) || !failed.length) return;
+        // collect headers
+        const baseCols = ['row','error_code','error_message'];
+        const dynamicCols = new Set();
+        for (const f of failed){
+          const obj = f.original_row || {};
+          Object.keys(obj).forEach(k=> dynamicCols.add(k));
+        }
+        const headers = baseCols.concat(Array.from(dynamicCols));
+        const esc = (v)=>{
+          const s = (v===null||v===undefined)? '': String(v);
+          // escape quotes and wrap
+          return '"' + s.replace(/"/g, '""') + '"';
+        };
+        let csv = headers.join(',') + '\n';
+        for (const f of failed){
+          const row = [];
+          row.push(esc(f.row));
+          row.push(esc(f.error_code||''));
+          row.push(esc(f.error_message||''));
+          const src = f.original_row || {};
+          for (const h of headers.slice(baseCols.length)) row.push(esc(src[h]!==undefined? src[h]:''));
+          csv += row.join(',') + '\n';
+        }
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const ts = new Date().toISOString().replace(/[-:]/g,'').replace(/\..*$/,'');
+        a.href = url;
+        a.download = `import_failures_${kind}_${ts}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
       }
 
       let currentPage = 1;
