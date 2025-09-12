@@ -3,55 +3,67 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LiveKit Monitor</title>
+    <title>Live Calls · ACROPAQ AI</title>
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="/app/shell.js"></script>
     <style>
-      body { font-family: system-ui, sans-serif; margin: 20px; }
-      label { display: block; margin: 8px 0 4px; }
-      input { width: 360px; padding: 6px; }
-      button { margin-top: 10px; padding: 8px 12px; }
-      .row { margin: 10px 0; }
-      audio { display: block; margin: 10px 0; }
-      pre { background: #f7f7f7; padding: 10px; max-height: 180px; overflow: auto; }
+      body { font-family: Inter, "Noto Sans", sans-serif; }
+      .card { background:#181C20; border:1px solid #283039; border-radius:.5rem; }
+      .inp { background:#111418; border:1px solid #283039; color:#fff; border-radius:.375rem; padding:.5rem .75rem; width:100%; }
+      .btn { display:inline-flex; align-items:center; gap:.5rem; border-radius:.5rem; padding:.5rem .75rem; font-weight:500; }
+      .btn-primary { background:#0d7ff2; color:#fff; }
+      .btn-danger { background:#b91c1c; color:#fff; }
+      .muted { color:#9cabba; }
+      pre { background:#111418; border:1px solid #283039; color:#e5e7eb; padding:10px; max-height:180px; overflow:auto; }
     </style>
   </head>
-  <body>
-    <h1>LiveKit Monitor</h1>
-    <div class="row">
-      <label>LiveKit WS URL (wss://...)</label>
-      <input id="host" placeholder="wss://your-livekit.example" />
-    </div>
-    <div class="row">
-      <label>Room Name</label>
-      <input id="room" placeholder="call-..." />
-    </div>
-    <div class="row">
-      <label>Identity</label>
-      <input id="identity" placeholder="viewer-123" />
-    </div>
-    <div class="row">
-      <label>Prime Text (optional)</label>
-      <input id="primeText" placeholder="e.g., Open with a brief intro about receipt rolls" />
-    </div>
-    <div class="row">
-      <label>API Token (Authorization: Bearer)</label>
-      <input id="token" placeholder="paste AUTH_TOKEN here" />
-      <button id="saveToken">Save Token</button>
-    </div>
-    <div class="row">
-      <button id="join">Join Room</button>
-      <button id="leave">Leave</button>
-      <button id="talk">Start Talk</button>
-      <button id="stopTalk">Stop Talk</button>
-    </div>
-    <div class="row">
-      <strong>Subscribed Tracks:</strong>
-      <div id="tracks"></div>
-    </div>
-    <div class="row">
-      <strong>Logs:</strong>
-      <pre id="logs"></pre>
-    </div>
-
+  <body class="min-h-screen bg-[#111418] text-gray-100">
+    <main class="max-w-4xl mx-auto p-6 grid gap-4">
+      <h1 class="text-2xl font-bold">Live Calls</h1>
+      <section class="card p-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="muted text-sm">LiveKit WS URL (wss://...)</label>
+            <input id="host" class="inp" placeholder="wss://your-livekit.example" />
+          </div>
+          <div>
+            <label class="muted text-sm">Room Name</label>
+            <input id="room" class="inp" placeholder="call-..." />
+          </div>
+          <div>
+            <label class="muted text-sm">Identity</label>
+            <input id="identity" class="inp" placeholder="viewer-123" />
+          </div>
+          <div>
+            <label class="muted text-sm">Prime Text (optional)</label>
+            <input id="primeText" class="inp" placeholder="e.g., Open with a brief intro about receipt rolls" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="muted text-sm">API Token (Authorization: Bearer)</label>
+            <div class="flex gap-2">
+              <input id="token" class="inp" placeholder="paste AUTH_TOKEN here" />
+              <button id="saveToken" class="btn btn-primary">Save Token</button>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button id="join" class="btn btn-primary">Join Room</button>
+          <button id="leave" class="btn">Leave</button>
+          <button id="talk" class="btn" style="background:#10b981;color:#fff;">Start Talk</button>
+          <button id="stopTalk" class="btn btn-danger">Stop Talk</button>
+        </div>
+      </section>
+      <section class="card p-4">
+        <h2 class="font-semibold text-white mb-2">Subscribed Tracks</h2>
+        <div id="tracks" class="flex flex-wrap gap-2"></div>
+      </section>
+      <section class="card p-4">
+        <h2 class="font-semibold text-white mb-2">Logs</h2>
+        <pre id="logs"></pre>
+      </section>
+    </main>
     <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js" crossorigin="anonymous"></script>
     <script src="/monitor.js"></script>
   </body>
