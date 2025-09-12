@@ -9,7 +9,8 @@
     "start": "node src/index.js",
     "test": "jest",
     "seed-admin": "node scripts/seedAdmin.js",
-    "fix-admin": "node scripts/fix-admin.js"
+    "fix-admin": "node scripts/fix-admin.js",
+    "clear-contacts": "node scripts/clearContacts.js"
   },
   "keywords": [],
   "author": "",

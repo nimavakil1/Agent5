@@ -91,6 +91,69 @@ router.get('/template.csv', requireSession, async (req, res) => {
   res.send(header.join(',') + '\n');
 });
 
+// Deliveries-only template and upload
+router.get('/deliveries_template.csv', requireSession, async (req, res) => {
+  const header = [
+    'parent_invoice_phone','parent_invoice_mobile','parent_email',
+    'delivery_contact_name','delivery_company','delivery_address','delivery_city','delivery_postal_code','delivery_country','delivery_email','delivery_phone','delivery_mobile','delivery_language','delivery_language_confirmed','delivery_wa_preferred','delivery_tags','delivery_opt_out'
+  ];
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="deliveries_template.csv"');
+  res.send(header.join(',') + '\n');
+});
+
+router.post('/upload_deliveries', requireSession, upload.single('csv'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: 'No CSV file uploaded (field name: csv)' });
+  const rows=[]; const errors=[]; let imported=0;
+  try {
+    const raw = fs.readFileSync(req.file.path,'utf8');
+    const sep = (raw.split(';').length >= raw.split(',').length) ? ';' : ',';
+    fs.createReadStream(req.file.path)
+      .pipe(csv({ separator: sep, mapHeaders: ({ header }) => header.replace(/\uFEFF/g,'').trim(), mapValues: ({ value }) => (typeof value === 'string' ? value.trim() : value) }))
+      .on('data', (row)=> rows.push(row))
+      .on('end', async ()=>{
+        for (let i=0;i<rows.length;i++){
+          try{
+            const r=rows[i];
+            const keyPhone = normalizeToE164(r.parent_invoice_phone||'');
+            const keyMobile = normalizeToE164(r.parent_invoice_mobile||'');
+            const find = keyPhone? { 'invoice.phone': keyPhone } : (keyMobile? { 'invoice.mobile': keyMobile } : (r.parent_email? { 'invoice.email': r.parent_email } : null));
+            if (!find) { errors.push(`Row ${i+1}: missing parent key`); continue; }
+            const parent = await CustomerRecord.findOne(find).lean();
+            if (!parent) { errors.push(`Row ${i+1}: parent not found`); continue; }
+            const payload = {
+              parentId: parent._id,
+              code: 'delivery_'+Date.now()+('_'+i),
+              contact_name: (r.delivery_contact_name||'').trim(),
+              company: (r.delivery_company||'').trim(),
+              address: (r.delivery_address||'').trim(),
+              city: (r.delivery_city||'').trim(),
+              postal_code: (r.delivery_postal_code||'').trim(),
+              country: (r.delivery_country||'').trim(),
+              email: (r.delivery_email||'').trim(),
+              phone: normalizeToE164(r.delivery_phone||''),
+              mobile: normalizeToE164(r.delivery_mobile||''),
+              language: (r.delivery_language||'').trim(),
+              language_confirmed: String(r.delivery_language_confirmed||'').toLowerCase()==='true' || r.delivery_language_confirmed==='1',
+              wa_preferred: String(r.delivery_wa_preferred||'').toLowerCase()==='true' || r.delivery_wa_preferred==='1',
+              tags: (r.delivery_tags||'').split(';').map(s=>s.trim()).filter(Boolean),
+            };
+            await DeliveryContact.create(payload);
+            // DNC handling for phone/mobile
+            const toBool = (v)=>{ const s=String(v||'').trim().toLowerCase(); return s==='1'||s==='true'||s==='yes'||s==='y'; };
+            if (toBool(r.delivery_opt_out)){
+              if (payload.phone) await Dnc.updateOne({ phone_e164: payload.phone }, { $set: { phone_e164: payload.phone, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
+              if (payload.mobile) await Dnc.updateOne({ phone_e164: payload.mobile }, { $set: { phone_e164: payload.mobile, source:'upload', addedBy: req.user?.email||'upload' } }, { upsert: true });
+            }
+            imported++;
+          } catch(e){ errors.push(`Row ${i+1}: ${e.message}`); }
+        }
+        fs.unlink(req.file.path, ()=>{});
+        res.json({ imported, total: rows.length, errors: errors.length?errors:undefined });
+      });
+  } catch(e){ fs.unlink(req.file.path,()=>{}); res.status(500).json({ message:'Failed to process CSV', error: e.message }); }
+});
+
 // Upload CSV and upsert prospects
 router.post('/upload', requireSession, upload.single('csv'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No CSV file uploaded (field name: csv)' });
@@ -338,23 +401,43 @@ router.patch('/:id/delivery/:code', requireSession, async (req, res) => {
   try {
     const code = String(req.params.code);
     const b = req.body||{};
-    const set = {};
-    const base = 'delivery_addresses.$.';
-    const fields = ['name','company','address','city','postal_code','country','email','language','language_confirmed','notes','wa_preferred'];
-    fields.forEach(k=>{ if (b[k]!==undefined) set[base+k]=b[k]; });
-    if (b.phone!==undefined) set[base+'phone'] = normalizeToE164(b.phone||'');
-    if (b.mobile!==undefined) set[base+'mobile'] = normalizeToE164(b.mobile||'');
-    if (Array.isArray(b.tags)) set[base+'tags']=b.tags;
-    const doc = await CustomerRecord.findOneAndUpdate(
-      { _id: req.params.id, 'delivery_addresses.code': code },
-      { $set: set },
-      { new:true }
-    );
-    if (!doc) return res.status(404).json({ message:'not found' });
+    const update = {};
+    if (b.name!==undefined) update.contact_name = b.name;
+    if (b.company!==undefined) update.company = b.company;
+    if (b.address!==undefined) update.address = b.address;
+    if (b.city!==undefined) update.city = b.city;
+    if (b.postal_code!==undefined) update.postal_code = b.postal_code;
+    if (b.country!==undefined) update.country = b.country;
+    if (b.email!==undefined) update.email = b.email;
+    if (b.language!==undefined) update.language = b.language;
+    if (b.language_confirmed!==undefined) update.language_confirmed = !!b.language_confirmed;
+    if (b.notes!==undefined) update.notes = b.notes;
+    if (b.wa_preferred!==undefined) update.wa_preferred = !!b.wa_preferred;
+    if (b.phone!==undefined) update.phone = normalizeToE164(b.phone||'');
+    if (b.mobile!==undefined) update.mobile = normalizeToE164(b.mobile||'');
+    if (Array.isArray(b.tags)) update.tags = b.tags;
+    await DeliveryContact.updateOne({ parentId: req.params.id, code }, { $set: { parentId: req.params.id, code, ...update } }, { upsert: true });
     res.json({ ok:true });
   } catch (e) {
     res.status(500).json({ message:'Failed to update delivery', error:e.message });
   }
+});
+
+// Deliveries child endpoints
+router.get('/:id/deliveries', requireSession, async (req,res)=>{
+  const items = await DeliveryContact.find({ parentId: req.params.id, archived: { $ne: true } }).sort({ createdAt: 1 }).lean();
+  res.json(items);
+});
+router.post('/:id/deliveries', requireSession, async (req,res)=>{
+  const b = req.body||{}; const code = String(b.code||'delivery_'+Date.now());
+  const doc = await DeliveryContact.create({ parentId: req.params.id, code, contact_name:b.name||'', company:b.company||'', address:b.address||'', city:b.city||'', postal_code:b.postal_code||'', country:b.country||'', email:b.email||'', phone: normalizeToE164(b.phone||''), mobile: normalizeToE164(b.mobile||''), language:b.language||'', language_confirmed: !!b.language_confirmed, wa_preferred: !!b.wa_preferred, tags: Array.isArray(b.tags)?b.tags:[], notes:b.notes||'', custom:b.custom||{} });
+  res.status(201).json(doc);
+});
+router.patch('/:id/deliveries/:deliveryId/archive', requireSession, async (req,res)=>{
+  const { archived } = req.body||{}; await DeliveryContact.findByIdAndUpdate(req.params.deliveryId, { archived: !!archived }); res.json({ ok:true });
+});
+router.delete('/:id/deliveries/:deliveryId', requireSession, async (req,res)=>{
+  await DeliveryContact.deleteOne({ _id: req.params.deliveryId, parentId: req.params.id }); res.json({ ok:true });
 });
 
 module.exports = router;
