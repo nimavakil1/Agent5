@@ -7,7 +7,9 @@
     }
   }
   function redirectToLogin(nextUrl){
-    const next = encodeURIComponent(nextUrl || (location.pathname+location.search+location.hash));
+    const rawNext = nextUrl || (location.pathname+location.search+location.hash);
+    try { sessionStorage.setItem('next_url', rawNext); } catch(_){}
+    const next = encodeURIComponent(rawNext);
     location.href = `/app/login?next=${next}`;
   }
   function ensureIconFont(){

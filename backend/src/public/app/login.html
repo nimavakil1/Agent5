@@ -55,7 +55,11 @@
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
     const res = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }), credentials:'include' });
-    if(res.ok){ const next=getParam('next'); location.href= next || '/dashboard.html'; }
+    if(res.ok){
+      let next = getParam('next');
+      if (!next) { try { next = sessionStorage.getItem('next_url') || ''; sessionStorage.removeItem('next_url'); } catch(_){} }
+      location.href= next || '/dashboard.html';
+    }
     else { try{ const j=await res.json(); document.getElementById('msg').textContent = j.message||'Login failed'; }catch(_){ document.getElementById('msg').textContent = 'Login failed'; } }
   };
  </script>
