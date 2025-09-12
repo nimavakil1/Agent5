@@ -54,6 +54,7 @@ const customerRecordSchema = new mongoose.Schema(
     delivery_addresses: [deliveryAddressSchema],
     tags: [{ type: String }],
     custom: { type: mongoose.Schema.Types.Mixed }, // dynamic fields (customer scope)
+    archived: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -62,5 +63,6 @@ const customerRecordSchema = new mongoose.Schema(
 customerRecordSchema.index({ 'invoice.phone': 1 }, { unique: true, sparse: true });
 customerRecordSchema.index({ 'delivery_addresses.phone': 1 });
 customerRecordSchema.index({ tags: 1 });
+customerRecordSchema.index({ archived: 1, updatedAt: -1 });
 
 module.exports = mongoose.model('CustomerRecord', customerRecordSchema);

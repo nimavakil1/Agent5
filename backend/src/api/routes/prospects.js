@@ -205,8 +205,10 @@ router.get('/', requireSession, async (req, res) => {
     const lang = String(req.query.lang||'').trim();
     const langConfirmed = req.query.lang_confirmed === '1' ? true : req.query.lang_confirmed === '0' ? false : undefined;
     const optOutFilter = req.query.opt_out === '1' ? true : req.query.opt_out === '0' ? false : undefined;
+    const showArchived = req.query.show_archived === '1';
 
     const find = {};
+    if (!showArchived) find.archived = { $ne: true };
     if (q) {
       find.$or = [
         { 'invoice.name': new RegExp(q,'i') },
@@ -270,6 +272,33 @@ router.get('/:id', requireSession, async (req, res) => {
     res.json(doc);
   } catch (e) {
     res.status(500).json({ message:'Failed to fetch prospect', error: e.message });
+  }
+});
+
+// Archive/unarchive a contact
+router.patch('/:id/archive', requireSession, async (req, res) => {
+  try {
+    const { archived } = req.body || {};
+    const doc = await CustomerRecord.findByIdAndUpdate(req.params.id, { archived: !!archived }, { new: true });
+    if (!doc) return res.status(404).json({ message: 'not found' });
+    res.json({ id: doc._id, archived: !!doc.archived });
+  } catch (e) {
+    res.status(500).json({ message:'Failed to update archive state', error:e.message });
+  }
+});
+
+// Interaction logs for a contact (calls etc.)
+router.get('/:id/logs', requireSession, async (req, res) => {
+  try {
+    const doc = await CustomerRecord.findById(req.params.id).lean();
+    if (!doc) return res.status(404).json({ message:'not found' });
+    const keys = [String(doc._id)];
+    if (doc.customer_id) keys.push(String(doc.customer_id));
+    const CallLogEntry = require('../../models/CallLogEntry');
+    const calls = await CallLogEntry.find({ customer_id: { $in: keys } }).sort({ start_time: -1 }).limit(200).lean();
+    res.json({ calls });
+  } catch (e) {
+    res.status(500).json({ message:'Failed to fetch logs', error:e.message });
   }
 });
 

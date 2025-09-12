@@ -47,7 +47,7 @@
         <nav class="flex flex-col gap-2">
           ${navItem('/dashboard.html','dashboard','Dashboard', is('/dashboard.html'))}
           ${navItem('/app/campaigns.html','campaign','Campaigns', is('/app/campaigns.html'))}
-          ${navItem('/app/prospects.html','group','Prospects', is('/app/prospects.html'))}
+          ${navItem('/app/prospects.html','group','Contacts', is('/app/prospects.html'))}
           ${navItem('/app/agent-studio.html','headset_mic','Agent Studio', is('/app/agent-studio.html'))}
           ${navItem('/monitor.html','call','Live Calls', is('/monitor.html'))}
           ${navItem('/call-review.html','analytics','Call Review', is('/call-review.html'))}

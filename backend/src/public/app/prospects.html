@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Prospects · ACROPAQ AI</title>
+    <title>Contacts · ACROPAQ AI</title>
     <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
     <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
@@ -14,7 +14,7 @@
   <body class="min-h-screen bg-[#111418] text-gray-100">
     <main class="p-8">
       <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
-        <h1 class="text-2xl font-bold">Prospects</h1>
+        <h1 class="text-2xl font-bold">Contacts</h1>
         <div class="flex items-center gap-2">
           <a class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" href="/api/prospects/template.csv"><span class="material-symbols-outlined">download</span>Template CSV</a>
           <form id="uploadForm" method="post" action="/api/prospects/upload" enctype="multipart/form-data" class="flex items-center gap-2">
@@ -23,13 +23,14 @@
           </form>
         </div>
       </div>
-      <p class="text-sm text-gray-400 mb-4">Upload prospects (invoice + deliveries). Toggle opt‑out per phone below.</p>
+      <p class="text-sm text-gray-400 mb-4">Upload contacts (invoice + deliveries). Toggle opt‑out per phone below.</p>
       <div class="flex items-center gap-2 mb-4">
         <label class="relative flex-1">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">search</span>
           <input id="q" type="text" placeholder="Search name…" class="w-full rounded-md border border-[#283039] bg-[#181C20] py-2 pl-10 pr-3 text-sm"/>
         </label>
         <button class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="searchBtn"><span class="material-symbols-outlined">manage_search</span>Search</button>
+        <label class="text-sm text-gray-400 inline-flex items-center gap-2 ml-2"><input type="checkbox" id="showArchived"/> Show archived</label>
       </div>
       <div class="overflow-x-auto rounded-md border border-[#3b4754]">
         <table class="w-full text-left">
@@ -49,7 +50,7 @@
       </div>
     </main>
 
-    <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50" id="editModal" role="dialog" aria-modal="true">
+    <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 flex" id="editModal" role="dialog" aria-modal="true">
       <div class="w-[680px] max-w-[90vw] rounded-lg border border-[#283039] bg-[#181C20]">
         <div class="flex items-center justify-between border-b border-[#283039] px-4 py-3">
           <strong id="editTitle">Edit</strong>
@@ -73,6 +74,10 @@
             <label class="text-sm text-gray-300">Postal Code<input type="text" id="f_postal" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
             <label class="text-sm text-gray-300">Country<input type="text" id="f_country" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
           </form>
+          <div class="mt-4">
+            <div class="text-sm text-gray-300 mb-1">Interactions</div>
+            <div id="logsArea" class="max-h-64 overflow-auto"></div>
+          </div>
         </div>
         <div class="flex items-center justify-end gap-2 border-t border-[#283039] px-4 py-3">
           <button class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="saveBtn"><span class="material-symbols-outlined">save</span>Save</button>
@@ -104,7 +109,8 @@
 
       async function loadProspects(){
         rows.innerHTML = '<tr><td colspan="7" class="p-3 text-[#9cabba]">Loading…</td></tr>';
-        const r = await fetch('/api/prospects'+(q.value? ('?q='+encodeURIComponent(q.value)) : ''), { credentials:'include' });
+        const params = new URLSearchParams(); if(q.value) params.set('q', q.value); if (document.getElementById('showArchived').checked) params.set('show_archived','1');
+        const r = await fetch('/api/prospects'+(params.toString()? ('?'+params.toString()):''), { credentials:'include' });
         const list = await r.json();
         rows.innerHTML = '';
         if(!Array.isArray(list) || !list.length){ rows.innerHTML='<tr><td colspan="7" class="p-3 text-[#9cabba]">No prospects</td></tr>'; return; }
@@ -122,6 +128,7 @@
               <div class="flex items-center gap-2">
                 <button class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90" data-act="toggle" data-phone="${encodeURIComponent(phone)}" data-opt="${row.opt_out?0:1}">${row.opt_out?'Allow':'Opt‑out'}</button>
                 <button class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90" data-act="edit" data-id="${row.id}" data-type="${row.type}" data-code="${row.code||''}">Edit</button>
+                <button class="inline-flex items-center gap-2 rounded-md bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-600" data-act="archive" data-id="${row.id}">Archive</button>
               </div>
             </td>
           `;
@@ -138,6 +145,13 @@
         rows.querySelectorAll('button[data-act="edit"]').forEach(btn=>{
           btn.onclick = (ev)=> openEdit(ev.currentTarget.getAttribute('data-id'), ev.currentTarget.getAttribute('data-type'), ev.currentTarget.getAttribute('data-code'));
         });
+        rows.querySelectorAll('button[data-act="archive"]').forEach(btn=>{
+          btn.onclick = async (ev)=>{
+            const id = ev.currentTarget.getAttribute('data-id');
+            await fetch(`/api/prospects/${id}/archive`, { method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ archived: true }) });
+            loadProspects();
+          };
+        });
       }
 
       async function openEdit(id, type, code){
@@ -153,6 +167,25 @@
           fillForm(d);
         }
         modal.classList.remove('hidden');
+        loadLogs(id);
+      }
+
+      async function loadLogs(id){
+        try {
+          const r = await fetch(`/api/prospects/${id}/logs`, { credentials:'include' });
+          const j = await r.json();
+          const area = document.getElementById('logsArea');
+          if (!area) return;
+          const calls = Array.isArray(j.calls)? j.calls: [];
+          area.innerHTML = calls.length? '' : '<div class="text-sm text-gray-400">No interactions yet</div>';
+          for (const c of calls){
+            const div = document.createElement('div');
+            div.className = 'rounded border border-[#283039] p-2 mb-2';
+            div.innerHTML = `<div class=\"text-xs text-gray-400\">${new Date(c.start_time).toLocaleString()} · ${c.call_status} · ${c.language_detected||''}</div>
+                             <div class=\"text-sm\">${(c.transcription_summary||'').slice(0,240)}</div>`;
+            area.appendChild(div);
+          }
+        } catch(_){}
       }
 
       function fillForm(obj){
@@ -193,6 +226,7 @@
         loadProspects();
       }
 
+      document.getElementById('showArchived').onchange = ()=> loadProspects();
       loadProspects();
     </script>
   </body>
