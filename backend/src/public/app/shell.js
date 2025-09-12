@@ -36,6 +36,7 @@
           ${navItem('/dashboard.html','dashboard','Dashboard', is('/dashboard.html'))}
           ${navItem('/app/campaigns.html','campaign','Campaigns', is('/app/campaigns.html'))}
           ${navItem('/app/prospects.html','group','Prospects', is('/app/prospects.html'))}
+          ${navItem('/app/agent-studio.html','headset_mic','Agent Studio', is('/app/agent-studio.html'))}
           ${navItem('/monitor.html','call','Live Calls', is('/monitor.html'))}
           ${navItem('/call-review.html','analytics','Call Review', is('/call-review.html'))}
           ${navItem('/app/products.html','inventory_2','Products', is('/app/products.html'))}
