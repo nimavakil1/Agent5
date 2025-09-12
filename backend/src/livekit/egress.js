@@ -1,4 +1,4 @@
-const { EgressClient, EncodedFileOutput, RoomCompositeOptions, AudioCodec, FileType } = require('livekit-server-sdk');
+const { EgressClient, EncodedFileOutput, AudioCodec, FileType } = require('livekit-server-sdk');
 
 function makeEgressClient() {
   const host = process.env.LIVEKIT_API_URL || process.env.LIVEKIT_SERVER_URL;
@@ -19,10 +19,8 @@ function filenameFor(roomName) {
 async function startRoomAudioEgress(roomName) {
   const client = makeEgressClient();
   if (!client) throw new Error('EgressClient not configured');
-  const options = new RoomCompositeOptions({
-    audioOnly: true,
-    audioCodec: AudioCodec.OPUS,
-  });
+  // Newer SDKs expose options as plain objects (not constructors)
+  const options = { audioOnly: true, audioCodec: AudioCodec.OPUS };
   const output = new EncodedFileOutput({
     fileType: (process.env.LIVEKIT_EGRESS_FILE_EXT || 'mp4').toLowerCase() === 'ogg' ? FileType.OGG : FileType.MP4,
     filepath: filenameFor(roomName),
@@ -38,4 +36,3 @@ async function stopEgress(egressId) {
 }
 
 module.exports = { startRoomAudioEgress, stopEgress };
-

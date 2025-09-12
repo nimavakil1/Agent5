@@ -361,6 +361,7 @@ function createWebSocketServer(server) {
         let currentResponseId = null;
         let agentSpeaking = false;
         let agentSpeakingSent = false;
+        let studioSuppressAgentAudio = false; // guard for barge-in
         // Simple server-side VAD for barge-in (raised thresholds to reduce false triggers)
         let userSpeaking = false;
         let aboveCnt = 0;

@@ -42,8 +42,14 @@ router.get('/rooms', async (req, res) => {
     if (!host || !apiKey || !apiSecret) return res.status(500).json({ message: 'LiveKit not configured' });
     const svc = new RoomServiceClient(host, apiKey, apiSecret);
     const rooms = await svc.listRooms();
-    // Return a compact summary
-    res.json(rooms.map(r => ({ name: r.name, num_participants: r.numParticipants || r.num_participants, empty_timeout: r.emptyTimeout || r.empty_timeout, creation_time: r.creationTime || r.creation_time })));
+    // Return a compact summary (coerce BigInt to Number)
+    const out = rooms.map((r) => ({
+      name: r.name,
+      num_participants: Number(r.numParticipants ?? r.num_participants ?? 0),
+      empty_timeout: Number(r.emptyTimeout ?? r.empty_timeout ?? 0),
+      creation_time: Number(r.creationTime ?? r.creation_time ?? 0),
+    }));
+    res.json(out);
   } catch (e) {
     console.error('livekit rooms error', e);
     // Fallback to recent rooms in memory
