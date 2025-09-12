@@ -209,8 +209,9 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               country: (r.invoice_country||'').trim(),
               email: (r.invoice_email||'').trim(),
               website: (r.invoice_website||'').trim(),
-              phone: invLandline,
-              mobile: invMobile,
+              // only set phone fields when non-empty to avoid unique index collisions on empty values
+              phone: invLandline || undefined,
+              mobile: invMobile || undefined,
               language: (r.invoice_language||'').trim(),
               language_confirmed: String(r.invoice_language_confirmed||'').toLowerCase()==='true' || r.invoice_language_confirmed==='1',
               wa_preferred: String(r.invoice_wa_preferred||'').toLowerCase()==='true' || r.invoice_wa_preferred==='1'
@@ -236,8 +237,8 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               postal_code: (r.delivery_1_postal_code||'').trim(),
               country: (r.delivery_1_country||'').trim(),
               email: (r.delivery_1_email||'').trim(),
-              phone: delLandline,
-              mobile: delMobile,
+              phone: delLandline || undefined,
+              mobile: delMobile || undefined,
               language: (r.delivery_1_language||'').trim(),
               language_confirmed: String(r.delivery_1_language_confirmed||'').toLowerCase()==='true' || r.delivery_1_language_confirmed==='1',
               wa_preferred: String(r.delivery1_wa_preferred||r.delivery_1_wa_preferred||'').toLowerCase()==='true' || r.delivery1_wa_preferred==='1',
@@ -263,7 +264,7 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
               const tagsDi = (r[`delivery_${di}_tags`]||'').split(';').map(s=>s.trim()).filter(Boolean);
               const any = nm || comp || addr || city || pc || ctry || em || ph || mob;
               if (!any) continue;
-              extra.push({ code:`delivery_${di}`, name:nm, company:comp, address:addr, city, postal_code:pc, country:ctry, email:em, phone:ph, mobile:mob, language:lang, language_confirmed:lconf, wa_preferred:wa, tags:tagsDi });
+              extra.push({ code:`delivery_${di}`, name:nm, company:comp, address:addr, city, postal_code:pc, country:ctry, email:em, phone: (ph||undefined), mobile: (mob||undefined), language:lang, language_confirmed:lconf, wa_preferred:wa, tags:tagsDi });
             }
 
             const tags = (r.invoice_tags||'').split(';').map(s=>s.trim()).filter(Boolean);
