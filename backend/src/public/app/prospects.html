@@ -13,17 +13,26 @@
   </head>
   <body class="min-h-screen bg-[#111418] text-gray-100">
     <main class="p-8">
-      <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+      <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
         <h1 class="text-2xl font-bold">Contacts</h1>
-        <div class="flex items-center gap-2">
-          <a class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" href="/api/prospects/template.csv"><span class="material-symbols-outlined">download</span>Template CSV</a>
-          <form id="uploadForm" method="post" action="/api/prospects/upload" enctype="multipart/form-data" class="flex items-center gap-2">
-            <input type="file" name="csv" accept=".csv" required class="rounded-md border border-[#283039] bg-[#181C20] px-2.5 py-2 text-sm"/>
-            <button class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" type="submit"><span class="material-symbols-outlined">upload</span>Upload</button>
-          </form>
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <a class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" href="/api/prospects/template.csv"><span class="material-symbols-outlined">download</span>Contacts Template CSV</a>
+            <form id="uploadForm" method="post" action="/api/prospects/upload" enctype="multipart/form-data" class="flex items-center gap-2">
+              <input type="file" name="csv" accept=".csv" required class="rounded-md border border-[#283039] bg-[#181C20] px-2.5 py-2 text-sm"/>
+              <button class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" type="submit"><span class="material-symbols-outlined">upload</span>Upload</button>
+            </form>
+          </div>
+          <div class="flex items-center gap-2">
+            <a class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" href="/api/prospects/deliveries_template.csv"><span class="material-symbols-outlined">download</span>Deliveries Template CSV</a>
+            <form id="uploadDeliveriesForm" method="post" action="/api/prospects/upload_deliveries" enctype="multipart/form-data" class="flex items-center gap-2">
+              <input type="file" name="csv" accept=".csv" required class="rounded-md border border-[#283039] bg-[#181C20] px-2.5 py-2 text-sm"/>
+              <button class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" type="submit"><span class="material-symbols-outlined">upload</span>Upload</button>
+            </form>
+          </div>
         </div>
       </div>
-      <p class="text-sm text-gray-400 mb-4">Upload contacts (invoice + deliveries). Toggle opt‑out per phone below.</p>
+      <p class="text-sm text-gray-400 mb-4">Upload contacts (invoice + first delivery) or use the deliveries template for bulk deliveries. Toggle opt‑out per phone below.</p>
       <div class="flex items-center gap-2 mb-4">
         <label class="relative flex-1">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">search</span>
@@ -81,6 +90,28 @@
             <div class="text-sm text-gray-300 mb-1">Interactions</div>
             <div id="logsArea" class="max-h-64 overflow-auto"></div>
           </div>
+          <div class="mt-6">
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-sm text-gray-300">Deliveries</div>
+              <button id="addDelivery" class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90">Add Delivery</button>
+            </div>
+            <div id="deliveriesList" class="space-y-2"></div>
+            <div id="deliveryEditor" class="mt-3 hidden">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="text-sm text-gray-300">Contact Name<input id="d_name" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+                <label class="text-sm text-gray-300">Company<input id="d_company" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+                <label class="text-sm text-gray-300">Landline<input id="d_phone" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+                <label class="text-sm text-gray-300">Mobile<input id="d_mobile" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+                <label class="text-sm text-gray-300">Language<input id="d_language" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+                <label class="text-sm text-gray-300 flex items-center gap-2">Language confirmed<input type="checkbox" id="d_lang_conf" class="h-4 w-4"/></label>
+                <label class="text-sm text-gray-300 flex items-center gap-2">WhatsApp preferred<input type="checkbox" id="d_wa_pref" class="h-4 w-4"/></label>
+              </div>
+              <div class="mt-3 flex justify-end gap-2">
+                <button id="deliverySave" class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90">Save Delivery</button>
+                <button id="deliveryCancel" class="inline-flex items-center gap-2 rounded-md bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-600">Cancel</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="flex items-center justify-end gap-2 border-t border-[#283039] px-4 py-3">
           <button class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="saveBtn"><span class="material-symbols-outlined">save</span>Save</button>
@@ -92,6 +123,17 @@
       const rows = document.getElementById('rows');
       const q = document.getElementById('q');
       document.getElementById('searchBtn').onclick = ()=> loadProspects();
+      // Upload deliveries CSV
+      const upDel = document.getElementById('uploadDeliveriesForm');
+      upDel.onsubmit = async (e)=>{
+        e.preventDefault();
+        const fd=new FormData(upDel);
+        const r = await fetch('/api/prospects/upload_deliveries',{ method:'POST', body: fd, credentials:'include' });
+        const j = await r.json();
+        if(!r.ok){ alert(j.message||'Upload failed'); return; }
+        alert(`Imported ${j.imported} of ${j.total}.` + (j.errors? `\nErrors:\n${j.errors.join('\n')}`:''));
+        loadProspects();
+      };
       const modal = document.getElementById('editModal');
       const editTitle = document.getElementById('editTitle');
       const formEl = document.getElementById('editForm');
@@ -176,6 +218,7 @@
         }
         modal.classList.remove('hidden');
         loadLogs(id);
+        if (type==='invoice') loadDeliveries(id);
       }
 
       async function loadLogs(id){
@@ -195,6 +238,38 @@
           }
         } catch(_){}
       }
+
+      // Deliveries UI
+      let currentDeliveryId = '';
+      async function loadDeliveries(parentId){
+        const list = await (await fetch(`/api/prospects/${parentId}/deliveries`, { credentials:'include' })).json();
+        const box = document.getElementById('deliveriesList'); box.innerHTML='';
+        if (!Array.isArray(list) || !list.length){ box.innerHTML='<div class="text-sm text-gray-400">No deliveries</div>'; return; }
+        for (const d of list){
+          const div=document.createElement('div'); div.className='rounded border border-[#283039] p-2 flex items-center justify-between';
+          div.innerHTML = `<div class="text-sm">${(d.contact_name||'').replace(/</g,'&lt;')} · ${(d.company||'').replace(/</g,'&lt;')} · ${d.phone||''}${d.mobile? ' / '+d.mobile:''}</div>
+                           <div class="flex gap-2"><button class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90" data-act="edit" data-id="${d._id}">Edit</button>
+                           <button class="inline-flex items-center gap-2 rounded-md bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-600" data-act="arch" data-id="${d._id}">Archive</button></div>`;
+          box.appendChild(div);
+        }
+        box.querySelectorAll('[data-act="edit"]').forEach(b=> b.onclick = async (ev)=>{
+          const did=ev.currentTarget.getAttribute('data-id'); currentDeliveryId=did; document.getElementById('deliveryEditor').classList.remove('hidden');
+          const list = await (await fetch(`/api/prospects/${currentEdit.id}/deliveries`, { credentials:'include' })).json(); const d=list.find(x=>x._id===did); if(!d) return;
+          document.getElementById('d_name').value=d.contact_name||''; document.getElementById('d_company').value=d.company||''; document.getElementById('d_phone').value=d.phone||''; document.getElementById('d_mobile').value=d.mobile||''; document.getElementById('d_language').value=d.language||''; document.getElementById('d_lang_conf').checked=!!d.language_confirmed; document.getElementById('d_wa_pref').checked=!!d.wa_preferred;
+        });
+        box.querySelectorAll('[data-act="arch"]').forEach(b=> b.onclick = async (ev)=>{
+          const did=ev.currentTarget.getAttribute('data-id'); await fetch(`/api/prospects/${currentEdit.id}/deliveries/${did}/archive`, { method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ archived: true }) }); loadDeliveries(currentEdit.id);
+        });
+      }
+      document.getElementById('addDelivery').onclick = ()=>{ currentDeliveryId=''; document.getElementById('deliveryEditor').classList.remove('hidden'); document.getElementById('d_name').value=''; document.getElementById('d_company').value=''; document.getElementById('d_phone').value=''; document.getElementById('d_mobile').value=''; document.getElementById('d_language').value=''; document.getElementById('d_lang_conf').checked=false; document.getElementById('d_wa_pref').checked=false; };
+      document.getElementById('deliveryCancel').onclick = ()=>{ document.getElementById('deliveryEditor').classList.add('hidden'); };
+      document.getElementById('deliverySave').onclick = async ()=>{
+        const body = { name: document.getElementById('d_name').value, company: document.getElementById('d_company').value, phone: document.getElementById('d_phone').value, mobile: document.getElementById('d_mobile').value, language: document.getElementById('d_language').value, language_confirmed: document.getElementById('d_lang_conf').checked, wa_preferred: document.getElementById('d_wa_pref').checked };
+        if (currentDeliveryId) await fetch(`/api/prospects/${currentEdit.id}/deliveries/${currentDeliveryId}/archive`, { method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ archived: false }) }); // ensure visible if resurrecting
+        if (currentDeliveryId) await fetch(`/api/prospects/${currentEdit.id}/delivery/${encodeURIComponent(currentDeliveryId)}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) });
+        else await fetch(`/api/prospects/${currentEdit.id}/deliveries`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) });
+        document.getElementById('deliveryEditor').classList.add('hidden'); loadDeliveries(currentEdit.id);
+      };
 
       function fillForm(obj){
         formEl.querySelector('#f_name').value = obj.name||'';
