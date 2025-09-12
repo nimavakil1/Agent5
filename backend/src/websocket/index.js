@@ -200,6 +200,7 @@ async function createOpenAISession(customerRecord = null) {
 
 function createWebSocketServer(server) {
   const wss = new WebSocket.Server({ server });
+  const sessionRegistry = require('../util/sessionRegistry');
 
   // --- Start Shared Audio Helpers ---
   function linearToUlaw(sample) {
@@ -251,6 +252,33 @@ function createWebSocketServer(server) {
   wss.on('connection', async (telnyxWs, req) => { // Add req parameter
     const parsedUrl = url.parse(req.url, true);
     const pathname = parsedUrl.pathname || '';
+    // Operator bridge: stream browser mic to PSTN for takeover
+    if (pathname === '/operator-bridge') {
+      try {
+        const query = parsedUrl.query || {};
+        const roomName = String(query.room || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!roomName) { telnyxWs.close(); return; }
+        // Mute agent while operator is speaking
+        try { sessionRegistry.setAgentMute(roomName, true); } catch(_) {}
+        telnyxWs.on('message', (data) => {
+          try {
+            const m = JSON.parse(typeof data === 'string' ? data : data.toString('utf8'));
+            if (m.type === 'audio' && m.audio) {
+              const buf = Buffer.from(m.audio, 'base64');
+              const outLen = Math.floor(buf.length / 6);
+              const pcm8k = new Int16Array(outLen);
+              for (let i = 0, j = 0; j < outLen; i += 6, j++) pcm8k[j] = buf.readInt16LE(i);
+              const mu = Buffer.alloc(pcm8k.length);
+              for (let i = 0; i < pcm8k.length; i++) mu[i] = linearToUlaw(pcm8k[i]);
+              sessionRegistry.sendPcmuToPstn(roomName, mu);
+            }
+          } catch (e) { console.error('operator-bridge error', e); }
+        });
+        const unmute = () => { try { sessionRegistry.setAgentMute(roomName, false); } catch(_) {} };
+        telnyxWs.on('close', unmute); telnyxWs.on('error', unmute);
+      } catch (e) { try { telnyxWs.close(); } catch(_) {} }
+      return;
+    }
     // Browser mic bridge: /agent-stream?room=<roomName>
     if (pathname === '/agent-stream') {
       try {
@@ -760,6 +788,9 @@ function createWebSocketServer(server) {
         headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
       });
 
+      // Register session references for operator control
+      try { sessionRegistry.set(roomName, { openaiWs, livekitPublisher }); } catch(_) {}
+
       openaiWs.on('open', async () => {
         console.log('Connected to OpenAI Realtime API');
         // Prime a response with chosen voice from saved settings
@@ -775,6 +806,17 @@ function createWebSocketServer(server) {
           console.log('LiveKit egress started:', egressId || eg);
         } catch (egErr) {
           console.error('Failed to start LiveKit egress:', egErr?.message || egErr);
+          // Fallback to local LiveKit recorder
+          try {
+            const { createRecorder } = require('../livekit/recorder');
+            const at = new AccessToken(apiKey, apiSecret, { identity: `recorder-${roomName}-${Date.now()}` });
+            at.addGrant({ room: roomName, roomJoin: true, canPublish: false, canSubscribe: true });
+            const token = at.toJwt();
+            livekitRecorder = await createRecorder({ host: livekitHost, token, roomName, outFileBase: `${roomName}-${Date.now()}` });
+            console.log('Local recorder started:', livekitRecorder?.outPath || '(unknown)');
+          } catch (recErr) {
+            console.error('Failed to start local recorder:', recErr?.message || recErr);
+          }
         }
       });
 
@@ -847,6 +889,7 @@ function createWebSocketServer(server) {
         if (data.event === 'start') {
           console.log('Telnyx stream started:', data);
           telnyxStreamId = data.stream_id || data.streamId || (data.start && data.start.stream_id) || null;
+          try { sessionRegistry.set(roomName, { telnyxWs, telnyxStreamId }); } catch(_) {}
           bytesWritten = 0;
           await ensureCallLogDefaults();
         } else if (data.event === 'media') {
@@ -1007,6 +1050,7 @@ function createWebSocketServer(server) {
       if (livekitRecorder) {
         try { await livekitRecorder.close(); } catch (e) { console.error('Error closing recorder on close:', e); }
       }
+      try { sessionRegistry.remove(roomName); } catch(_) {}
 
       // Try to finalize header sizes if a file exists
       try {

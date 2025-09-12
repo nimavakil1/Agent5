@@ -8,6 +8,7 @@
 
   let room = null;
   const tracksEl = document.getElementById('tracks');
+  const roomsEl = document.getElementById('rooms');
 
   async function join() {
     try {
@@ -33,7 +34,7 @@
         log('Failed to get token', await res.text());
         return;
       }
-      const { token } = await res.json();
+      const { token, host: srvHost } = await res.json();
 
       const LK =
         window.LivekitClient ||
@@ -46,7 +47,8 @@
         return;
       }
       room = new LK.Room();
-      await room.connect(host, token);
+      const url = (srvHost && (srvHost.startsWith('ws') ? srvHost : (srvHost.startsWith('http') ? (srvHost.replace(/^http/,'ws')) : srvHost))) || host;
+      await room.connect(url, token);
       log('Connected to room');
 
       room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub) => {
@@ -189,4 +191,90 @@
     const span = document.createElement('span'); span.id='latency'; span.style.marginLeft='8px'; span.textContent='--'; row.appendChild(span);
     document.body.insertBefore(row, document.getElementById('logs').parentElement);
   })();
+
+  // --- Active Rooms UI ---
+  async function loadRooms() {
+    try {
+      const bearer = localStorage.getItem('AUTH_TOKEN') || '';
+      let r = await fetch('/api/livekit/rooms', { headers: { Authorization: `Bearer ${bearer}` } });
+      if (!r.ok) r = await fetch('/api/livekit/recent-rooms', { headers: { Authorization: `Bearer ${bearer}` } });
+      const rooms = await r.json();
+      renderRooms(Array.isArray(rooms) ? rooms : []);
+    } catch (e) {
+      console.error('loadRooms error', e);
+    }
+  }
+
+  function renderRooms(list) {
+    roomsEl.innerHTML = '';
+    if (!list.length) {
+      const div = document.createElement('div'); div.className='muted text-sm'; div.textContent='No active rooms'; roomsEl.appendChild(div); return;
+    }
+    list.forEach((r) => {
+      const row = document.createElement('div');
+      row.className = 'flex items-center justify-between gap-2 p-2 border border-[#283039] rounded';
+      const left = document.createElement('div');
+      left.innerHTML = `<div class="font-medium">${r.name}</div><div class="text-xs muted">participants: ${r.num_participants||''}</div>`;
+      const right = document.createElement('div'); right.className='flex items-center gap-2';
+      const joinBtn = document.createElement('button'); joinBtn.className='btn btn-primary'; joinBtn.textContent='Join';
+      joinBtn.onclick = () => { document.getElementById('room').value = r.name; join(); };
+      const stopBtn = document.createElement('button'); stopBtn.className='btn btn-danger'; stopBtn.textContent='Stop AI';
+      stopBtn.onclick = async () => {
+        const bearer = localStorage.getItem('AUTH_TOKEN') || '';
+        const res = await fetch(`/api/livekit/rooms/${encodeURIComponent(r.name)}/stop_ai`, { method:'POST', headers:{ Authorization: `Bearer ${bearer}`, 'Content-Type':'application/json' } });
+        if (!res.ok) { alert('Failed to stop AI'); }
+      };
+      const takeBtn = document.createElement('button'); takeBtn.className='btn'; takeBtn.style.background='#10b981'; takeBtn.style.color='#fff'; takeBtn.textContent='Take Over';
+      takeBtn.onclick = () => startOperatorBridge(r.name);
+      right.appendChild(joinBtn); right.appendChild(stopBtn); right.appendChild(takeBtn);
+      row.appendChild(left); row.appendChild(right);
+      roomsEl.appendChild(row);
+    });
+  }
+
+  // Operator takeover: stream mic to server bridge -> PSTN
+  let opWs = null; let opAudio = { stream:null, ctx:null, proc:null };
+  async function startOperatorBridge(roomName) {
+    try {
+      if (!roomName) roomName = document.getElementById('room').value.trim();
+      if (!roomName) return alert('room required');
+      if (opWs && opWs.readyState === WebSocket.OPEN) return;
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      opWs = new WebSocket(`${proto}://${location.host}/operator-bridge?room=${encodeURIComponent(roomName)}`);
+      opWs.onopen = () => log('Operator bridge connected');
+      opWs.onclose = () => log('Operator bridge closed');
+      opWs.onerror = () => log('Operator bridge error');
+      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+      const src = ctx.createMediaStreamSource(micStream);
+      const proc = ctx.createScriptProcessor(1024, 1, 1);
+      proc.onaudioprocess = (e) => {
+        if (!opWs || opWs.readyState !== WebSocket.OPEN) return;
+        const f32 = e.inputBuffer.getChannelData(0);
+        const i16 = floatTo16BitPCM(f32);
+        // Downsample 48k -> 24k by dropping every other sample
+        const out = new Int16Array(Math.floor(i16.length/2));
+        for (let i=0,j=0;j<out.length;i+=2,j++) out[j] = i16[i];
+        const buf = new Uint8Array(out.length*2);
+        for (let i=0;i<out.length;i++){ buf[i*2]=out[i]&0xff; buf[i*2+1]=(out[i]>>8)&0xff; }
+        const b64 = btoa(String.fromCharCode(...buf));
+        opWs.send(JSON.stringify({ type:'audio', audio:b64 }));
+      };
+      src.connect(proc); proc.connect(ctx.destination);
+      opAudio = { stream: micStream, ctx, proc };
+    } catch (e) { log('Operator bridge error:', e.message||String(e)); }
+  }
+
+  function stopOperatorBridge() {
+    try { if (opWs && opWs.readyState === WebSocket.OPEN) opWs.close(); } catch(_) {}
+    opWs = null;
+    try { if (opAudio.proc) opAudio.proc.disconnect(); } catch(_) {}
+    try { if (opAudio.ctx) opAudio.ctx.close(); } catch(_) {}
+    try { if (opAudio.stream) opAudio.stream.getTracks().forEach(t=>t.stop()); } catch(_) {}
+    opAudio = { stream:null, ctx:null, proc:null };
+  }
+
+  // Poll rooms
+  setInterval(loadRooms, 5000);
+  loadRooms();
 })();

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
 const roomsStore = require('../../util/roomsStore');
+const sessionRegistry = require('../../util/sessionRegistry');
 
 function toHttpUrl(u) {
   if (!u) return '';
@@ -70,6 +71,30 @@ router.get('/rooms/:name/participants', async (req, res) => {
 // Fallback: recent rooms seen by this backend (no admin API)
 router.get('/recent-rooms', (req, res) => {
   try { res.json(roomsStore.list()); } catch (_) { res.json([]); }
+});
+
+// Control: stop AI in a room (cancel OpenAI + mute agent track)
+router.post('/rooms/:name/stop_ai', async (req, res) => {
+  try {
+    const ok = await sessionRegistry.stopAI(req.params.name);
+    if (!ok) return res.status(404).json({ message: 'room not found or no AI session' });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ message: 'error', error: e.message });
+  }
+});
+
+// Control: mute/unmute agent track in LiveKit
+router.post('/rooms/:name/mute_agent', async (req, res) => {
+  try {
+    const mute = String(req.query.mute || req.body?.mute || '').toLowerCase();
+    const v = mute === '1' || mute === 'true' || mute === 'yes';
+    const ok = sessionRegistry.setAgentMute(req.params.name, v);
+    if (!ok) return res.status(404).json({ message: 'room not found' });
+    res.json({ ok: true, muted: v });
+  } catch (e) {
+    res.status(500).json({ message: 'error', error: e.message });
+  }
 });
 
 module.exports = router;
