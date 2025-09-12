@@ -1,6 +1,15 @@
 (() => {
   const PRIMARY = '#0d7ff2';
   async function getMe(){ try{ const r=await fetch('/api/auth/me',{credentials:'include'}); if(!r.ok) return null; return await r.json(); }catch(_){ return null; } }
+  function ensureUiCss(){
+    if (!document.querySelector('link[href$="/app/ui.css"]')){
+      const l=document.createElement('link'); l.rel='stylesheet'; l.href='/app/ui.css'; document.head.appendChild(l);
+    }
+  }
+  function redirectToLogin(nextUrl){
+    const next = encodeURIComponent(nextUrl || (location.pathname+location.search+location.hash));
+    location.href = `/app/login?next=${next}`;
+  }
   function ensureIconFont(){
     if (!document.querySelector('link[href*="Material+Symbols"]')){
       const l=document.createElement('link'); l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined'; document.head.appendChild(l);
@@ -16,6 +25,7 @@
   function injectShell(me){
     if(document.getElementById('acq-shell')) return; // once
     ensureIconFont();
+    ensureUiCss();
     const p = currentPath();
     const is = (k)=> p.endsWith(k);
     const aside = document.createElement('div');
@@ -50,11 +60,25 @@
       </aside>
     `;
     document.body.appendChild(aside);
+    // Global 401 handler: redirect to login preserving return URL
+    if (!window.__acq_fetch_wrapped){
+      window.__acq_fetch_wrapped = true;
+      const origFetch = window.fetch.bind(window);
+      let redirecting = false;
+      window.fetch = async function(input, init){
+        const resp = await origFetch(input, init);
+        if (resp && resp.status === 401 && !redirecting){
+          redirecting = true;
+          redirectToLogin(location.pathname+location.search+location.hash);
+        }
+        return resp;
+      };
+    }
     const logout = document.getElementById('acq-logout');
     if (logout) logout.onclick = async()=>{ try{ await fetch('/api/auth/logout',{method:'POST',credentials:'include'});}catch(_){} location.href='/app/login'; };
   }
   getMe().then(u=>{
-    if(!u){ if(!location.pathname.endsWith('/app/login')) location.href='/app/login'; return; }
+    if(!u){ if(!location.pathname.endsWith('/app/login')) redirectToLogin(location.pathname+location.search+location.hash); return; }
     injectShell(u);
   });
 })();
