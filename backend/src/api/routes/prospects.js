@@ -183,6 +183,7 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
         const defs = await ProspectFieldDef.find({}).lean();
         const invKeys = new Set(defs.filter(d=>d.visibility==='invoice' || d.visibility==='both').map(d=>d.key));
         const delKeys = new Set(defs.filter(d=>d.visibility==='delivery' || d.visibility==='both').map(d=>d.key));
+        const insertAll = String(req.query.insert_all || '').toLowerCase() === '1' || String(req.query.insert_all || '').toLowerCase() === 'true';
         for (let i = 0; i < results.length; i++) {
           const r = results[i];
           try {
@@ -267,13 +268,23 @@ router.post('/upload', requireSession, upload.single('csv'), async (req, res) =>
 
             const tags = (r.invoice_tags||'').split(';').map(s=>s.trim()).filter(Boolean);
 
-            // Upsert by invoice phone if present, else by name+email tuple
-            const findCond = (invLandline || invMobile) ? { 'invoice.phone': (invLandline || invMobile) } : { 'invoice.name': invoice.name, 'invoice.email': invoice.email };
-            const doc = await CustomerRecord.findOneAndUpdate(
-              findCond,
-              { $set: { invoice: { ...invoice, custom: Object.keys(invoiceCustom).length ? invoiceCustom : undefined } }, $addToSet: { tags: { $each: tags } }, $push: { delivery_addresses: { $each: delivery1 } } },
-              { upsert: true, new: true }
-            );
+            let doc;
+            if (insertAll) {
+              // Always create a new record regardless of duplicates
+              doc = await CustomerRecord.create({
+                invoice: { ...invoice, custom: Object.keys(invoiceCustom).length ? invoiceCustom : undefined },
+                delivery_addresses: delivery1,
+                tags
+              });
+            } else {
+              // Upsert by invoice phone if present, else by name+email tuple
+              const findCond = (invLandline || invMobile) ? { 'invoice.phone': (invLandline || invMobile) } : { 'invoice.name': invoice.name, 'invoice.email': invoice.email };
+              doc = await CustomerRecord.findOneAndUpdate(
+                findCond,
+                { $set: { invoice: { ...invoice, custom: Object.keys(invoiceCustom).length ? invoiceCustom : undefined } }, $addToSet: { tags: { $each: tags } }, $push: { delivery_addresses: { $each: delivery1 } } },
+                { upsert: true, new: true }
+              );
+            }
 
             // Upsert DeliveryContact(s) for delivery1 + extras
             if (delivery1.length){

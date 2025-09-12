@@ -20,6 +20,10 @@
             <a class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" href="/api/prospects/template.csv"><span class="material-symbols-outlined">download</span>Contacts Template CSV</a>
             <form id="uploadForm" method="post" action="/api/prospects/upload" enctype="multipart/form-data" class="flex items-center gap-2">
               <input type="file" name="csv" accept=".csv" required class="rounded-md border border-[#283039] bg-[#181C20] px-2.5 py-2 text-sm"/>
+              <label class="text-xs text-gray-300 inline-flex items-center gap-1">
+                <input id="insertAll" type="checkbox" class="rounded border-[#283039] bg-[#181C20]"/>
+                Insert all (no dedupe)
+              </label>
               <button class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" type="submit"><span class="material-symbols-outlined">upload</span>Upload</button>
             </form>
           </div>
@@ -157,10 +161,12 @@
       document.getElementById('closeBtn').onclick = ()=> modal.style.display='none';
       document.getElementById('saveBtn').onclick = saveEdit;
 
+      const insertAll = document.getElementById('insertAll');
       document.getElementById('uploadForm').addEventListener('submit', async (e)=>{
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
-        const r = await fetch('/api/prospects/upload', { method:'POST', body: fd, credentials:'include' });
+        const url = insertAll?.checked ? '/api/prospects/upload?insert_all=1' : '/api/prospects/upload';
+        const r = await fetch(url, { method:'POST', body: fd, credentials:'include' });
         const j = await r.json();
         if(!r.ok) { alert(j.message||'Upload failed'); return; }
         renderImportReport(j, 'contacts');

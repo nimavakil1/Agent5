@@ -65,7 +65,8 @@ const customerRecordSchema = new mongoose.Schema(
 );
 
 // Indexes per design
-customerRecordSchema.index({ 'invoice.phone': 1 }, { unique: true, sparse: true });
+// Make phone index non-unique to allow duplicate invoice phones when desired
+customerRecordSchema.index({ 'invoice.phone': 1 }, { sparse: true });
 customerRecordSchema.index({ 'delivery_addresses.phone': 1 });
 customerRecordSchema.index({ tags: 1 });
 customerRecordSchema.index({ archived: 1, updatedAt: -1 });
