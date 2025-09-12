@@ -17,12 +17,9 @@
       if (!roomName) return alert('room is required');
 
       // fetch token from backend
-      const bearer = localStorage.getItem('AUTH_TOKEN') || '';
       const res = await fetch(
         `/api/livekit/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`,
-        {
-          headers: { Authorization: `Bearer ${bearer}` },
-        }
+        { credentials: 'include' }
       );
       if (!res.ok) {
         log('Failed to get token', await res.text());
@@ -179,16 +176,16 @@
   async function loadRooms() {
     try {
       const bearer = localStorage.getItem('AUTH_TOKEN') || '';
-      let r = await fetch('/api/livekit/rooms', { headers: { Authorization: `Bearer ${bearer}` } });
+      let r = await fetch('/api/livekit/rooms', { credentials: 'include' });
       let rooms = [];
       if (r.ok) {
         rooms = await r.json();
         if (!Array.isArray(rooms) || rooms.length === 0) {
-          const r2 = await fetch('/api/livekit/recent-rooms', { headers: { Authorization: `Bearer ${bearer}` } });
+          const r2 = await fetch('/api/livekit/recent-rooms', { credentials: 'include' });
           if (r2.ok) rooms = await r2.json();
         }
       } else {
-        const r2 = await fetch('/api/livekit/recent-rooms', { headers: { Authorization: `Bearer ${bearer}` } });
+        const r2 = await fetch('/api/livekit/recent-rooms', { credentials: 'include' });
         if (r2.ok) rooms = await r2.json();
       }
       renderRooms(Array.isArray(rooms) ? rooms : []);
