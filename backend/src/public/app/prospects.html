@@ -3,115 +3,80 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Prospects</title>
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color:#0f172a; }
-      a { color:#2563eb; text-decoration: none; }
-      a:hover { text-decoration: underline; }
-      .card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:16px; margin: 12px 0; }
-      .muted { color:#64748b; font-size: 14px; }
-      .btn { display:inline-block; background:#2563eb; color:#fff; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; }
-      .btn:hover { background:#1d4ed8; }
-      .row { display:flex; gap:16px; align-items:center; }
-      input[type=file], input[type=text] { padding:8px; border:1px solid #cbd5e1; border-radius:6px; }
-      table { width:100%; border-collapse:collapse; }
-      th, td { padding:8px; }
-      thead tr { border-bottom:1px solid #e2e8f0; text-align:left; }
-      tr { border-bottom:1px solid #f1f5f9; }
-      .modal { position:fixed; inset:0; background:rgba(15,23,42,0.4); display:none; align-items:center; justify-content:center; }
-      .modal .panel { background:#fff; width:680px; max-width:90vw; border-radius:8px; border:1px solid #e2e8f0; }
-      .modal header, .modal footer { padding:12px 16px; border-bottom:1px solid #e2e8f0; }
-      .modal footer { border-top:1px solid #e2e8f0; border-bottom:0; display:flex; gap:8px; justify-content:flex-end; }
-      .modal main { padding:16px; }
-      label { display:block; font-size:12px; color:#475569; margin-top:8px; }
-      .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
-    </style>
+    <title>Prospects · ACROPAQ AI</title>
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="/app/shell.js"></script>
+    <style> body { font-family: Inter, "Noto Sans", sans-serif; } </style>
   </head>
-  <body>
-    <h1>Prospects</h1>
-    <div class="card">
-      <div class="row" style="justify-content:space-between;">
-        <div>
-          <a class="btn" href="/api/prospects/template.csv">Download Template CSV</a>
-        </div>
-        <form id="uploadForm" method="post" action="/api/prospects/upload" enctype="multipart/form-data">
-          <input type="file" name="csv" accept=".csv" required />
-          <button class="btn" type="submit">Upload CSV</button>
-        </form>
-      </div>
-      <p class="muted">Upload prospects (invoice + deliveries). Toggle opt‑out per phone below.</p>
-      <div class="row" style="margin:8px 0;">
-        <input id="q" type="text" placeholder="Search name…" />
-        <button class="btn" id="searchBtn">Search</button>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Customer</th>
-            <th>Phone</th>
-            <th>Language</th>
-            <th>Confirmed</th>
-            <th>Opt-out</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-
-    <div class="modal" id="editModal">
-      <div class="panel">
-        <header><strong id="editTitle">Edit</strong></header>
-        <main>
-          <form id="editForm">
-            <div class="grid">
-              <div>
-                <label>Name
-                  <input type="text" id="f_name" />
-                </label>
-                <label>Company
-                  <input type="text" id="f_company" />
-                </label>
-                <label>VAT
-                  <input type="text" id="f_vat" />
-                </label>
-                <label>Email
-                  <input type="text" id="f_email" />
-                </label>
-              </div>
-              <div>
-                <label>Phone
-                  <input type="text" id="f_phone" />
-                </label>
-                <label>Language
-                  <input type="text" id="f_language" />
-                </label>
-                <label>Language confirmed
-                  <input type="checkbox" id="f_lang_conf" />
-                </label>
-              </div>
-            </div>
-            <div class="grid">
-              <label>Address
-                <input type="text" id="f_address" />
-              </label>
-              <label>City
-                <input type="text" id="f_city" />
-              </label>
-              <label>Postal Code
-                <input type="text" id="f_postal" />
-              </label>
-              <label>Country
-                <input type="text" id="f_country" />
-              </label>
-            </div>
+  <body class="min-h-screen bg-[#111418] text-gray-100">
+    <main class="p-8">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <h1 class="text-2xl font-bold">Prospects</h1>
+        <div class="flex items-center gap-2">
+          <a class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" href="/api/prospects/template.csv"><span class="material-symbols-outlined">download</span>Template CSV</a>
+          <form id="uploadForm" method="post" action="/api/prospects/upload" enctype="multipart/form-data" class="flex items-center gap-2">
+            <input type="file" name="csv" accept=".csv" required class="rounded-md border border-[#283039] bg-[#181C20] px-2.5 py-2 text-sm"/>
+            <button class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" type="submit"><span class="material-symbols-outlined">upload</span>Upload</button>
           </form>
-        </main>
-        <footer>
-          <button class="btn" id="saveBtn">Save</button>
-          <button class="btn" id="closeBtn" style="background:#64748b;">Close</button>
-        </footer>
+        </div>
+      </div>
+      <p class="text-sm text-gray-400 mb-4">Upload prospects (invoice + deliveries). Toggle opt‑out per phone below.</p>
+      <div class="flex items-center gap-2 mb-4">
+        <label class="relative flex-1">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">search</span>
+          <input id="q" type="text" placeholder="Search name…" class="w-full rounded-md border border-[#283039] bg-[#181C20] py-2 pl-10 pr-3 text-sm"/>
+        </label>
+        <button class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="searchBtn"><span class="material-symbols-outlined">manage_search</span>Search</button>
+      </div>
+      <div class="overflow-x-auto rounded-md border border-[#3b4754]">
+        <table class="w-full text-left">
+          <thead class="bg-[#1b2127]">
+            <tr>
+              <th class="p-3 text-sm font-medium text-white">Type</th>
+              <th class="p-3 text-sm font-medium text-white">Customer</th>
+              <th class="p-3 text-sm font-medium text-white">Phone</th>
+              <th class="p-3 text-sm font-medium text-white">Language</th>
+              <th class="p-3 text-sm font-medium text-white">Confirmed</th>
+              <th class="p-3 text-sm font-medium text-white">Opt-out</th>
+              <th class="p-3 text-sm font-medium text-white">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rows" class="divide-y divide-[#3b4754]"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <div class="fixed inset-0 bg-black/50 hidden items-center justify-center" id="editModal" role="dialog" aria-modal="true">
+      <div class="w-[680px] max-w-[90vw] rounded-lg border border-[#283039] bg-[#181C20]">
+        <div class="flex items-center justify-between border-b border-[#283039] px-4 py-3">
+          <strong id="editTitle">Edit</strong>
+          <button id="closeBtn" class="text-gray-400 hover:text-white"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <div class="p-4">
+          <form id="editForm" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-sm text-gray-300">Name<input type="text" id="f_name" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+              <label class="text-sm text-gray-300">Company<input type="text" id="f_company" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+              <label class="text-sm text-gray-300">VAT<input type="text" id="f_vat" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+              <label class="text-sm text-gray-300">Email<input type="text" id="f_email" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+            </div>
+            <div>
+              <label class="text-sm text-gray-300">Phone<input type="text" id="f_phone" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+              <label class="text-sm text-gray-300">Language<input type="text" id="f_language" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+              <label class="text-sm text-gray-300 flex items-center gap-2">Language confirmed<input type="checkbox" id="f_lang_conf" class="h-4 w-4"/></label>
+            </div>
+            <label class="text-sm text-gray-300">Address<input type="text" id="f_address" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+            <label class="text-sm text-gray-300">City<input type="text" id="f_city" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+            <label class="text-sm text-gray-300">Postal Code<input type="text" id="f_postal" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+            <label class="text-sm text-gray-300">Country<input type="text" id="f_country" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+          </form>
+        </div>
+        <div class="flex items-center justify-end gap-2 border-t border-[#283039] px-4 py-3">
+          <button class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="saveBtn"><span class="material-symbols-outlined">save</span>Save</button>
+        </div>
       </div>
     </div>
 
@@ -138,24 +103,26 @@
       });
 
       async function loadProspects(){
-        rows.innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>';
+        rows.innerHTML = '<tr><td colspan="7" class="p-3 text-[#9cabba]">Loading…</td></tr>';
         const r = await fetch('/api/prospects'+(q.value? ('?q='+encodeURIComponent(q.value)) : ''), { credentials:'include' });
         const list = await r.json();
         rows.innerHTML = '';
-        if(!Array.isArray(list) || !list.length){ rows.innerHTML='<tr><td colspan="7" class="muted">No prospects</td></tr>'; return; }
+        if(!Array.isArray(list) || !list.length){ rows.innerHTML='<tr><td colspan="7" class="p-3 text-[#9cabba]">No prospects</td></tr>'; return; }
         for (const row of list){
           const tr = document.createElement('tr');
           const phone = row.phone||'';
           tr.innerHTML = `
-            <td>${row.type}${row.code? ' · '+row.code:''}</td>
-            <td>${(row.name||'').replace(/</g,'&lt;')}</td>
-            <td>${phone}</td>
-            <td>${row.language||''}</td>
-            <td>${row.language_confirmed? '✔️':'—'}</td>
-            <td>${row.opt_out? 'Yes':'No'}</td>
-            <td>
-              <button class="btn" data-act="toggle" data-phone="${encodeURIComponent(phone)}" data-opt="${row.opt_out?0:1}">${row.opt_out?'Allow':'Opt‑out'}</button>
-              <button class="btn" data-act="edit" data-id="${row.id}" data-type="${row.type}" data-code="${row.code||''}">Edit</button>
+            <td class="p-3 text-sm">${row.type}${row.code? ' · '+row.code:''}</td>
+            <td class="p-3 text-sm">${(row.name||'').replace(/</g,'&lt;')}</td>
+            <td class="p-3 text-sm text-[#9cabba]">${phone}</td>
+            <td class="p-3 text-sm">${row.language||''}</td>
+            <td class="p-3 text-sm">${row.language_confirmed? '✔️':'—'}</td>
+            <td class="p-3 text-sm">${row.opt_out? '<span class="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-300">Yes</span>' : '<span class="inline-flex items-center rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-300">No</span>'}</td>
+            <td class="p-3">
+              <div class="flex items-center gap-2">
+                <button class="inline-flex items-center gap-2 rounded-md bg-[#0d7ff2] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90" data-act="toggle" data-phone="${encodeURIComponent(phone)}" data-opt="${row.opt_out?0:1}">${row.opt_out?'Allow':'Opt‑out'}</button>
+                <button class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90" data-act="edit" data-id="${row.id}" data-type="${row.type}" data-code="${row.code||''}">Edit</button>
+              </div>
             </td>
           `;
           rows.appendChild(tr);
@@ -185,7 +152,7 @@
           const d = (doc.delivery_addresses||[]).find(x=> x.code===code) || {};
           fillForm(d);
         }
-        modal.style.display='flex';
+        modal.classList.remove('hidden');
       }
 
       function fillForm(obj){
@@ -222,7 +189,7 @@
         else url = `/api/prospects/${currentEdit.id}/delivery/${encodeURIComponent(currentEdit.code||'')}`;
         const r = await fetch(url, { method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) });
         if(!r.ok){ alert('Save failed'); return; }
-        modal.style.display='none';
+        modal.classList.add('hidden');
         loadProspects();
       }
 
@@ -230,4 +197,3 @@
     </script>
   </body>
   </html>
-

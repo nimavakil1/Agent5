@@ -3,155 +3,86 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Campaigns</title>
+    <title>Campaigns · ACROPAQ AI</title>
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="/app/shell.js"></script>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color:#0f172a; }
-      a { color:#2563eb; text-decoration: none; }
-      a:hover { text-decoration: underline; }
-      .card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:16px; margin: 12px 0; }
-      .muted { color:#64748b; font-size: 14px; }
-      .btn { display:inline-block; background:#2563eb; color:#fff; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; }
-      .btn.secondary { background:#0f172a; }
-      .btn.muted { background:#64748b; }
-      .btn.warn { background:#b91c1c; }
-      .btn:hover { filter: brightness(0.95); }
-      .row { display:flex; gap:16px; align-items:center; }
-      input[type=text], input[type=datetime-local], select, textarea { padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box; }
-      table { width:100%; border-collapse:collapse; }
-      th, td { padding:8px; vertical-align:top; }
-      thead tr { border-bottom:1px solid #e2e8f0; text-align:left; }
-      tr { border-bottom:1px solid #f1f5f9; }
-      .modal { position:fixed; inset:0; background:rgba(15,23,42,0.4); display:none; align-items:center; justify-content:center; }
-      .modal .panel { background:#fff; width:880px; max-width:95vw; border-radius:8px; border:1px solid #e2e8f0; }
-      .modal header, .modal footer { padding:12px 16px; border-bottom:1px solid #e2e8f0; }
-      .modal footer { border-top:1px solid #e2e8f0; border-bottom:0; display:flex; gap:8px; justify-content:flex-end; }
-      .modal main { padding:16px; max-height:70vh; overflow:auto; }
-      label { display:block; font-size:12px; color:#475569; margin-top:8px; }
-      .grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
-      .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
-      .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#e2e8f0; color:#0f172a; font-size:12px; }
-      .status-running { background:#dcfce7; color:#166534; }
-      .status-paused { background:#fee2e2; color:#991b1b; }
-      .status-scheduled { background:#e0e7ff; color:#3730a3; }
-      .status-ended { background:#e5e7eb; color:#374151; }
-      .windows { border:1px solid #e2e8f0; border-radius:6px; padding:8px; }
-      .windows table { width:100%; border-collapse:collapse; }
-      .windows th, .windows td { padding:6px; border-bottom:1px solid #f1f5f9; }
+      :root { --primary-color:#0d7ff2; }
+      body { font-family: Inter, "Noto Sans", sans-serif; }
     </style>
   </head>
-  <body>
-    <h1>Campaigns</h1>
-    <div class="card">
-      <div class="row" style="justify-content:space-between; align-items:flex-start;">
-        <div class="row" style="gap:8px;">
-          <button class="btn" id="newBtn">New Campaign</button>
-          <button class="btn secondary" id="refreshBtn">Refresh</button>
-          <span class="muted">Prospects moved to <a href="/app/prospects.html">Prospects</a></span>
+  <body class="min-h-screen bg-[#111418] text-gray-100">
+    <main class="p-8">
+      <div class="flex items-start justify-between gap-6">
+        <div class="flex items-center gap-2">
+          <button class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="newBtn"><span class="material-symbols-outlined">add_circle</span><span>New Campaign</span></button>
+          <button class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="refreshBtn"><span class="material-symbols-outlined">refresh</span><span>Refresh</span></button>
         </div>
-        <div style="max-width:520px; width:100%;">
-          <label>Describe campaign (NL prefill)</label>
-          <textarea id="nlInput" rows="3" placeholder="E.g., Run weekdays 9-17 Brussels time, target delivery phones tagged 'promo', 2 attempts with 24h cooldown."></textarea>
-          <div class="row" style="justify-content:flex-end; margin-top:8px;">
-            <button class="btn" id="nlFillBtn">Fill From Description</button>
-          </div>
+        <div class="w-full max-w-xl">
+          <label class="block text-sm text-gray-400 mb-1">Describe campaign (NL prefill)</label>
+          <textarea id="nlInput" rows="3" class="w-full rounded-md border border-[#283039] bg-[#181C20] p-3 text-sm placeholder-gray-500" placeholder="E.g., Run weekdays 9-17 Brussels time, target delivery phones tagged 'promo', 2 attempts with 24h cooldown."></textarea>
+          <div class="flex justify-end mt-2"><button class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="nlFillBtn"><span class="material-symbols-outlined">auto_awesome</span><span>Fill From Description</span></button></div>
         </div>
       </div>
-      <table style="margin-top:12px;">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Windows</th>
-            <th>Start</th>
-            <th>End</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
+      <div class="overflow-x-auto rounded-md border border-[#3b4754] mt-6">
+        <table class="w-full text-left">
+          <thead class="bg-[#1b2127]">
+            <tr>
+              <th class="p-4 text-sm font-medium text-white">Name</th>
+              <th class="p-4 text-sm font-medium text-white">Status</th>
+              <th class="p-4 text-sm font-medium text-white">Windows</th>
+              <th class="p-4 text-sm font-medium text-white">Start</th>
+              <th class="p-4 text-sm font-medium text-white">End</th>
+              <th class="p-4 text-sm font-medium text-white">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rows" class="divide-y divide-[#3b4754]"></tbody>
+        </table>
+      </div>
+    </main>
 
-    <div class="modal" id="editModal">
-      <div class="panel">
-        <header><strong id="editTitle">New Campaign</strong></header>
-        <main>
-          <form id="form">
-            <div class="grid-2">
-              <div>
-                <label>Name
-                  <input type="text" id="f_name" />
-                </label>
-                <label>Description
-                  <input type="text" id="f_description" />
-                </label>
-                <label>Target
-                  <select id="f_target">
-                    <option value="invoice">Invoice</option>
-                    <option value="delivery">Delivery</option>
-                  </select>
-                </label>
-                <label>Include tags (comma-separated)
-                  <input type="text" id="f_include_tags" placeholder="e.g. promo, belgium" />
-                </label>
-                <label>Exclude tags (comma-separated)
-                  <input type="text" id="f_exclude_tags" placeholder="e.g. vip" />
-                </label>
-                <label>Field filters (JSON array)
-                  <input type="text" id="f_field_filters" placeholder='e.g. [{"key":"segment","op":"=","value":"A"}]' />
-                </label>
+    <div class="fixed inset-0 bg-black/50 hidden items-center justify-center" id="editModal" role="dialog" aria-modal="true">
+      <div class="w-[880px] max-w-[95vw] rounded-lg border border-[#283039] bg-[#181C20]">
+        <div class="flex items-center justify-between border-b border-[#283039] px-4 py-3">
+          <strong id="editTitle">New Campaign</strong>
+          <button id="closeBtn" class="text-gray-400 hover:text-white"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <div class="p-4 max-h-[70vh] overflow-auto">
+          <form id="form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-3">
+              <label class="text-sm text-gray-300">Name<input type="text" id="f_name" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+              <label class="text-sm text-gray-300">Description<input type="text" id="f_description" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
+              <label class="text-sm text-gray-300">Target<select id="f_target" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"><option value="invoice">Invoice</option><option value="delivery">Delivery</option></select></label>
+              <label class="text-sm text-gray-300">Include tags (comma-separated)<input type="text" id="f_include_tags" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder="promo, belgium"/></label>
+              <label class="text-sm text-gray-300">Exclude tags (comma-separated)<input type="text" id="f_exclude_tags" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder="vip"/></label>
+              <label class="text-sm text-gray-300">Field filters (JSON array)<input type="text" id="f_field_filters" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder='[{"key":"segment","op":"=","value":"A"}]'/></label>
+            </div>
+            <div class="space-y-3">
+              <label class="text-sm text-gray-300">Time zone (IANA)<input type="text" id="f_tz" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder="Europe/Brussels"/></label>
+              <div class="rounded-md border border-[#283039] p-2.5">
+                <div class="flex items-center justify-between mb-2">
+                  <strong>Windows</strong>
+                  <button class="inline-flex items-center gap-1 rounded-md bg-[var(--primary-color)] px-2 py-1 text-xs text-white" type="button" id="addWindowBtn"><span class="material-symbols-outlined text-base">add</span>Add</button>
+                </div>
+                <table class="w-full text-sm">
+                  <thead><tr class="text-gray-400"><th class="py-1 text-left">Day</th><th class="py-1 text-left">Start</th><th class="py-1 text-left">End</th><th></th></tr></thead>
+                  <tbody id="winRows"></tbody>
+                </table>
               </div>
-              <div>
-                <label>Time zone (IANA)
-                  <input type="text" id="f_tz" placeholder="Europe/Brussels" />
-                </label>
-                <div class="windows">
-                  <div class="row" style="justify-content:space-between;">
-                    <strong>Windows</strong>
-                    <button class="btn" type="button" id="addWindowBtn">Add window</button>
-                  </div>
-                  <table>
-                    <thead><tr><th>Day</th><th>Start</th><th>End</th><th></th></tr></thead>
-                    <tbody id="winRows"></tbody>
-                  </table>
-                </div>
-                <div class="grid-2">
-                  <label>Start at
-                    <input type="datetime-local" id="f_start_at" />
-                  </label>
-                  <label>End at
-                    <input type="datetime-local" id="f_end_at" />
-                  </label>
-                </div>
-                <div class="grid-2">
-                  <label>Max attempts
-                    <input type="text" id="f_max_attempts" value="1" />
-                  </label>
-                  <label>Cooldown (hours)
-                    <input type="text" id="f_cooldown" value="24" />
-                  </label>
-                </div>
-                <div class="grid-2">
-                  <label>Daily cap
-                    <input type="text" id="f_daily_cap" value="0" />
-                  </label>
-                  <label>Hourly cap
-                    <input type="text" id="f_hourly_cap" value="0" />
-                  </label>
-                </div>
-                <label>Script profile
-                  <input type="text" id="f_script_profile" placeholder="e.g. sales_v1" />
-                </label>
-                <label>Notes
-                  <input type="text" id="f_notes" />
-                </label>
-              </div>
+              <div class="grid grid-cols-2 gap-3"><label class="text-sm text-gray-300">Start at<input type="datetime-local" id="f_start_at" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label><label class="text-sm text-gray-300">End at<input type="datetime-local" id="f_end_at" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label></div>
+              <div class="grid grid-cols-2 gap-3"><label class="text-sm text-gray-300">Max attempts<input type="text" id="f_max_attempts" value="1" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label><label class="text-sm text-gray-300">Cooldown (hours)<input type="text" id="f_cooldown" value="24" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label></div>
+              <div class="grid grid-cols-2 gap-3"><label class="text-sm text-gray-300">Daily cap<input type="text" id="f_daily_cap" value="0" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label><label class="text-sm text-gray-300">Hourly cap<input type="text" id="f_hourly_cap" value="0" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label></div>
+              <label class="text-sm text-gray-300">Script profile<input type="text" id="f_script_profile" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder="sales_v1"/></label>
+              <label class="text-sm text-gray-300">Notes<input type="text" id="f_notes" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
             </div>
           </form>
-        </main>
-        <footer>
-          <button class="btn" id="saveBtn">Save</button>
-          <button class="btn muted" id="closeBtn">Close</button>
-        </footer>
+        </div>
+        <div class="flex items-center justify-end gap-2 border-t border-[#283039] px-4 py-3">
+          <button class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="saveBtn"><span class="material-symbols-outlined">save</span><span>Save</span></button>
+        </div>
       </div>
     </div>
 
@@ -174,30 +105,30 @@
       function htmlesc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
       async function load(){
-        rows.innerHTML = '<tr><td colspan="6" class="muted">Loading…</td></tr>';
+        rows.innerHTML = '<tr><td colspan="6" class="p-4 text-[#9cabba]">Loading…</td></tr>';
         const r = await fetch('/api/campaigns', { credentials:'include' });
         const list = await r.json();
         rows.innerHTML = '';
-        if(!Array.isArray(list) || !list.length){ rows.innerHTML='<tr><td colspan="6" class="muted">No campaigns</td></tr>'; return; }
+        if(!Array.isArray(list) || !list.length){ rows.innerHTML='<tr><td colspan="6" class="p-4 text-[#9cabba]">No campaigns</td></tr>'; return; }
         for(const c of list){
           const windows = (c.schedule?.windows||[]).map(w=> `${w.day} ${w.start}-${w.end}`).join('<br/>');
           const status = c.status||'draft';
-          const pillCls = 'pill status-' + status;
+          const color = status==='running'?'green': status==='paused'?'yellow': status==='scheduled'?'blue': status==='ended'?'gray':'slate';
           const tr = document.createElement('tr');
           tr.innerHTML = `
-            <td>${htmlesc(c.name||c.title||'(untitled)')}</td>
-            <td><span class="${pillCls}">${htmlesc(status)}</span></td>
-            <td>${windows||'<span class="muted">—</span>'}</td>
-            <td>${c.schedule?.start_at ? new Date(c.schedule.start_at).toLocaleString() : '—'}</td>
-            <td>${c.schedule?.end_at ? new Date(c.schedule.end_at).toLocaleString() : '—'}</td>
-            <td>
-              <div class="row" style="gap:6px;">
-                <button class="btn" data-act="edit" data-id="${c._id}">Edit</button>
-                <button class="btn secondary" data-act="stats" data-id="${c._id}">Stats</button>
-                <button class="btn" data-act="start" data-id="${c._id}">Start</button>
-                <button class="btn muted" data-act="pause" data-id="${c._id}">Pause</button>
-                <button class="btn warn" data-act="stop" data-id="${c._id}">Stop</button>
-                <button class="btn warn" data-act="del" data-id="${c._id}">Delete</button>
+            <td class="p-4 text-sm text-white">${htmlesc(c.name||c.title||'(untitled)')}</td>
+            <td class="p-4 text-sm"><span class="inline-flex items-center rounded-full bg-${color}-500/10 px-2 py-1 text-xs font-medium text-${color}-400">${htmlesc(status)}</span></td>
+            <td class="p-4 text-sm text-[#9cabba]">${windows||'—'}</td>
+            <td class="p-4 text-sm text-[#9cabba]">${c.schedule?.start_at ? new Date(c.schedule.start_at).toLocaleString() : '—'}</td>
+            <td class="p-4 text-sm text-[#9cabba]">${c.schedule?.end_at ? new Date(c.schedule.end_at).toLocaleString() : '—'}</td>
+            <td class="p-4">
+              <div class="flex flex-wrap items-center gap-2">
+                <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-[#9cabba] hover:bg-[#1b2127] hover:text-white" data-act="edit" data-id="${c._id}"><span class="material-symbols-outlined text-base">edit</span>Edit</button>
+                <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-[#9cabba] hover:bg-[#1b2127] hover:text-white" data-act="stats" data-id="${c._id}"><span class="material-symbols-outlined text-base">monitoring</span>Stats</button>
+                <button class="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary-color)] px-2 py-1.5 text-sm font-medium text-white hover:bg-opacity-90" data-act="start" data-id="${c._id}"><span class="material-symbols-outlined text-base">play_arrow</span>Start</button>
+                <button class="inline-flex items-center gap-1.5 rounded-md bg-gray-700 px-2 py-1.5 text-sm font-medium text-white hover:bg-gray-600" data-act="pause" data-id="${c._id}"><span class="material-symbols-outlined text-base">pause</span>Pause</button>
+                <button class="inline-flex items-center gap-1.5 rounded-md bg-red-700 px-2 py-1.5 text-sm font-medium text-white hover:bg-red-600" data-act="stop" data-id="${c._id}"><span class="material-symbols-outlined text-base">stop</span>Stop</button>
+                <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-red-300 hover:bg-red-900/40" data-act="del" data-id="${c._id}"><span class="material-symbols-outlined text-base">delete</span>Delete</button>
               </div>
             </td>
           `;
@@ -213,16 +144,16 @@
         editTitle.textContent = 'New Campaign';
         form.reset(); winRows.innerHTML='';
         addWindowRow('Mon','09:00','17:00');
-        modal.style.display='flex';
+        modal.classList.remove('hidden');
       }
 
       function addWindowRow(day='',start='',end=''){
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><select>${dayOpts.map(d=>`<option ${d===day?'selected':''}>${d}</option>`).join('')}</select></td>
-          <td><input type="text" placeholder="09:00" value="${htmlesc(start)}"/></td>
-          <td><input type="text" placeholder="17:00" value="${htmlesc(end)}"/></td>
-          <td><button type="button" class="btn warn">X</button></td>
+          <td class="py-1 pr-2"><select class="w-full rounded-md border border-[#283039] bg-[#111418] p-1.5 text-sm">${dayOpts.map(d=>`<option ${d===day?'selected':''}>${d}</option>`).join('')}</select></td>
+          <td class="py-1 pr-2"><input type="text" class="w-full rounded-md border border-[#283039] bg-[#111418] p-1.5 text-sm" placeholder="09:00" value="${htmlesc(start)}"/></td>
+          <td class="py-1 pr-2"><input type="text" class="w-full rounded-md border border-[#283039] bg-[#111418] p-1.5 text-sm" placeholder="17:00" value="${htmlesc(end)}"/></td>
+          <td class="py-1"><button type="button" class="rounded-md bg-red-700/70 px-2 py-1 text-xs">Remove</button></td>
         `;
         tr.querySelector('button').onclick = ()=> tr.remove();
         winRows.appendChild(tr);
@@ -323,7 +254,7 @@
         if (!c) return alert('Not found');
         editTitle.textContent = 'Edit Campaign';
         fillForm(c);
-        modal.style.display='flex';
+        modal.classList.remove('hidden');
       }
 
       async function save(){
@@ -333,7 +264,7 @@
         const url = currentId ? `/api/campaigns/${currentId}` : '/api/campaigns';
         const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) });
         if(!r.ok){ const j = await r.json().catch(()=>({})); return alert('Save failed: '+(j.message||r.status)); }
-        modal.style.display='none';
+        modal.classList.add('hidden');
         load();
       }
 
@@ -343,7 +274,6 @@
         const r = await fetch('/api/campaigns/nl-fill', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ text }) });
         if(!r.ok){ const j = await r.json().catch(()=>({})); return alert('NL fill failed: '+(j.message||r.status)); }
         const c = await r.json();
-        // Open new form and populate
         openNew();
         fillForm(c);
       }
@@ -351,7 +281,7 @@
       newBtn.onclick = ()=> openNew();
       refreshBtn.onclick = ()=> load();
       saveBtn.onclick = ()=> save();
-      closeBtn.onclick = ()=> modal.style.display='none';
+      closeBtn.onclick = ()=> modal.classList.add('hidden');
       document.getElementById('addWindowBtn').onclick = ()=> addWindowRow('Mon','09:00','17:00');
       nlBtn.onclick = ()=> nlFill();
 
