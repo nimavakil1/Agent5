@@ -36,7 +36,8 @@
       <style>
         :root { --primary-color: ${PRIMARY}; }
         body { background:#111418; color:#e5e7eb; padding-left: 256px; }
-        @media (max-width: 1024px){ body { padding-left: 0; } #acq-aside { transform: translateX(-100%);} }
+        /* Keep sidebar visible on all widths to avoid hidden nav */
+        /* You can add a toggle later for mobile */
         .btn { display:inline-flex; align-items:center; gap:.5rem; border-radius:.5rem; padding:.5rem .75rem; background: var(--primary-color); color:#fff; }
       </style>
       <aside id="acq-aside" class="fixed left-0 top-0 bottom-0 w-64 shrink-0 border-r border-[#283039] bg-[#111418] p-6 z-40">
