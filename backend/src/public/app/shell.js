@@ -58,6 +58,7 @@
         <div class="mt-8 text-[#9cabba] text-sm overflow-hidden">
           <div class="flex items-center gap-2 overflow-hidden"><span class="material-symbols-outlined shrink-0">account_circle</span><span class="truncate" title="${me? (me.email||'') : ''}">${me? (me.email||'') : ''}</span></div>
           <button id="acq-logout" class="mt-3 btn">Logout</button>
+          <div id="acq-ver" class="mt-3 text-xs text-[#6b7280]">v —</div>
         </div>
       </aside>
     `;
@@ -78,6 +79,8 @@
     }
     const logout = document.getElementById('acq-logout');
     if (logout) logout.onclick = async()=>{ try{ await fetch('/api/auth/logout',{method:'POST',credentials:'include'});}catch(_){} location.href='/app/login'; };
+    // Fetch version info
+    try { const r = await fetch('/version',{ credentials:'include' }); if (r.ok){ const j = await r.json(); const el=document.getElementById('acq-ver'); if (el) el.textContent = 'v ' + (j.commit || 'unknown'); } } catch(_) {}
   }
   getMe().then(u=>{
     if(!u){ if(!location.pathname.endsWith('/app/login')) redirectToLogin(location.pathname+location.search+location.hash); return; }

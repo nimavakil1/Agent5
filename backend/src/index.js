@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const { execSync } = require('child_process');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
@@ -117,6 +118,7 @@ app.get('/', (req, res) => {
 // Health endpoints
 app.get('/healthz', (req, res) => res.status(200).send('ok'));
 app.get('/readyz', (req, res) => res.status(200).json({ ready: true }));
+app.get('/version', (req, res) => res.status(200).json({ commit: COMMIT_SHA || null, startedAt: STARTED_AT }));
 
 // Serve static monitor and call recordings (optionally protected)
 // Save path is backend/recordings; __dirname is backend/src, so serve ../recordings
@@ -204,5 +206,10 @@ if (process.env.NODE_ENV !== 'test') {
   // Start simple scheduler loop
   try { scheduler.start(); } catch (e) { console.error('scheduler start error', e); }
 }
+
+// App version info
+let COMMIT_SHA = process.env.COMMIT_SHA || '';
+try { if (!COMMIT_SHA) COMMIT_SHA = execSync('git rev-parse --short HEAD', { stdio: ['ignore','pipe','ignore'] }).toString().trim(); } catch(_) {}
+const STARTED_AT = new Date().toISOString();
 
 module.exports = { app, server, wss };
