@@ -24,7 +24,7 @@
     const cls = active? 'bg-[#283039] text-white' : 'text-[#9cabba] hover:bg-[#1b2127] hover:text-white';
     return `<a href="${href}" class="${base} ${cls}"><span class="material-symbols-outlined shrink-0">${icon}</span><span class="text-sm font-medium whitespace-nowrap truncate">${label}</span></a>`;
   }
-  function injectShell(me){
+  async function injectShell(me){
     if(document.getElementById('acq-shell')) return; // once
     ensureIconFont();
     ensureUiCss();
