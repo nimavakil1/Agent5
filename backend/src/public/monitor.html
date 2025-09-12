@@ -26,39 +26,7 @@
         <h2 class="font-semibold text-white mb-2">Active Rooms</h2>
         <div id="rooms" class="flex flex-col gap-2"></div>
       </section>
-      <section class="card p-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="muted text-sm">LiveKit WS URL (wss://...)</label>
-            <input id="host" class="inp" placeholder="wss://your-livekit.example" />
-          </div>
-          <div>
-            <label class="muted text-sm">Room Name</label>
-            <input id="room" class="inp" placeholder="call-..." />
-          </div>
-          <div>
-            <label class="muted text-sm">Identity</label>
-            <input id="identity" class="inp" placeholder="viewer-123" />
-          </div>
-          <div>
-            <label class="muted text-sm">Prime Text (optional)</label>
-            <input id="primeText" class="inp" placeholder="e.g., Open with a brief intro about receipt rolls" />
-          </div>
-          <div class="md:col-span-2">
-            <label class="muted text-sm">API Token (Authorization: Bearer)</label>
-            <div class="flex gap-2">
-              <input id="token" class="inp" placeholder="paste AUTH_TOKEN here" />
-              <button id="saveToken" class="btn btn-primary">Save Token</button>
-            </div>
-          </div>
-        </div>
-        <div class="mt-4 flex flex-wrap gap-2">
-          <button id="join" class="btn btn-primary">Join Room</button>
-          <button id="leave" class="btn">Leave</button>
-          <button id="talk" class="btn" style="background:#10b981;color:#fff;">Start Talk</button>
-          <button id="stopTalk" class="btn btn-danger">Stop Talk</button>
-        </div>
-      </section>
+      <!-- Simplified UI: all actions on room rows -->
       <section class="card p-4">
         <h2 class="font-semibold text-white mb-2">Subscribed Tracks</h2>
         <div id="tracks" class="flex flex-wrap gap-2"></div>

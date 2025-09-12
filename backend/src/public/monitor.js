@@ -10,19 +10,13 @@
   const tracksEl = document.getElementById('tracks');
   const roomsEl = document.getElementById('rooms');
 
-  async function join() {
+  async function join(roomNameParam) {
     try {
-      const host = document.getElementById('host').value.trim();
-      const roomName = document.getElementById('room').value.trim();
-      let identity = document.getElementById('identity').value.trim();
-      if (!host || !roomName) return alert('host and room are required');
-      if (!identity) identity = 'viewer-' + Date.now();
+      const roomName = String(roomNameParam || '').trim();
+      let identity = 'viewer-' + Date.now();
+      if (!roomName) return alert('room is required');
 
       // fetch token from backend
-      const tokenInput = document.getElementById('token').value.trim();
-      if (tokenInput) {
-        localStorage.setItem('AUTH_TOKEN', tokenInput);
-      }
       const bearer = localStorage.getItem('AUTH_TOKEN') || '';
       const res = await fetch(
         `/api/livekit/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`,
@@ -81,17 +75,7 @@
     }
   }
 
-  document.getElementById('join').onclick = join;
-  document.getElementById('leave').onclick = leave;
-  document.getElementById('saveToken').onclick = () => {
-    const v = document.getElementById('token').value.trim();
-    if (v) {
-      localStorage.setItem('AUTH_TOKEN', v);
-      log('Token saved');
-    } else {
-      log('Enter a token before saving');
-    }
-  };
+  // Leave handled globally via room.disconnect
 
   // Mic streaming to backend WS -> OpenAI
   let micStream = null;
@@ -182,8 +166,7 @@
     }
   }
 
-  document.getElementById('talk').onclick = startTalk;
-  document.getElementById('stopTalk').onclick = stopTalk;
+  // Removed talk/stopTalk; use Take Over button per-room instead
   // Create latency label
   (function(){
     const row = document.createElement('div'); row.className='row';
@@ -207,17 +190,20 @@
 
   function renderRooms(list) {
     roomsEl.innerHTML = '';
-    if (!list.length) {
+    // prefer rooms with participants > 0 if available
+    const populated = list.filter((x)=> (x.num_participants||0) > 0);
+    const show = populated.length ? populated : list;
+    if (!show.length) {
       const div = document.createElement('div'); div.className='muted text-sm'; div.textContent='No active rooms'; roomsEl.appendChild(div); return;
     }
-    list.forEach((r) => {
+    show.forEach((r) => {
       const row = document.createElement('div');
       row.className = 'flex items-center justify-between gap-2 p-2 border border-[#283039] rounded';
       const left = document.createElement('div');
-      left.innerHTML = `<div class="font-medium">${r.name}</div><div class="text-xs muted">participants: ${r.num_participants||''}</div>`;
+      left.innerHTML = `<div class="font-medium">${r.name}</div><div class="text-xs muted">participants: ${r.num_participants ?? '?'} </div>`;
       const right = document.createElement('div'); right.className='flex items-center gap-2';
       const joinBtn = document.createElement('button'); joinBtn.className='btn btn-primary'; joinBtn.textContent='Join';
-      joinBtn.onclick = () => { document.getElementById('room').value = r.name; join(); };
+      joinBtn.onclick = () => { join(r.name); };
       const stopBtn = document.createElement('button'); stopBtn.className='btn btn-danger'; stopBtn.textContent='Stop AI';
       stopBtn.onclick = async () => {
         const bearer = localStorage.getItem('AUTH_TOKEN') || '';
@@ -236,7 +222,6 @@
   let opWs = null; let opAudio = { stream:null, ctx:null, proc:null };
   async function startOperatorBridge(roomName) {
     try {
-      if (!roomName) roomName = document.getElementById('room').value.trim();
       if (!roomName) return alert('room required');
       if (opWs && opWs.readyState === WebSocket.OPEN) return;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';

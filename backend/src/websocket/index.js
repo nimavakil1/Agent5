@@ -341,7 +341,7 @@ function createWebSocketServer(server) {
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
         let publisher = null;
-        if (process.env.AGENTSTREAM_PUBLISH_LIVEKIT === '1') {
+        if (process.env.AGENTSTREAM_PUBLISH_LIVEKIT !== '0') {
           try {
             const at = new AccessToken(apiKey, apiSecret, { identity });
             at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
