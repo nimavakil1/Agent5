@@ -30,7 +30,7 @@ async function logAuditEvent(userId, userEmail, action, resource, resourceId, de
 function signJwt(user) {
   const secret = process.env.JWT_SECRET || 'dev-secret-change-me';
   const payload = { sub: user._id.toString(), email: user.email, role: user.role };
-  return jwt.sign(payload, secret, { expiresIn: '15m' });
+  return jwt.sign(payload, secret, { expiresIn: '4h' });
 }
 
 router.post('/login', async (req, res) => {
@@ -67,7 +67,7 @@ router.post('/login', async (req, res) => {
       httpOnly: true,
       sameSite: 'lax',
       secure: (process.env.COOKIE_SECURE === '1') || (process.env.NODE_ENV === 'production'),
-      maxAge: 15 * 60 * 1000,
+      maxAge: 4 * 60 * 60 * 1000,
       path: '/',
     };
     res.cookie('access_token', token, cookieOpts);
