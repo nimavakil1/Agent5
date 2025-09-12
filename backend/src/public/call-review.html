@@ -198,11 +198,7 @@
       </section>
     </main>
     <script>
-      // Session info
-      fetch('/api/auth/me', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject()).then(u => {
-        document.getElementById('who').textContent = u.email;
-      }).catch(() => location.href = '/app/login');
-      document.getElementById('logout').onclick = async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); location.href = '/app/login'; };
+      // Session info is handled by shell.js
 
       // Global variables
       let allCalls = [];
