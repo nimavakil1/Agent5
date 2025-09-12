@@ -17,9 +17,16 @@ function verifyJwt(token) {
 // Strict: requires a valid session
 function requireSession(req, res, next) {
   const token = readJwtFromCookies(req);
-  if (!token) return res.status(401).json({ message: 'Unauthorized' });
+  const isHtml = (req.headers.accept || '').includes('text/html') || /\.html($|\?)/.test(req.originalUrl || '');
+  if (!token) {
+    if (isHtml) return res.redirect(302, `/app/login?next=${encodeURIComponent(req.originalUrl || '/')}`);
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
   const data = verifyJwt(token);
-  if (!data) return res.status(401).json({ message: 'Unauthorized' });
+  if (!data) {
+    if (isHtml) return res.redirect(302, `/app/login?next=${encodeURIComponent(req.originalUrl || '/')}`);
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
   req.user = { id: data.sub, email: data.email, role: data.role };
   next();
 }
@@ -42,4 +49,3 @@ function allowBearerOrSession(req, res, next) {
 }
 
 module.exports = { requireSession, allowBearerOrSession };
-
