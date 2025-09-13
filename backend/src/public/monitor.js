@@ -54,14 +54,25 @@
         log('RoomEvent enum not found on LiveKit client');
       }
       room.on((RoomEvent||{}).TrackSubscribed || 'trackSubscribed', (track, pub) => {
-        log('TrackSubscribed', pub.trackName || pub.source || 'audio');
+        const name = pub?.trackName || pub?.source || 'audio';
+        log('TrackSubscribed', name);
         if (track.kind === 'audio') {
           const audio = document.createElement('audio');
           audio.autoplay = true;
           audio.controls = true;
+          audio.playsInline = true;
+          audio.muted = false;
           track.attach(audio);
-          audio.dataset.name = pub.trackName || 'audio';
+          audio.dataset.name = name;
           tracksEl.appendChild(audio);
+          const tryPlay = () => audio.play().catch(() => {
+            const btn = document.createElement('button');
+            btn.textContent = `Tap to enable audio (${name})`;
+            btn.className = 'mt-2 bg-emerald-600 text-white rounded px-3 py-2';
+            btn.onclick = () => { audio.muted = false; audio.play().catch(()=>{}); btn.remove(); };
+            tracksEl.appendChild(btn);
+          });
+          tryPlay();
         }
       });
 
