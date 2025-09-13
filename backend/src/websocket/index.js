@@ -269,13 +269,14 @@ function createWebSocketServer(server) {
               const pcm8k = new Int16Array(outLen);
               for (let i = 0, j = 0; j < outLen; i += 6, j++) pcm8k[j] = buf.readInt16LE(i);
               const s = sessionRegistry.get(roomName);
+              // 1) Publish to LiveKit so browser listeners (monitor) can hear operator
               if (s && s.livekitPublisher && typeof s.livekitPublisher.pushCalleeFrom8kPcm16 === 'function') {
                 try { s.livekitPublisher.pushCalleeFrom8kPcm16(pcm8k); } catch(e) { console.error('operator-bridge livekit push error:', e); }
-              } else {
-                const mu = Buffer.alloc(pcm8k.length);
-                for (let i = 0; i < pcm8k.length; i++) mu[i] = linearToUlaw(pcm8k[i]);
-                sessionRegistry.sendPcmuToPstn(roomName, mu);
               }
+              // 2) Always send to PSTN so the person on the phone hears operator
+              const mu = Buffer.alloc(pcm8k.length);
+              for (let i = 0; i < pcm8k.length; i++) mu[i] = linearToUlaw(pcm8k[i]);
+              sessionRegistry.sendPcmuToPstn(roomName, mu);
             }
           } catch (e) { console.error('operator-bridge error', e); }
         });
