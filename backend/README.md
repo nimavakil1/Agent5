@@ -32,3 +32,39 @@ Docker
 
 - Build: `docker build -t agent5-backend ./backend`
 - Run: `docker run --env-file ./backend/.env -p 3000:3000 agent5-backend`
+
+Reverse proxy (Nginx) for WebSockets
+
+The admin Monitor and Agent Studio use WebSockets on these endpoints:
+
+- `/operator-bridge` (operator mic takeover)
+- `/agent-stream` (Studio mic/agent bridge)
+- `/websocket` (Telnyx PSTN bridge)
+
+If you use Nginx in front of the backend, you must enable WS upgrade. Add this to the server blocks for `agent.acropaq.com` (both 80 and 443) above any generic `location /` proxy:
+
+```
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
+location ~ ^/(operator-bridge|agent-stream|websocket)$ {
+  proxy_pass http://127.0.0.1:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection $connection_upgrade;
+  proxy_set_header Host $host;
+  proxy_read_timeout 3600s;
+  proxy_send_timeout 3600s;
+  proxy_buffering off;
+}
+```
+
+Then reload Nginx:
+
+```
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Without these, takeover mic traffic will fail to connect and the Operator mic level will show errors.
