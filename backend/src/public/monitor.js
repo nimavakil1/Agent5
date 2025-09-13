@@ -38,7 +38,14 @@
         return;
       }
       room = new LK.Room();
-      const url = (srvHost && (srvHost.startsWith('ws') ? srvHost : (srvHost.startsWith('http') ? (srvHost.replace(/^http/,'ws')) : srvHost))) || host;
+      const toWs = (u)=>{
+        if (!u) return '';
+        if (u.startsWith('wss://') || u.startsWith('ws://')) return u;
+        if (u.startsWith('https://')) return 'wss://' + u.slice(8);
+        if (u.startsWith('http://')) return 'ws://' + u.slice(7);
+        return u;
+      };
+      const url = toWs(srvHost) || ((location.protocol==='https:'?'wss':'ws')+'://'+location.host);
       await room.connect(url, token);
       log('Connected to room');
 
@@ -212,8 +219,7 @@
       joinBtn.onclick = () => { join(r.name); };
       const stopBtn = document.createElement('button'); stopBtn.className='btn btn-danger'; stopBtn.textContent='Stop AI';
       stopBtn.onclick = async () => {
-        const bearer = localStorage.getItem('AUTH_TOKEN') || '';
-        const res = await fetch(`/api/livekit/rooms/${encodeURIComponent(r.name)}/stop_ai`, { method:'POST', headers:{ Authorization: `Bearer ${bearer}`, 'Content-Type':'application/json' } });
+        const res = await fetch(`/api/livekit/rooms/${encodeURIComponent(r.name)}/stop_ai`, { method:'POST', credentials:'include' });
         if (!res.ok) { alert('Failed to stop AI'); }
       };
       const takeBtn = document.createElement('button'); takeBtn.className='btn'; takeBtn.style.background='#10b981'; takeBtn.style.color='#fff'; takeBtn.textContent='Take Over';
