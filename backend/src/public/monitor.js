@@ -232,17 +232,25 @@
       const right = document.createElement('div'); right.className='flex items-center gap-2';
       const joinBtn = document.createElement('button'); joinBtn.className='btn btn-primary'; joinBtn.textContent='Join';
       joinBtn.onclick = () => { join(r.name); };
-      const stopBtn = document.createElement('button'); stopBtn.className='btn btn-danger'; stopBtn.textContent='Stop Agent';
-      stopBtn.onclick = async () => {
-        const res = await fetch(`/api/livekit/rooms/${encodeURIComponent(r.name)}/stop_ai`, { method:'POST', credentials:'include' });
-        if (!res.ok) {
-          const t = await res.text().catch(()=> '');
-          alert('Failed to stop Agent: ' + (t || res.status));
+      const takeBtn = document.createElement('button'); takeBtn.className='btn'; takeBtn.style.background='#10b981'; takeBtn.style.color='#fff'; takeBtn.textContent='Take Over';
+      takeBtn.onclick = async () => {
+        try {
+          takeBtn.disabled = true;
+          // 1) Stop the agent
+          const res = await fetch(`/api/livekit/rooms/${encodeURIComponent(r.name)}/stop_ai`, { method:'POST', credentials:'include' });
+          if (!res.ok) {
+            const t = await res.text().catch(()=> '');
+            alert('Failed to stop Agent: ' + (t || res.status));
+            takeBtn.disabled = false;
+            return;
+          }
+          // 2) Start operator mic bridge
+          await startOperatorBridge(r.name);
+        } finally {
+          takeBtn.disabled = false;
         }
       };
-      const takeBtn = document.createElement('button'); takeBtn.className='btn'; takeBtn.style.background='#10b981'; takeBtn.style.color='#fff'; takeBtn.textContent='Take Over';
-      takeBtn.onclick = () => startOperatorBridge(r.name);
-      right.appendChild(joinBtn); right.appendChild(stopBtn); right.appendChild(takeBtn);
+      right.appendChild(joinBtn); right.appendChild(takeBtn);
       row.appendChild(left); row.appendChild(right);
       roomsEl.appendChild(row);
     });

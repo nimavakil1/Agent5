@@ -377,6 +377,9 @@ function createWebSocketServer(server) {
         const silentTh = Number(process.env.SERVER_VAD_SILENT_TH || '0.006');
         const onsetNeededBase = Number(process.env.SERVER_VAD_ONSET_FRAMES || '4');
         const onsetNeededWhileAgent = Number(process.env.SERVER_VAD_ONSET_FRAMES_AGENT || '8');
+        // Expose handles to the session registry so control endpoints can stop the agent
+        try { sessionRegistry.set(roomName, { openaiWs: oaWs, livekitPublisher: publisher }); } catch(_) {}
+
         oaWs.on('open', async () => {
           try {
             // Apply saved settings as-is
