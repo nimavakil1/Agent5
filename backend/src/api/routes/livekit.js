@@ -23,7 +23,8 @@ router.get('/token', async (req, res) => {
     if (!apiKey || !apiSecret) return res.status(500).json({ message: 'LiveKit not configured' });
 
     const at = new AccessToken(apiKey, apiSecret, { identity });
-    at.addGrant({ room, roomJoin: true, canPublish: false, canSubscribe: true });
+    const canPublish = String(req.query.pub || req.query.publish || '').toLowerCase() === '1';
+    at.addGrant({ room, roomJoin: true, canPublish, canSubscribe: true });
     const token = await at.toJwt();
     try { roomsStore.touch(room); } catch(_) {}
     res.json({ token, room, identity, host: process.env.LIVEKIT_SERVER_URL });
