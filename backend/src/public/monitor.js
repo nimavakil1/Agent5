@@ -272,8 +272,15 @@
       const src = ctx.createMediaStreamSource(micStream);
       const proc = ctx.createScriptProcessor(1024, 1, 1);
       proc.onaudioprocess = (e) => {
-        if (!opWs || opWs.readyState !== WebSocket.OPEN) return;
         const f32 = e.inputBuffer.getChannelData(0);
+        // Update mic VU even if bridge WS is not open yet
+        try {
+          let sum=0; for (let k=0;k<f32.length;k++){ const v=f32[k]; sum += v*v; }
+          const rms = Math.sqrt(sum / (f32.length||1));
+          const pct = Math.max(0, Math.min(100, Math.round((rms/0.1)*100)));
+          const vu = document.getElementById('opVu'); if (vu) vu.style.width = pct + '%';
+        } catch(_) {}
+        if (!opWs || opWs.readyState !== WebSocket.OPEN) return;
         const i16 = floatTo16BitPCM(f32);
         // Downsample 48k -> 24k by dropping every other sample
         const out = new Int16Array(Math.floor(i16.length/2));
@@ -282,13 +289,6 @@
         for (let i=0;i<out.length;i++){ buf[i*2]=out[i]&0xff; buf[i*2+1]=(out[i]>>8)&0xff; }
         const b64 = btoa(String.fromCharCode(...buf));
         opWs.send(JSON.stringify({ type:'audio', audio:b64 }));
-        // Update mic VU
-        try {
-          let sum=0; for (let k=0;k<f32.length;k++){ const v=f32[k]; sum += v*v; }
-          const rms = Math.sqrt(sum / (f32.length||1));
-          const pct = Math.max(0, Math.min(100, Math.round((rms/0.1)*100)));
-          const vu = document.getElementById('opVu'); if (vu) vu.style.width = pct + '%';
-        } catch(_) {}
       };
       src.connect(proc); proc.connect(ctx.destination);
       opAudio = { stream: micStream, ctx, proc };
