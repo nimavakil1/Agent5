@@ -268,4 +268,14 @@
   // Poll rooms
   setInterval(loadRooms, 5000);
   loadRooms();
+
+  // Manual join fallback
+  const mj = document.getElementById('manualJoin');
+  if (mj) {
+    mj.onclick = () => {
+      const v = (document.getElementById('manualRoom')?.value || '').trim();
+      if (!v) { alert('Enter a room name'); return; }
+      join(v);
+    };
+  }
 })();
