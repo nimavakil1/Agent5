@@ -3,6 +3,7 @@ const router = express.Router();
 const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
 const roomsStore = require('../../util/roomsStore');
 const sessionRegistry = require('../../util/sessionRegistry');
+const roomPool = require('../../util/roomPool');
 
 function toHttpUrl(u) {
   if (!u) return '';
@@ -146,6 +147,31 @@ router.get('/pool', async (req, res) => {
   } catch (e) {
     res.status(500).json({ message: 'error' });
   }
+});
+
+// Allocate a free room from the pool
+router.post('/allocate', async (req, res) => {
+  const name = roomPool.allocate();
+  if (!name) return res.status(503).json({ message: 'no_rooms_available' });
+  // Ensure LiveKit room exists
+  try {
+    const host = process.env.LIVEKIT_API_URL || toHttpUrl(process.env.LIVEKIT_SERVER_URL);
+    const apiKey = process.env.LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    if (host && apiKey && apiSecret) {
+      const svc = new RoomServiceClient(host, apiKey, apiSecret);
+      try { await svc.getRoom(name); } catch { try { await svc.createRoom({ name }); } catch(_){} }
+    }
+  } catch(_){}
+  res.json({ room: name });
+});
+
+// Release a room back to the pool
+router.post('/release', async (req, res) => {
+  const { room } = req.body || {};
+  if (!room) return res.status(400).json({ message: 'room required' });
+  roomPool.release(String(room));
+  res.json({ ok: true });
 });
 
 // Diagnostics: connectivity, recent rooms, sessions

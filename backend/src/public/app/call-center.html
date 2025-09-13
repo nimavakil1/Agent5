@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Call Center · ACROPAQ AI</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="/app/shell.js"></script>
+  </head>
+  <body class="min-h-screen bg-[#111418] text-gray-100">
+    <main class="p-6">
+      <h1 class="text-2xl font-bold mb-4">Call Center</h1>
+      <div class="mb-4 flex gap-2">
+        <button id="tabStudio" class="px-3 py-1.5 rounded bg-[#0d7ff2] text-white text-sm">Agent Studio</button>
+        <button id="tabLive" class="px-3 py-1.5 rounded bg-[#0f172a] text-white text-sm">Live Calls</button>
+        <button id="tabReview" class="px-3 py-1.5 rounded bg-[#0f172a] text-white text-sm">Call Review</button>
+      </div>
+      <iframe id="frame" src="/app/agent-studio.html" class="w-full" style="height: calc(100vh - 160px); border: 1px solid #283039; border-radius: .5rem; background:#111418"></iframe>
+    </main>
+    <script>
+      const f = document.getElementById('frame');
+      const a = (id, src)=>{ const b=document.getElementById(id); b.onclick=()=>{ f.src=src; document.getElementById('tabStudio').className='px-3 py-1.5 rounded bg-[#0f172a] text-white text-sm'; document.getElementById('tabLive').className='px-3 py-1.5 rounded bg-[#0f172a] text-white text-sm'; document.getElementById('tabReview').className='px-3 py-1.5 rounded bg-[#0f172a] text-white text-sm'; b.className='px-3 py-1.5 rounded bg-[#0d7ff2] text-white text-sm'; } };
+      a('tabStudio','/app/agent-studio.html');
+      a('tabLive','/monitor.html');
+      a('tabReview','/call-review.html');
+    </script>
+  </body>
+  </html>
+

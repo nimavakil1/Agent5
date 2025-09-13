@@ -70,10 +70,7 @@
       <section class="card p-4">
         <h2 class="font-semibold text-white mb-3">Talk & Test</h2>
         <div class="grid grid-cols-2 gap-3">
-          <div class="col-span-2">
-            <label class="block text-sm muted">Room</label>
-            <input id="room" class="mt-1 inp" placeholder="test-room" />
-          </div>
+          <!-- Room is auto-assigned from pool -->
           <div class="col-span-2">
             <label class="block text-sm muted">Prime Text (optional)</label>
             <input id="prime" class="mt-1 inp" placeholder="Topic to open with" />
@@ -357,8 +354,14 @@
         }catch(_){ }
       }
 
+      let allocatedRoom = '';
       async function startTalk(){
-        const room = document.getElementById('room').value.trim() || 'test-room-1';
+        // Allocate a pooled room
+        try {
+          const r = await fetch('/api/livekit/allocate', { method:'POST', credentials:'include' });
+          if (r.ok) { const j = await r.json(); allocatedRoom = j.room; }
+        } catch(_) {}
+        const room = allocatedRoom || 'room1';
         const prime = document.getElementById('prime').value.trim();
         // Get mic first so we can publish to LiveKit immediately
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -421,6 +424,9 @@
         try{ if(audioCtx){ await audioCtx.close(); audioCtx=null; } }catch(_){ }
         try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }catch(_){ }
         try{ await leaveLiveKit(); } catch(_) {}
+        // Release the room back to pool
+        try { if (allocatedRoom) await fetch('/api/livekit/release', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ room: allocatedRoom }) }); } catch(_) {}
+        allocatedRoom = '';
         setState('idle');
       }
       document.getElementById('talk').onclick = startTalk;

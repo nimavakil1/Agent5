@@ -17,9 +17,12 @@ const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
  */
 async function createOutboundCall(to, options = {}) {
   try {
-    // 1. Create a LiveKit Room
-    const roomName = `call-${Date.now()}`;
-    const room = await roomService.createRoom({ name: roomName });
+    // 1. Allocate a pooled LiveKit Room (room1..roomN)
+    const { allocate } = require('../../util/roomPool');
+    const roomName = allocate();
+    if (!roomName) throw new Error('No pooled rooms available');
+    let room;
+    try { room = await roomService.getRoom(roomName); } catch { room = await roomService.createRoom({ name: roomName }); }
 
     // 2. Create a Telnyx Call
     const connectionId = process.env.TELNYX_CONNECTION_ID;

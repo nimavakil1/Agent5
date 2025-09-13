@@ -42,16 +42,13 @@
       </style>
       <aside id="acq-aside" class="fixed left-0 top-0 bottom-0 w-64 shrink-0 border-r border-[#283039] bg-[#111418] p-6 z-40">
         <div class="flex items-center gap-2 mb-8">
-          <div class="w-8 h-8 rounded-full" style="background:${PRIMARY}"></div>
-          <h1 class="text-white text-lg font-bold">ACROPAQ AI</h1>
+          <img src="/assets/placeholder-logo.svg" alt="ACROPAQ" class="w-8 h-8" style="filter: invert(1);" />
         </div>
         <nav class="flex flex-col gap-2">
           ${navItem('/dashboard.html','dashboard','Dashboard', is('/dashboard.html'))}
           ${navItem('/app/campaigns.html','campaign','Campaigns', is('/app/campaigns.html'))}
           ${navItem('/app/prospects.html','group','Contacts', is('/app/prospects.html'))}
-          ${navItem('/app/agent-studio.html','headset_mic','Agent Studio', is('/app/agent-studio.html'))}
-          ${navItem('/monitor.html','call','Live Calls', is('/monitor.html'))}
-          ${navItem('/call-review.html','analytics','Call Review', is('/call-review.html'))}
+          ${navItem('/app/call-center.html','headset_mic','Call Center', is('/app/call-center.html'))}
           ${navItem('/app/products.html','inventory_2','Products', is('/app/products.html'))}
           ${navItem('/app/profile.html','settings','Settings', is('/app/profile.html'))}
           ${(me && (me.role==='admin'||me.role==='superadmin'))? navItem('/app/admin/users.html','admin_panel_settings','Admin · Users', is('/app/admin/users.html')):''}
