@@ -1,4 +1,6 @@
 (() => {
+  // Skip shell injection when embedded in an iframe (Call Center tabs)
+  if (window.self !== window.top) return;
   const PRIMARY = '#0d7ff2';
   async function getMe(){ try{ const r=await fetch('/api/auth/me',{credentials:'include'}); if(!r.ok) return null; return await r.json(); }catch(_){ return null; } }
   function ensureUiCss(){
@@ -42,7 +44,7 @@
       </style>
       <aside id="acq-aside" class="fixed left-0 top-0 bottom-0 w-64 shrink-0 border-r border-[#283039] bg-[#111418] p-6 z-40">
         <div class="flex items-center gap-2 mb-8">
-          <img src="/assets/placeholder-logo.svg" alt="ACROPAQ" class="w-8 h-8" style="filter: invert(1);" />
+          <img src="/assets/acropaq-logo-inverted.svg" alt="ACROPAQ" class="h-8" />
         </div>
         <nav class="flex flex-col gap-2">
           ${navItem('/dashboard.html','dashboard','Dashboard', is('/dashboard.html'))}
