@@ -50,6 +50,7 @@
           ${navItem('/dashboard.html','dashboard','Dashboard', is('/dashboard.html'))}
           ${navItem('/app/campaigns.html','campaign','Campaigns', is('/app/campaigns.html'))}
           ${navItem('/app/prospects.html','group','Contacts', is('/app/prospects.html'))}
+          ${navItem('/app/agent-studio.html','psychology','Agent Studio', is('/app/agent-studio.html'))}
           ${navItem('/app/call-center.html','headset_mic','Call Center', is('/app/call-center.html'))}
           ${navItem('/app/products.html','inventory_2','Products', is('/app/products.html'))}
           ${navItem('/app/profile.html','settings','Settings', is('/app/profile.html'))}
