@@ -513,7 +513,7 @@ function createWebSocketServer(server) {
 
           // Update CallLogEntry with egress file
           try {
-            const audioRecordingUrl = egressFile || '';
+            const audioRecordingUrl = egressFile ? ('/recordings/' + String(egressFile).replace(/^\/+/, '')) : '';
             const callEndTime = new Date();
             await CallLogEntry.findOneAndUpdate(
               { call_id: callId },
@@ -1032,7 +1032,7 @@ function createWebSocketServer(server) {
 
             // Prefer LiveKit Egress output only
             const chosenPath = egressFile || '';
-            const audioRecordingUrl = chosenPath;
+            const audioRecordingUrl = chosenPath ? ('/recordings/' + String(chosenPath).replace(/^\/+/, '')) : '';
             await CallLogEntry.findOneAndUpdate(
               { call_id: roomName },
               { 

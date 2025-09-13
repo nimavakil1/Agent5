@@ -208,8 +208,7 @@
   // --- Active Rooms UI ---
   async function loadRooms() {
     try {
-      const bearer = localStorage.getItem('AUTH_TOKEN') || '';
-      let r = await fetch('/api/livekit/rooms', { credentials: 'include' });
+      let r = await fetch('/api/livekit/pool', { credentials: 'include' });
       let rooms = [];
       if (r.ok) {
         rooms = await r.json();
@@ -229,9 +228,8 @@
 
   function renderRooms(list) {
     roomsEl.innerHTML = '';
-    // prefer rooms with participants > 0 if available
-    const populated = list.filter((x)=> (x.num_participants||0) > 0);
-    const show = populated.length ? populated : list;
+    // Normalize shapes: pool -> {name,active}; rooms -> {name,num_participants}
+    const show = list.map((x) => ({ name: x.name, active: !!(x.active || (x.num_participants||0) > 0) }));
     if (!show.length) {
       const div = document.createElement('div'); div.className='muted text-sm'; div.textContent='No active rooms'; roomsEl.appendChild(div); return;
     }
@@ -239,7 +237,8 @@
       const row = document.createElement('div');
       row.className = 'flex items-center justify-between gap-2 p-2 border border-[#283039] rounded';
       const left = document.createElement('div');
-      left.innerHTML = `<div class="font-medium">${r.name}</div><div class="text-xs muted">participants: ${r.num_participants ?? '?'} </div>`;
+      const badge = r.active ? '<span class="ml-2 inline-block px-2 py-0.5 text-xs rounded bg-emerald-600 text-white">active</span>' : '<span class="ml-2 inline-block px-2 py-0.5 text-xs rounded bg-slate-600 text-white">idle</span>';
+      left.innerHTML = `<div class="font-medium">${r.name} ${badge}</div>`;
       const right = document.createElement('div'); right.className='flex items-center gap-2';
       const joinBtn = document.createElement('button'); joinBtn.className='btn btn-primary'; joinBtn.textContent='Join';
       joinBtn.onclick = () => { join(r.name); };

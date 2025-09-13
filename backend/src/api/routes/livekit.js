@@ -110,6 +110,44 @@ router.post('/rooms/:name/mute_agent', async (req, res) => {
   }
 });
 
+// Fixed-size room pool (room1..room15) with active flag
+router.get('/pool', async (req, res) => {
+  try {
+    // Build pool names
+    const size = Number(req.query.size || '15');
+    const pool = Array.from({ length: Math.max(1, Math.min(50, size)) }, (_, i) => `room${i+1}`);
+
+    // Try LiveKit admin for participants counts
+    const host = process.env.LIVEKIT_API_URL || toHttpUrl(process.env.LIVEKIT_SERVER_URL);
+    const apiKey = process.env.LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    let activeSet = new Set();
+    if (host && apiKey && apiSecret) {
+      try {
+        const svc = new RoomServiceClient(host, apiKey, apiSecret);
+        const rooms = await svc.listRooms();
+        for (const r of rooms) {
+          const n = String(r.name||'');
+          if (pool.includes(n) && Number(r.numParticipants ?? r.num_participants ?? 0) > 0) activeSet.add(n);
+        }
+      } catch (e) {
+        // fallthrough to recent-rooms
+      }
+    }
+    // Fallback: mark recent rooms as active
+    if (activeSet.size === 0) {
+      try {
+        for (const r of roomsStore.list()) {
+          if (pool.includes(r.name)) activeSet.add(r.name);
+        }
+      } catch (_) {}
+    }
+    res.json(pool.map(name => ({ name, active: activeSet.has(name) })));
+  } catch (e) {
+    res.status(500).json({ message: 'error' });
+  }
+});
+
 // Diagnostics: connectivity, recent rooms, sessions
 router.get('/debug', async (req, res) => {
   const out = { ok: true, api: {}, recent_rooms: [], sessions: [] };

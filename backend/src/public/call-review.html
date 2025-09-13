@@ -229,7 +229,8 @@
 
         for (const call of filteredCalls) {
           const row = document.createElement('tr');
-          row.className = 'hover:bg-slate-50 cursor-pointer';
+          // Dark hover for readability
+          row.className = 'hover:bg-[#1b2127] cursor-pointer';
           row.onclick = () => selectCall(call);
           
           const duration = call.end_time && call.start_time ? 
