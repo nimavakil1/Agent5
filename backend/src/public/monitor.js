@@ -232,10 +232,13 @@
       const right = document.createElement('div'); right.className='flex items-center gap-2';
       const joinBtn = document.createElement('button'); joinBtn.className='btn btn-primary'; joinBtn.textContent='Join';
       joinBtn.onclick = () => { join(r.name); };
-      const stopBtn = document.createElement('button'); stopBtn.className='btn btn-danger'; stopBtn.textContent='Stop AI';
+      const stopBtn = document.createElement('button'); stopBtn.className='btn btn-danger'; stopBtn.textContent='Stop Agent';
       stopBtn.onclick = async () => {
         const res = await fetch(`/api/livekit/rooms/${encodeURIComponent(r.name)}/stop_ai`, { method:'POST', credentials:'include' });
-        if (!res.ok) { alert('Failed to stop AI'); }
+        if (!res.ok) {
+          const t = await res.text().catch(()=> '');
+          alert('Failed to stop Agent: ' + (t || res.status));
+        }
       };
       const takeBtn = document.createElement('button'); takeBtn.className='btn'; takeBtn.style.background='#10b981'; takeBtn.style.color='#fff'; takeBtn.textContent='Take Over';
       takeBtn.onclick = () => startOperatorBridge(r.name);

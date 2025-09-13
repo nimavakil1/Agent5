@@ -286,6 +286,7 @@ function createWebSocketServer(server) {
         const roomName = String(query.room || '').replace(/[^a-zA-Z0-9_-]/g, '');
         if (!roomName) { telnyxWs.close(); return; }
         try { require('../util/roomsStore').touch(roomName); } catch(e) { console.error('Error touching room store:', e); }
+        try { sessionRegistry.set(roomName, {}); } catch(_) {}
         const primeText = typeof query.text === 'string' ? String(query.text) : '';
 
         const { AccessToken } = require('livekit-server-sdk');
@@ -543,6 +544,7 @@ function createWebSocketServer(server) {
           } catch (error) {
             console.error('Error saving cost tracking for agent session:', error);
           }
+          try { sessionRegistry.remove(roomName); } catch(_) {}
         };
         telnyxWs.on('message', (raw) => {
           try {
