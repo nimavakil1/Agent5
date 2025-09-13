@@ -360,8 +360,7 @@
       async function startTalk(){
         const room = document.getElementById('room').value.trim() || 'test-room-1';
         const prime = document.getElementById('prime').value.trim();
-        await joinLiveKit(room);
-        attachWs(room, prime);
+        // Get mic first so we can publish to LiveKit immediately
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioCtx = new (window.AudioContext||window.webkitAudioContext)({ sampleRate: 48000 });
         src = audioCtx.createMediaStreamSource(stream);
@@ -411,6 +410,9 @@
         nullSink.gain.setValueAtTime(0.0, audioCtx.currentTime);
         proc.connect(nullSink);
         nullSink.connect(audioCtx.destination);
+        // Now join LiveKit and attach the WS after
+        await joinLiveKit(room);
+        attachWs(room, prime);
       }
       async function stopTalk(){
         try{ if(ws&&ws.readyState===WebSocket.OPEN){ ws.close(); } }catch(_){ }

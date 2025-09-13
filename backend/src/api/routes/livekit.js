@@ -68,7 +68,13 @@ router.get('/rooms/:name/participants', async (req, res) => {
     if (!host || !apiKey || !apiSecret) return res.status(500).json({ message: 'LiveKit not configured' });
     const svc = new RoomServiceClient(host, apiKey, apiSecret);
     const parts = await svc.listParticipants(req.params.name);
-    res.json(parts.map(p => ({ identity: p.identity, name: p.name, metadata: p.metadata, joined_at: p.joinedAt || p.joined_at })));
+    const out = parts.map(p => ({
+      identity: String(p.identity || ''),
+      name: p.name || '',
+      metadata: p.metadata || '',
+      joined_at: Number(p.joinedAt ?? p.joined_at ?? 0),
+    }));
+    res.json(out);
   } catch (e) {
     console.error('livekit participants error', e);
     res.status(500).json({ message: 'error' });
