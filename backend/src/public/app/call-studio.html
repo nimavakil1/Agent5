@@ -108,7 +108,9 @@
           const RoomEvent = (LK && LK.RoomEvent) ? LK.RoomEvent : null;
           lkRoom.on((RoomEvent||{}).TrackSubscribed || 'trackSubscribed', (track,pub)=>{
             if(track.kind==='audio'){
-              const name=(pub&&(pub.trackName||pub.source))||'audio';
+              const name=String((pub&&(pub.trackName||pub.source))||'audio');
+              // Only play the agent track to avoid hearing own mic
+              if (name.toLowerCase() !== 'agent') return;
               const audio=document.createElement('audio'); audio.autoplay=true; audio.controls=true; audio.playsInline=true; audio.muted=false; track.attach(audio); tracksEl.appendChild(audio);
               audio.play().catch(()=>{ const btn=document.createElement('button'); btn.textContent='Tap to enable audio ('+name+')'; btn.className='mt-2 bg-emerald-600 text-white rounded px-3 py-2'; btn.onclick=()=>{audio.muted=false; audio.play().catch(()=>{}); btn.remove();}; tracksEl.appendChild(btn); });
               lkAgentAudioEl=audio;
@@ -162,4 +164,3 @@
     </script>
   </body>
   </html>
-

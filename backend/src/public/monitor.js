@@ -54,9 +54,10 @@
         log('RoomEvent enum not found on LiveKit client');
       }
       room.on((RoomEvent||{}).TrackSubscribed || 'trackSubscribed', (track, pub) => {
-        const name = pub?.trackName || pub?.source || 'audio';
+        const name = String(pub?.trackName || pub?.source || 'audio');
         log('TrackSubscribed', name);
-        if (track.kind === 'audio') {
+        // Only play agent track; ignore callee/self to avoid echo
+        if (track.kind === 'audio' && name.toLowerCase() === 'agent') {
           const audio = document.createElement('audio');
           audio.autoplay = true;
           audio.controls = true;
