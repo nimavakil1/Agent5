@@ -20,7 +20,7 @@
     <script>
       const f = document.getElementById('frame');
       const a = (id, src)=>{ const b=document.getElementById(id); b.onclick=()=>{ f.src=src; document.getElementById('tabStudio').className='px-3 py-1.5 rounded bg-[#0f172a] text-white text-sm'; document.getElementById('tabLive').className='px-3 py-1.5 rounded bg-[#0f172a] text-white text-sm'; document.getElementById('tabReview').className='px-3 py-1.5 rounded bg-[#0f172a] text-white text-sm'; b.className='px-3 py-1.5 rounded bg-[#0d7ff2] text-white text-sm'; } };
-      a('tabStudio','/app/agent-studio.html');
+      a('tabStudio','/app/call-studio.html');
       a('tabLive','/monitor.html');
       a('tabReview','/call-review.html');
     </script>

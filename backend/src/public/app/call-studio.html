@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Call Studio · ACROPAQ</title>
+    <link crossorigin href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js" crossorigin="anonymous"></script>
+    <script src="/app/shell.js"></script>
+    <style> body{font-family:Inter, "Noto Sans", sans-serif;} .card{background:#181C20;border:1px solid #283039;border-radius:.5rem;} .inp{background:#111418;border:1px solid #283039;color:#fff;border-radius:.375rem;padding:.5rem .75rem;width:100%;} .btn{display:inline-flex;align-items:center;gap:.5rem;border-radius:.5rem;padding:.5rem .75rem;font-weight:500;} .btn-primary{background:#0d7ff2;color:#fff;} .btn-secondary{background:#0f172a;color:#fff;} .bar{background:#283039;border-radius:.375rem;} .bar-fill{background:#10b981;} </style>
+  </head>
+  <body class="min-h-screen bg-[#111418] text-gray-100">
+    <main class="max-w-6xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <section class="card p-4 lg:col-span-2">
+        <h2 class="font-semibold text-white mb-3">Call Studio</h2>
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label class="block text-sm text-gray-400">Select Agent</label>
+            <select id="profiles" class="mt-1 inp"></select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400">Prime Text (optional)</label>
+            <input id="prime" class="mt-1 inp" placeholder="Topic to open with" />
+          </div>
+        </div>
+        <div class="flex gap-2 mb-4">
+          <button id="talk" class="btn" style="background:#10b981;color:#fff;">Talk to Agent</button>
+          <button id="commit" class="btn btn-primary">Commit Reply</button>
+          <button id="stop" class="btn btn-secondary">Stop</button>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <div class="text-sm text-gray-400">State</div>
+            <div id="state" class="font-medium text-white">idle</div>
+          </div>
+          <div>
+            <div class="text-sm text-gray-400">Latency</div>
+            <div id="latency" class="font-medium text-white">--</div>
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-2 gap-4 items-center">
+          <div>
+            <div class="text-sm text-gray-400 mb-1">Mic Level</div>
+            <div class="h-3 w-full bar"><div id="vum-fill" class="h-3 bar-fill rounded" style="width:0%"></div></div>
+          </div>
+        </div>
+        <div class="mt-4">
+          <h3 class="font-medium text-white mb-2">Subscribed Tracks</h3>
+          <div id="tracks" class="flex flex-col gap-2"></div>
+        </div>
+      </section>
+      <section class="card p-4">
+        <h2 class="font-semibold text-white mb-3">Outbound Call Panel</h2>
+        <div class="grid grid-cols-1 gap-3">
+          <div>
+            <label class="block text-sm text-gray-400">Phone Number</label>
+            <input id="dialNumber" class="mt-1 inp" placeholder="+1234567890" />
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400">Campaign (optional)</label>
+            <select id="dialCampaign" class="mt-1 inp"></select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400">Customer Name (optional)</label>
+            <input id="dialCustomerName" class="mt-1 inp" placeholder="Customer Name" />
+          </div>
+        </div>
+        <div class="mt-3 flex gap-2">
+          <button id="dialCall" class="btn" style="background:#16a34a;color:#fff;">Dial Number</button>
+          <button id="hangupCall" class="btn btn-secondary" disabled>Hang Up</button>
+        </div>
+        <div class="mt-4 text-sm text-gray-400">Call Status</div>
+        <div id="callStatus" class="font-medium text-white">Ready</div>
+      </section>
+    </main>
+    <script>
+      // Profiles list (read-only here)
+      async function loadProfiles(){
+        const res = await fetch('/api/agents', { credentials: 'include' });
+        const list = res.ok ? await res.json() : [];
+        const sel = document.getElementById('profiles');
+        sel.innerHTML='';
+        for(const p of list){ const opt=document.createElement('option'); opt.value=p._id; opt.textContent=p.name + (p.voice?(' — '+p.voice):''); sel.appendChild(opt); }
+        const last = localStorage.getItem('agentProfileId');
+        if (last && [...sel.options].some(o=>o.value===last)) sel.value=last; else if (sel.options.length) sel.selectedIndex=0;
+        sel.onchange = ()=> localStorage.setItem('agentProfileId', sel.value);
+      }
+      loadProfiles();
+
+      // LiveKit helpers
+      function toWs(u){ if(!u) return ''; if(u.startsWith('wss://')||u.startsWith('ws://'))return u; if(u.startsWith('https://'))return 'wss://'+u.slice(8); if(u.startsWith('http://'))return 'ws://'+u.slice(7); return u; }
+      let lkRoom=null; let lkAgentAudioEl=null; let ws=null; let audioCtx=null; let src=null; let proc=null; let stream=null; let lastCommitAt=0; let currentState='idle';
+      function setState(s){ currentState=s; document.getElementById('state').textContent=s; }
+
+      async function joinLiveKit(roomName){
+        try {
+          const identity = 'viewer-' + Date.now();
+          const r = await fetch(`/api/livekit/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`, { credentials:'include' });
+          if (!r.ok) return;
+          const { token, host } = await r.json();
+          const LK = window.LivekitClient || window.LiveKitClient || window.LiveKit || window.livekitClient || window.livekit || null;
+          if (!LK) return;
+          lkRoom = new LK.Room();
+          await lkRoom.connect(toWs(host), token);
+          const tracksEl = document.getElementById('tracks'); tracksEl.innerHTML='';
+          const RoomEvent = (LK && LK.RoomEvent) ? LK.RoomEvent : null;
+          lkRoom.on((RoomEvent||{}).TrackSubscribed || 'trackSubscribed', (track,pub)=>{
+            if(track.kind==='audio'){
+              const name=(pub&&(pub.trackName||pub.source))||'audio';
+              const audio=document.createElement('audio'); audio.autoplay=true; audio.controls=true; audio.playsInline=true; audio.muted=false; track.attach(audio); tracksEl.appendChild(audio);
+              audio.play().catch(()=>{ const btn=document.createElement('button'); btn.textContent='Tap to enable audio ('+name+')'; btn.className='mt-2 bg-emerald-600 text-white rounded px-3 py-2'; btn.onclick=()=>{audio.muted=false; audio.play().catch(()=>{}); btn.remove();}; tracksEl.appendChild(btn); });
+              lkAgentAudioEl=audio;
+            }
+          });
+        } catch(_){}
+      }
+
+      function floatTo16(input){ const out=new Int16Array(input.length); for(let i=0;i<input.length;i++){ let s=Math.max(-1,Math.min(1,input[i])); out[i]= s<0 ? s*0x8000 : s*0x7fff; } return out; }
+      function down48to24(int16){ const out=new Int16Array(Math.floor(int16.length/2)); for(let i=0,j=0;j<out.length;i+=2,j++) out[j]=int16[i]; return out; }
+
+      async function startTalk(){
+        // Allocate pooled room
+        let allocated='room1';
+        try { const r=await fetch('/api/livekit/allocate',{method:'POST',credentials:'include'}); if(r.ok){const j=await r.json(); allocated=j.room||allocated;} } catch(_){ }
+        const room = allocated;
+        const prime = (document.getElementById('prime').value||'').trim();
+        await joinLiveKit(room);
+        // Open WS bridge to OpenAI
+        const qs = new URLSearchParams({ room }); const sel=document.getElementById('profiles'); if(sel&&sel.value) qs.set('profile', sel.value); if (prime) qs.set('text', prime);
+        ws = new WebSocket(((location.protocol==='https:')?'wss':'ws')+'://'+location.host+'/agent-stream?'+qs.toString());
+        ws.onopen = ()=> setState('connected');
+        ws.onmessage = (ev)=>{ try{ const m=JSON.parse(ev.data); if(m.type==='first_audio_delta' && lastCommitAt){ const dt=Date.now()-lastCommitAt; document.getElementById('latency').textContent=dt+' ms'; } }catch(_){}};
+
+        stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+        audioCtx = new (window.AudioContext||window.webkitAudioContext)({ sampleRate: 48000 });
+        src = audioCtx.createMediaStreamSource(stream);
+        proc = audioCtx.createScriptProcessor(1024,1,1);
+        const vum = document.getElementById('vum-fill');
+        proc.onaudioprocess = (e)=>{
+          const input=e.inputBuffer.getChannelData(0);
+          // VU
+          try{ let sum=0; for(let i=0;i<input.length;i++){ const v=input[i]; sum+=v*v; } const rms=Math.sqrt(sum/(input.length||1)); const pct=Math.max(0,Math.min(100,Math.round((rms/0.1)*100))); if(vum) vum.style.width=pct+'%'; }catch(_){ }
+          if(!ws || ws.readyState!==WebSocket.OPEN) return;
+          const int16=floatTo16(input); const ds=down48to24(int16);
+          const buf=new Uint8Array(ds.length*2); for(let i=0;i<ds.length;i++){ buf[i*2]=ds[i]&0xff; buf[i*2+1]=(ds[i]>>8)&0xff; }
+          ws.send(JSON.stringify({ type:'audio', audio: btoa(String.fromCharCode(...buf)) }));
+        };
+        src.connect(proc); proc.connect(audioCtx.destination);
+      }
+      async function stopTalk(){ try{ if(ws&&ws.readyState===WebSocket.OPEN){ ws.close(); } }catch(_){ } try{ if(proc){ proc.disconnect(); proc=null; } }catch(_){ } try{ if(src){ src.disconnect(); src=null; } }catch(_){ } try{ if(audioCtx){ await audioCtx.close(); audioCtx=null; } }catch(_){ } try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }catch(_){ } setState('idle'); }
+      document.getElementById('talk').onclick=startTalk;
+      document.getElementById('commit').onclick=()=>{ try{ if(ws&&ws.readyState===WebSocket.OPEN){ lastCommitAt=Date.now(); ws.send(JSON.stringify({ type:'commit' })); document.getElementById('state').textContent='thinking'; } }catch(_){ } };
+      document.getElementById('stop').onclick=stopTalk;
+
+      // Outbound call support (campaigns list)
+      async function loadCampaigns(){ try{ const r=await fetch('/api/campaigns',{credentials:'include'}); const list=r.ok? await r.json():[]; const sel=document.getElementById('dialCampaign'); sel.innerHTML='<option value="">Select Campaign</option>'; for(const c of list){ const o=document.createElement('option'); o.value=c.campaign_id; o.textContent=`${c.title} (${c.campaign_id})`; sel.appendChild(o);} }catch(_){ } }
+      loadCampaigns();
+      document.getElementById('dialCall').onclick = async ()=>{ const to=document.getElementById('dialNumber').value.trim(); const camp=document.getElementById('dialCampaign').value; const name=(document.getElementById('dialCustomerName').value||'').trim(); if(!to) { alert('Enter a phone number'); return; } try{ document.getElementById('dialCall').disabled=true; const r=await fetch('/api/calls/outbound',{method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ to, campaign_id: camp||undefined, customer_name: name||undefined }) }); if(!r.ok){ alert('Failed to create call'); } else { document.getElementById('callStatus').textContent='Dialing...'; document.getElementById('hangupCall').disabled=false; } } finally { document.getElementById('dialCall').disabled=false; } };
+      document.getElementById('hangupCall').onclick = ()=> alert('Hangup via Telnyx not implemented here');
+    </script>
+  </body>
+  </html>
+
