@@ -175,12 +175,23 @@
   }
 
   // Removed talk/stopTalk; use Take Over button per-room instead
-  // Create latency label
+  // Create latency label near the Logs section safely
   (function(){
-    const row = document.createElement('div'); row.className='row';
-    const lbl = document.createElement('strong'); lbl.textContent='Latency:'; row.appendChild(lbl);
-    const span = document.createElement('span'); span.id='latency'; span.style.marginLeft='8px'; span.textContent='--'; row.appendChild(span);
-    document.body.insertBefore(row, document.getElementById('logs').parentElement);
+    try {
+      const row = document.createElement('div');
+      row.style.margin = '6px 0';
+      const lbl = document.createElement('strong'); lbl.textContent='Latency:'; row.appendChild(lbl);
+      const span = document.createElement('span'); span.id='latency'; span.style.marginLeft='8px'; span.textContent='--'; row.appendChild(span);
+      const logsElLocal = document.getElementById('logs');
+      const section = logsElLocal && logsElLocal.parentElement;
+      if (section && logsElLocal) {
+        section.insertBefore(row, logsElLocal);
+      } else if (section) {
+        section.appendChild(row);
+      } else {
+        document.body.appendChild(row);
+      }
+    } catch(_) {}
   })();
 
   // --- Active Rooms UI ---
