@@ -49,7 +49,11 @@
       await room.connect(url, token);
       log('Connected to room');
 
-      room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub) => {
+      const RoomEvent = (LK && LK.RoomEvent) ? LK.RoomEvent : (window.LivekitClient && window.LivekitClient.RoomEvent) ? window.LivekitClient.RoomEvent : null;
+      if (!RoomEvent) {
+        log('RoomEvent enum not found on LiveKit client');
+      }
+      room.on((RoomEvent||{}).TrackSubscribed || 'trackSubscribed', (track, pub) => {
         log('TrackSubscribed', pub.trackName || pub.source || 'audio');
         if (track.kind === 'audio') {
           const audio = document.createElement('audio');
@@ -61,7 +65,7 @@
         }
       });
 
-      room.on(LivekitClient.RoomEvent.Disconnected, () => log('Disconnected'));
+      room.on((RoomEvent||{}).Disconnected || 'disconnected', () => log('Disconnected'));
     } catch (e) {
       log('Error:', e.message || String(e));
     }
