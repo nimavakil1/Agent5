@@ -3,629 +3,103 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Agent Studio · ACROPAQ AI</title>
-    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <title>Agent Studio · ACROPAQ</title>
+    <link crossorigin href="https://fonts.gstatic.com/" rel="preconnect"/>
     <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js" crossorigin="anonymous"></script>
     <script src="/app/shell.js"></script>
-    <style>
-      body { font-family: Inter, "Noto Sans", sans-serif; }
-      #transcript { white-space: pre-wrap; word-break: break-word; }
-      .card { background:#181C20; border:1px solid #283039; border-radius: .5rem; }
-      .inp { background:#111418; border:1px solid #283039; color:#fff; border-radius:.375rem; padding:.5rem .75rem; width:100%; }
-      .muted { color:#9cabba; }
-      .btn { display:inline-flex; align-items:center; gap:.5rem; border-radius:.5rem; padding:.5rem .75rem; font-weight:500; }
-      .btn-primary { background:#0d7ff2; color:#fff; }
-      .btn-secondary { background:#0f172a; color:#fff; }
-      .btn-danger { background:#b91c1c; color:#fff; }
-      .bar { background:#283039; border-radius:.375rem; }
-      .bar-fill { background:#10b981; }
-    </style>
+    <style> body{font-family:Inter, "Noto Sans", sans-serif;} .card{background:#181C20;border:1px solid #283039;border-radius:.5rem;} .inp{background:#111418;border:1px solid #283039;color:#fff;border-radius:.375rem;padding:.5rem .75rem;width:100%;} .btn{display:inline-flex;align-items:center;gap:.5rem;border-radius:.5rem;padding:.5rem .75rem;font-weight:500;} .btn-primary{background:#0d7ff2;color:#fff;} .btn-secondary{background:#0f172a;color:#fff;} .btn-danger{background:#b91c1c;color:#fff;} </style>
   </head>
   <body class="min-h-screen bg-[#111418] text-gray-100">
     <main class="max-w-6xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <section class="card p-4">
-        <h2 class="font-semibold text-white mb-3">Profile</h2>
-        <div class="grid grid-cols-2 gap-3">
-          <div class="col-span-2">
-            <label class="block text-sm muted">Profile Name</label>
-            <input id="name" class="mt-1 inp" placeholder="e.g., Sales - DACH" />
-          </div>
-          <div>
-            <label class="block text-sm muted">Voice</label>
-            <select id="voice" class="mt-1 inp">
-              <option value="">(model default)</option>
-              <option>alloy</option>
-              <option>ash</option>
-              <option>ballad</option>
-              <option>cedar</option>
-              <option>coral</option>
-              <option>echo</option>
-              <option>marin</option>
-              <option>sage</option>
-              <option>shimmer</option>
-              <option>verse</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm muted">Language</label>
-            <input id="language" class="mt-1 inp" placeholder="e.g., de" />
-          </div>
-          <div class="col-span-2">
-            <label class="block text-sm muted">Instructions</label>
-            <textarea id="instructions" class="mt-1 inp h-36" placeholder="How should the agent behave?"></textarea>
+      <section class="card p-4 lg:col-span-2">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-white">Agent Studio</h2>
+          <div class="flex items-center gap-2">
+            <input id="q" class="inp text-sm" placeholder="Search agents…" />
+            <button id="refresh" class="btn btn-secondary text-sm">Refresh</button>
+            <button id="createFromTemplate" class="btn btn-primary text-sm">Create Agent</button>
           </div>
         </div>
-        <div class="mt-3 flex gap-2">
-          <button id="saveProfile" class="btn btn-primary">Save Profile</button>
-          <button id="newProfile" class="btn btn-secondary">New</button>
-          <button id="deleteProfile" class="btn btn-danger">Delete</button>
+        <!-- Modal -->
+        <div id="tmplModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+          <div class="bg-[#181C20] border border-[#283039] rounded p-6 w-full max-w-2xl">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-white">Create Agent</h3>
+              <button id="tmplClose" class="text-sm btn btn-secondary">Close</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="p-3 border border-[#283039] rounded">
+                <div class="font-medium text-white">Inbound Sales</div>
+                <div class="text-sm text-gray-400 mb-2">Answers inbound calls, qualifies leads, and offers products.</div>
+                <button data-tmpl="inbound" class="btn btn-primary text-sm">Use Template</button>
+              </div>
+              <div class="p-3 border border-[#283039] rounded">
+                <div class="font-medium text-white">Support Agent</div>
+                <div class="text-sm text-gray-400 mb-2">Greets customers, gathers issue details, provides first-line help.</div>
+                <button data-tmpl="support" class="btn btn-primary text-sm">Use Template</button>
+              </div>
+              <div class="p-3 border border-[#283039] rounded opacity-70">
+                <div class="font-medium text-white">Outbound (cold)</div>
+                <div class="text-sm text-gray-400 mb-2">Prospects with a short pitch and qualification. (Soon)</div>
+                <button disabled class="btn btn-secondary text-sm">Coming Soon</button>
+              </div>
+              <div class="p-3 border border-[#283039] rounded opacity-70">
+                <div class="font-medium text-white">Worker</div>
+                <div class="text-sm text-gray-400 mb-2">Background task agent (no calls). (Soon)</div>
+                <button disabled class="btn btn-secondary text-sm">Coming Soon</button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="mt-4">
-          <label class="block text-sm muted">Profiles</label>
-          <select id="profiles" class="mt-1 inp"></select>
-        </div>
+        <div id="list" class="space-y-2"></div>
       </section>
       <section class="card p-4">
-        <h2 class="font-semibold text-white mb-3">Talk & Test</h2>
+        <h3 class="font-medium text-white mb-3">Create / Edit Agent</h3>
         <div class="grid grid-cols-2 gap-3">
-          <!-- Room is auto-assigned from pool -->
-          <div class="col-span-2">
-            <label class="block text-sm muted">Prime Text (optional)</label>
-            <input id="prime" class="mt-1 inp" placeholder="Topic to open with" />
-          </div>
+          <div class="col-span-2"><label class="block text-sm text-gray-400">Name</label><input id="name" class="mt-1 inp" placeholder="e.g., Sales - DACH" /></div>
+          <div><label class="block text-sm text-gray-400">Agent Type</label><select id="kind" class="mt-1 inp"><option value="call">Call Agent</option><option value="chat" disabled>Chat Agent (soon)</option><option value="worker" disabled>Background Worker (soon)</option></select></div>
+          <div><label class="block text-sm text-gray-400">Voice</label><select id="voice" class="mt-1 inp"><option value="">(model default)</option><option>alloy</option><option>ash</option><option>ballad</option><option>cedar</option><option>coral</option><option>echo</option><option>marin</option><option>sage</option><option>shimmer</option><option>verse</option></select></div>
+          <div><label class="block text-sm text-gray-400">Language</label><input id="language" class="mt-1 inp" placeholder="e.g., de" /></div>
+          <div class="col-span-2"><label class="block text-sm text-gray-400">Instructions</label><textarea id="instructions" class="mt-1 inp h-36" placeholder="How should this agent behave?"></textarea></div>
         </div>
-        <div class="mt-3 flex gap-2">
-          <button id="talk" class="btn" style="background:#10b981;color:#fff;">Talk to Agent</button>
-          <button id="commit" class="btn btn-primary">Commit Reply</button>
-          <button id="stop" class="btn btn-secondary">Stop</button>
-        </div>
-        <div class="mt-4 grid grid-cols-2 gap-3">
-          <div>
-            <div class="text-sm muted">State</div>
-            <div id="state" class="font-medium text-white">idle</div>
-          </div>
-          <div>
-            <div class="text-sm muted">Latency</div>
-            <div id="latency" class="font-medium text-white">--</div>
-          </div>
-        </div>
-        <div class="mt-4 grid grid-cols-2 gap-4 items-center">
-          <div>
-            <div class="text-sm muted mb-1">Mic Level</div>
-            <div class="h-3 w-full bar"><div id="vum-fill" class="h-3 bar-fill rounded" style="width:0%"></div></div>
-          </div>
-          <div class="flex gap-2 items-center">
-            <span id="youBadge" class="px-2 py-1 rounded text-xs bg-slate-100 text-slate-600">You: silent</span>
-            <span id="agentBadge" class="px-2 py-1 rounded text-xs bg-slate-100 text-slate-600">Agent: idle</span>
-          </div>
-        </div>
-        
-        <div class="mt-4">
-          <div class="text-sm muted mb-1">Transcript</div>
-          <pre id="transcript" class="bg-[#111418] border border-[#283039] rounded p-2 h-40 overflow-auto"></pre>
-        </div>
-        <div class="mt-4">
-          <div class="text-sm muted mb-1">Subscribed Tracks</div>
-          <div id="tracks" class="flex gap-2 flex-wrap"></div>
-        </div>
-        <div class="mt-4">
-          <div class="flex items-center justify-between mb-1">
-            <div class="text-sm muted">Active Rooms</div>
-            <button id="refreshRooms" class="text-xs btn btn-secondary">Refresh</button>
-          </div>
-          <div id="rooms" class="text-sm text-white flex flex-wrap gap-2"></div>
-        </div>
-      </section>
-      <section class="card p-4">
-        <h2 class="font-semibold text-white mb-3">Outbound Call Panel</h2>
-        <div class="grid grid-cols-1 gap-3">
-          <div>
-            <label class="block text-sm muted">Phone Number</label>
-            <input id="dialNumber" class="mt-1 inp" placeholder="+1234567890" />
-          </div>
-          <div>
-            <label class="block text-sm muted">Campaign (optional)</label>
-            <select id="dialCampaign" class="mt-1 inp">
-              <option value="">Select Campaign</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm muted">Customer Name (optional)</label>
-            <input id="dialCustomerName" class="mt-1 inp" placeholder="Customer Name" />
-          </div>
-        </div>
-        <div class="mt-3 flex gap-2">
-          <button id="dialCall" class="btn" style="background:#16a34a;color:#fff;">Dial Number</button>
-          <button id="hangupCall" class="btn btn-danger" disabled>Hang Up</button>
-        </div>
-        <div class="mt-4">
-          <div class="text-sm muted mb-1">Call Status</div>
-          <div id="callStatus" class="font-medium text-white">Ready</div>
-        </div>
-        <div class="mt-4">
-          <div class="text-sm muted mb-1">Call Duration</div>
-          <div id="callDuration" class="font-medium text-white">--:--</div>
-        </div>
-        <div class="mt-4">
-          <div class="text-sm muted mb-1">Live Summary</div>
-          <div id="liveSummary" class="bg-[#111418] border border-[#283039] rounded p-2 h-24 overflow-auto text-sm text-white">No active call</div>
-        </div>
-        <div class="mt-4">
-          <div class="text-sm muted mb-1">Call Log</div>
-          <div id="callLog" class="space-y-2 max-h-32 overflow-auto"></div>
-          <button id="refreshCallLog" class="mt-2 text-xs btn btn-secondary">Refresh Log</button>
-        </div>
+        <div class="mt-3 flex gap-2"><button id="save" class="btn btn-primary">Save</button><button id="new" class="btn btn-secondary">New</button><button id="del" class="btn btn-danger">Delete</button></div>
       </section>
     </main>
     <script>
-
-      // Profiles
-      async function loadProfiles(selectedId = '') {
-        const res = await fetch('/api/agents', { credentials: 'include' });
-        const list = res.ok ? await res.json() : [];
-        const sel = document.getElementById('profiles');
-        sel.innerHTML = '';
-        for (const p of list) {
-          const opt = document.createElement('option'); opt.value = p._id; opt.textContent = `${p.name} — ${p.voice || 'default'}`; sel.appendChild(opt);
-        }
-        // pick selection: explicit -> last used -> first
-        const last = localStorage.getItem('agentProfileId');
-        if (selectedId) sel.value = selectedId;
-        else if (last && [...sel.options].some(o => o.value === last)) sel.value = last;
-        else if (sel.options.length) sel.selectedIndex = 0;
-
-        async function applySelected() {
-          const id = sel.value; if (!id) return;
-          localStorage.setItem('agentProfileId', id);
-          const p = await (await fetch('/api/agents/' + id, { credentials: 'include' })).json();
-          document.getElementById('name').value = p.name || '';
-          document.getElementById('voice').value = p.voice || '';
-          document.getElementById('language').value = p.language || '';
-          document.getElementById('instructions').value = p.instructions || '';
-        }
-
-        sel.onchange = applySelected;
-        // apply immediately on load so fields are populated
-        if (sel.value) await applySelected();
-      }
-      loadProfiles();
-      document.getElementById('newProfile').onclick = () => {
-        document.getElementById('name').value = '';
-        document.getElementById('voice').value = '';
-        document.getElementById('language').value = '';
-        document.getElementById('instructions').value = '';
-      };
-      document.getElementById('saveProfile').onclick = async () => {
-        const body = {
-          name: document.getElementById('name').value.trim() || ('Agent ' + Date.now()),
-          voice: document.getElementById('voice').value,
-          language: document.getElementById('language').value,
-          instructions: document.getElementById('instructions').value,
+      let currentId='';
+      const els={ list:document.getElementById('list'), q:document.getElementById('q'), refresh:document.getElementById('refresh'), name:document.getElementById('name'), voice:document.getElementById('voice'), instructions:document.getElementById('instructions'), language:document.getElementById('language'), kind:document.getElementById('kind'), save:document.getElementById('save'), del:document.getElementById('del'), neu:document.getElementById('new') };
+      function row(a){ const div=document.createElement('div'); div.className='p-3 border border-[#283039] rounded flex items-center justify-between gap-2'; const left=document.createElement('div'); left.innerHTML=`<div class=\"font-medium\">${a.name}</div><div class=\"text-xs text-gray-400\">${a.kind||'call'} · ${a.voice||'default'} · ${a.language||''}</div>`; const r=document.createElement('div'); const b=document.createElement('button'); b.className='btn btn-secondary text-sm'; b.textContent='Edit'; b.onclick=()=>loadEdit(a._id); r.appendChild(b); div.appendChild(left); div.appendChild(r); return div; }
+      async function loadList(){ const r=await fetch('/api/agents',{credentials:'include'}); const list=r.ok?await r.json():[]; const q=(els.q.value||'').toLowerCase(); els.list.innerHTML=''; list.filter(a=>!q||a.name.toLowerCase().includes(q)).forEach(a=> els.list.appendChild(row(a))); }
+      async function loadEdit(id){ const r=await fetch('/api/agents/'+id,{credentials:'include'}); const a=r.ok?await r.json():null; if(!a) return; currentId=a._id; els.name.value=a.name||''; els.voice.value=a.voice||''; els.language.value=a.language||''; els.instructions.value=a.instructions||''; els.kind.value=a.kind||'call'; }
+      els.refresh.onclick=loadList; els.q.oninput=()=> loadList(); els.neu.onclick=()=>{ currentId=''; els.name.value=''; els.voice.value=''; els.language.value=''; els.instructions.value=''; els.kind.value='call'; };
+      els.save.onclick= async ()=>{ const body={ name:els.name.value.trim(), voice:els.voice.value, language:els.language.value, instructions:els.instructions.value, kind:els.kind.value }; if(!body.name){ alert('Name required'); return; } let r; if(currentId) r=await fetch('/api/agents/'+currentId,{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)}); else r=await fetch('/api/agents',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)}); if(!r.ok){ alert('Save failed'); return;} currentId=''; els.neu.click(); loadList(); };
+      els.del.onclick= async ()=>{ if(!currentId) return; if(!confirm('Delete this agent?')) return; const r=await fetch('/api/agents/'+currentId,{method:'DELETE',credentials:'include'}); if(!r.ok){ alert('Delete failed'); return;} currentId=''; els.neu.click(); loadList(); };
+      loadList();
+      // Modal wiring
+      const modal=document.getElementById('tmplModal');
+      document.getElementById('createFromTemplate').onclick=()=>{ modal.classList.remove('hidden'); modal.classList.add('flex'); };
+      document.getElementById('tmplClose').onclick=()=>{ modal.classList.add('hidden'); modal.classList.remove('flex'); };
+      modal.addEventListener('click',(e)=>{ if(e.target===modal){ modal.classList.add('hidden'); modal.classList.remove('flex'); } });
+      modal.querySelectorAll('button[data-tmpl]').forEach(btn=>{
+        btn.onclick=()=>{
+          const t=btn.getAttribute('data-tmpl');
+          currentId='';
+          els.kind.value='call';
+          if(t==='inbound'){
+            els.name.value='Inbound Sales';
+            els.voice.value='shimmer';
+            els.language.value='en';
+            els.instructions.value='You are an inbound sales agent. Greet callers warmly, identify their needs, qualify them, and recommend relevant products. Be concise, helpful, and confirm next steps.';
+          } else if(t==='support'){
+            els.name.value='Support Agent';
+            els.voice.value='alloy';
+            els.language.value='en';
+            els.instructions.value='You are a support agent. Greet politely, collect details (name, order/reference), diagnose common issues, and provide clear, step-by-step solutions or escalate when needed.';
+          }
+          modal.classList.add('hidden'); modal.classList.remove('flex');
         };
-        const sel = document.getElementById('profiles');
-        let res;
-        let doc;
-        if (sel.value) { res = await fetch('/api/agents/' + sel.value, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) }); if (res.ok) doc = await res.json(); }
-        else { res = await fetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) }); if (res.ok) doc = await res.json(); }
-        if (doc && doc._id) { await loadProfiles(doc._id); }
-      };
-      document.getElementById('deleteProfile').onclick = async () => {
-        const sel = document.getElementById('profiles');
-        const id = sel.value;
-        if (!id) return;
-        if (!confirm('Delete this agent profile?')) return;
-        const res = await fetch('/api/agents/' + id, { method: 'DELETE', credentials: 'include' });
-        if (res.ok) { await loadProfiles(''); document.getElementById('name').value=''; document.getElementById('voice').value=''; document.getElementById('language').value=''; document.getElementById('instructions').value=''; }
-      };
-
-      // Talk unified — rely on server VAD
-      let ws, audioCtx, src, proc, stream, lastCommitAt=0, currentState='idle';
-      let lkRoom = null;
-      let lkAgentAudioEl = null; // audio element for LiveKit agent track
-      
-      // Fixed turn-taking parameters
-      const SERVER_VAD_SPEAK_TH = 0.020;
-      const SERVER_VAD_SILENT_TH = 0.006;
-      const SERVER_VAD_ONSET_FRAMES = 4;
-      const SERVER_VAD_ONSET_FRAMES_AGENT = 8;
-      const TURN_DETECTION_THRESHOLD = 0.60;
-      const TURN_DETECTION_PREFIX_MS = 180;
-      const TURN_DETECTION_SILENCE_MS = 250;
-      
-      let agentSpeaking = false;
-      
-      const stateEl = document.getElementById('state'); const latEl = document.getElementById('latency');
-      function setState(s){ currentState=s; stateEl.textContent=s; }
-      function floatTo16(input){ const out=new Int16Array(input.length); for(let i=0;i<input.length;i++){ let s=Math.max(-1,Math.min(1,input[i])); out[i]= s<0 ? s*0x8000 : s*0x7fff; } return out; }
-      function down48to24(int16){ const out=new Int16Array(Math.floor(int16.length/2)); for(let i=0,j=0;j<out.length;i+=2,j++) out[j]=int16[i]; return out; }
-      function energy(buf){ let sum=0; for(let i=0;i<buf.length;i++){ const v=buf[i]; sum+= v*v; } return Math.sqrt(sum/buf.length); }
-
-      function attachWs(room, prime){
-        const proto = location.protocol==='https:'?'wss':'ws';
-        const qs = new URLSearchParams({ room }); if (prime) qs.set('text', prime);
-        const profSel = document.getElementById('profiles');
-        if (profSel.value) qs.set('profile', profSel.value);
-        ws = new WebSocket(`${proto}://${location.host}/agent-stream?${qs.toString()}`);
-        ws.onopen = ()=> setState('connected');
-        ws.onmessage = (ev)=>{
-          try{ const m=JSON.parse(ev.data);
-            if(m.type==='first_audio_delta' && lastCommitAt){ const dt=Date.now()-lastCommitAt; latEl.textContent=dt+' ms'; }
-            if(m.type==='transcript_delta'){ const el=document.getElementById('transcript'); el.textContent+=m.text; el.scrollTop=el.scrollHeight; }
-            if(m.type==='agent_speaking'){ const ab=document.getElementById('agentBadge'); agentSpeaking = m.speaking; if(m.speaking){ ab.textContent='Agent: speaking'; ab.className='px-2 py-1 rounded text-xs bg-indigo-600 text-white'; if(lkAgentAudioEl){ lkAgentAudioEl.muted = false; } } else { ab.textContent='Agent: idle'; ab.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600'; } }
-            // Avoid double agent playback: if LiveKit is connected, skip direct playback
-            if(m.type==='agent_audio_24k' && m.audio){ if(!lkRoom) { playAgent24k(m.audio); } }
-            if(m.type==='barge_in'){ duckAndFlush(); if(lkAgentAudioEl){ lkAgentAudioEl.muted = true; } }
-          }catch(_){}
-        };
-        ws.onclose = ()=> setState('idle');
-        ws.onerror = ()=> setState('error');
-      }
-
-      async function joinLiveKit(roomName){
-        try {
-          const identity = 'viewer-' + Date.now();
-          const res = await fetch(`/api/livekit/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}&pub=1`, { credentials: 'include' });
-          if (!res.ok) return;
-          const { token, host } = await res.json();
-          const toWs = (u)=>{ if(!u) return ''; if(u.startsWith('wss://')||u.startsWith('ws://')) return u; if(u.startsWith('https://')) return 'wss://'+u.slice(8); if(u.startsWith('http://')) return 'ws://'+u.slice(7); return u; };
-          const LK = window.LivekitClient || window.LiveKitClient || window.LiveKit || window.livekitClient || window.livekit || null;
-          if (!LK) return;
-          const wsHost = toWs(host) || 'wss://ai.acropaq.com';
-          console.log('Joining LiveKit host:', wsHost, 'room:', roomName);
-          lkRoom = new LK.Room();
-          await lkRoom.connect(wsHost, token);
-          const tracksEl = document.getElementById('tracks'); tracksEl.innerHTML='';
-          lkRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub) => {
-            if (track.kind === 'audio') {
-              const name = (pub && (pub.trackName || pub.source)) || '';
-              // Only play the agent track; skip callee to avoid self-echo
-              if (String(name).toLowerCase() !== 'agent') return;
-              const audio = document.createElement('audio'); audio.autoplay=true; audio.controls=true; audio.dataset.name = name || 'agent';
-              lkAgentAudioEl = audio; // save reference for barge-in mute
-              track.attach(audio); tracksEl.appendChild(audio);
-              // Attempt autoplay and fall back to click-to-unmute
-              const tryPlay = () => audio.play().catch(() => {
-                const btn = document.createElement('button');
-                btn.textContent = 'Tap to enable audio (' + (pub.trackName || 'agent') + ')';
-                btn.className = 'mt-2 bg-emerald-600 text-white rounded px-3 py-2';
-                btn.onclick = () => { audio.muted=false; audio.play().catch(()=>{}); btn.remove(); };
-                tracksEl.appendChild(btn);
-              });
-              tryPlay();
-            }
-          });
-          // After connect: publish mic if available
-          try {
-            if (window.stream) {
-              await lkRoom.localParticipant.publishTrack(stream.getAudioTracks()[0], { name: 'callee' });
-            }
-          } catch (_) {}
-          // Publish agent audio from WebAudio graph if available
-          try {
-            if (window.audioCtx) {
-              if (!window.agentGain) { window.agentGain = audioCtx.createGain(); }
-              const dest = audioCtx.createMediaStreamDestination();
-              window.agentGain.connect(dest);
-              const agentTrack = dest.stream.getAudioTracks()[0];
-              if (agentTrack) await lkRoom.localParticipant.publishTrack(agentTrack, { name: 'agent' });
-            }
-          } catch (_) {}
-        } catch (_) {}
-      }
-      async function leaveLiveKit(){ try { if (lkRoom) { await lkRoom.disconnect(); lkRoom=null; document.getElementById('tracks').innerHTML=''; } } catch(_) {}
-      }
-
-      // Direct audio playback of 24k PCM16 from WS
-      let playHead = 0;
-      let agentGain = null;
-      let scheduled = [];
-      function playAgent24k(b64){
-        try{
-          if(!audioCtx){ return; }
-          if(!agentGain){ agentGain = audioCtx.createGain(); agentGain.gain.setValueAtTime(1.0, audioCtx.currentTime); agentGain.connect(audioCtx.destination); }
-          const bin = atob(b64);
-          const len = (bin.length/2)|0;
-          const buf = audioCtx.createBuffer(1, len, 24000);
-          const ch = buf.getChannelData(0);
-          for(let i=0, j=0; i<len; i++, j+=2){
-            let v = (bin.charCodeAt(j) | (bin.charCodeAt(j+1) << 8));
-            if (v & 0x8000) v = v - 0x10000;
-            ch[i] = v / 32768;
-          }
-          const src = audioCtx.createBufferSource();
-          src.buffer = buf; src.connect(agentGain);
-          const now = audioCtx.currentTime;
-          if (playHead < now + 0.02) playHead = now + 0.02;
-          src.start(playHead); scheduled.push(src); src.onended = () => { scheduled = scheduled.filter(x => x !== src); };
-          playHead += buf.duration;
-        }catch(_){ }
-      }
-      function duckAndFlush(){
-        try{
-          if(!audioCtx) return;
-          const now = audioCtx.currentTime;
-          if(agentGain){ agentGain.gain.cancelScheduledValues(now); agentGain.gain.setTargetAtTime(0.0, now, 0.02); }
-          for(const s of scheduled){ try{ s.stop(); } catch(_){} }
-          scheduled = [];
-          playHead = audioCtx.currentTime + 0.02;
-          if(agentGain){ agentGain.gain.setTargetAtTime(1.0, now+0.06, 0.05); }
-        }catch(_){ }
-      }
-
-      let allocatedRoom = '';
-      async function startTalk(){
-        // Allocate a pooled room
-        try {
-          const r = await fetch('/api/livekit/allocate', { method:'POST', credentials:'include' });
-          if (r.ok) { const j = await r.json(); allocatedRoom = j.room; }
-        } catch(_) {}
-        const room = allocatedRoom || 'room1';
-        const prime = document.getElementById('prime').value.trim();
-        // Get mic first so we can publish to LiveKit immediately
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioCtx = new (window.AudioContext||window.webkitAudioContext)({ sampleRate: 48000 });
-        src = audioCtx.createMediaStreamSource(stream);
-        proc = audioCtx.createScriptProcessor(1024,1,1);
-        const vum = document.getElementById('vum-fill');
-        const youBadge = document.getElementById('youBadge');
-        proc.onaudioprocess = (e)=>{
-          const input=e.inputBuffer.getChannelData(0);
-          const rms = energy(input);
-
-          // update VU (map 0..0.1 -> 0..100%) regardless of WS state
-          const pct = Math.max(0, Math.min(100, Math.round((rms/0.1)*100)));
-          if (vum) vum.style.width = pct + '%';
-
-          // If WS isn’t open yet, don't send but keep VU active
-          if(!ws || ws.readyState!==WebSocket.OPEN) return;
-
-          const int16=floatTo16(input); const ds=down48to24(int16);
-
-          // Simple VAD with fixed thresholds (affects UI only)
-          const isActive = rms > (agentSpeaking ? SERVER_VAD_SPEAK_TH * 2 : SERVER_VAD_SPEAK_TH);
-
-          // send audio
-          const buf=new Uint8Array(ds.length*2);
-          for(let i=0;i<ds.length;i++){
-            buf[i*2]=ds[i]&0xff;
-            buf[i*2+1]=(ds[i]>>8)&0xff;
-          }
-          ws.send(JSON.stringify({ type:'audio', audio: btoa(String.fromCharCode(...buf)) }));
-
-          // Simple activity badge
-          const youBadge = document.getElementById('youBadge');
-          if (isActive) {
-            youBadge.textContent='You: speaking';
-            youBadge.className='px-2 py-1 rounded text-xs bg-emerald-600 text-white';
-          } else {
-            youBadge.textContent='You: silent';
-            youBadge.className='px-2 py-1 rounded text-xs bg-slate-100 text-slate-600';
-          }
-        };
-        
-        // Connect mic to processor (for capture + VU)
-        src.connect(proc);
-        // Keep the ScriptProcessor active by connecting it to a muted sink,
-        // so onaudioprocess fires without local monitoring (avoids self-echo)
-        const nullSink = audioCtx.createGain();
-        nullSink.gain.setValueAtTime(0.0, audioCtx.currentTime);
-        proc.connect(nullSink);
-        nullSink.connect(audioCtx.destination);
-        // Now join LiveKit and attach the WS after
-        await joinLiveKit(room);
-        attachWs(room, prime);
-      }
-      async function stopTalk(){
-        try{ if(ws&&ws.readyState===WebSocket.OPEN){ ws.close(); } }catch(_){ }
-        try{ if(proc){ proc.disconnect(); proc=null; } }catch(_){ }
-        try{ if(src){ src.disconnect(); src=null; } }catch(_){ }
-        try{ if(audioCtx){ await audioCtx.close(); audioCtx=null; } }catch(_){ }
-        try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }catch(_){ }
-        try{ await leaveLiveKit(); } catch(_) {}
-        // Release the room back to pool
-        try { if (allocatedRoom) await fetch('/api/livekit/release', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ room: allocatedRoom }) }); } catch(_) {}
-        allocatedRoom = '';
-        setState('idle');
-      }
-      document.getElementById('talk').onclick = startTalk;
-      document.getElementById('commit').onclick = () => { try { if(ws&&ws.readyState===WebSocket.OPEN){ lastCommitAt=Date.now(); ws.send(JSON.stringify({ type:'commit' })); setState('thinking'); } } catch(_) {} };
-      document.getElementById('stop').onclick = stopTalk;
-
-      // List active rooms and click to use room name
-      async function listRooms(){
-        try {
-          let res = await fetch('/api/livekit/rooms', { credentials: 'include' });
-          let rooms = [];
-          if (res.ok) { rooms = await res.json(); }
-          if (!Array.isArray(rooms) || rooms.length === 0) {
-            res = await fetch('/api/livekit/recent-rooms', { credentials: 'include' });
-            if (res.ok) rooms = await res.json();
-          }
-          const wrap = document.getElementById('rooms');
-          wrap.innerHTML='';
-          if (!rooms || rooms.length === 0) { wrap.textContent = 'No active rooms'; return; }
-          for (const r of rooms) {
-            const b = document.createElement('button');
-            b.className='px-2 py-1 rounded bg-slate-100 hover:bg-slate-200';
-            b.textContent = `${r.name} (${r.num_participants ?? '-'})`;
-            b.onclick = ()=> { document.getElementById('room').value = r.name; };
-            wrap.appendChild(b);
-          }
-        } catch (_) {}
-      }
-      document.getElementById('refreshRooms').onclick = listRooms;
-      listRooms();
-
-      // Outbound Call Panel
-      let currentCall = null;
-      let callTimer = null;
-      let callStartTime = null;
-
-      // Load campaigns for the dropdown
-      async function loadCampaigns() {
-        try {
-          const res = await fetch('/api/campaigns', { credentials: 'include' });
-          const campaigns = res.ok ? await res.json() : [];
-          const sel = document.getElementById('dialCampaign');
-          sel.innerHTML = '<option value="">Select Campaign</option>';
-          for (const campaign of campaigns) {
-            const opt = document.createElement('option');
-            opt.value = campaign.campaign_id;
-            opt.textContent = `${campaign.title} (${campaign.campaign_id})`;
-            sel.appendChild(opt);
-          }
-        } catch (err) {
-          console.error('Failed to load campaigns:', err);
-        }
-      }
-      loadCampaigns();
-
-      function updateCallStatus(status) {
-        document.getElementById('callStatus').textContent = status;
-      }
-
-      function updateCallDuration() {
-        if (!callStartTime) return;
-        const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
-        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
-        const seconds = (elapsed % 60).toString().padStart(2, '0');
-        document.getElementById('callDuration').textContent = `${minutes}:${seconds}`;
-      }
-
-      function startCallTimer() {
-        callStartTime = Date.now();
-        callTimer = setInterval(updateCallDuration, 1000);
-      }
-
-      function stopCallTimer() {
-        if (callTimer) {
-          clearInterval(callTimer);
-          callTimer = null;
-        }
-        callStartTime = null;
-        document.getElementById('callDuration').textContent = '--:--';
-      }
-
-      async function makeOutboundCall() {
-        const phoneNumber = document.getElementById('dialNumber').value.trim();
-        const campaign = document.getElementById('dialCampaign').value;
-        const customerName = document.getElementById('dialCustomerName').value.trim();
-        
-        if (!phoneNumber) {
-          alert('Please enter a phone number');
-          return;
-        }
-
-        try {
-          updateCallStatus('Dialing...');
-          document.getElementById('dialCall').disabled = true;
-          document.getElementById('hangupCall').disabled = false;
-
-          // Create the outbound call
-          const callRes = await fetch('/api/calls/outbound', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              to: phoneNumber,
-              campaign_id: campaign || undefined,
-              customer_name: customerName || undefined
-            })
-          });
-
-          if (!callRes.ok) {
-            throw new Error('Failed to create outbound call');
-          }
-
-          const callData = await callRes.json();
-          currentCall = callData;
-          
-          updateCallStatus('Connecting...');
-          startCallTimer();
-
-          // Auto-join the room for this call
-          const roomName = `call-${callData.call_id || Date.now()}`;
-          document.getElementById('room').value = roomName;
-          
-          // Start the agent session for this call
-          await startTalk();
-          
-          updateCallStatus('Connected');
-          document.getElementById('liveSummary').textContent = `Call started with ${phoneNumber}${customerName ? ` (${customerName})` : ''}`;
-
-        } catch (err) {
-          console.error('Failed to make outbound call:', err);
-          updateCallStatus('Failed');
-          document.getElementById('dialCall').disabled = false;
-          document.getElementById('hangupCall').disabled = true;
-          stopCallTimer();
-          alert('Failed to make outbound call: ' + err.message);
-        }
-      }
-
-      async function hangupCall() {
-        try {
-          updateCallStatus('Hanging up...');
-          
-          // Stop the talk session
-          await stopTalk();
-          
-          // If we have a current call, we might want to update its status
-          if (currentCall) {
-            // TODO: Call Telnyx API to hang up the call
-            // This would require implementing a hangup endpoint
-          }
-
-          currentCall = null;
-          stopCallTimer();
-          updateCallStatus('Ready');
-          document.getElementById('dialCall').disabled = false;
-          document.getElementById('hangupCall').disabled = true;
-          document.getElementById('liveSummary').textContent = 'No active call';
-
-        } catch (err) {
-          console.error('Failed to hang up call:', err);
-          updateCallStatus('Error');
-        }
-      }
-
-      async function refreshCallLog() {
-        try {
-          const res = await fetch('/api/calls/log', { credentials: 'include' });
-          const calls = res.ok ? await res.json() : [];
-          const logEl = document.getElementById('callLog');
-          logEl.innerHTML = '';
-          
-          if (calls.length === 0) {
-            logEl.innerHTML = '<div class="text-sm text-slate-500">No recent calls</div>';
-            return;
-          }
-
-          for (const call of calls.slice(0, 5)) { // Show last 5 calls
-            const callEl = document.createElement('div');
-            callEl.className = 'text-xs bg-slate-50 rounded p-2';
-            const duration = call.end_time && call.start_time ? 
-              Math.floor((new Date(call.end_time) - new Date(call.start_time)) / 1000) + 's' : 
-              'N/A';
-            callEl.innerHTML = `
-              <div class="font-medium">${call.customer_id}</div>
-              <div class="text-slate-500">${call.call_status} • ${duration} • ${new Date(call.start_time).toLocaleTimeString()}</div>
-            `;
-            logEl.appendChild(callEl);
-          }
-        } catch (err) {
-          console.error('Failed to refresh call log:', err);
-        }
-      }
-
-      document.getElementById('dialCall').onclick = makeOutboundCall;
-      document.getElementById('hangupCall').onclick = hangupCall;
-      document.getElementById('refreshCallLog').onclick = refreshCallLog;
-      
-      // Load call log on page load
-      refreshCallLog();
+      });
     </script>
   </body>
   </html>

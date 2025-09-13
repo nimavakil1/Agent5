@@ -12,7 +12,8 @@
     "fix-admin": "node scripts/fix-admin.js",
     "clear-contacts": "node scripts/clearContacts.js",
     "drop-uniq-invoice-phone": "node scripts/dropUniqueInvoicePhoneIndex.js",
-    "healthcheck": "node scripts/healthcheck.js"
+    "healthcheck": "node scripts/healthcheck.js",
+    "migrate-agent-kinds": "node scripts/migrateAgentKinds.js"
   },
   "keywords": [],
   "author": "",
