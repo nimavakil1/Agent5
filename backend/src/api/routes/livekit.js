@@ -4,6 +4,7 @@ const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
 const roomsStore = require('../../util/roomsStore');
 const sessionRegistry = require('../../util/sessionRegistry');
 const roomPool = require('../../util/roomPool');
+const RoomLock = require('../../models/RoomLock');
 
 function toHttpUrl(u) {
   if (!u) return '';
@@ -151,27 +152,41 @@ router.get('/pool', async (req, res) => {
 
 // Allocate a free room from the pool
 router.post('/allocate', async (req, res) => {
-  const name = roomPool.allocate();
-  if (!name) return res.status(503).json({ message: 'no_rooms_available' });
-  // Ensure LiveKit room exists
   try {
-    const host = process.env.LIVEKIT_API_URL || toHttpUrl(process.env.LIVEKIT_SERVER_URL);
-    const apiKey = process.env.LIVEKIT_API_KEY;
-    const apiSecret = process.env.LIVEKIT_API_SECRET;
-    if (host && apiKey && apiSecret) {
-      const svc = new RoomServiceClient(host, apiKey, apiSecret);
-      try { await svc.getRoom(name); } catch { try { await svc.createRoom({ name }); } catch(_){} }
+    const size = Number(process.env.ROOM_POOL_SIZE || '15');
+    const pool = Array.from({ length: Math.max(1, Math.min(50, size)) }, (_, i) => `room${i+1}`);
+    const owner = (req.user && req.user.email) || 'server';
+    const ttlMs = Number(process.env.ROOM_LOCK_TTL_MS || '1800000'); // 30m default
+    let allocated = '';
+    for (const name of pool) {
+      try {
+        await RoomLock.create({ name, owner, expiresAt: new Date(Date.now() + ttlMs) });
+        allocated = name; break;
+      } catch (_) { /* already locked */ }
     }
-  } catch(_){}
-  res.json({ room: name });
+    if (!allocated) return res.status(503).json({ message: 'no_rooms_available' });
+    // Ensure LiveKit room exists
+    try {
+      const host = process.env.LIVEKIT_API_URL || toHttpUrl(process.env.LIVEKIT_SERVER_URL);
+      const apiKey = process.env.LIVEKIT_API_KEY;
+      const apiSecret = process.env.LIVEKIT_API_SECRET;
+      if (host && apiKey && apiSecret) {
+        const svc = new RoomServiceClient(host, apiKey, apiSecret);
+        try { await svc.getRoom(allocated); } catch { try { await svc.createRoom({ name: allocated }); } catch(_){} }
+      }
+    } catch(_){}
+    res.json({ room: allocated });
+  } catch (e) { res.status(500).json({ message: 'error' }); }
 });
 
 // Release a room back to the pool
 router.post('/release', async (req, res) => {
-  const { room } = req.body || {};
-  if (!room) return res.status(400).json({ message: 'room required' });
-  roomPool.release(String(room));
-  res.json({ ok: true });
+  try {
+    const { room } = req.body || {};
+    if (!room) return res.status(400).json({ message: 'room required' });
+    await RoomLock.deleteOne({ name: String(room) });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ message: 'error' }); }
 });
 
 // Diagnostics: connectivity, recent rooms, sessions

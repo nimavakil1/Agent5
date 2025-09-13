@@ -5,6 +5,8 @@ const router = express.Router();
 const { createOutboundCall } = require('../services/callService');
 const { createPrefilledCartLink } = require('../services/shopifyService');
 const { sendEmail } = require('../services/brevoService');
+const fs = require('fs');
+const path = require('path');
 const CallLogEntry = require('../../models/CallLogEntry');
 
 // Optional API key middleware for creating outbound calls
@@ -83,3 +85,25 @@ router.get('/log', async (req, res) => {
 });
 
 module.exports = router;
+
+// Diagnostics: recent recordings vs call logs
+router.get('/recordings/diagnostics', async (req, res) => {
+  try {
+    const limit = Number(req.query.limit || '50');
+    const calls = await CallLogEntry.find({}).sort({ start_time: -1 }).limit(Math.max(1, Math.min(200, limit))).lean();
+    const base = path.join(__dirname, '..', '..', 'recordings');
+    const out = [];
+    for (const c of calls) {
+      const url = c.audio_recording_url || '';
+      let exists = false, size = 0, mtime = 0, fullPath='';
+      if (url && url.startsWith('/recordings/')) {
+        fullPath = path.join(base, url.replace(/^\/recordings\//, ''));
+        try { const st = fs.statSync(fullPath); exists = st.isFile(); size = st.size; mtime = st.mtimeMs; } catch(_) {}
+      }
+      out.push({ call_id: c.call_id, start_time: c.start_time, audio_recording_url: url, exists, size, mtime, full_path: exists?fullPath:'' });
+    }
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ message: 'error', error: e.message });
+  }
+});

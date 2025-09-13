@@ -1069,6 +1069,8 @@ function createWebSocketServer(server) {
       if (livekitRecorder) {
         try { await livekitRecorder.close(); } catch (e) { console.error('Error closing recorder on close:', e); }
       }
+      // Release pooled room if used
+      try { const pool = require('../util/roomPool'); if (pool.isInPool && pool.isInPool(roomName)) { const RoomLock = require('../models/RoomLock'); await RoomLock.deleteOne({ name: roomName }); } } catch(_) {}
       try { sessionRegistry.remove(roomName); } catch(_) {}
 
       // Try to finalize header sizes if a file exists
