@@ -752,6 +752,7 @@ function createWebSocketServer(server) {
 
     function startAiSender() {
       if (aiSendTimer) return;
+      let sentFrames = 0;
       aiSendTimer = setInterval(() => {
         try {
           if (!telnyxWs || telnyxWs.readyState !== WebSocket.OPEN) return;
@@ -764,6 +765,10 @@ function createWebSocketServer(server) {
           const msg = { event: 'media', media: { payload } };
           if (telnyxStreamId) msg.stream_id = telnyxStreamId;
           telnyxWs.send(JSON.stringify(msg));
+          sentFrames++;
+          if (sentFrames <= 3 || sentFrames % 50 === 0) {
+            console.log(`AI->PSTN sent frames: ${sentFrames}`);
+          }
         } catch (err) {
           console.error('AI sender error:', err);
         }
@@ -941,8 +946,8 @@ function createWebSocketServer(server) {
       try {
         const data = JSON.parse(message);
         if (data.event === 'start') {
-          console.log('Telnyx stream started:', data);
           telnyxStreamId = data.stream_id || data.streamId || (data.start && data.start.stream_id) || null;
+          console.log('Telnyx stream started; stream_id=', telnyxStreamId);
           try { sessionRegistry.set(roomName, { telnyxWs, telnyxStreamId }); } catch(_) {}
           try { require('../util/roomsStore').touch(roomName); } catch(_) {}
           bytesWritten = 0;
