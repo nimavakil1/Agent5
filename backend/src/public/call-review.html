@@ -320,22 +320,51 @@
         const audioPlayer = document.getElementById('audioPlayer');
         const wf = document.getElementById('waveform');
         if (call.audio_recording_url) {
-          // Bust cache to avoid stale 401s; ensure metadata loads
-          const url = call.audio_recording_url + (call.audio_recording_url.includes('?') ? '&' : '?') + 't=' + Date.now();
-          audioPlayer.src = url;
+          // Reset UI state
+          document.getElementById('audioDuration').textContent = '00:00';
+          wf.innerHTML = '';
+
+          // Bust cache to avoid stale cached responses; ensure metadata loads
+          const base = call.audio_recording_url;
+          const directUrl = base + (base.includes('?') ? '&' : '?') + 't=' + Date.now();
+          audioPlayer.src = directUrl;
           audioPlayer.preload = 'metadata';
           audioPlayer.style.display = 'block';
+
+          let triedSigned = false;
+
           audioPlayer.onloadedmetadata = () => {
             try {
-              document.getElementById('audioDuration').textContent = formatDuration(Math.floor((audioPlayer.duration||0))); 
+              const sec = Math.floor(audioPlayer.duration || 0);
+              document.getElementById('audioDuration').textContent = formatDurationSeconds(sec);
             } catch(_) {}
           };
-          audioPlayer.onerror = () => {
-            wf.innerHTML = '<span class="text-red-400 text-sm">Failed to load recording. Ensure you are logged in and try again.</span>';
+          audioPlayer.oncanplay = () => {
+            // Clear any error placeholder once playable
+            if (!wf.innerText) generateWaveform();
           };
-          // Generate placeholder waveform
+          audioPlayer.onerror = async () => {
+            // First failure: try a signed URL (works without cookies)
+            if (!triedSigned) {
+              triedSigned = true;
+              try {
+                const resp = await fetch(`/api/calls/recordings/sign?u=${encodeURIComponent(base)}`);
+                if (resp.ok) {
+                  const data = await resp.json();
+                  const signed = data && data.url ? data.url : null;
+                  if (signed) {
+                    audioPlayer.src = signed + (signed.includes('?') ? '&' : '?') + 't=' + Date.now();
+                    try { audioPlayer.load(); } catch(_) {}
+                    return;
+                  }
+                }
+              } catch (_) { /* fall through to UI error */ }
+            }
+            wf.innerHTML = '<span class="text-red-400 text-sm">Failed to load recording. If this persists, re-login and retry.</span>';
+          };
+
+          // Generate placeholder waveform and force a load
           generateWaveform();
-          // Force a load
           try { audioPlayer.load(); } catch(_) {}
         } else {
           audioPlayer.style.display = 'none';
@@ -343,7 +372,7 @@
         }
       }
 
-      function formatDuration(seconds){
+      function formatDurationSeconds(seconds){
         const m = Math.floor(seconds/60).toString().padStart(2,'0');
         const s = Math.floor(seconds%60).toString().padStart(2,'0');
         return m+':'+s;
