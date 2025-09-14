@@ -18,30 +18,30 @@
   a > svg { display: none; }
 </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900">
+<body class="min-h-screen bg-[#111418] text-gray-100">
 <div class="flex flex-col items-center justify-center px-6 py-8 mx-auto md:h-screen lg:py-0">
   <a class="flex items-center mb-6 text-2xl font-semibold text-gray-900 dark:text-white" href="#">
     <svg class="w-8 h-8 mr-2 text-[var(--primary-color)]" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zM5 10a5 5 0 0110 0v1.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L10 11.586V10zm-1.707-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 10-1.414-1.414L10 8.414 6.707 5.121a1 1 0 00-1.414 0z" fill-rule="evenodd"></path></svg>
     ACROPAQ
   </a>
-  <div class="card md:mt-0 sm:max-w-md w-full">
+  <div class="card md:mt-0 sm:max-w-md w-full bg-[#181C20] border border-[#283039] text-white">
     <div class="p-6 space-y-4 md:space-y-6 sm:p-8">
-      <h1 class="text-xl font-bold leading-tight tracking-tight text-center text-gray-900 md:text-2xl dark:text-white">Sign in to your account</h1>
+      <h1 class="text-xl font-semibold text-center text-white">Sign in to your account</h1>
       <form id="form" class="space-y-4 md:space-y-6">
         <div>
           <label for="email" class="label">Email</label>
-          <input id="email" name="email" type="email" class="field" placeholder="you@company.com" required />
+          <input id="email" name="email" type="email" class="field bg-[#111418] border-[#283039] text-white" placeholder="you@company.com" required />
         </div>
         <div>
           <label for="password" class="label">Password</label>
-          <input id="password" name="password" type="password" class="field" placeholder="••••••••" required />
+          <input id="password" name="password" type="password" class="field bg-[#111418] border-[#283039] text-white" placeholder="••••••••" required />
         </div>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <input id="remember" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-[var(--primary-color)] focus:ring-[var(--primary-color)]" />
             <label for="remember" class="text-sm text-gray-500 dark:text-gray-300">Remember me</label>
           </div>
-          <a href="#" class="text-sm font-medium text-[var(--primary-color)] hover:underline">Forgot password?</a>
+          <a href="#" class="text-sm font-medium text-indigo-400 hover:underline">Forgot password?</a>
         </div>
         <button type="submit" class="btn">Login</button>
         <p id="msg" class="text-sm text-center text-red-500"></p>
@@ -62,7 +62,7 @@
       let next = getParam('next');
       if (!next) { try { next = sessionStorage.getItem('next_url') || ''; sessionStorage.removeItem('next_url'); } catch(_){} }
       if (!next) next = sameOriginReferrer();
-      location.href= next || '/app/index.html';
+      location.href= next || '/dashboard.html';
     }
     else { try{ const j=await res.json(); document.getElementById('msg').textContent = j.message||'Login failed'; }catch(_){ document.getElementById('msg').textContent = 'Login failed'; } }
   };
