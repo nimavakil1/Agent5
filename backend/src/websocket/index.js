@@ -755,6 +755,8 @@ function createWebSocketServer(server) {
       aiSendTimer = setInterval(() => {
         try {
           if (!telnyxWs || telnyxWs.readyState !== WebSocket.OPEN) return;
+          // Do not consume or send frames until Telnyx provided a stream_id (start event)
+          if (!telnyxStreamId) return;
           if (aiPcmuQueue.length < AI_FRAME_SAMPLES) return;
           const frame = aiPcmuQueue.subarray(0, AI_FRAME_SAMPLES);
           aiPcmuQueue = aiPcmuQueue.subarray(AI_FRAME_SAMPLES);
@@ -850,12 +852,7 @@ function createWebSocketServer(server) {
 
       openaiWs.on('open', async () => {
         console.log('Connected to OpenAI Realtime API');
-        // Prime a response with chosen voice from saved settings
-        try {
-          openaiWs.send(
-            JSON.stringify({ type: 'response.create', response: { modalities: ['text', 'audio'], voice: settings?.voice || undefined } })
-          );
-        } catch (e) { console.error('Error priming OA response:', e); }
+        // Do not prime an immediate response on PSTN path; wait for caller speech
         // Start LiveKit Room Composite Egress (audio-only)
         try {
           const eg = await startRoomAudioEgress(roomName);
