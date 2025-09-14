@@ -5,6 +5,7 @@ const ScheduledJob = require('../../models/ScheduledJob');
 const OpenAI = require('openai');
 
 const router = express.Router();
+const { resolveAgentAndMcp } = require('../../util/orchestrator');
 
 function toIsoOrNull(s) {
   const d = new Date(s);
@@ -122,3 +123,17 @@ router.post('/commit', async (req, res) => {
 });
 
 module.exports = router;
+
+// Resolve agent + MCP for a campaign and language
+router.get('/resolve', async (req, res) => {
+  try {
+    const campaign = String(req.query.campaign || req.query.campaign_id || req.query.id || '');
+    const lang = String(req.query.lang || req.query.language || '').toLowerCase();
+    if (!campaign && !lang) return res.status(400).json({ message: 'campaign or language required' });
+    const out = await resolveAgentAndMcp({ campaignId: campaign, detectedLanguage: lang });
+    const agent = out.agent ? { name: out.agent.name, voice: out.agent.voice, language: out.agent.language, mcp_service: out.agent.mcp_service } : null;
+    res.json({ agent, mcp_service: out.mcp_service || '' });
+  } catch (e) {
+    res.status(500).json({ message: 'error', error: e.message });
+  }
+});

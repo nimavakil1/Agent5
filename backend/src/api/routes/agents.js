@@ -14,9 +14,9 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { name, voice, instructions, language } = req.body || {};
+  const { name, voice, instructions, language, kind, mcp_service } = req.body || {};
   if (!name) return res.status(400).json({ message: 'name required' });
-  const doc = await AgentProfile.create({ name, voice: voice || '', instructions: instructions || '', language: language || '', updatedBy: req.user.email, deletedAt: null });
+  const doc = await AgentProfile.create({ name, kind: kind||'call', voice: voice || '', instructions: instructions || '', language: language || '', mcp_service: mcp_service || '', updatedBy: req.user.email, deletedAt: null });
   res.status(201).json(doc);
 });
 
@@ -27,10 +27,10 @@ router.get('/:id', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-  const { voice, instructions, language, name } = req.body || {};
+  const { voice, instructions, language, name, kind, mcp_service } = req.body || {};
   const doc = await AgentProfile.findOneAndUpdate(
     { _id: req.params.id, deletedAt: null },
-    { $set: { voice, instructions, language, name, updatedBy: req.user.email } },
+    { $set: { voice, instructions, language, name, kind, mcp_service, updatedBy: req.user.email } },
     { new: true }
   );
   if (!doc) return res.status(404).json({ message: 'not found' });
