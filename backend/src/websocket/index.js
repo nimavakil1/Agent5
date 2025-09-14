@@ -1121,7 +1121,7 @@ function createWebSocketServer(server) {
       }
       try { await pstnMixer.finalize(); } catch(_) {}
       // Release pooled room if used
-      try { const pool = require('../util/roomPool'); if (pool.isInPool && pool.isInPool(roomName)) { const RoomLock = require('../models/RoomLock'); await RoomLock.deleteOne({ name: roomName }); } } catch(_) {}
+      try { const alloc = require('../util/mongoAllocator'); if (alloc.isInPool && alloc.isInPool(roomName)) { await alloc.release(roomName); } } catch(_) {}
       try { sessionRegistry.remove(roomName); } catch(_) {}
 
       // Try to finalize header sizes if a file exists

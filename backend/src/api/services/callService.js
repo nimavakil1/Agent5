@@ -18,8 +18,9 @@ const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
 async function createOutboundCall(to, options = {}) {
   try {
     // 1. Allocate a pooled LiveKit Room (room1..roomN)
-    const { allocate } = require('../../util/roomPool');
-    const roomName = allocate();
+    // Allocate from shared pool with Mongo-backed lock to avoid double-booking
+    const { allocate } = require('../../util/mongoAllocator');
+    const roomName = await allocate({ owner: 'pstn-outbound' });
     if (!roomName) throw new Error('No pooled rooms available');
     let room;
     try { room = await roomService.getRoom(roomName); } catch { room = await roomService.createRoom({ name: roomName }); }
