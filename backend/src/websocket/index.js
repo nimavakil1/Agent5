@@ -8,6 +8,8 @@ const { createPublisher, toWsUrl } = require('../livekit/publisher');
 const CallLogEntry = require('../models/CallLogEntry'); // Import CallLogEntry model
 const CustomerRecord = require('../models/CustomerRecord'); // Import CustomerRecord model
 const CallCostTracking = require('../models/CallCostTracking'); // Import CallCostTracking model
+const { getToolsSpec, callTool } = require('../services/mcpTools');
+const { resolveAgentAndMcp } = require('../util/orchestrator');
 const costCalculationService = require('../services/costCalculationService');
 // const onedriveService = require('../services/onedriveService'); // Temporarily disabled due to dependency issues
 const fs = require('fs'); // Import file system module
@@ -313,6 +315,26 @@ function createWebSocketServer(server) {
             }
           } else {
             console.log('No profile parameter provided');
+            // Try campaign/language-based routing if hints are provided
+            try {
+              const campaign = String(query.campaign || query.campaign_id || query.id || '');
+              const langHint = String(query.lang || query.language || '').toLowerCase();
+              if (campaign || langHint) {
+                const out = await resolveAgentAndMcp({ campaignId: campaign, detectedLanguage: langHint });
+                if (out?.agent) {
+                  console.log('Resolved Studio agent via orchestrator:', { name: out.agent.name, lang: out.agent.language });
+                  settings = {
+                    instructions: out.agent.instructions || settings.instructions,
+                    voice: out.agent.voice || settings.voice,
+                    language: out.agent.language || settings.language,
+                  };
+                } else {
+                  console.log('Orchestrator resolution returned no agent; keeping defaults');
+                }
+              }
+            } catch (e) {
+              console.error('Studio resolver error:', e?.message || e);
+            }
           }
         } catch (e) {
           console.error('Error loading profile:', e);
@@ -410,7 +432,8 @@ function createWebSocketServer(server) {
                 voice: settings.voice || undefined,
                 input_audio_format: 'pcm16',
                 input_audio_transcription: { model: 'whisper-1', language: settings.language || 'en' },
-                turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence }
+                turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence },
+                tools: getToolsSpec(),
               }
             };
             console.log('Sending session.update with instructions length:', sessionData.session.instructions.length);
@@ -454,10 +477,37 @@ function createWebSocketServer(server) {
         let studioAppendedMs = 0; // ms of user audio since last commit
         const STUDIO_FRAME_MS = 21; // ~1024/48k -> 512/24k ≈ 21ms
         const STUDIO_MIN_COMMIT_MS = Number(process.env.MIN_COMMIT_MS || '120');
-        oaWs.on('message', (data) => {
+        const studioToolArgs = new Map();
+        oaWs.on('message', async (data) => {
           try {
             const s = typeof data === 'string' ? data : data.toString('utf8');
             const m = JSON.parse(s);
+            // --- Realtime tool calling (Studio) ---
+            if (m.type === 'response.function_call.created' && m.response?.id && m.response?.name) {
+              studioToolArgs.set(m.response.id, { name: m.response.name, args: '' });
+            }
+            if (m.type === 'response.function_call.arguments.delta' && m.response?.id && typeof m.delta === 'string') {
+              const rec = studioToolArgs.get(m.response.id);
+              if (rec) rec.args += m.delta;
+            }
+            if ((m.type === 'response.function_call.arguments.done' || m.type === 'response.function_call.completed') && m.response?.id) {
+              const rec = studioToolArgs.get(m.response.id);
+              if (rec) {
+                studioToolArgs.delete(m.response.id);
+                try {
+                  const parsed = rec.args ? JSON.parse(rec.args) : {};
+                  const result = await callTool(rec.name, parsed, {});
+                  // Send tool output back into conversation and request next response
+                  oaWs.send(JSON.stringify({
+                    type: 'conversation.item.create',
+                    item: { type: 'tool', tool_call_id: m.response.id, name: rec.name, content: [{ type: 'output_text', text: JSON.stringify(result) }] },
+                  }));
+                  oaWs.send(JSON.stringify({ type: 'response.create' }));
+                } catch (e) {
+                  console.error('Studio tool call error:', e?.message || e);
+                }
+              }
+            }
             
             if (m.type === 'session.updated') {
               console.log('OpenAI session.updated:', JSON.stringify(m, null, 2));
@@ -844,6 +894,29 @@ function createWebSocketServer(server) {
       }
 
 
+      // Prepare routing context from query and DB, then create OpenAI Session
+      const q = parsedUrl.query || {};
+      const campaignHint = String(q.campaign || q.campaign_id || q.id || '').trim();
+      let languageHint = String(q.lang || q.language || '').toLowerCase();
+      if (!languageHint && customerRecord?.preferred_language) languageHint = String(customerRecord.preferred_language).toLowerCase();
+
+      let resolved = null;
+      let sessionOverrides = { instructions: null, voice: null, language: null };
+      try {
+        const out = await resolveAgentAndMcp({ campaignId: (campaignHint || (callLog?.campaign_id || '')), detectedLanguage: languageHint });
+        resolved = out;
+        if (out?.agent) {
+          sessionOverrides.instructions = out.agent.instructions || null;
+          sessionOverrides.voice = out.agent.voice || null;
+          sessionOverrides.language = (out.agent.language || languageHint || null) || null;
+          console.log('Resolved PSTN agent via orchestrator:', { name: out.agent.name, lang: sessionOverrides.language });
+        } else {
+          console.log('Orchestrator resolution (PSTN) returned no agent; using defaults');
+        }
+      } catch (e) {
+        console.error('PSTN resolver error:', e?.message || e);
+      }
+
       // 2. Create OpenAI Session and connect WebSocket
       const session = await createOpenAISession(customerRecord);
       const OPENAI_REALTIME_API_URL = session.websocket_url;
@@ -857,6 +930,25 @@ function createWebSocketServer(server) {
 
       openaiWs.on('open', async () => {
         console.log('Connected to OpenAI Realtime API');
+        // Apply session overrides from orchestrator resolution (if any)
+        try {
+          const tdThresh = Number(process.env.TURN_DETECTION_THRESHOLD || '0.60');
+          const tdPrefix = Number(process.env.TURN_DETECTION_PREFIX_MS || '180');
+          const tdSilence = Number(process.env.TURN_DETECTION_SILENCE_MS || '250');
+          const sessionUpdate = {
+            type: 'session.update',
+            session: {
+              ...(sessionOverrides.instructions ? { instructions: sessionOverrides.instructions } : {}),
+              ...(sessionOverrides.voice ? { voice: sessionOverrides.voice } : {}),
+              ...(sessionOverrides.language ? { input_audio_transcription: { model: 'whisper-1', language: sessionOverrides.language } } : {}),
+              turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence },
+              tools: getToolsSpec(),
+            },
+          };
+          openaiWs.send(JSON.stringify(sessionUpdate));
+        } catch (e) {
+          console.error('Failed to apply session overrides (PSTN):', e?.message || e);
+        }
         // Do not prime an immediate response on PSTN path; wait for caller speech
         // Start LiveKit Room Composite Egress (audio-only)
         try {
@@ -879,11 +971,38 @@ function createWebSocketServer(server) {
         }
       });
 
+      const pstnToolArgs = new Map();
       openaiWs.on('message', async (data) => {
         try {
           const str = typeof data === 'string' ? data : data.toString('utf8');
           const openaiResponse = JSON.parse(str);
           // console.log('Received from OpenAI:', openaiResponse.type); // Too noisy
+
+          // --- Realtime tool calling (PSTN) ---
+          if (openaiResponse.type === 'response.function_call.created' && openaiResponse.response?.id && openaiResponse.response?.name) {
+            pstnToolArgs.set(openaiResponse.response.id, { name: openaiResponse.response.name, args: '' });
+          }
+          if (openaiResponse.type === 'response.function_call.arguments.delta' && openaiResponse.response?.id && typeof openaiResponse.delta === 'string') {
+            const rec = pstnToolArgs.get(openaiResponse.response.id);
+            if (rec) rec.args += openaiResponse.delta;
+          }
+          if ((openaiResponse.type === 'response.function_call.arguments.done' || openaiResponse.type === 'response.function_call.completed') && openaiResponse.response?.id) {
+            const rec = pstnToolArgs.get(openaiResponse.response.id);
+            if (rec) {
+              pstnToolArgs.delete(openaiResponse.response.id);
+              try {
+                const parsed = rec.args ? JSON.parse(rec.args) : {};
+                const result = await callTool(rec.name, parsed, {});
+                openaiWs.send(JSON.stringify({
+                  type: 'conversation.item.create',
+                  item: { type: 'tool', tool_call_id: openaiResponse.response.id, name: rec.name, content: [{ type: 'output_text', text: JSON.stringify(result) }] },
+                }));
+                openaiWs.send(JSON.stringify({ type: 'response.create' }));
+              } catch (e) {
+                console.error('PSTN tool call error:', e?.message || e);
+              }
+            }
+          }
 
           // Text streaming per Realtime events
           if (openaiResponse.type === 'response.output_text.delta' && openaiResponse.delta) {

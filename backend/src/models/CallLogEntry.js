@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 
 const callLogEntrySchema = new mongoose.Schema({
   call_id: { type: String, required: true },
+  telnyx_call_id: { type: String },
   customer_id: { type: String, required: true },
   campaign_id: { type: String, required: true },
   start_time: { type: Date, required: true },

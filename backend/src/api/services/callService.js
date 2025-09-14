@@ -37,12 +37,18 @@ async function createOutboundCall(to, options = {}) {
     const defaultStreamUrl = `ws://localhost:${localPort}/websocket`;
     const streamBase = baseStreamUrl || defaultStreamUrl; // Prefer env, default to local dev
 
+    // Attach context for routing (campaign/lang) to the Telnyx stream URL so the WS layer can resolve
+    const params = new URLSearchParams({ roomName });
+    if (options.campaign_id) params.set('campaign', String(options.campaign_id));
+    if (options.language) params.set('lang', String(options.language));
+    const streamUrl = `${streamBase}?${params.toString()}`;
+
     const call = await telnyx.calls.create({
       to,
       from: process.env.TELNYX_PHONE_NUMBER,
       connection_id: connectionId,
-      // Provide roomName as a query param for the WS server
-      stream_url: `${streamBase}?roomName=${encodeURIComponent(roomName)}`,
+      // Provide roomName (+ optional campaign/lang) as query params for the WS server
+      stream_url: streamUrl,
       stream_track: 'both_tracks',
     });
 
@@ -53,7 +59,8 @@ async function createOutboundCall(to, options = {}) {
 
     // 4. Create CallLogEntry
     const callLogEntry = new CallLogEntry({
-      call_id: call.id,
+      call_id: roomName,
+      telnyx_call_id: call.id,
       customer_id: options.customer_name || to,
       campaign_id: options.campaign_id || 'manual-dial',
       start_time: new Date(),
@@ -71,7 +78,8 @@ async function createOutboundCall(to, options = {}) {
       call, 
       room, 
       token, 
-      call_id: call.id,
+      call_id: roomName,
+      telnyx_call_id: call.id,
       room_name: roomName,
       call_log_entry: callLogEntry 
     };
