@@ -943,6 +943,8 @@ function createWebSocketServer(server) {
             const b64 = pcmBuf.toString('base64');
             // Append chunk to input buffer
             openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
+            // Feed PSTN mixer (callee)
+            try { pstnMixer.appendCallee(pcmBuf); } catch(_) {}
             pstnAppendedMs += PSTN_FRAME_MS;
             // PSTN server-side VAD for barge-in + auto-commit
             try {
@@ -1095,6 +1097,7 @@ function createWebSocketServer(server) {
       if (livekitRecorder) {
         try { await livekitRecorder.close(); } catch (e) { console.error('Error closing recorder on close:', e); }
       }
+      try { await pstnMixer.finalize(); } catch(_) {}
       // Release pooled room if used
       try { const pool = require('../util/roomPool'); if (pool.isInPool && pool.isInPool(roomName)) { const RoomLock = require('../models/RoomLock'); await RoomLock.deleteOne({ name: roomName }); } } catch(_) {}
       try { sessionRegistry.remove(roomName); } catch(_) {}
