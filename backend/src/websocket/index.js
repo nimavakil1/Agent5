@@ -488,6 +488,7 @@ function createWebSocketServer(server) {
               }
               const pcm24k = Buffer.from(m.delta, 'base64');
               if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+              try { studioMixer.appendAgent(pcm24k); } catch(_) {}
               try { telnyxWs.send(JSON.stringify({ type: 'agent_audio_24k', audio: m.delta })); } catch(e) { console.error('Error sending agent_audio_24k:', e); }
               if (!notified) {
                 notified = true;
@@ -505,6 +506,7 @@ function createWebSocketServer(server) {
         const closeAll = async () => { 
           try { oaWs.close(); } catch(e) { console.error('Error closing OA ws:', e); };
           try { publisher && await publisher.close(); } catch(e) { console.error('Error closing publisher:', e); };
+          try { await studioMixer.finalize(); } catch(_) {}
           // Stop LiveKit egress and capture file result
           let egressFile = '';
           if (egressId) {
@@ -522,7 +524,7 @@ function createWebSocketServer(server) {
             }
           }
 
-          // Update CallLogEntry with egress file or local recorder fallback
+          // Update CallLogEntry with egress file or local recorder/studio mixer fallback
           try {
             let chosenPath = egressFile || '';
             if (!chosenPath && livekitRecorder && livekitRecorder.outPath) {
@@ -531,6 +533,12 @@ function createWebSocketServer(server) {
                 const idx = recPath.lastIndexOf('/recordings/');
                 chosenPath = idx >= 0 ? recPath.slice(idx + '/recordings/'.length) : require('path').basename(recPath);
               } catch (_) {}
+            }
+            if (!chosenPath && studioMixPath) {
+              try {
+                const idx2 = studioMixPath.lastIndexOf('/recordings/');
+                chosenPath = idx2 >= 0 ? studioMixPath.slice(idx2 + '/recordings/'.length) : require('path').basename(studioMixPath);
+              } catch(_) {}
             }
             const audioRecordingUrl = chosenPath ? ('/recordings/' + String(chosenPath).replace(/^\/+/, '')) : '';
             const callEndTime = new Date();
