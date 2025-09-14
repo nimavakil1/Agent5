@@ -27,6 +27,11 @@ const campaignDefinitionSchema = new mongoose.Schema(
     },
     script_profile: { type: String },
     notes: { type: String },
+    orchestrator: {
+      mcp_service: { type: String },
+      default_agent_profile: { type: String },
+      language_routes: [{ lang: String, agent_profile: String }],
+    },
 
     // Backward-compatible legacy fields (optional)
     campaign_id: { type: String },

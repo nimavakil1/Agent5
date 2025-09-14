@@ -36,6 +36,17 @@ async function runDueJobs(now = new Date()) {
           await CampaignDefinition.findByIdAndUpdate(id, { status: 'ended' });
           console.log(`[scheduler] Campaign ${id} stopped`);
         }
+      } else if (job.type === 'callback') {
+        // Place an outbound call for a scheduled callback
+        const to = job.payload?.to;
+        if (!to) throw new Error('callback payload missing "to"');
+        const { createOutboundCall } = require('../api/services/callService');
+        try {
+          await createOutboundCall(to, { campaign_id: job.payload?.campaign_id || 'callback', customer_name: job.payload?.customer_name || '' });
+          console.log(`[scheduler] Callback call queued to ${to}`);
+        } catch (e) {
+          throw new Error('failed to create outbound call: ' + (e?.message || e));
+        }
       }
       job.status = 'completed';
       job.last_error = '';
