@@ -347,6 +347,7 @@ function createWebSocketServer(server) {
         // --- End Recording state ---
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
+        let livekitRecorder = null; // Studio fallback recorder
         // Ensure room exists for monitor/egress
         try {
           await roomService.getRoom(roomName);
@@ -404,13 +405,23 @@ function createWebSocketServer(server) {
             };
             console.log('Sending session.update with instructions length:', sessionData.session.instructions.length);
             oaWs.send(JSON.stringify(sessionData));
-            // Start LiveKit Egress (audio-only) for this room
+            // Start LiveKit Egress (audio-only) for this room, fallback to local recorder
             try {
               const eg = await startRoomAudioEgress(roomName);
               egressId = eg?.egressId || eg?.egress_id || null;
               console.log('LiveKit egress started (studio):', egressId || eg);
             } catch (egErr) {
               console.error('Failed to start LiveKit egress (studio):', egErr?.message || egErr);
+              try {
+                const { createRecorder } = require('../livekit/recorder');
+                const at = new AccessToken(apiKey, apiSecret, { identity: `recorder-${roomName}-${Date.now()}` });
+                at.addGrant({ room: roomName, roomJoin: true, canPublish: false, canSubscribe: true });
+                const token = at.toJwt();
+                livekitRecorder = await createRecorder({ host: livekitHost, token, roomName, outFileBase: `${roomName}-${Date.now()}` });
+                console.log('Local recorder started (studio):', livekitRecorder?.outPath || '(unknown)');
+              } catch (recErr) {
+                console.error('Failed to start local recorder (studio):', recErr?.message || recErr);
+              }
             }
             // If a prime text was provided, send as an initial user message and request a response
             if (primeText && primeText.trim().length > 0) {
