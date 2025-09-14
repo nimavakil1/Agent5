@@ -121,8 +121,15 @@ app.get('/readyz', (req, res) => res.status(200).json({ ready: true }));
 app.get('/version', (req, res) => res.status(200).json({ commit: COMMIT_SHA || null, startedAt: STARTED_AT }));
 
 // Serve static monitor and call recordings (optionally protected)
-// Save path is backend/recordings; __dirname is backend/src, so serve ../recordings
-const recordingsDir = path.join(__dirname, '..', 'recordings');
+// Recordings are saved under backend/src/recordings; __dirname is backend/src
+const recordingsDir = path.join(__dirname, 'recordings');
+// Signed URL helper for recordings (when session cookies are unreliable for media elements)
+const crypto = require('crypto');
+function signRecordingPath(u, ts){
+  const secret = process.env.RECORDINGS_SIGNING_SECRET || process.env.AUTH_TOKEN || 'dev-secret';
+  const h = crypto.createHmac('sha256', secret).update(String(u)+'|'+String(ts)).digest('hex');
+  return h;
+}
 // Public: login page
 app.get('/app/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'login.html'));
@@ -157,7 +164,20 @@ app.get('/monitor.js', requireSession, (req, res) => {
 // Remove broad root-protected static to avoid intercepting /api/auth/login
 // Legacy pages (monitor/admin) can be accessed during transition under /legacy if needed
 if (process.env.PROTECT_RECORDINGS === '1') {
-  // Protect with session cookie so the admin UI can access recordings without a bearer token
+  // Allow either session cookie or signed URL
+  app.get('/recordings-signed', async (req, res) => {
+    try {
+      const u = String(req.query.u || '');
+      const ts = Number(req.query.ts || '0');
+      const sig = String(req.query.sig || '');
+      if (!u.startsWith('/recordings/')) return res.status(400).json({ message:'bad url' });
+      const now = Date.now();
+      if (!ts || Math.abs(now - ts) > 10 * 60 * 1000) return res.status(401).json({ message:'expired' });
+      const expect = signRecordingPath(u, ts);
+      if (sig !== expect) return res.status(401).json({ message:'bad signature' });
+      return res.sendFile(path.join(recordingsDir, u.replace(/^\/recordings\//,'')));
+    } catch (e) { return res.status(500).json({ message:'error' }); }
+  });
   app.use('/recordings', requireSession, express.static(recordingsDir));
 } else {
   app.use('/recordings', express.static(recordingsDir));
