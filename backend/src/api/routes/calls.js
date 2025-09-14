@@ -7,6 +7,7 @@ const { createPrefilledCartLink } = require('../services/shopifyService');
 const { sendEmail } = require('../services/brevoService');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const CallLogEntry = require('../../models/CallLogEntry');
 
 // Optional API key middleware for creating outbound calls
@@ -106,4 +107,25 @@ router.get('/recordings/diagnostics', async (req, res) => {
   } catch (e) {
     res.status(500).json({ message: 'error', error: e.message });
   }
+});
+
+// Signed recording URL generator (requires session)
+router.get('/recordings/sign', async (req, res) => {
+  try {
+    const raw = String(req.query.u || '');
+    let u = raw;
+    // Accept absolute URLs and extract pathname
+    try {
+      if (/^https?:\/\//i.test(raw)) {
+        const parsed = new URL(raw);
+        u = parsed.pathname; // only path should be signed
+      }
+    } catch(_) {}
+    if (!u.startsWith('/recordings/')) return res.status(400).json({ message:'bad url' });
+    const ts = Date.now();
+    const secret = process.env.RECORDINGS_SIGNING_SECRET || process.env.AUTH_TOKEN || 'dev-secret';
+    const sig = crypto.createHmac('sha256', secret).update(u+'|'+ts).digest('hex');
+    const url = `/recordings-signed?u=${encodeURIComponent(u)}&ts=${ts}&sig=${sig}`;
+    res.json({ url, ts, sig });
+  } catch (e) { res.status(500).json({ message:'error' }); }
 });

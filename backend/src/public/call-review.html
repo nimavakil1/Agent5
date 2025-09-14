@@ -348,7 +348,13 @@
             if (!triedSigned) {
               triedSigned = true;
               try {
-                const resp = await fetch(`/api/calls/recordings/sign?u=${encodeURIComponent(base)}`);
+                // Ensure we pass only the path to the signer
+                let pathOnly = base;
+                try {
+                  const u = new URL(base, window.location.origin);
+                  pathOnly = u.pathname; // no query here
+                } catch(_) {}
+                const resp = await fetch(`/api/calls/recordings/sign?u=${encodeURIComponent(pathOnly)}`);
                 if (resp.ok) {
                   const data = await resp.json();
                   const signed = data && data.url ? data.url : null;
