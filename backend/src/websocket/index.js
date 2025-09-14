@@ -597,7 +597,9 @@ function createWebSocketServer(server) {
             const m = JSON.parse(raw.toString());
             if (m.type === 'audio' && m.audio && oaWs.readyState === WebSocket.OPEN) {
               const pcm24kBuffer = Buffer.from(m.audio, 'base64');
-              // Publish callee (browser mic) into LiveKit so the recorder can capture it
+              // Mix callee (browser mic) into local studio WAV
+              try { if (studioMixer) studioMixer.appendCallee(pcm24kBuffer); } catch(_) {}
+              // Publish callee (browser mic) into LiveKit so the recorder/egress can capture it
               try {
                 if (publisher) {
                   const pcm8k = downsample24kTo8k(pcm24kBuffer);
