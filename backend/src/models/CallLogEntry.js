@@ -19,6 +19,7 @@ const callLogEntrySchema = new mongoose.Schema({
   cost_tracking_id: { type: String }, // Reference to CallCostTracking
   onedrive_recording_url: { type: String }, // Direct OneDrive shareable link
   transcription_summary: { type: String }, // Key conversation points
+  intents: [String],
 });
 
 module.exports = mongoose.model('CallLogEntry', callLogEntrySchema);

@@ -10,6 +10,7 @@ const CustomerRecord = require('../models/CustomerRecord'); // Import CustomerRe
 const CallCostTracking = require('../models/CallCostTracking'); // Import CallCostTracking model
 const { getToolsSpec, callTool } = require('../services/mcpTools');
 const { resolveAgentAndMcp } = require('../util/orchestrator');
+const CampaignDefinition = require('../models/CampaignDefinition');
 const costCalculationService = require('../services/costCalculationService');
 // const onedriveService = require('../services/onedriveService'); // Temporarily disabled due to dependency issues
 const fs = require('fs'); // Import file system module
@@ -301,6 +302,7 @@ function createWebSocketServer(server) {
         const { createPublisher } = require('../livekit/publisher');
         // Load saved settings for this bridge session
         let settings = await agentSettings.getSettings();
+        let campaignDoc = null;
         console.log('Base settings loaded:', { hasInstructions: !!settings.instructions, voice: settings.voice });
         try {
           if (query.profile) {
@@ -320,6 +322,7 @@ function createWebSocketServer(server) {
               const campaign = String(query.campaign || query.campaign_id || query.id || '');
               const langHint = String(query.lang || query.language || '').toLowerCase();
               if (campaign || langHint) {
+                if (campaign) { try { campaignDoc = await CampaignDefinition.findOne({ $or: [{ _id: campaign }, { campaign_id: campaign }, { name: campaign }, { title: campaign }] }).lean(); } catch(_) {} }
                 const out = await resolveAgentAndMcp({ campaignId: campaign, detectedLanguage: langHint });
                 if (out?.agent) {
                   console.log('Resolved Studio agent via orchestrator:', { name: out.agent.name, lang: out.agent.language });
@@ -478,6 +481,47 @@ function createWebSocketServer(server) {
         const STUDIO_FRAME_MS = 21; // ~1024/48k -> 512/24k ≈ 21ms
         const STUDIO_MIN_COMMIT_MS = Number(process.env.MIN_COMMIT_MS || '120');
         const studioToolArgs = new Map();
+        let studioRuleLangSwitched = false;
+        const studioTagged = new Set();
+        function guessLangFromText(txt){
+          const s = (txt||'').toLowerCase();
+          const frHits = [' le ', ' la ', ' et ', ' je ', ' vous ', ' merci ', 'bonjour','rappeler','facture'];
+          const nlHits = [' de ', ' het ', ' en ', ' jij ', ' u ', ' dank u','goeden','factuur'];
+          let fr=0, nl=0; for(const w of frHits) if(s.includes(w)) fr++; for(const w of nlHits) if(s.includes(w)) nl++; return fr>nl? 'fr' : (nl>fr? 'nl' : '');
+        }
+        async function studioApplyRules(){
+          try {
+            if (!campaignDoc || !campaignDoc.orchestrator) return;
+            const orch = campaignDoc.orchestrator || {};
+            // Auto language switch
+            if (orch.auto_lang_switch && !studioRuleLangSwitched) {
+              const g = guessLangFromText(currentTranscription);
+              if (g && g !== (settings.language||'').toLowerCase()) {
+                const out = await resolveAgentAndMcp({ campaignId: campaignDoc._id || campaignDoc.campaign_id || campaignDoc.name, detectedLanguage: g });
+                if (out?.agent) {
+                  settings = { instructions: out.agent.instructions || settings.instructions, voice: out.agent.voice || settings.voice, language: out.agent.language || g };
+                  const tdThresh = Number(process.env.TURN_DETECTION_THRESHOLD || '0.60');
+                  const tdPrefix = Number(process.env.TURN_DETECTION_PREFIX_MS || '180');
+                  const tdSilence = Number(process.env.TURN_DETECTION_SILENCE_MS || '250');
+                  oaWs.send(JSON.stringify({ type:'session.update', session:{ instructions: settings.instructions, voice: settings.voice, input_audio_transcription: { model: 'whisper-1', language: settings.language }, turn_detection: { type:'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence } } }));
+                  studioRuleLangSwitched = true;
+                }
+              }
+            }
+            // Intent keywords -> tag
+            if (Array.isArray(orch.intent_keywords)) {
+              for (const r of orch.intent_keywords) {
+                const pat = String(r.pattern||'').toLowerCase();
+                const tag = String(r.tag||'').trim();
+                if (!pat || !tag || studioTagged.has(tag)) continue;
+                if ((currentTranscription||'').toLowerCase().includes(pat)) {
+                  studioTagged.add(tag);
+                  try { await CallLogEntry.findOneAndUpdate({ call_id: callId }, { $addToSet: { intents: tag } }, { upsert: true }); } catch(_) {}
+                }
+              }
+            }
+          } catch (e) { console.error('Studio rules error:', e); }
+        }
         oaWs.on('message', async (data) => {
           try {
             const s = typeof data === 'string' ? data : data.toString('utf8');
@@ -561,6 +605,8 @@ function createWebSocketServer(server) {
               try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(e) { console.error('Error sending agent_speaking=false:', e); }
               try { if (publisher) publisher.muteAgent(false); } catch(e) { console.error('Error muting agent on done:', e); }
             }
+            // Evaluate rules on each message (cheap heuristics)
+            try { await studioApplyRules(); } catch(_) {}
           } catch (e) { console.error('Error processing OA message:', e); }
         });
         const closeAll = async () => { 
@@ -972,6 +1018,48 @@ function createWebSocketServer(server) {
       });
 
       const pstnToolArgs = new Map();
+      let pstnRuleLangSwitched = false;
+      const pstnTagged = new Set();
+      async function pstnApplyRules(){
+        try {
+          let campaignDoc = null;
+          if (campaignHint) { try { campaignDoc = await CampaignDefinition.findOne({ $or: [{ _id: campaignHint }, { campaign_id: campaignHint }, { name: campaignHint }, { title: campaignHint }] }).lean(); } catch(_) {} }
+          if (!campaignDoc || !campaignDoc.orchestrator) return;
+          const orch = campaignDoc.orchestrator || {};
+          // Auto language switch
+          if (orch.auto_lang_switch && !pstnRuleLangSwitched) {
+            const g = guessLangFromText(currentTranscription);
+            if (g && g !== (sessionOverrides.language||'').toLowerCase()) {
+              const out = await resolveAgentAndMcp({ campaignId: (campaignDoc._id || campaignDoc.campaign_id || campaignDoc.name), detectedLanguage: g });
+              if (out?.agent) {
+                const tdThresh = Number(process.env.TURN_DETECTION_THRESHOLD || '0.60');
+                const tdPrefix = Number(process.env.TURN_DETECTION_PREFIX_MS || '180');
+                const tdSilence = Number(process.env.TURN_DETECTION_SILENCE_MS || '250');
+                openaiWs.send(JSON.stringify({ type:'session.update', session:{ instructions: out.agent.instructions || undefined, voice: out.agent.voice || undefined, input_audio_transcription: { model: 'whisper-1', language: out.agent.language || g }, turn_detection: { type:'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence } } }));
+                pstnRuleLangSwitched = true;
+              }
+            }
+          }
+          // Intent keywords -> tag
+          if (Array.isArray(orch.intent_keywords)) {
+            for (const r of orch.intent_keywords) {
+              const pat = String(r.pattern||'').toLowerCase();
+              const tag = String(r.tag||'').trim();
+              if (!pat || !tag || pstnTagged.has(tag)) continue;
+              if ((currentTranscription||'').toLowerCase().includes(pat)) {
+                pstnTagged.add(tag);
+                try { await CallLogEntry.findOneAndUpdate({ call_id: roomName }, { $addToSet: { intents: tag } }, { upsert: true }); } catch(_) {}
+              }
+            }
+          }
+        } catch (e) { console.error('PSTN rules error:', e); }
+      }
+      function guessLangFromText(txt){
+        const s = (txt||'').toLowerCase();
+        const frHits = [' le ', ' la ', ' et ', ' je ', ' vous ', ' merci ', 'bonjour','rappeler','facture'];
+        const nlHits = [' de ', ' het ', ' en ', ' jij ', ' u ', ' dank u','goeden','factuur'];
+        let fr=0, nl=0; for(const w of frHits) if(s.includes(w)) fr++; for(const w of nlHits) if(s.includes(w)) nl++; return fr>nl? 'fr' : (nl>fr? 'nl' : '');
+      }
       openaiWs.on('message', async (data) => {
         try {
           const str = typeof data === 'string' ? data : data.toString('utf8');
@@ -1041,6 +1129,8 @@ function createWebSocketServer(server) {
             pstnAgentSpeaking = true;
           }
           if (openaiResponse.type === 'response.done') { pstnAgentSpeaking = false; try { if (livekitPublisher) livekitPublisher.muteAgent(false); } catch(_) {} }
+          // Evaluate rules on each message
+          try { await pstnApplyRules(); } catch(_) {}
 
         } catch (error) {
           console.error('Error processing OpenAI message:', error);

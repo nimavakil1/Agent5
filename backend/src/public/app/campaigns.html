@@ -35,6 +35,12 @@
             <div class="flex items-center justify-between mb-2"><div class="text-sm text-gray-400">Language Routes</div><button id="addRoute" class="btn btn-secondary text-sm">Add Route</button></div>
             <div id="routes" class="space-y-2"></div>
           </div>
+          <div class="mt-6">
+            <div class="text-sm text-gray-400 mb-2">Rules</div>
+            <label class="flex items-center gap-2 text-sm mb-3"><input type="checkbox" id="autoLang" class="rounded"> <span>Auto-switch agent by detected language</span></label>
+            <div class="mb-2 flex items-center justify-between"><div class="text-sm text-gray-400">Intent Keywords → Tag</div><button id="addIntent" class="btn btn-secondary text-sm">Add Intent</button></div>
+            <div id="intents" class="space-y-2"></div>
+          </div>
           <div class="mt-4 flex gap-2">
             <button id="save" class="btn btn-primary">Save Orchestrator</button>
             <div class="flex items-center gap-2">
@@ -80,15 +86,17 @@
     </main>
     <script>
       let campaigns=[]; let agents=[]; let current=null;
-      const el={ list:document.getElementById('list'), q:document.getElementById('q'), refresh:document.getElementById('refresh'), empty:document.getElementById('empty'), orch:document.getElementById('orch'), mcp:document.getElementById('mcp'), def:document.getElementById('defaultAgent'), routes:document.getElementById('routes'), addRoute:document.getElementById('addRoute'), save:document.getElementById('save'), test:document.getElementById('test'), testLang:document.getElementById('testLang'), testOut:document.getElementById('testOut'),
+      const el={ list:document.getElementById('list'), q:document.getElementById('q'), refresh:document.getElementById('refresh'), empty:document.getElementById('empty'), orch:document.getElementById('orch'), mcp:document.getElementById('mcp'), def:document.getElementById('defaultAgent'), routes:document.getElementById('routes'), addRoute:document.getElementById('addRoute'), autoLang:document.getElementById('autoLang'), intents:document.getElementById('intents'), addIntent:document.getElementById('addIntent'), save:document.getElementById('save'), test:document.getElementById('test'), testLang:document.getElementById('testLang'), testOut:document.getElementById('testOut'),
         newBtn:document.getElementById('newCamp'), modal:document.getElementById('newModal'), closeBtn:document.getElementById('newClose'), nc_name:document.getElementById('nc_name'), nc_desc:document.getElementById('nc_desc'), nc_tz:document.getElementById('nc_tz'), nc_start:document.getElementById('nc_start'), createBtn:document.getElementById('createCamp'), openOrch:document.getElementById('openOrchestrator'), nc_msg:document.getElementById('nc_msg') };
       function row(c){ const div=document.createElement('div'); div.className='p-3 border border-[#283039] rounded'; const title=(c.title||c.name||'untitled'); const legacy=c.campaign_id?`<span class="tag ml-2">${c.campaign_id}</span>`:''; div.innerHTML=`<div class=\"font-medium\">${title}${legacy}</div><div class=\"text-xs text-gray-400\">${c.status||'draft'} · ${c.channel||'pstn'}</div>`; div.onclick=()=> loadEdit(c); return div; }
       function opt(sel, label, value){ const o=document.createElement('option'); o.textContent=label; o.value=value; sel.appendChild(o); }
       function renderAgentOptions(sel){ sel.innerHTML=''; opt(sel, '(none)', ''); for(const a of agents){ opt(sel, a.name, a.name); } }
       function addRouteRow(r){ const wrap=document.createElement('div'); wrap.className='grid grid-cols-3 gap-2 items-center'; const lang=document.createElement('input'); lang.className='inp'; lang.placeholder='lang (e.g., nl)'; lang.value=r?.lang||''; const ap=document.createElement('select'); ap.className='inp'; renderAgentOptions(ap); if(r?.agent_profile) ap.value=r.agent_profile; const del=document.createElement('button'); del.className='btn btn-danger text-sm'; del.textContent='Remove'; del.onclick=()=>{ wrap.remove(); } ; wrap.appendChild(lang); wrap.appendChild(ap); wrap.appendChild(del); el.routes.appendChild(wrap); }
+      function addIntentRow(obj){ const wrap=document.createElement('div'); wrap.className='grid grid-cols-2 gap-2 items-center'; const p=document.createElement('input'); p.className='inp'; p.placeholder='pattern (e.g., rappeler)'; p.value=obj?.pattern||''; const t=document.createElement('input'); t.className='inp'; t.placeholder='tag (e.g., callback_requested)'; t.value=obj?.tag||''; const del=document.createElement('button'); del.className='btn btn-danger text-sm col-span-2'; del.textContent='Remove'; del.onclick=()=> wrap.remove(); wrap.appendChild(p); wrap.appendChild(t); wrap.appendChild(del); el.intents.appendChild(wrap); }
       async function load(){ const r1=await fetch('/api/campaigns',{credentials:'include'}); campaigns = r1.ok? await r1.json():[]; const r2=await fetch('/api/agents',{credentials:'include'}); agents = r2.ok? await r2.json():[]; el.list.innerHTML=''; const q=(el.q.value||'').toLowerCase(); for(const c of campaigns.filter(c=>{ const t=(c.title||c.name||'').toLowerCase(); const id=(c._id||'').toLowerCase(); const cid=(c.campaign_id||'').toLowerCase(); return !q || t.includes(q) || id.includes(q) || cid.includes(q); })){ el.list.appendChild(row(c)); } }
-      function loadEdit(c){ current=c; el.empty.classList.add('hidden'); el.orch.classList.remove('hidden'); el.mcp.value = (c.orchestrator && c.orchestrator.mcp_service) || '/api/mcp'; renderAgentOptions(el.def); el.def.value = (c.orchestrator && c.orchestrator.default_agent_profile) || ''; el.routes.innerHTML=''; const lr = (c.orchestrator && Array.isArray(c.orchestrator.language_routes)) ? c.orchestrator.language_routes : []; if(!lr.length) addRouteRow({}); else lr.forEach(addRouteRow); }
+      function loadEdit(c){ current=c; el.empty.classList.add('hidden'); el.orch.classList.remove('hidden'); el.mcp.value = (c.orchestrator && c.orchestrator.mcp_service) || '/api/mcp'; renderAgentOptions(el.def); el.def.value = (c.orchestrator && c.orchestrator.default_agent_profile) || ''; el.routes.innerHTML=''; const lr = (c.orchestrator && Array.isArray(c.orchestrator.language_routes)) ? c.orchestrator.language_routes : []; if(!lr.length) addRouteRow({}); else lr.forEach(addRouteRow); el.autoLang.checked = !!(c.orchestrator && c.orchestrator.auto_lang_switch); el.intents.innerHTML=''; const ik = (c.orchestrator && Array.isArray(c.orchestrator.intent_keywords)) ? c.orchestrator.intent_keywords : []; if(!ik.length) addIntentRow({}); else ik.forEach(addIntentRow); }
       el.q.oninput = load; el.refresh.onclick = load; el.addRoute.onclick = ()=> addRouteRow({});
+      el.addIntent.onclick = ()=> addIntentRow({});
       // Modal wiring
       el.newBtn.onclick = ()=>{ el.modal.classList.remove('hidden'); el.modal.classList.add('flex'); el.nc_msg.textContent=''; };
       el.closeBtn.onclick = ()=>{ el.modal.classList.add('hidden'); el.modal.classList.remove('flex'); };
@@ -117,7 +125,8 @@
           const agent_profile = (apSel.value||'').trim();
           return (lang && agent_profile) ? { lang, agent_profile } : null;
         }).filter(Boolean);
-        const orchestrator = { mcp_service: (el.mcp.value||'').trim(), default_agent_profile: el.def.value || '', language_routes: langRoutes };
+        const intents = [...el.intents.children].map(w=>{ const ins = w.querySelectorAll('.inp'); return { pattern: (ins[0].value||'').trim(), tag: (ins[1].value||'').trim() }; }).filter(x=>x.pattern && x.tag);
+        const orchestrator = { mcp_service: (el.mcp.value||'').trim(), default_agent_profile: el.def.value || '', language_routes: langRoutes, auto_lang_switch: !!el.autoLang.checked, intent_keywords: intents };
         const res = await fetch('/api/campaigns/'+id, { method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ orchestrator }) });
         if (!res.ok) { alert('Save failed'); return; }
         const updated = await res.json();

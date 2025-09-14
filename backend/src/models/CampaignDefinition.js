@@ -31,6 +31,8 @@ const campaignDefinitionSchema = new mongoose.Schema(
       mcp_service: { type: String },
       default_agent_profile: { type: String },
       language_routes: [{ lang: String, agent_profile: String }],
+      auto_lang_switch: { type: Boolean, default: false },
+      intent_keywords: [{ pattern: String, tag: String }],
     },
 
     // Backward-compatible legacy fields (optional)
