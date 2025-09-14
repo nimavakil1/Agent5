@@ -318,14 +318,35 @@
 
       function loadAudioPlayer(call) {
         const audioPlayer = document.getElementById('audioPlayer');
+        const wf = document.getElementById('waveform');
         if (call.audio_recording_url) {
-          audioPlayer.src = call.audio_recording_url;
+          // Bust cache to avoid stale 401s; ensure metadata loads
+          const url = call.audio_recording_url + (call.audio_recording_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+          audioPlayer.src = url;
+          audioPlayer.preload = 'metadata';
           audioPlayer.style.display = 'block';
+          audioPlayer.onloadedmetadata = () => {
+            try {
+              document.getElementById('audioDuration').textContent = formatDuration(Math.floor((audioPlayer.duration||0))); 
+            } catch(_) {}
+          };
+          audioPlayer.onerror = () => {
+            wf.innerHTML = '<span class="text-red-400 text-sm">Failed to load recording. Ensure you are logged in and try again.</span>';
+          };
+          // Generate placeholder waveform
           generateWaveform();
+          // Force a load
+          try { audioPlayer.load(); } catch(_) {}
         } else {
           audioPlayer.style.display = 'none';
-          document.getElementById('waveform').innerHTML = '<span class="text-slate-500 text-sm">No recording available</span>';
+          wf.innerHTML = '<span class="text-slate-500 text-sm">No recording available</span>';
         }
+      }
+
+      function formatDuration(seconds){
+        const m = Math.floor(seconds/60).toString().padStart(2,'0');
+        const s = Math.floor(seconds%60).toString().padStart(2,'0');
+        return m+':'+s;
       }
 
       function generateWaveform() {
