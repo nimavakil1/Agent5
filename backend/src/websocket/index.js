@@ -511,9 +511,17 @@ function createWebSocketServer(server) {
             }
           }
 
-          // Update CallLogEntry with egress file
+          // Update CallLogEntry with egress file or local recorder fallback
           try {
-            const audioRecordingUrl = egressFile ? ('/recordings/' + String(egressFile).replace(/^\/+/, '')) : '';
+            let chosenPath = egressFile || '';
+            if (!chosenPath && livekitRecorder && livekitRecorder.outPath) {
+              try {
+                const recPath = String(livekitRecorder.outPath);
+                const idx = recPath.lastIndexOf('/recordings/');
+                chosenPath = idx >= 0 ? recPath.slice(idx + '/recordings/'.length) : require('path').basename(recPath);
+              } catch (_) {}
+            }
+            const audioRecordingUrl = chosenPath ? ('/recordings/' + String(chosenPath).replace(/^\/+/, '')) : '';
             const callEndTime = new Date();
             await CallLogEntry.findOneAndUpdate(
               { call_id: callId },
