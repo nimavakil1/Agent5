@@ -1,291 +1,85 @@
 <!doctype html>
-<html lang="en">
+<html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Campaigns · ACROPAQ AI</title>
-    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <title>Campaigns · ACROPAQ</title>
+    <link crossorigin href="https://fonts.gstatic.com/" rel="preconnect"/>
     <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script src="/app/shell.js"></script>
-    <style>
-      :root { --primary-color:#0d7ff2; }
-      body { font-family: Inter, "Noto Sans", sans-serif; }
-    </style>
+    <style> body{font-family:Inter, "Noto Sans", sans-serif;} .card{background:#181C20;border:1px solid #283039;border-radius:.5rem;} .inp{background:#111418;border:1px solid #283039;color:#fff;border-radius:.375rem;padding:.5rem .75rem;width:100%;} .btn{display:inline-flex;align-items:center;gap:.5rem;border-radius:.5rem;padding:.5rem .75rem;font-weight:500;} .btn-primary{background:#0d7ff2;color:#fff;} .btn-secondary{background:#0f172a;color:#fff;} .btn-danger{background:#b91c1c;color:#fff;} .tag{background:#0f172a;border:1px solid #283039;border-radius:.375rem;padding:.125rem .375rem;}</style>
   </head>
   <body class="min-h-screen bg-[#111418] text-gray-100">
-    <main class="p-8">
-      <div class="flex items-start justify-between gap-6">
-        <div class="flex items-center gap-2">
-          <button class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="newBtn"><span class="material-symbols-outlined">add_circle</span><span>New Campaign</span></button>
-          <button class="inline-flex items-center gap-2 rounded-md bg-[#0f172a] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="refreshBtn"><span class="material-symbols-outlined">refresh</span><span>Refresh</span></button>
+    <main class="max-w-6xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <section class="card p-4 lg:col-span-1">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-white">Campaigns</h2>
+          <button id="refresh" class="btn btn-secondary text-sm">Refresh</button>
         </div>
-        <div class="w-full max-w-xl">
-          <label class="block text-sm text-gray-400 mb-1">Describe campaign (NL prefill)</label>
-          <textarea id="nlInput" rows="3" class="w-full rounded-md border border-[#283039] bg-[#181C20] p-3 text-sm placeholder-gray-500" placeholder="E.g., Run weekdays 9-17 Brussels time, target delivery phones tagged 'promo', 2 attempts with 24h cooldown."></textarea>
-          <div class="flex justify-end mt-2"><button class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="nlFillBtn"><span class="material-symbols-outlined">auto_awesome</span><span>Fill From Description</span></button></div>
+        <input id="q" class="inp text-sm mb-3" placeholder="Search by name/id" />
+        <div id="list" class="space-y-2"></div>
+      </section>
+      <section class="card p-4 lg:col-span-2">
+        <h3 class="font-medium text-white mb-3">Orchestrator</h3>
+        <div id="empty" class="text-sm text-gray-400">Select a campaign to edit routing.</div>
+        <div id="orch" class="hidden">
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="block text-sm text-gray-400">MCP Service</label><input id="mcp" class="mt-1 inp" placeholder="/api/mcp" /></div>
+            <div><label class="block text-sm text-gray-400">Default Agent Profile</label><select id="defaultAgent" class="mt-1 inp"></select></div>
+          </div>
+          <div class="mt-4">
+            <div class="flex items-center justify-between mb-2"><div class="text-sm text-gray-400">Language Routes</div><button id="addRoute" class="btn btn-secondary text-sm">Add Route</button></div>
+            <div id="routes" class="space-y-2"></div>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <button id="save" class="btn btn-primary">Save Orchestrator</button>
+            <div class="flex items-center gap-2">
+              <input id="testLang" class="inp text-sm" placeholder="Test lang (e.g., fr)" style="width:10rem" />
+              <button id="test" class="btn btn-secondary text-sm">Test Routing</button>
+            </div>
+          </div>
+          <div id="testOut" class="mt-3 text-sm text-gray-300"></div>
         </div>
-      </div>
-      <div class="overflow-x-auto rounded-md border border-[#3b4754] mt-6">
-        <table class="w-full text-left">
-          <thead class="bg-[#1b2127]">
-            <tr>
-              <th class="p-4 text-sm font-medium text-white">Name</th>
-              <th class="p-4 text-sm font-medium text-white">Status</th>
-              <th class="p-4 text-sm font-medium text-white">Windows</th>
-              <th class="p-4 text-sm font-medium text-white">Start</th>
-              <th class="p-4 text-sm font-medium text-white">End</th>
-              <th class="p-4 text-sm font-medium text-white">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="rows" class="divide-y divide-[#3b4754]"></tbody>
-        </table>
-      </div>
+      </section>
     </main>
-
-    <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 flex" id="editModal" role="dialog" aria-modal="true">
-      <div class="w-[880px] max-w-[95vw] rounded-lg border border-[#283039] bg-[#181C20]">
-        <div class="flex items-center justify-between border-b border-[#283039] px-4 py-3">
-          <strong id="editTitle">New Campaign</strong>
-          <button id="closeBtn" class="text-gray-400 hover:text-white"><span class="material-symbols-outlined">close</span></button>
-        </div>
-        <div class="p-4 max-h-[70vh] overflow-auto">
-          <form id="form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="space-y-3">
-              <label class="text-sm text-gray-300">Name<input type="text" id="f_name" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
-              <label class="text-sm text-gray-300">Description<input type="text" id="f_description" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
-              <label class="text-sm text-gray-300">Target<select id="f_target" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"><option value="invoice">Invoice</option><option value="delivery">Delivery</option></select></label>
-              <label class="text-sm text-gray-300">Include tags (comma-separated)<input type="text" id="f_include_tags" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder="promo, belgium"/></label>
-              <label class="text-sm text-gray-300">Exclude tags (comma-separated)<input type="text" id="f_exclude_tags" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder="vip"/></label>
-              <label class="text-sm text-gray-300">Field filters (JSON array)<input type="text" id="f_field_filters" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder='[{"key":"segment","op":"=","value":"A"}]'/></label>
-            </div>
-            <div class="space-y-3">
-              <label class="text-sm text-gray-300">Time zone (IANA)<input type="text" id="f_tz" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder="Europe/Brussels"/></label>
-              <div class="rounded-md border border-[#283039] p-2.5">
-                <div class="flex items-center justify-between mb-2">
-                  <strong>Windows</strong>
-                  <button class="inline-flex items-center gap-1 rounded-md bg-[var(--primary-color)] px-2 py-1 text-xs text-white" type="button" id="addWindowBtn"><span class="material-symbols-outlined text-base">add</span>Add</button>
-                </div>
-                <table class="w-full text-sm">
-                  <thead><tr class="text-gray-400"><th class="py-1 text-left">Day</th><th class="py-1 text-left">Start</th><th class="py-1 text-left">End</th><th></th></tr></thead>
-                  <tbody id="winRows"></tbody>
-                </table>
-              </div>
-              <div class="grid grid-cols-2 gap-3"><label class="text-sm text-gray-300">Start at<input type="datetime-local" id="f_start_at" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label><label class="text-sm text-gray-300">End at<input type="datetime-local" id="f_end_at" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label></div>
-              <div class="grid grid-cols-2 gap-3"><label class="text-sm text-gray-300">Max attempts<input type="text" id="f_max_attempts" value="1" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label><label class="text-sm text-gray-300">Cooldown (hours)<input type="text" id="f_cooldown" value="24" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label></div>
-              <div class="grid grid-cols-2 gap-3"><label class="text-sm text-gray-300">Daily cap<input type="text" id="f_daily_cap" value="0" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label><label class="text-sm text-gray-300">Hourly cap<input type="text" id="f_hourly_cap" value="0" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label></div>
-              <label class="text-sm text-gray-300">Script profile<input type="text" id="f_script_profile" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5" placeholder="sales_v1"/></label>
-              <label class="text-sm text-gray-300">Notes<input type="text" id="f_notes" class="mt-1 w-full rounded-md border border-[#283039] bg-[#111418] p-2.5"/></label>
-            </div>
-          </form>
-        </div>
-        <div class="flex items-center justify-end gap-2 border-t border-[#283039] px-4 py-3">
-          <button class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-medium text-white hover:bg-opacity-90" id="saveBtn"><span class="material-symbols-outlined">save</span><span>Save</span></button>
-        </div>
-      </div>
-    </div>
-
     <script>
-      const rows = document.getElementById('rows');
-      const newBtn = document.getElementById('newBtn');
-      const refreshBtn = document.getElementById('refreshBtn');
-      const nlBtn = document.getElementById('nlFillBtn');
-      const nlInput = document.getElementById('nlInput');
-      const modal = document.getElementById('editModal');
-      const form = document.getElementById('form');
-      const winRows = document.getElementById('winRows');
-      const editTitle = document.getElementById('editTitle');
-      const saveBtn = document.getElementById('saveBtn');
-      const closeBtn = document.getElementById('closeBtn');
-
-      let currentId = null;
-      const dayOpts = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-
-      function htmlesc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
-
-      async function load(){
-        rows.innerHTML = '<tr><td colspan="6" class="p-4 text-[#9cabba]">Loading…</td></tr>';
-        const r = await fetch('/api/campaigns', { credentials:'include' });
-        const list = await r.json();
-        rows.innerHTML = '';
-        if(!Array.isArray(list) || !list.length){ rows.innerHTML='<tr><td colspan="6" class="p-4 text-[#9cabba]">No campaigns</td></tr>'; return; }
-        for(const c of list){
-          const windows = (c.schedule?.windows||[]).map(w=> `${w.day} ${w.start}-${w.end}`).join('<br/>');
-          const status = c.status||'draft';
-          const color = status==='running'?'green': status==='paused'?'yellow': status==='scheduled'?'blue': status==='ended'?'gray':'slate';
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td class="p-4 text-sm text-white">${htmlesc(c.name||c.title||'(untitled)')}</td>
-            <td class="p-4 text-sm"><span class="inline-flex items-center rounded-full bg-${color}-500/10 px-2 py-1 text-xs font-medium text-${color}-400">${htmlesc(status)}</span></td>
-            <td class="p-4 text-sm text-[#9cabba]">${windows||'—'}</td>
-            <td class="p-4 text-sm text-[#9cabba]">${c.schedule?.start_at ? new Date(c.schedule.start_at).toLocaleString() : '—'}</td>
-            <td class="p-4 text-sm text-[#9cabba]">${c.schedule?.end_at ? new Date(c.schedule.end_at).toLocaleString() : '—'}</td>
-            <td class="p-4">
-              <div class="flex flex-wrap items-center gap-2">
-                <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-[#9cabba] hover:bg-[#1b2127] hover:text-white" data-act="edit" data-id="${c._id}"><span class="material-symbols-outlined text-base">edit</span>Edit</button>
-                <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-[#9cabba] hover:bg-[#1b2127] hover:text-white" data-act="stats" data-id="${c._id}"><span class="material-symbols-outlined text-base">monitoring</span>Stats</button>
-                <button class="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary-color)] px-2 py-1.5 text-sm font-medium text-white hover:bg-opacity-90" data-act="start" data-id="${c._id}"><span class="material-symbols-outlined text-base">play_arrow</span>Start</button>
-                <button class="inline-flex items-center gap-1.5 rounded-md bg-gray-700 px-2 py-1.5 text-sm font-medium text-white hover:bg-gray-600" data-act="pause" data-id="${c._id}"><span class="material-symbols-outlined text-base">pause</span>Pause</button>
-                <button class="inline-flex items-center gap-1.5 rounded-md bg-red-700 px-2 py-1.5 text-sm font-medium text-white hover:bg-red-600" data-act="stop" data-id="${c._id}"><span class="material-symbols-outlined text-base">stop</span>Stop</button>
-                <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-red-300 hover:bg-red-900/40" data-act="del" data-id="${c._id}"><span class="material-symbols-outlined text-base">delete</span>Delete</button>
-              </div>
-            </td>
-          `;
-          rows.appendChild(tr);
-        }
-        rows.querySelectorAll('button[data-act]').forEach(btn=>{
-          btn.onclick = (ev)=> handleRowAction(ev.currentTarget.getAttribute('data-act'), ev.currentTarget.getAttribute('data-id'));
-        });
-      }
-
-      function openNew(){
-        currentId = null;
-        editTitle.textContent = 'New Campaign';
-        form.reset(); winRows.innerHTML='';
-        addWindowRow('Mon','09:00','17:00');
-        modal.classList.remove('hidden');
-      }
-
-      function addWindowRow(day='',start='',end=''){
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="py-1 pr-2"><select class="w-full rounded-md border border-[#283039] bg-[#111418] p-1.5 text-sm">${dayOpts.map(d=>`<option ${d===day?'selected':''}>${d}</option>`).join('')}</select></td>
-          <td class="py-1 pr-2"><input type="text" class="w-full rounded-md border border-[#283039] bg-[#111418] p-1.5 text-sm" placeholder="09:00" value="${htmlesc(start)}"/></td>
-          <td class="py-1 pr-2"><input type="text" class="w-full rounded-md border border-[#283039] bg-[#111418] p-1.5 text-sm" placeholder="17:00" value="${htmlesc(end)}"/></td>
-          <td class="py-1"><button type="button" class="rounded-md bg-red-700/70 px-2 py-1 text-xs">Remove</button></td>
-        `;
-        tr.querySelector('button').onclick = ()=> tr.remove();
-        winRows.appendChild(tr);
-      }
-
-      function fillForm(c){
-        document.getElementById('f_name').value = c.name||'';
-        document.getElementById('f_description').value = c.description||'';
-        document.getElementById('f_target').value = c.audience?.target||'invoice';
-        document.getElementById('f_include_tags').value = (c.audience?.include_tags||[]).join(', ');
-        document.getElementById('f_exclude_tags').value = (c.audience?.exclude_tags||[]).join(', ');
-        document.getElementById('f_field_filters').value = c.audience?.field_filters ? JSON.stringify(c.audience.field_filters) : '';
-        document.getElementById('f_tz').value = c.schedule?.tz||'';
-        winRows.innerHTML = '';
-        (c.schedule?.windows||[]).forEach(w=> addWindowRow(w.day, w.start, w.end));
-        const sa = c.schedule?.start_at ? new Date(c.schedule.start_at) : null;
-        const ea = c.schedule?.end_at ? new Date(c.schedule.end_at) : null;
-        document.getElementById('f_start_at').value = sa ? toLocalInput(sa) : '';
-        document.getElementById('f_end_at').value = ea ? toLocalInput(ea) : '';
-        document.getElementById('f_max_attempts').value = c.dialer?.max_attempts ?? 1;
-        document.getElementById('f_cooldown').value = c.dialer?.cooldown_hours ?? 24;
-        document.getElementById('f_daily_cap').value = c.dialer?.daily_cap ?? 0;
-        document.getElementById('f_hourly_cap').value = c.dialer?.hourly_cap ?? 0;
-        document.getElementById('f_script_profile').value = c.script_profile||'';
-        document.getElementById('f_notes').value = c.notes||'';
-      }
-
-      function toLocalInput(d){
-        const pad=(n)=> String(n).padStart(2,'0');
-        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      }
-
-      function collectForm(){
-        const inc = document.getElementById('f_include_tags').value.split(',').map(s=>s.trim()).filter(Boolean);
-        const exc = document.getElementById('f_exclude_tags').value.split(',').map(s=>s.trim()).filter(Boolean);
-        let filters = [];
-        const ff = document.getElementById('f_field_filters').value.trim();
-        if (ff) {
-          try { filters = JSON.parse(ff); } catch(e) { alert('Field filters must be JSON'); throw e; }
-        }
-        const windows = Array.from(winRows.querySelectorAll('tr')).map(tr=>{
-          const tds = tr.querySelectorAll('td');
-          return { day: tds[0].querySelector('select').value, start: tds[1].querySelector('input').value, end: tds[2].querySelector('input').value };
-        }).filter(w=> w.day && w.start && w.end);
-        const startAt = document.getElementById('f_start_at').value;
-        const endAt = document.getElementById('f_end_at').value;
-        return {
-          name: document.getElementById('f_name').value,
-          description: document.getElementById('f_description').value,
-          audience: {
-            include_tags: inc,
-            exclude_tags: exc,
-            field_filters: filters,
-            target: document.getElementById('f_target').value
-          },
-          schedule: {
-            tz: document.getElementById('f_tz').value,
-            windows,
-            start_at: startAt ? new Date(startAt).toISOString() : undefined,
-            end_at: endAt ? new Date(endAt).toISOString() : undefined,
-          },
-          dialer: {
-            max_attempts: Number(document.getElementById('f_max_attempts').value)||1,
-            cooldown_hours: Number(document.getElementById('f_cooldown').value)||24,
-            daily_cap: Number(document.getElementById('f_daily_cap').value)||0,
-            hourly_cap: Number(document.getElementById('f_hourly_cap').value)||0,
-          },
-          script_profile: document.getElementById('f_script_profile').value,
-          notes: document.getElementById('f_notes').value,
-        };
-      }
-
-      async function handleRowAction(act, id){
-        if (act==='edit') return openEdit(id);
-        if (act==='stats') {
-          const r = await fetch(`/api/campaigns/${id}/stats`, { credentials:'include' });
-          const j = await r.json();
-          alert(`Calls: ${j.calls_total}\nConnects: ${j.connects}\nConversions: ${j.conversions}\nCost: ${j.cost}`);
-          return;
-        }
-        if (act==='del') {
-          if (!confirm('Delete this campaign?')) return;
-          const r = await fetch(`/api/campaigns/${id}`, { method:'DELETE', credentials:'include' });
-          if(!r.ok) return alert('Delete failed');
-          return load();
-        }
-        const r = await fetch(`/api/campaigns/${id}/${act}`, { method:'POST', credentials:'include' });
-        if(!r.ok) return alert(act+' failed');
+      let campaigns=[]; let agents=[]; let current=null;
+      const el={ list:document.getElementById('list'), q:document.getElementById('q'), refresh:document.getElementById('refresh'), empty:document.getElementById('empty'), orch:document.getElementById('orch'), mcp:document.getElementById('mcp'), def:document.getElementById('defaultAgent'), routes:document.getElementById('routes'), addRoute:document.getElementById('addRoute'), save:document.getElementById('save'), test:document.getElementById('test'), testLang:document.getElementById('testLang'), testOut:document.getElementById('testOut') };
+      function row(c){ const div=document.createElement('div'); div.className='p-3 border border-[#283039] rounded'; const title=(c.title||c.name||'untitled'); const legacy=c.campaign_id?`<span class="tag ml-2">${c.campaign_id}</span>`:''; div.innerHTML=`<div class=\"font-medium\">${title}${legacy}</div><div class=\"text-xs text-gray-400\">${c.status||'draft'} · ${c.channel||'pstn'}</div>`; div.onclick=()=> loadEdit(c); return div; }
+      function opt(sel, label, value){ const o=document.createElement('option'); o.textContent=label; o.value=value; sel.appendChild(o); }
+      function renderAgentOptions(sel){ sel.innerHTML=''; opt(sel, '(none)', ''); for(const a of agents){ opt(sel, a.name, a.name); } }
+      function addRouteRow(r){ const wrap=document.createElement('div'); wrap.className='grid grid-cols-3 gap-2 items-center'; const lang=document.createElement('input'); lang.className='inp'; lang.placeholder='lang (e.g., nl)'; lang.value=r?.lang||''; const ap=document.createElement('select'); ap.className='inp'; renderAgentOptions(ap); if(r?.agent_profile) ap.value=r.agent_profile; const del=document.createElement('button'); del.className='btn btn-danger text-sm'; del.textContent='Remove'; del.onclick=()=>{ wrap.remove(); } ; wrap.appendChild(lang); wrap.appendChild(ap); wrap.appendChild(del); el.routes.appendChild(wrap); }
+      async function load(){ const r1=await fetch('/api/campaigns',{credentials:'include'}); campaigns = r1.ok? await r1.json():[]; const r2=await fetch('/api/agents',{credentials:'include'}); agents = r2.ok? await r2.json():[]; el.list.innerHTML=''; const q=(el.q.value||'').toLowerCase(); for(const c of campaigns.filter(c=>{ const t=(c.title||c.name||'').toLowerCase(); const id=(c._id||'').toLowerCase(); const cid=(c.campaign_id||'').toLowerCase(); return !q || t.includes(q) || id.includes(q) || cid.includes(q); })){ el.list.appendChild(row(c)); } }
+      function loadEdit(c){ current=c; el.empty.classList.add('hidden'); el.orch.classList.remove('hidden'); el.mcp.value = (c.orchestrator && c.orchestrator.mcp_service) || '/api/mcp'; renderAgentOptions(el.def); el.def.value = (c.orchestrator && c.orchestrator.default_agent_profile) || ''; el.routes.innerHTML=''; const lr = (c.orchestrator && Array.isArray(c.orchestrator.language_routes)) ? c.orchestrator.language_routes : []; if(!lr.length) addRouteRow({}); else lr.forEach(addRouteRow); }
+      el.q.oninput = load; el.refresh.onclick = load; el.addRoute.onclick = ()=> addRouteRow({});
+      el.save.onclick = async ()=>{
+        if (!current) return;
+        const id = current._id;
+        const rows = [...el.routes.children];
+        const langRoutes = rows.map(row=>{
+          const [langEl, apSel] = row.querySelectorAll('.inp');
+          const lang = (langEl.value||'').trim().toLowerCase();
+          const agent_profile = (apSel.value||'').trim();
+          return (lang && agent_profile) ? { lang, agent_profile } : null;
+        }).filter(Boolean);
+        const orchestrator = { mcp_service: (el.mcp.value||'').trim(), default_agent_profile: el.def.value || '', language_routes: langRoutes };
+        const res = await fetch('/api/campaigns/'+id, { method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ orchestrator }) });
+        if (!res.ok) { alert('Save failed'); return; }
+        const updated = await res.json();
+        loadEdit(updated);
         load();
-      }
-
-      async function openEdit(id){
-        currentId = id || null;
-        if (!id) { openNew(); return; }
-        const r = await fetch('/api/campaigns', { credentials:'include' });
-        const list = await r.json();
-        const c = list.find(x=> x._id===id);
-        if (!c) return alert('Not found');
-        editTitle.textContent = 'Edit Campaign';
-        fillForm(c);
-        modal.classList.remove('hidden');
-      }
-
-      async function save(){
-        let body;
-        try { body = collectForm(); } catch(_) { return; }
-        const method = currentId ? 'PUT' : 'POST';
-        const url = currentId ? `/api/campaigns/${currentId}` : '/api/campaigns';
-        const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) });
-        if(!r.ok){ const j = await r.json().catch(()=>({})); return alert('Save failed: '+(j.message||r.status)); }
-        modal.classList.add('hidden');
-        load();
-      }
-
-      async function nlFill(){
-        const text = nlInput.value.trim();
-        if (!text) return alert('Enter a description');
-        const r = await fetch('/api/campaigns/nl-fill', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ text }) });
-        if(!r.ok){ const j = await r.json().catch(()=>({})); return alert('NL fill failed: '+(j.message||r.status)); }
-        const c = await r.json();
-        openNew();
-        fillForm(c);
-      }
-
-      newBtn.onclick = ()=> openNew();
-      refreshBtn.onclick = ()=> load();
-      saveBtn.onclick = ()=> save();
-      closeBtn.onclick = ()=> modal.classList.add('hidden');
-      document.getElementById('addWindowBtn').onclick = ()=> addWindowRow('Mon','09:00','17:00');
-      nlBtn.onclick = ()=> nlFill();
-
+      };
+      el.test.onclick = async ()=>{
+        if (!current) return;
+        const lang = (el.testLang.value||'').trim().toLowerCase();
+        const id = current._id || current.campaign_id || current.name;
+        const r = await fetch(`/api/orchestrator/resolve?campaign=${encodeURIComponent(id)}&lang=${encodeURIComponent(lang)}`, { credentials:'include' });
+        const j = r.ok ? await r.json() : { error: 'failed' };
+        el.testOut.textContent = `Resolved → agent: ${j.agent?j.agent.name:'(none)'} • mcp: ${j.mcp_service||''}`;
+      };
       load();
     </script>
   </body>
   </html>
+
