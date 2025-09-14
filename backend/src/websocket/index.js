@@ -1030,8 +1030,15 @@ function createWebSocketServer(server) {
               console.error('Cost calculation failed:', costError);
             }
 
-            // Prefer LiveKit Egress output only
-            const chosenPath = egressFile || '';
+            // Prefer LiveKit Egress; fallback to local recorder outPath
+            let chosenPath = egressFile || '';
+            if (!chosenPath && livekitRecorder && livekitRecorder.outPath) {
+              try {
+                const recPath = String(livekitRecorder.outPath);
+                const idx = recPath.lastIndexOf('/recordings/');
+                chosenPath = idx >= 0 ? recPath.slice(idx + '/recordings/'.length) : require('path').basename(recPath);
+              } catch (_) {}
+            }
             const audioRecordingUrl = chosenPath ? ('/recordings/' + String(chosenPath).replace(/^\/+/, '')) : '';
             await CallLogEntry.findOneAndUpdate(
               { call_id: roomName },
