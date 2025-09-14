@@ -347,6 +347,16 @@ function createWebSocketServer(server) {
         // --- End Recording state ---
 
         const identity = `browser-bridge-${roomName}-${Date.now()}`;
+        // Studio local mixer fallback (24kHz PCM16 mono) — independent of LiveKit
+        let studioMixer = new Pcm16MonoMixer(24000);
+        let studioMixPath = '';
+        try {
+          const recDir = path.resolve(__dirname, '..', 'recordings', 'studio');
+          if (!fs.existsSync(recDir)) fs.mkdirSync(recDir, { recursive: true });
+          studioMixPath = path.join(recDir, `${roomName}-${Date.now()}.wav`);
+          studioMixer.start(studioMixPath);
+          console.log('Studio mixer started:', studioMixPath);
+        } catch (e) { console.error('Studio mixer init failed:', e?.message || e); }
         let livekitRecorder = null; // Studio fallback recorder
         // Ensure room exists for monitor/egress
         try {
