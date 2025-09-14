@@ -91,7 +91,8 @@ async function createRecorder({ host, token, roomName, outFileBase }) {
     for (let i = 0; i < len; i++) {
       const va = a ? (a[i] || 0) : 0;
       const vc = c ? (c[i] || 0) : 0;
-      let sum = va + vc;
+      // -6 dB per source before summing to reduce clipping
+      let sum = (va >> 1) + (vc >> 1);
       if (sum > 32767) sum = 32767;
       if (sum < -32768) sum = -32768;
       out[i] = sum;
@@ -164,4 +165,3 @@ async function createRecorder({ host, token, roomName, outFileBase }) {
 }
 
 module.exports = { createRecorder, toWsUrl };
-

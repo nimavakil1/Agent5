@@ -98,7 +98,7 @@ async function createPublisher({ host, token, roomName }) {
     // Queues and timers for 10ms frames @ 48kHz (480 samples)
     let calleeQueue = Buffer.alloc(0); // int16 LE
     let agentQueue = Buffer.alloc(0);
-    const FRAME_SAMPLES_48K = 480; // 10ms
+    const FRAME_SAMPLES_48K = 960; // 20ms frames to reduce scheduling jitter
     const FRAME_BYTES = FRAME_SAMPLES_48K * 2;
     let calleeTimer = null;
     let agentTimer = null;
@@ -132,7 +132,7 @@ async function createPublisher({ host, token, roomName }) {
           } catch (e) {
             console.error('[LiveKit] callee push error:', e);
           }
-        }, 10);
+        }, 20);
       }
       if (!agentTimer) {
         agentTimer = setInterval(() => {
@@ -156,7 +156,7 @@ async function createPublisher({ host, token, roomName }) {
           } catch (e) {
             console.error('[LiveKit] agent push error:', e);
           }
-        }, 10);
+        }, 20);
       }
     }
 
@@ -189,6 +189,7 @@ async function createPublisher({ host, token, roomName }) {
       },
       pushAgentFrom24kPcm16LEBuffer(pcm24kBuf) {
         try {
+          if (agentMuted) { return; }
           // buf -> Int16Array length/2 samples
           const int16 = new Int16Array(pcm24kBuf.buffer, pcm24kBuf.byteOffset, Math.floor(pcm24kBuf.length / 2));
           const buf48k = upsampleInt16Linear(int16, 2); // 24k -> 48k (smoother)
@@ -199,6 +200,7 @@ async function createPublisher({ host, token, roomName }) {
       },
       pushAgentFrom48kInt16(int16Array48k) {
         try {
+          if (agentMuted) { return; }
           const buf = Buffer.from(int16Array48k.buffer, int16Array48k.byteOffset, int16Array48k.length * 2);
           agentQueue = Buffer.concat([agentQueue, buf]);
         } catch (e) {

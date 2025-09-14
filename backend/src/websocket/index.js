@@ -902,7 +902,7 @@ function createWebSocketServer(server) {
             const audioBase64 = openaiResponse.delta;
             appendAiPcmuFromOpenAIBase64(audioBase64);
             try {
-              if (livekitPublisher) {
+              if (livekitPublisher && !pstnUserSpeaking) {
                 try { livekitPublisher.muteAgent(false); } catch(_) {}
                 const pcm24k = Buffer.from(audioBase64, 'base64');
                 livekitPublisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
@@ -919,7 +919,7 @@ function createWebSocketServer(server) {
             } catch(_) {}
             pstnAgentSpeaking = true;
           }
-          if (openaiResponse.type === 'response.done') { pstnAgentSpeaking = false; }
+          if (openaiResponse.type === 'response.done') { pstnAgentSpeaking = false; try { if (livekitPublisher) livekitPublisher.muteAgent(false); } catch(_) {} }
 
         } catch (error) {
           console.error('Error processing OpenAI message:', error);
