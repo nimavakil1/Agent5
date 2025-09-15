@@ -10,13 +10,7 @@ function who(req) {
 
 // List available tools (MCP-style discovery)
 router.get('/tools', async (_req, res) => {
-  try {
-    const all = getToolsSpec();
-    const cfg = await McpConfig.findOne({ name: 'default' }).lean();
-    if (!cfg || !Array.isArray(cfg.enabled_tools) || cfg.enabled_tools.length === 0) return res.json({ tools: all });
-    const set = new Set(cfg.enabled_tools.map(String));
-    res.json({ tools: all.filter(t => set.has(t.name)) });
-  } catch (e) { res.status(500).json({ message: 'error', error: e.message }); }
+  try { res.json({ tools: getToolsSpec() }); } catch (e) { res.status(500).json({ message: 'error', error: e.message }); }
 });
 
 // MCP config

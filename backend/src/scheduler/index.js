@@ -1,5 +1,6 @@
 const ScheduledJob = require('../models/ScheduledJob');
 const CampaignDefinition = require('../models/CampaignDefinition');
+let shopifyTimer = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -65,6 +66,20 @@ function start() {
     runDueJobs().catch((e) => console.error('[scheduler] tick error', e));
   }, 5000);
   console.log('[scheduler] started');
+  // Periodic Shopify sync (inventory/prices)
+  try {
+    if (process.env.SHOPIFY_SYNC_ENABLED === '1') {
+      const minutes = Number(process.env.SHOPIFY_SYNC_INTERVAL_MIN || '15');
+      const periodMs = Math.max(1, minutes) * 60 * 1000;
+      const { syncAllowed } = require('../api/services/shopifySyncService');
+      const runSync = async () => {
+        try { const r = await syncAllowed(); console.log(`[scheduler] Shopify sync:`, r); } catch (e) { console.error('[scheduler] Shopify sync error', e?.message || e); }
+      };
+      shopifyTimer = setInterval(runSync, periodMs);
+      // kick off once at start
+      runSync();
+    }
+  } catch (e) { console.error('[scheduler] Shopify sync init error', e); }
 }
 
 module.exports = { start };

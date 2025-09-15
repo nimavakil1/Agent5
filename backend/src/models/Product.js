@@ -8,6 +8,8 @@ const productSchema = new mongoose.Schema(
     title: { type: String },
     variant_title: { type: String },
     price: { type: String },
+    price_ex_vat: { type: Number },
+    vat_rate: { type: Number, default: 0.21 },
     currency: { type: String, default: 'EUR' },
     image: { type: String },
     inventory_quantity: { type: Number },
@@ -19,4 +21,3 @@ const productSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('Product', productSchema);
-

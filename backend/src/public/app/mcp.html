@@ -15,7 +15,7 @@
       <section class="card p-4 lg:col-span-2">
         <div class="flex items-center justify-between mb-3">
           <h2 class="font-semibold text-white">MCP Tools</h2>
-          <button id="save" class="btn btn-primary text-sm">Save Enabled</button>
+          <div class="text-xs text-[#9cabba]">Read-only catalog</div>
         </div>
         <div id="tools" class="space-y-2"></div>
       </section>
@@ -36,14 +36,12 @@
       </section>
     </main>
     <script>
-      const el={ tools:document.getElementById('tools'), save:document.getElementById('save'), tool:document.getElementById('tool'), params:document.getElementById('params'), run:document.getElementById('run'), out:document.getElementById('out') };
-      let available=[]; let enabled=new Set();
-      function row(t){ const wrap=document.createElement('div'); wrap.className='p-3 border border-[#283039] rounded'; const c=document.createElement('input'); c.type='checkbox'; c.className='mr-2'; c.checked=enabled.has(t.name); c.onchange=()=>{ if(c.checked) enabled.add(t.name); else enabled.delete(t.name); }; const title=document.createElement('div'); title.className='font-medium'; title.textContent=t.name; const desc=document.createElement('div'); desc.className='text-xs text-gray-400'; desc.textContent=t.description||''; wrap.appendChild(c); wrap.appendChild(title); wrap.appendChild(desc); return wrap; }
-      async function load(){ const cfg=await (await fetch('/api/mcp/config',{credentials:'include'})).json(); enabled = new Set((cfg.enabled_tools||[]).map(String)); const r=await fetch('/api/mcp/tools',{credentials:'include'}); const j=await r.json(); available=j.tools||[]; el.tools.innerHTML=''; available.forEach(t=> el.tools.appendChild(row(t))); el.tool.innerHTML=''; available.forEach(t=>{ const o=document.createElement('option'); o.value=t.name; o.textContent=t.name; el.tool.appendChild(o); }); }
-      el.save.onclick = async ()=>{ const list=[...enabled]; await fetch('/api/mcp/config',{ method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ enabled_tools: list }) }); await load(); };
+      const el={ tools:document.getElementById('tools'), tool:document.getElementById('tool'), params:document.getElementById('params'), run:document.getElementById('run'), out:document.getElementById('out') };
+      let available=[];
+      function row(t){ const wrap=document.createElement('div'); wrap.className='p-3 border border-[#283039] rounded'; const title=document.createElement('div'); title.className='font-medium'; title.textContent=t.name; const desc=document.createElement('div'); desc.className='text-xs text-gray-400'; desc.textContent=t.description||''; wrap.appendChild(title); wrap.appendChild(desc); return wrap; }
+      async function load(){ const r=await fetch('/api/mcp/tools',{credentials:'include'}); const j=await r.json(); available=j.tools||[]; el.tools.innerHTML=''; available.forEach(t=> el.tools.appendChild(row(t))); el.tool.innerHTML=''; available.forEach(t=>{ const o=document.createElement('option'); o.value=t.name; o.textContent=t.name; el.tool.appendChild(o); }); }
       el.run.onclick = async ()=>{ try{ el.out.textContent=''; const name=el.tool.value; const params=JSON.parse(el.params.value||'{}'); const r=await fetch('/api/mcp/call',{ method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ name, params }) }); const j=await r.json(); el.out.textContent = JSON.stringify(j, null, 2); } catch(e){ el.out.textContent=String(e); } };
       load();
     </script>
   </body>
   </html>
-

@@ -32,6 +32,9 @@ async function syncEntries(entries) {
     const v = await fetchVariant(vid);
     const p = await fetchProduct(v.product_id);
     const image = (v.image_id && Array.isArray(p.images)) ? (p.images.find(i => i.id === v.image_id)?.src || '') : (p.image?.src || (Array.isArray(p.images) && p.images[0]?.src) || '');
+    const gross = Number(v.price || 0);
+    const vatRate = 0.21;
+    const net = gross ? Number((gross / (1 + vatRate)).toFixed(2)) : 0;
     const doc = {
       variant_id: v.id,
       product_id: v.product_id,
@@ -39,6 +42,8 @@ async function syncEntries(entries) {
       title: p.title || v.title || '',
       variant_title: v.title || '',
       price: String(v.price || ''),
+      price_ex_vat: net,
+      vat_rate: vatRate,
       currency: 'EUR',
       image,
       inventory_quantity: typeof v.inventory_quantity === 'number' ? v.inventory_quantity : undefined,
@@ -60,4 +65,3 @@ async function syncAllowed() {
 }
 
 module.exports = { syncEntries, syncAllowed };
-
