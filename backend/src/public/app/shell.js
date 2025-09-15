@@ -44,7 +44,7 @@
       </style>
       <aside id="acq-aside" class="fixed left-0 top-0 bottom-0 w-64 shrink-0 border-r border-[#283039] bg-[#111418] p-6 z-40">
         <div class="flex items-center gap-2 mb-8">
-          <img src="/assets/acropaq-logo-inverted.svg" alt="ACROPAQ" class="h-8" />
+          <img src="/assets/acropaq-wordmark.png" alt="ACROPAQ" class="h-8" onerror="this.src='/assets/acropaq-logo-inverted.svg'" />
         </div>
         <nav class="flex flex-col gap-2">
           ${navItem('/dashboard.html','dashboard','Dashboard', is('/dashboard.html'))}
