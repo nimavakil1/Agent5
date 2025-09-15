@@ -476,6 +476,33 @@ function createWebSocketServer(server) {
                 },
               }));
               oaWs.send(JSON.stringify({ type: 'response.create' }));
+            } else {
+              // No prime text: proactively create a first turn with a strict opening directive to avoid small talk
+              try {
+                const lang = (settings.language || 'fr').toLowerCase();
+                const opening = lang.startsWith('fr')
+                  ? "Bonjour, je vous appelle d’ACROPAQ au sujet de vos rouleaux thermiques de caisse. Utilisez-vous actuellement des rouleaux thermiques pour vos caisses/imprimantes ?"
+                  : (lang.startsWith('nl')
+                    ? "Goedemiddag, ik bel u namens ACROPAQ over uw thermische kassarollen. Gebruikt u momenteel thermische rollen voor uw kassa’s/printers?"
+                    : "Hello, I’m calling from ACROPAQ about your thermal receipt rolls. Do you currently use thermal rolls for your tills/printers?");
+                const guard = (lang.startsWith('fr')
+                  ? "Parlez uniquement en français (Belgique). Pas de small talk (« comment ça va » interdit). Posez une seule question à la fois."
+                  : lang.startsWith('nl')
+                  ? "Spreek alleen Nederlands (België). Geen small talk. Stel één vraag tegelijk."
+                  : "Speak only English. No small talk. Ask one question at a time.");
+                const directive = `${guard}\n\nOUVERTURE OBLIGATOIRE:\n${opening}`;
+                oaWs.send(JSON.stringify({
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'message',
+                    role: 'user',
+                    content: [{ type: 'input_text', text: directive }],
+                  },
+                }));
+                oaWs.send(JSON.stringify({ type: 'response.create' }));
+              } catch (e) {
+                console.error('Failed to prime first turn:', e?.message || e);
+              }
             }
           } catch (e) { console.error('Error on OA open:', e); }
         });
