@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getToolsSpec, callTool } = require('../../services/mcpTools');
+const McpConfig = require('../../models/McpConfig');
 
 function who(req) {
   const user = req.user || {};
@@ -9,7 +10,28 @@ function who(req) {
 
 // List available tools (MCP-style discovery)
 router.get('/tools', async (_req, res) => {
-  res.json({ tools: getToolsSpec() });
+  try {
+    const all = getToolsSpec();
+    const cfg = await McpConfig.findOne({ name: 'default' }).lean();
+    if (!cfg || !Array.isArray(cfg.enabled_tools) || cfg.enabled_tools.length === 0) return res.json({ tools: all });
+    const set = new Set(cfg.enabled_tools.map(String));
+    res.json({ tools: all.filter(t => set.has(t.name)) });
+  } catch (e) { res.status(500).json({ message: 'error', error: e.message }); }
+});
+
+// MCP config
+router.get('/config', async (_req, res) => {
+  try {
+    const cfg = (await McpConfig.findOne({ name: 'default' }).lean()) || { name: 'default', enabled_tools: [] };
+    res.json(cfg);
+  } catch (e) { res.status(500).json({ message: 'error', error: e.message }); }
+});
+router.put('/config', async (req, res) => {
+  try {
+    const enabled = Array.isArray(req.body?.enabled_tools) ? req.body.enabled_tools.map(String) : [];
+    const cfg = await McpConfig.findOneAndUpdate({ name: 'default' }, { $set: { enabled_tools: enabled } }, { upsert: true, new: true });
+    res.json(cfg);
+  } catch (e) { res.status(500).json({ message: 'error', error: e.message }); }
 });
 
 // Call a tool by name

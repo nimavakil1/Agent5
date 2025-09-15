@@ -53,6 +53,7 @@
           ${navItem('/app/agent-studio.html','psychology','Agent Studio', is('/app/agent-studio.html'))}
           ${navItem('/app/call-center.html','headset_mic','Call Center', is('/app/call-center.html'))}
           ${navItem('/app/products.html','inventory_2','Products', is('/app/products.html'))}
+          ${navItem('/app/mcp.html','plumbing','MCP', is('/app/mcp.html'))}
           ${navItem('/app/profile.html','settings','Settings', is('/app/profile.html'))}
           ${(me && (me.role==='admin'||me.role==='superadmin'))? navItem('/app/admin/users.html','admin_panel_settings','Admin · Users', is('/app/admin/users.html')):''}
         </nav>
