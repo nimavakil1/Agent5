@@ -439,7 +439,11 @@ function createWebSocketServer(server) {
                 tools: getToolsSpec(),
               }
             };
-            console.log('Sending session.update with instructions length:', sessionData.session.instructions.length);
+            try {
+              const instrPrev = String(sessionData.session.instructions || '').slice(0, 220).replace(/\s+/g, ' ');
+              const langPrev = sessionData.session?.input_audio_transcription?.language || '';
+              console.log('Studio session.update -> lang:', langPrev, '| len:', (sessionData.session.instructions||'').length, '| instr:', instrPrev);
+            } catch(_) {}
             oaWs.send(JSON.stringify(sessionData));
             // Start LiveKit Egress (audio-only) for this room, fallback to local recorder
             try {
@@ -991,6 +995,11 @@ function createWebSocketServer(server) {
               tools: getToolsSpec(),
             },
           };
+          try {
+            const instrPrev = String(sessionUpdate.session?.instructions || '').slice(0, 220).replace(/\s+/g, ' ');
+            const langPrev = sessionUpdate.session?.input_audio_transcription?.language || '';
+            console.log('PSTN session.update -> lang:', langPrev, '| len:', (sessionUpdate.session?.instructions||'').length, '| instr:', instrPrev);
+          } catch(_) {}
           openaiWs.send(JSON.stringify(sessionUpdate));
         } catch (e) {
           console.error('Failed to apply session overrides (PSTN):', e?.message || e);
