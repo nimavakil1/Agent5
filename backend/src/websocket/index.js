@@ -430,6 +430,7 @@ function createWebSocketServer(server) {
         let outBuf = '';
         let ttsInFlight = false;
         let ttsAbort = null;
+        let ttsResid = Buffer.alloc(0); // carry to keep PCM16 even-byte alignment
         async function maybeStartTts(force=false) {
           if (!useElevenTts) return;
           const apiKey = process.env.ELEVENLABS_API_KEY || '';
@@ -455,13 +456,22 @@ function createWebSocketServer(server) {
               debug: dbg,
               onChunk: async (pcm24k) => {
                 try {
+                  // Append to residual to ensure even-length (PCM16 LE)
+                  if (pcm24k && pcm24k.length) {
+                    ttsResid = Buffer.concat([ttsResid, pcm24k]);
+                  }
+                  const evenLen = ttsResid.length & ~1; // drop last odd byte if any
+                  if (!evenLen) return;
+                  const toPush = ttsResid.subarray(0, evenLen);
+                  ttsResid = ttsResid.subarray(evenLen);
+
                   if (!agentSpeakingSent) {
                     agentSpeakingSent = true; agentSpeaking = true;
                     try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(_) {}
                     try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
                   }
-                  if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
-                  try { studioMixer.appendAgent(pcm24k); } catch(_) {}
+                  if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(toPush);
+                  try { studioMixer.appendAgent(toPush); } catch(_) {}
                 } catch(_) {}
               },
             });
