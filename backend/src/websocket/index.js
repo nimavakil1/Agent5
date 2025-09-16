@@ -470,7 +470,9 @@ function createWebSocketServer(server) {
                     try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(_) {}
                     try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
                   }
-                  if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(toPush);
+                  if (publisher) {
+                    try { publisher.pushAgentFrom24kPcm16LEBuffer(toPush); } catch(e) { console.error('Studio ElevenLabs push error:', e?.message||e); }
+                  }
                   try { studioMixer.appendAgent(toPush); } catch(_) {}
                 } catch(_) {}
               },

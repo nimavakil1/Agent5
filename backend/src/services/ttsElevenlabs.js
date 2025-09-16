@@ -15,7 +15,8 @@ async function streamTextToElevenlabs({ apiKey, voiceId, text, optimize = 4, abo
     method: 'POST',
     headers: {
       'xi-api-key': apiKey,
-      'content-type': 'application/json'
+      'content-type': 'application/json',
+      'accept': 'application/octet-stream'
     },
     body: JSON.stringify(body),
     signal: abortSignal,
