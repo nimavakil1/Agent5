@@ -431,6 +431,7 @@ function createWebSocketServer(server) {
         let ttsInFlight = false;
         let ttsAbort = null;
         let ttsResid = Buffer.alloc(0); // carry to keep PCM16 even-byte alignment
+        const elevenEndian = String(process.env.ELEVENLABS_ENDIAN || 'le').toLowerCase();
         async function maybeStartTts(force=false) {
           if (!useElevenTts) return;
           const apiKey = process.env.ELEVENLABS_API_KEY || '';
@@ -462,8 +463,18 @@ function createWebSocketServer(server) {
                   }
                   const evenLen = ttsResid.length & ~1; // drop last odd byte if any
                   if (!evenLen) return;
-                  const toPush = ttsResid.subarray(0, evenLen);
+                  let toPush = ttsResid.subarray(0, evenLen);
                   ttsResid = ttsResid.subarray(evenLen);
+
+                  // Optional byte-swap if ElevenLabs outputs big-endian
+                  if (elevenEndian === 'be') {
+                    const swapped = Buffer.allocUnsafe(toPush.length);
+                    for (let i = 0; i + 1 < toPush.length; i += 2) {
+                      swapped[i] = toPush[i+1];
+                      swapped[i+1] = toPush[i];
+                    }
+                    toPush = swapped;
+                  }
 
                   if (!agentSpeakingSent) {
                     agentSpeakingSent = true; agentSpeaking = true;
