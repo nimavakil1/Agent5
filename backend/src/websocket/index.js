@@ -441,13 +441,25 @@ function createWebSocketServer(server) {
           const ctrl = new AbortController();
           ttsAbort = ctrl;
           try {
+            const dbg = process.env.TTS_DEBUG === '1';
             await streamTextToElevenlabs({
               apiKey,
               voiceId,
               text,
               optimize: Number(process.env.ELEVENLABS_OPTIMIZE || '4') || 4,
               abortSignal: ctrl.signal,
-              onChunk: async (pcm24k) => { try { if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k); } catch(_) {} },
+              debug: dbg,
+              onChunk: async (pcm24k) => {
+                try {
+                  if (!agentSpeakingSent) {
+                    agentSpeakingSent = true; agentSpeaking = true;
+                    try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(_) {}
+                    try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
+                  }
+                  if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k);
+                  try { studioMixer.appendAgent(pcm24k); } catch(_) {}
+                } catch(_) {}
+              },
             });
           } catch (e) { console.error('ElevenLabs TTS error:', e?.message || e); }
           finally { ttsInFlight = false; ttsAbort = null; setTimeout(()=>{ try { maybeStartTts(true); } catch(_){} }, 0); }
@@ -607,7 +619,7 @@ function createWebSocketServer(server) {
                     type: 'conversation.item.create',
                     item: { type: 'tool', tool_call_id: m.response.id, name: rec.name, content: [{ type: 'output_text', text: JSON.stringify(result) }] },
                   }));
-                  oaWs.send(JSON.stringify({ type: 'response.create' }));
+                  oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: useElevenTts ? ['text'] : ['audio','text'] } }));
                 } catch (e) {
                   console.error('Studio tool call error:', e?.message || e);
                 }
@@ -805,7 +817,7 @@ function createWebSocketServer(server) {
               try {
                 if (studioAppendedMs >= STUDIO_MIN_COMMIT_MS) {
                   oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-                  oaWs.send(JSON.stringify({ type: 'response.create' }));
+                  oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: useElevenTts ? ['text'] : ['audio','text'] } }));
                   studioAppendedMs = 0; studioSuppressAgentAudio = false;
                 } else {
                   // Not enough audio to commit; wait for more frames
@@ -817,7 +829,7 @@ function createWebSocketServer(server) {
           studioAppendedMs += STUDIO_FRAME_MS;
             } else if (m.type === 'commit' && oaWs.readyState === WebSocket.OPEN) {
               oaWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-              oaWs.send(JSON.stringify({ type: 'response.create' }));
+              oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: useElevenTts ? ['text'] : ['audio','text'] } }));
             }
             // client VAD messages removed when using server_vad
           } catch(e) {
