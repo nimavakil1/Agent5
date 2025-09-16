@@ -433,6 +433,8 @@ function createWebSocketServer(server) {
         let ttsResid = Buffer.alloc(0); // carry to keep PCM16 even-byte alignment
         let ttsBuf = Buffer.alloc(0);   // frameizer buffer
         const elevenEndian = String(process.env.ELEVENLABS_ENDIAN || 'le').toLowerCase();
+        const elevenOutFmt = String(process.env.ELEVENLABS_OUTPUT_FORMAT || 'pcm_24000');
+        let wavHeaderStripped = false;
         // Simple upsample 24k -> 48k Int16
         function upsample24kTo48kInt16(buf24k) {
           const n = buf24k.length >>> 1; // samples count at 16-bit
@@ -471,11 +473,19 @@ function createWebSocketServer(server) {
               abortSignal: ctrl.signal,
               debug: dbg,
               outputFormat: outFmt,
-              onChunk: async (pcm24k) => {
+              onChunk: async (chunk) => {
                 try {
+                  let pcmIn = chunk;
+                  // If ElevenLabs returns WAV framing, strip RIFF header once
+                  if (elevenOutFmt.startsWith('wav_') && !wavHeaderStripped && pcmIn && pcmIn.length >= 44) {
+                    if (pcmIn.toString('ascii', 0, 4) === 'RIFF' && pcmIn.toString('ascii', 8, 12) === 'WAVE') {
+                      pcmIn = pcmIn.subarray(44);
+                      wavHeaderStripped = true;
+                    }
+                  }
                   // Append to residual to ensure even-length (PCM16 LE)
-                  if (pcm24k && pcm24k.length) {
-                    ttsResid = Buffer.concat([ttsResid, pcm24k]);
+                  if (pcmIn && pcmIn.length) {
+                    ttsResid = Buffer.concat([ttsResid, pcmIn]);
                   }
                   const evenLen = ttsResid.length & ~1; // drop last odd byte if any
                   if (!evenLen) return;
