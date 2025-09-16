@@ -432,6 +432,18 @@ function createWebSocketServer(server) {
         let ttsAbort = null;
         let ttsResid = Buffer.alloc(0); // carry to keep PCM16 even-byte alignment
         const elevenEndian = String(process.env.ELEVENLABS_ENDIAN || 'le').toLowerCase();
+        // Simple upsample 24k -> 48k Int16
+        function upsample24kTo48kInt16(buf24k) {
+          const n = buf24k.length >>> 1; // samples count at 16-bit
+          const out = new Int16Array(n * 2);
+          for (let i = 0, j = 0; i < n; i++, j += 2) {
+            const s = buf24k.readInt16LE(i * 2);
+            out[j] = s;
+            out[j + 1] = s; // zero-order hold (fast)
+          }
+          return out;
+        }
+
         async function maybeStartTts(force=false) {
           if (!useElevenTts) return;
           const apiKey = process.env.ELEVENLABS_API_KEY || '';
@@ -448,6 +460,8 @@ function createWebSocketServer(server) {
           ttsAbort = ctrl;
           try {
             const dbg = process.env.TTS_DEBUG === '1';
+            const outFmt = String(process.env.ELEVENLABS_OUTPUT_FORMAT || 'pcm_24000');
+            const sr = outFmt.startsWith('pcm_') ? parseInt(outFmt.slice(4), 10) : 24000;
             await streamTextToElevenlabs({
               apiKey,
               voiceId,
@@ -455,6 +469,7 @@ function createWebSocketServer(server) {
               optimize: Number(process.env.ELEVENLABS_OPTIMIZE || '4') || 4,
               abortSignal: ctrl.signal,
               debug: dbg,
+              outputFormat: outFmt,
               onChunk: async (pcm24k) => {
                 try {
                   // Append to residual to ensure even-length (PCM16 LE)
@@ -482,9 +497,32 @@ function createWebSocketServer(server) {
                     try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
                   }
                   if (publisher) {
-                    try { publisher.pushAgentFrom24kPcm16LEBuffer(toPush); } catch(e) { console.error('Studio ElevenLabs push error:', e?.message||e); }
+                    try {
+                      if (sr === 48000 && typeof publisher.pushAgentFrom48kInt16 === 'function') {
+                        const int16 = new Int16Array(toPush.buffer, toPush.byteOffset, toPush.length >>> 1);
+                        publisher.pushAgentFrom48kInt16(int16);
+                        // mixer expects 24k; downsample by 2 for recording
+                        try {
+                          const down = Buffer.allocUnsafe((toPush.length >>> 1));
+                          for (let i = 0, j = 0; i + 1 < toPush.length; i += 4, j += 2) {
+                            down[j] = toPush[i]; down[j+1] = toPush[i+1];
+                          }
+                          try { studioMixer.appendAgent(down); } catch(_) {}
+                        } catch(_) {}
+                      } else {
+                        // 24k path: upsample to 48k for LiveKit
+                        if (typeof publisher.pushAgentFrom48kInt16 === 'function') {
+                          const up = upsample24kTo48kInt16(toPush);
+                          publisher.pushAgentFrom48kInt16(up);
+                        } else {
+                          publisher.pushAgentFrom24kPcm16LEBuffer(toPush);
+                        }
+                        try { studioMixer.appendAgent(toPush); } catch(_) {}
+                      }
+                    } catch(e) { console.error('Studio ElevenLabs push error:', e?.message||e); }
+                  } else {
+                    try { studioMixer.appendAgent(toPush); } catch(_) {}
                   }
-                  try { studioMixer.appendAgent(toPush); } catch(_) {}
                 } catch(_) {}
               },
             });
