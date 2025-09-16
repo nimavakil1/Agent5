@@ -436,7 +436,6 @@ function createWebSocketServer(server) {
                 input_audio_format: 'pcm16',
                 input_audio_transcription: { model: 'whisper-1', language: settings.language || 'en' },
                 turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence },
-                tools: getToolsSpec(),
               }
             };
             try {
@@ -1019,7 +1018,6 @@ function createWebSocketServer(server) {
               ...(sessionOverrides.voice ? { voice: sessionOverrides.voice } : {}),
               ...(sessionOverrides.language ? { input_audio_transcription: { model: 'whisper-1', language: sessionOverrides.language } } : {}),
               turn_detection: { type: 'server_vad', threshold: tdThresh, prefix_padding_ms: tdPrefix, silence_duration_ms: tdSilence },
-              tools: getToolsSpec(),
             },
           };
           try {
