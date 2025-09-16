@@ -130,7 +130,11 @@
         const prime = (document.getElementById('prime').value||'').trim();
         await joinLiveKit(room);
         // Open WS bridge to OpenAI
-        const qs = new URLSearchParams({ room }); const sel=document.getElementById('profiles'); if(sel&&sel.value) qs.set('profile', sel.value); if (prime) qs.set('text', prime);
+        const qs = new URLSearchParams({ room });
+        const sel=document.getElementById('profiles');
+        if(sel&&sel.value) qs.set('profile', sel.value);
+        if (prime) qs.set('text', prime);
+        try { const pageQs = new URLSearchParams(location.search); const tts = pageQs.get('tts'); if (tts) qs.set('tts', tts); } catch(_) {}
         ws = new WebSocket(((location.protocol==='https:')?'wss':'ws')+'://'+location.host+'/agent-stream?'+qs.toString());
         ws.onopen = ()=> setState('connected');
         ws.onmessage = (ev)=>{ try{ const m=JSON.parse(ev.data); if(m.type==='first_audio_delta' && lastCommitAt){ const dt=Date.now()-lastCommitAt; document.getElementById('latency').textContent=dt+' ms'; } }catch(_){}};
