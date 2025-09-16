@@ -422,6 +422,37 @@ function createWebSocketServer(server) {
         // Expose handles to the session registry so control endpoints can stop the agent
         try { sessionRegistry.set(roomName, { openaiWs: oaWs, livekitPublisher: publisher }); } catch(_) {}
 
+        const useElevenTts = (process.env.TTS_PROVIDER || '').toLowerCase() === 'elevenlabs';
+        let outBuf = '';
+        let ttsInFlight = false;
+        let ttsAbort = null;
+        async function maybeStartTts(force=false) {
+          if (!useElevenTts) return;
+          const apiKey = process.env.ELEVENLABS_API_KEY || '';
+          const voiceId = process.env.ELEVENLABS_VOICE_ID || '';
+          if (!apiKey || !voiceId) return;
+          if (ttsInFlight) return;
+          const text = outBuf.trim();
+          if (!text) return;
+          if (!force && text.length < 60 && !/[\.!?;:]/.test(text)) return;
+          outBuf = '';
+          ttsInFlight = true;
+          const { streamTextToElevenlabs } = require('../services/ttsElevenlabs');
+          const ctrl = new (require('abort-controller'))();
+          ttsAbort = ctrl;
+          try {
+            await streamTextToElevenlabs({
+              apiKey,
+              voiceId,
+              text,
+              optimize: Number(process.env.ELEVENLABS_OPTIMIZE || '4') || 4,
+              abortSignal: ctrl.signal,
+              onChunk: async (pcm24k) => { try { if (publisher) publisher.pushAgentFrom24kPcm16LEBuffer(pcm24k); } catch(_) {} },
+            });
+          } catch (e) { console.error('ElevenLabs TTS error:', e?.message || e); }
+          finally { ttsInFlight = false; ttsAbort = null; setTimeout(()=>{ try { maybeStartTts(true); } catch(_){} }, 0); }
+        }
+
         oaWs.on('open', async () => {
           try {
             // Apply saved settings as-is
@@ -474,7 +505,7 @@ function createWebSocketServer(server) {
                   content: [{ type: 'input_text', text: primeText }],
                 },
               }));
-              oaWs.send(JSON.stringify({ type: 'response.create' }));
+              oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: useElevenTts ? ['text'] : ['audio','text'] } }));
             } else {
               // No prime text: proactively create a first turn with a strict opening directive to avoid small talk
               try {
@@ -498,7 +529,7 @@ function createWebSocketServer(server) {
                     content: [{ type: 'input_text', text: directive }],
                   },
                 }));
-                oaWs.send(JSON.stringify({ type: 'response.create' }));
+                oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: useElevenTts ? ['text'] : ['audio','text'] } }));
               } catch (e) {
                 console.error('Failed to prime first turn:', e?.message || e);
               }
@@ -613,7 +644,7 @@ function createWebSocketServer(server) {
               try { telnyxWs.send(JSON.stringify({ type: 'transcript_delta', text: m.delta })); } catch(e) { console.error('Error sending transcript delta:', e); }
             }
 
-            if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta) {
+            if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta && !useElevenTts) {
               if (studioSuppressAgentAudio) return;
               agentSpeaking = true;
               if (!agentSpeakingSent) {
@@ -634,6 +665,7 @@ function createWebSocketServer(server) {
               agentSpeakingSent = false;
               try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: false })); } catch(e) { console.error('Error sending agent_speaking=false:', e); }
               try { if (publisher) publisher.muteAgent(false); } catch(e) { console.error('Error muting agent on done:', e); }
+              try { if (useElevenTts) maybeStartTts(true); } catch(_) {}
             }
             // Evaluate rules on each message (cheap heuristics)
             try { await studioApplyRules(); } catch(_) {}
@@ -758,6 +790,7 @@ function createWebSocketServer(server) {
               } catch(e) { console.error('Error sending response.cancel:', e); }
               try { telnyxWs.send(JSON.stringify({ type: 'barge_in' })); } catch(e) { console.error('Error sending barge_in:', e); }
               agentSpeaking = false; agentSpeakingSent = false; studioSuppressAgentAudio = true;
+              try { if (ttsAbort) ttsAbort.abort(); } catch(_) {}
               // If publishing to LiveKit, immediately mute and clear the agent track queue
               try { if (publisher) { publisher.muteAgent(true); publisher.clearAgentQueue(); } } catch (e) { console.error('Error muting LiveKit agent on barge-in:', e); }
               studioAppendedMs = 0;
