@@ -431,6 +431,7 @@ function createWebSocketServer(server) {
         let ttsInFlight = false;
         let ttsAbort = null;
         let ttsResid = Buffer.alloc(0); // carry to keep PCM16 even-byte alignment
+        let ttsBuf = Buffer.alloc(0);   // frameizer buffer
         const elevenEndian = String(process.env.ELEVENLABS_ENDIAN || 'le').toLowerCase();
         // Simple upsample 24k -> 48k Int16
         function upsample24kTo48kInt16(buf24k) {
@@ -496,32 +497,39 @@ function createWebSocketServer(server) {
                     try { telnyxWs.send(JSON.stringify({ type: 'agent_speaking', speaking: true })); } catch(_) {}
                     try { telnyxWs.send(JSON.stringify({ type: 'first_audio_delta' })); } catch(_) {}
                   }
-                  if (publisher) {
-                    try {
-                      if (sr === 48000 && typeof publisher.pushAgentFrom48kInt16 === 'function') {
-                        const int16 = new Int16Array(toPush.buffer, toPush.byteOffset, toPush.length >>> 1);
-                        publisher.pushAgentFrom48kInt16(int16);
-                        // mixer expects 24k; downsample by 2 for recording
-                        try {
-                          const down = Buffer.allocUnsafe((toPush.length >>> 1));
-                          for (let i = 0, j = 0; i + 1 < toPush.length; i += 4, j += 2) {
-                            down[j] = toPush[i]; down[j+1] = toPush[i+1];
-                          }
-                          try { studioMixer.appendAgent(down); } catch(_) {}
-                        } catch(_) {}
-                      } else {
-                        // 24k path: upsample to 48k for LiveKit
-                        if (typeof publisher.pushAgentFrom48kInt16 === 'function') {
-                          const up = upsample24kTo48kInt16(toPush);
-                          publisher.pushAgentFrom48kInt16(up);
+                  // Frameize to 20ms chunks before pushing to LiveKit to avoid jitter/distortion
+                  ttsBuf = Buffer.concat([ttsBuf, toPush]);
+                  const frameBytes = sr === 48000 ? (960 * 2) : (480 * 2); // samples * 2 bytes
+                  while (ttsBuf.length >= frameBytes) {
+                    const frame = ttsBuf.subarray(0, frameBytes);
+                    ttsBuf = ttsBuf.subarray(frameBytes);
+                    if (publisher) {
+                      try {
+                        if (sr === 48000 && typeof publisher.pushAgentFrom48kInt16 === 'function') {
+                          const int16 = new Int16Array(frame.buffer, frame.byteOffset, frame.length >>> 1);
+                          publisher.pushAgentFrom48kInt16(int16);
+                          // mixer expects 24k; downsample by 2 for recording
+                          try {
+                            const down = Buffer.allocUnsafe(frame.length >>> 1);
+                            for (let i = 0, j = 0; i + 1 < frame.length; i += 4, j += 2) {
+                              down[j] = frame[i]; down[j+1] = frame[i+1];
+                            }
+                            try { studioMixer.appendAgent(down); } catch(_) {}
+                          } catch(_) {}
                         } else {
-                          publisher.pushAgentFrom24kPcm16LEBuffer(toPush);
+                          // 24k path: upsample to 48k for LiveKit if available
+                          if (typeof publisher.pushAgentFrom48kInt16 === 'function') {
+                            const up = upsample24kTo48kInt16(frame);
+                            publisher.pushAgentFrom48kInt16(up);
+                          } else {
+                            publisher.pushAgentFrom24kPcm16LEBuffer(frame);
+                          }
+                          try { studioMixer.appendAgent(frame); } catch(_) {}
                         }
-                        try { studioMixer.appendAgent(toPush); } catch(_) {}
-                      }
-                    } catch(e) { console.error('Studio ElevenLabs push error:', e?.message||e); }
-                  } else {
-                    try { studioMixer.appendAgent(toPush); } catch(_) {}
+                      } catch(e) { console.error('Studio ElevenLabs push error:', e?.message||e); }
+                    } else {
+                      try { studioMixer.appendAgent(frame); } catch(_) {}
+                    }
                   }
                 } catch(_) {}
               },
