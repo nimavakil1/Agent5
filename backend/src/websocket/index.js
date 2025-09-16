@@ -401,6 +401,11 @@ function createWebSocketServer(server) {
           }
         }
 
+        // Determine TTS provider (allow runtime override via ?tts=elevenlabs)
+        const qsTts = String((parsedUrl.query && parsedUrl.query.tts) || '').toLowerCase();
+        const useElevenTts = qsTts === 'elevenlabs' || (String(process.env.TTS_PROVIDER || '').toLowerCase() === 'elevenlabs');
+        try { console.log('Studio TTS provider:', useElevenTts ? 'elevenlabs' : 'openai', '| qs=', qsTts||'-', '| env=', (process.env.TTS_PROVIDER||'-')); } catch(_) {}
+
         // OpenAI Realtime WS
         const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
         const OA_URL = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
@@ -422,7 +427,6 @@ function createWebSocketServer(server) {
         // Expose handles to the session registry so control endpoints can stop the agent
         try { sessionRegistry.set(roomName, { openaiWs: oaWs, livekitPublisher: publisher }); } catch(_) {}
 
-        const useElevenTts = (process.env.TTS_PROVIDER || '').toLowerCase() === 'elevenlabs';
         let outBuf = '';
         let ttsInFlight = false;
         let ttsAbort = null;
