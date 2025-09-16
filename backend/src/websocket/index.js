@@ -650,7 +650,7 @@ function createWebSocketServer(server) {
                 currentTranscription += m.delta;
             }
 
-            // Handle AGENT transcription
+            // Handle AGENT transcription (text deltas)
             if ((m.type === 'response.audio_transcript.delta' || m.type === 'response.output_text.delta') && m.delta) {
               if (lastSpeaker !== 'agent') {
                   currentTranscription += (currentTranscription ? '\n---\n' : '') + 'Agent: ';
@@ -658,6 +658,8 @@ function createWebSocketServer(server) {
               }
               currentTranscription += m.delta;
               try { telnyxWs.send(JSON.stringify({ type: 'transcript_delta', text: m.delta })); } catch(e) { console.error('Error sending transcript delta:', e); }
+              // If ElevenLabs TTS is active, accumulate text and attempt streaming
+              try { if (useElevenTts) { outBuf += m.delta; maybeStartTts(false); } } catch(_) {}
             }
 
             if (useElevenTts && m.type === 'response.output_text.delta' && typeof m.delta === 'string') {
