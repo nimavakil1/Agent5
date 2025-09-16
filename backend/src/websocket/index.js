@@ -438,7 +438,7 @@ function createWebSocketServer(server) {
           outBuf = '';
           ttsInFlight = true;
           const { streamTextToElevenlabs } = require('../services/ttsElevenlabs');
-          const ctrl = new (require('abort-controller'))();
+          const ctrl = new AbortController();
           ttsAbort = ctrl;
           try {
             await streamTextToElevenlabs({
@@ -644,6 +644,10 @@ function createWebSocketServer(server) {
               try { telnyxWs.send(JSON.stringify({ type: 'transcript_delta', text: m.delta })); } catch(e) { console.error('Error sending transcript delta:', e); }
             }
 
+            if (useElevenTts && m.type === 'response.output_text.delta' && typeof m.delta === 'string') {
+              outBuf += m.delta;
+              try { maybeStartTts(false); } catch(_) {}
+            }
             if ((m.type === 'response.audio.delta' || m.type === 'response.output_audio.delta') && m.delta && !useElevenTts) {
               if (studioSuppressAgentAudio) return;
               agentSpeaking = true;
