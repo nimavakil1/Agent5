@@ -36,9 +36,21 @@ function allowBearerOrSession(req, res, next) {
   const required = process.env.AUTH_TOKEN;
   const header = (req.headers['authorization'] || '').trim();
   
+  // Debug logging (temporary)
+  console.log('Auth debug:', {
+    required: required ? `${required.slice(0, 10)}...` : null,
+    header: header ? `${header.slice(0, 20)}...` : null,
+    hasBearer: header.toLowerCase().startsWith('bearer '),
+    path: req.path
+  });
+  
   // Parse Bearer token more robustly
   if (header.toLowerCase().startsWith('bearer ')) {
     const bearer = header.substring(7).trim(); // Remove 'Bearer ' and trim whitespace
+    console.log('Bearer token comparison:', {
+      received: bearer ? `${bearer.slice(0, 10)}...` : null,
+      matches: bearer === required
+    });
     if (required && bearer && bearer === required) return next();
   }
   
