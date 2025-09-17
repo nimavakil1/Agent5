@@ -49,8 +49,8 @@ async function createOutboundCall(to, options = {}) {
       to,
       from: process.env.TELNYX_PHONE_NUMBER,
       connection_id: connectionId,
-      // Provide roomName (+ optional campaign/lang) as query params for the WS server
-      stream_url: streamUrl,
+      // Test without stream_url for FQDN connections
+      // stream_url: streamUrl,
       // stream_track: 'both_tracks', // Removed for FQDN connections
     };
     
