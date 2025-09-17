@@ -601,7 +601,7 @@ function createWebSocketServer(server) {
                 },
               }));
               oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: useElevenTts ? ['text'] : ['audio','text'] } }));
-            } else {
+            } else if (!useElevenTts) {
               // No prime text: proactively create a first turn with a strict opening directive to avoid small talk
               try {
                 const lang = (settings.language || 'fr').toLowerCase();
@@ -627,6 +627,23 @@ function createWebSocketServer(server) {
                 oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: useElevenTts ? ['text'] : ['audio','text'] } }));
               } catch (e) {
                 console.error('Failed to prime first turn:', e?.message || e);
+              }
+            } else {
+              // ElevenLabs mode without explicit prime: force a minimal first-turn prompt to guarantee text deltas
+              try {
+                const forced = String(process.env.STUDIO_PRIME_TEXT || 'Répondez en une phrase.');
+                console.log('Studio forced prime (11labs) ->', forced.slice(0,120));
+                oaWs.send(JSON.stringify({
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'message',
+                    role: 'user',
+                    content: [{ type: 'input_text', text: forced }],
+                  },
+                }));
+                oaWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['text'] } }));
+              } catch (e) {
+                console.error('Failed to send forced prime (11labs):', e?.message || e);
               }
             }
           } catch (e) { console.error('Error on OA open:', e); }
