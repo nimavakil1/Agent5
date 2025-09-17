@@ -10,6 +10,7 @@ const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const pinoHttp = require('pino-http');
 const { createWebSocketServer } = require('./websocket');
+const { createPSTNWebSocketHandler } = require('./websocket/pstn');
 const callsRouter = require('./api/routes/calls');
 const telnyxRouter = require('./api/routes/telnyx');
 const agentRouter = require('./api/routes/agent');
@@ -84,8 +85,10 @@ app.use(
 app.use(cookieParser());
 const server = http.createServer(app);
 let wss = null;
+let pstnWss = null;
 if (process.env.NODE_ENV !== 'test') {
   wss = createWebSocketServer(server);
+  pstnWss = createPSTNWebSocketHandler(server);
 }
 
 const port = process.env.PORT || 3000;

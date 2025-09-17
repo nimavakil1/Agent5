@@ -34,8 +34,10 @@ async function createOutboundCall(to, options = {}) {
     // Streaming URL for Telnyx to connect back to this server
     const baseStreamUrl = (process.env.TELNYX_STREAM_URL || '').replace(/\/$/, '');
     const localPort = process.env.PORT || 3000;
-    const defaultStreamUrl = `ws://localhost:${localPort}/websocket`;
-    const streamBase = baseStreamUrl || defaultStreamUrl; // Prefer env, default to local dev
+    
+    // Use clean PSTN WebSocket handler
+    const defaultStreamUrl = `ws://localhost:${localPort}/pstn-websocket`;
+    const streamBase = baseStreamUrl ? `${baseStreamUrl}/pstn-websocket` : defaultStreamUrl;
 
     // Attach context for routing (campaign/lang) to the Telnyx stream URL so the WS layer can resolve
     const params = new URLSearchParams({ roomName });

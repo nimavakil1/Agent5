@@ -1,16 +1,17 @@
 const { Readable } = require('stream');
 
-async function streamTextToElevenlabs({ apiKey, voiceId, text, optimize = 4, abortSignal, onChunk, debug = false }) {
+async function streamTextToElevenlabs({ apiKey, voiceId, text, optimize = 4, abortSignal, onChunk, debug = false, outputFormat }) {
   if (!apiKey) throw new Error('ELEVENLABS_API_KEY missing');
   if (!voiceId) throw new Error('ELEVENLABS_VOICE_ID missing');
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream?optimize_streaming_latency=${encodeURIComponent(String(optimize||4))}`;
+  const fmt = outputFormat || process.env.ELEVENLABS_OUTPUT_FORMAT || 'pcm_24000';
   const body = {
     text: String(text||'').slice(0, 4000),
     model_id: 'eleven_monolingual_v1',
-    output_format: 'pcm_24000',
+    output_format: fmt,
     // voice_settings can be tuned later
   };
-  if (debug) console.log(`[11labs] start stream: voice=${voiceId} len=${(text||'').length} opt=${optimize}`);
+  if (debug) console.log(`[11labs] start stream: voice=${voiceId} len=${(text||'').length} opt=${optimize} fmt=${fmt}`);
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
