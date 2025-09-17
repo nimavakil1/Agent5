@@ -45,14 +45,31 @@ async function createOutboundCall(to, options = {}) {
     if (options.language) params.set('lang', String(options.language));
     const streamUrl = `${streamBase}?${params.toString()}`;
 
-    const call = await telnyx.calls.create({
+    const callParams = {
       to,
       from: process.env.TELNYX_PHONE_NUMBER,
       connection_id: connectionId,
       // Provide roomName (+ optional campaign/lang) as query params for the WS server
       stream_url: streamUrl,
       stream_track: 'both_tracks',
-    });
+    };
+    
+    console.log('Creating Telnyx call with params:', JSON.stringify(callParams, null, 2));
+    
+    let call;
+    try {
+      call = await telnyx.calls.create(callParams);
+    } catch (telnyxError) {
+      console.error('Telnyx API Error Details:', {
+        message: telnyxError.message,
+        statusCode: telnyxError.statusCode,
+        responseBody: telnyxError.responseBody,
+        response: telnyxError.response,
+        data: telnyxError.data,
+        fullError: JSON.stringify(telnyxError, null, 2)
+      });
+      throw new Error(`Telnyx API Error: ${telnyxError.message} (Status: ${telnyxError.statusCode})`);
+    }
 
     // 3. Generate a LiveKit Token for the AI Agent
     const at = new AccessToken(apiKey, apiSecret, { identity: 'ai-agent' });
