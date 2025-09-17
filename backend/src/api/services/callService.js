@@ -64,11 +64,27 @@ async function createOutboundCall(to, options = {}) {
         message: telnyxError.message,
         statusCode: telnyxError.statusCode,
         responseBody: telnyxError.responseBody,
-        response: telnyxError.response,
+        response: telnyxError.response?.data || telnyxError.response,
         data: telnyxError.data,
-        fullError: JSON.stringify(telnyxError, null, 2)
+        errors: telnyxError.errors,
+        body: telnyxError.body,
+        rawResponse: telnyxError.rawResponse,
+        fullError: JSON.stringify(telnyxError, Object.getOwnPropertyNames(telnyxError), 2)
       });
-      throw new Error(`Telnyx API Error: ${telnyxError.message} (Status: ${telnyxError.statusCode})`);
+      
+      // Try to extract more detailed error info
+      let errorDetail = 'Unknown error';
+      if (telnyxError.response?.data?.errors) {
+        errorDetail = JSON.stringify(telnyxError.response.data.errors);
+      } else if (telnyxError.errors) {
+        errorDetail = JSON.stringify(telnyxError.errors);
+      } else if (telnyxError.responseBody) {
+        errorDetail = telnyxError.responseBody;
+      } else if (telnyxError.message) {
+        errorDetail = telnyxError.message;
+      }
+      
+      throw new Error(`Telnyx API Error: ${errorDetail} (Status: ${telnyxError.statusCode})`);
     }
 
     // 3. Generate a LiveKit Token for the AI Agent
