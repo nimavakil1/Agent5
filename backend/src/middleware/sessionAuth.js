@@ -34,9 +34,15 @@ function requireSession(req, res, next) {
 // Combined guard: allow either bearer AUTH_TOKEN or session cookie
 function allowBearerOrSession(req, res, next) {
   const required = process.env.AUTH_TOKEN;
-  const header = req.headers['authorization'] || '';
-  const [, bearer] = header.split(' ');
-  if (required && bearer && bearer === required) return next();
+  const header = (req.headers['authorization'] || '').trim();
+  
+  // Parse Bearer token more robustly
+  if (header.toLowerCase().startsWith('bearer ')) {
+    const bearer = header.substring(7).trim(); // Remove 'Bearer ' and trim whitespace
+    if (required && bearer && bearer === required) return next();
+  }
+  
+  // Fallback to session cookie
   const token = readJwtFromCookies(req);
   if (token) {
     const data = verifyJwt(token);
@@ -45,6 +51,7 @@ function allowBearerOrSession(req, res, next) {
       return next();
     }
   }
+  
   return res.status(401).json({ message: 'Unauthorized' });
 }
 
