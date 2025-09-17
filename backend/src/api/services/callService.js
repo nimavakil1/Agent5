@@ -51,7 +51,7 @@ async function createOutboundCall(to, options = {}) {
       connection_id: connectionId,
       // Provide roomName (+ optional campaign/lang) as query params for the WS server
       stream_url: streamUrl,
-      stream_track: 'both_tracks',
+      // stream_track: 'both_tracks', // Removed for FQDN connections
     };
     
     console.log('Creating Telnyx call with params:', JSON.stringify(callParams, null, 2));
