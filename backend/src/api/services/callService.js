@@ -17,11 +17,9 @@ const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
  */
 async function createOutboundCall(to, options = {}) {
   try {
-    // 1. Allocate a pooled LiveKit Room (room1..roomN)
-    // Allocate from shared pool with Mongo-backed lock to avoid double-booking
-    const { allocate } = require('../../util/mongoAllocator');
-    const roomName = await allocate({ owner: 'pstn-outbound' });
-    if (!roomName) throw new Error('No pooled rooms available');
+    // 1. Generate room name for clean PSTN calling (bypass MongoDB allocation)
+    // Clean PSTN path doesn't need pooled rooms - generate unique room name
+    const roomName = `pstn-clean-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     let room;
     try { room = await roomService.getRoom(roomName); } catch { room = await roomService.createRoom({ name: roomName }); }
 
