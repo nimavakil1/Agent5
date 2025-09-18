@@ -47,9 +47,9 @@ async function createOutboundCall(to, options = {}) {
       to,
       from: process.env.TELNYX_PHONE_NUMBER,
       connection_id: connectionId,
-      // Test without stream_url for FQDN connections
-      // stream_url: streamUrl,
-      // stream_track: 'both_tracks', // Removed for FQDN connections
+      // Enable streaming for Voice API Application (not FQDN)
+      stream_url: streamUrl,
+      stream_track: 'both_tracks',
     };
     
     console.log('Creating Telnyx call with params:', JSON.stringify(callParams, null, 2));
