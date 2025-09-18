@@ -35,7 +35,14 @@ async function createOutboundCall(to, options = {}) {
     
     // Use clean PSTN WebSocket handler
     const defaultStreamUrl = `ws://localhost:${localPort}/pstn-websocket`;
-    const streamBase = baseStreamUrl ? `${baseStreamUrl}/pstn-websocket` : defaultStreamUrl;
+    // Convert HTTPS base URL to WSS for WebSocket connections
+    let wsStreamBase = baseStreamUrl;
+    if (wsStreamBase && wsStreamBase.startsWith('https://')) {
+      wsStreamBase = wsStreamBase.replace('https://', 'wss://');
+    } else if (wsStreamBase && wsStreamBase.startsWith('http://')) {
+      wsStreamBase = wsStreamBase.replace('http://', 'ws://');
+    }
+    const streamBase = wsStreamBase ? `${wsStreamBase}/pstn-websocket` : defaultStreamUrl;
 
     // Attach context for routing (campaign/lang) to the Telnyx stream URL so the WS layer can resolve
     const params = new URLSearchParams({ roomName });
