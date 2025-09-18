@@ -136,7 +136,18 @@ async function createOutboundCall(to, options = {}) {
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
     console.error('Error cause:', error.cause);
-    console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    try {
+      console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    } catch (circularError) {
+      console.error('Error object has circular references, showing basic properties only');
+      console.error('Error properties:', {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        statusCode: error.statusCode,
+        response: error.response ? 'Response object exists' : 'No response'
+      });
+    }
     console.error('=== END DETAILED ERROR ===');
     throw error;
   }
