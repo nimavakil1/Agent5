@@ -131,7 +131,13 @@ async function createOutboundCall(to, options = {}) {
       call_log_entry: callLogEntry 
     };
   } catch (error) {
-    console.error('Error creating outbound call:', error);
+    console.error('=== DETAILED ERROR CREATING OUTBOUND CALL ===');
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Error cause:', error.cause);
+    console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    console.error('=== END DETAILED ERROR ===');
     throw error;
   }
 }
