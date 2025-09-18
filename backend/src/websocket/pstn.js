@@ -117,18 +117,24 @@ function createPSTNWebSocketHandler(server) {
   });
 
   wss.on('connection', async (telnyxWs, req) => {
+    console.log('=== PSTN WEBSOCKET CONNECTION ESTABLISHED ===');
+    console.log('Connection headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Request URL:', req.url);
+    
     const url = require('url');
     const parsedUrl = url.parse(req.url, true);
     const query = parsedUrl.query || {};
     const roomName = String(query.roomName || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    console.log('Parsed URL query parameters:', JSON.stringify(query, null, 2));
+    console.log('Extracted room name:', roomName);
 
     if (!roomName) {
-      console.error('PSTN: Room name not provided');
+      console.error('PSTN: Room name not provided - closing connection');
       telnyxWs.close();
       return;
     }
 
-    console.log(`PSTN WebSocket connected for room: ${roomName}`);
+    console.log(`=== PSTN WEBSOCKET SETUP COMPLETE FOR ROOM: ${roomName} ===`);
 
     let openaiWs = null;
     let telnyxStreamId = null;
@@ -183,7 +189,11 @@ function createPSTNWebSocketHandler(server) {
     }
 
     async function startTTS(text, force = false) {
+      console.log('=== STARTING TTS ===');
+      console.log('TTS text:', text);
+      console.log('Force flag:', force);
       const ttsProvider = process.env.TTS_PROVIDER_PSTN || 'openai';
+      console.log('TTS Provider:', ttsProvider);
       if (ttsProvider !== 'elevenlabs') {
         console.log('PSTN: TTS_PROVIDER_PSTN not set to elevenlabs, skipping TTS');
         return;
@@ -191,6 +201,8 @@ function createPSTNWebSocketHandler(server) {
 
       const apiKey = process.env.ELEVENLABS_API_KEY;
       const voiceId = process.env.ELEVENLABS_VOICE_ID;
+      console.log('ElevenLabs API Key:', apiKey ? 'Present' : 'Missing');
+      console.log('ElevenLabs Voice ID:', voiceId || 'Missing');
       if (!apiKey || !voiceId) {
         console.error('PSTN: ElevenLabs API key or voice ID missing');
         return;
@@ -311,7 +323,8 @@ function createPSTNWebSocketHandler(server) {
       });
 
       openaiWs.on('open', async () => {
-        console.log('PSTN: Connected to OpenAI Realtime API');
+        console.log('=== OPENAI REALTIME API CONNECTED ===');
+        console.log('OpenAI WebSocket URL:', OPENAI_REALTIME_API_URL);
         
         try {
           const sessionUpdate = {
@@ -344,17 +357,23 @@ function createPSTNWebSocketHandler(server) {
       });
 
       openaiWs.on('message', async (data) => {
+        console.log('=== RECEIVED OPENAI MESSAGE ===');
+        console.log('OpenAI message type:', typeof data);
         try {
           const message = JSON.parse(typeof data === 'string' ? data : data.toString('utf8'));
+          console.log('OpenAI message type:', message.type);
           
           // Handle text responses
           if (message.type === 'response.text.delta' && message.delta) {
+            console.log('=== OPENAI TEXT DELTA ===');
+            console.log('Delta content:', message.delta);
             currentTranscription += message.delta;
             outBuf += message.delta;
             
             // Start TTS when we have enough text
             if (outBuf.length > 0) {
               const textToSynth = outBuf;
+              console.log('Starting TTS for text:', textToSynth);
               outBuf = ''; // Clear buffer
               await startTTS(textToSynth);
             }
@@ -394,41 +413,65 @@ function createPSTNWebSocketHandler(server) {
 
     // Handle Telnyx messages
     telnyxWs.on('message', async (message) => {
+      console.log('=== RECEIVED TELNYX WEBSOCKET MESSAGE ===');
+      console.log('Message type:', typeof message);
+      console.log('Message size:', message.length, 'bytes');
+      
       try {
+        console.log('Raw message content (first 500 chars):', message.toString().substring(0, 500));
         const data = JSON.parse(message);
+        console.log('Parsed JSON data:', JSON.stringify(data, null, 2));
         
         if (data.event === 'start') {
           telnyxStreamId = data.stream_id || data.streamId || (data.start && data.start.stream_id) || null;
-          console.log('PSTN: Telnyx stream started, stream_id:', telnyxStreamId);
+          console.log('=== TELNYX STREAM STARTED ===');
+          console.log('Stream ID extracted:', telnyxStreamId);
+          console.log('Full start event:', JSON.stringify(data, null, 2));
         }
         
-        else if (data.event === 'media' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-          const audioBase64 = data.media.payload;
-          const ulawBuffer = Buffer.from(audioBase64, 'base64');
+        else if (data.event === 'media') {
+          console.log('=== PROCESSING MEDIA MESSAGE ===');
+          console.log('OpenAI WebSocket state:', openaiWs ? openaiWs.readyState : 'null');
+          console.log('Media payload length:', data.media?.payload?.length || 'no payload');
           
-          // Convert μ-law to PCM16 8kHz
-          const pcm16Samples = pcmuToPcm16(ulawBuffer);
+          if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+            console.log('Sending audio to OpenAI Realtime API...');
+            const audioBase64 = data.media.payload;
+            const ulawBuffer = Buffer.from(audioBase64, 'base64');
+            console.log('Decoded μ-law buffer size:', ulawBuffer.length, 'bytes');
           
-          // Convert to buffer for OpenAI (expects little-endian PCM16)
-          const pcm16Buffer = Buffer.alloc(pcm16Samples.length * 2);
-          for (let i = 0; i < pcm16Samples.length; i++) {
-            pcm16Buffer.writeInt16LE(pcm16Samples[i], i * 2);
-          }
+            // Convert μ-law to PCM16 8kHz
+            const pcm16Samples = pcmuToPcm16(ulawBuffer);
+            console.log('PCM16 samples array length:', pcm16Samples.length);
           
-          const b64 = pcm16Buffer.toString('base64');
-          openaiWs.send(JSON.stringify({ 
-            type: 'input_audio_buffer.append', 
-            audio: b64 
-          }));
+            // Convert to buffer for OpenAI (expects little-endian PCM16)
+            const pcm16Buffer = Buffer.alloc(pcm16Samples.length * 2);
+            for (let i = 0; i < pcm16Samples.length; i++) {
+              pcm16Buffer.writeInt16LE(pcm16Samples[i], i * 2);
+            }
+            console.log('PCM16 buffer size for OpenAI:', pcm16Buffer.length, 'bytes');
           
-          // Write to recording file (convert back to PCM16 for WAV)
-          if (recordingFile) {
-            recordingFile.write(pcm16Buffer);
+            const b64 = pcm16Buffer.toString('base64');
+            const openaiMessage = { 
+              type: 'input_audio_buffer.append', 
+              audio: b64 
+            };
+            console.log('Sending to OpenAI - message type:', openaiMessage.type, 'audio length:', b64.length);
+            openaiWs.send(JSON.stringify(openaiMessage));
+          
+            // Write to recording file (convert back to PCM16 for WAV)
+            if (recordingFile) {
+              recordingFile.write(pcm16Buffer);
+              console.log('Audio written to recording file');
+            }
+          } else {
+            console.log('OpenAI WebSocket not available - skipping audio processing');
           }
         }
         
         else if (data.event === 'stop') {
-          console.log('PSTN: Telnyx stream stopped');
+          console.log('=== TELNYX STREAM STOPPED ===');
+          console.log('Stop event data:', JSON.stringify(data, null, 2));
           
           // Clean up
           if (aiSendTimer) {
@@ -501,7 +544,10 @@ function createPSTNWebSocketHandler(server) {
           }
         }
       } catch (error) {
-        console.error('PSTN: Error parsing Telnyx message:', error);
+        console.error('=== ERROR PARSING TELNYX MESSAGE ===');
+        console.error('Parse error:', error.message);
+        console.error('Error stack:', error.stack);
+        console.error('Raw message causing error:', message.toString());
       }
     });
 
