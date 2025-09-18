@@ -17,7 +17,12 @@ router.post('/events', webhookLimiter, express.raw({ type: '*/*' }), (req, res) 
   try {
     const pubKeyPem = process.env.TELNYX_PUBLIC_KEY_PEM;
     if (!pubKeyPem) {
-      return res.status(500).send('Webhook public key not configured');
+      console.warn('TELNYX_PUBLIC_KEY_PEM not configured - skipping webhook signature verification');
+      // Temporarily skip signature verification for testing
+      const body = req.body.toString();
+      const eventData = JSON.parse(body);
+      console.log('Telnyx webhook event:', eventData.data?.event_type || 'unknown');
+      return res.status(200).send('OK');
     }
 
     const signatureB64 = req.header('telnyx-signature-ed25519') || req.header('Telnyx-Signature-Ed25519');
