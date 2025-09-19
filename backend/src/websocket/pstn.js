@@ -315,8 +315,17 @@ function createPSTNWebSocketHandler(server) {
       }
 
       // Create OpenAI session
+      console.log('=== CREATING OPENAI SESSION ===');
+      console.log('OpenAI API Key available:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
+      console.log('Customer record:', customerRecord ? 'Present' : 'None');
+      console.log('Session overrides:', JSON.stringify(sessionOverrides, null, 2));
+      
       const session = await createOpenAISession(customerRecord, sessionOverrides);
+      console.log('=== OPENAI SESSION CREATED ===');
+      console.log('Session response:', JSON.stringify(session, null, 2));
+      
       const OPENAI_REALTIME_API_URL = session.websocket_url;
+      console.log('Extracted WebSocket URL:', OPENAI_REALTIME_API_URL);
 
       openaiWs = new WebSocket(OPENAI_REALTIME_API_URL, {
         headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
