@@ -118,8 +118,24 @@ function createPSTNWebSocketHandler(server) {
 
   wss.on('connection', async (telnyxWs, req) => {
     console.log('=== PSTN WEBSOCKET CONNECTION ESTABLISHED ===');
+    console.log('Connection time:', new Date().toISOString());
     console.log('Connection headers:', JSON.stringify(req.headers, null, 2));
     console.log('Request URL:', req.url);
+    console.log('Client IP:', req.connection.remoteAddress);
+    
+    // Add connection event listeners for debugging
+    telnyxWs.on('error', (error) => {
+      console.error('=== TELNYX WEBSOCKET ERROR ===');
+      console.error('Error:', error);
+    });
+    
+    telnyxWs.on('close', (code, reason) => {
+      console.log('=== TELNYX WEBSOCKET CLOSED ===');
+      console.log('Close code:', code);
+      console.log('Close reason:', reason ? reason.toString() : 'No reason');
+    });
+    
+    console.log('=== WEBSOCKET EVENT LISTENERS ATTACHED ===');
     
     const url = require('url');
     const parsedUrl = url.parse(req.url, true);
@@ -439,11 +455,14 @@ function createPSTNWebSocketHandler(server) {
       console.log('=== RECEIVED TELNYX WEBSOCKET MESSAGE ===');
       console.log('Message type:', typeof message);
       console.log('Message size:', message.length, 'bytes');
+      console.log('Current time:', new Date().toISOString());
       
       try {
         console.log('Raw message content (first 500 chars):', message.toString().substring(0, 500));
         const data = JSON.parse(message);
-        console.log('Parsed JSON data:', JSON.stringify(data, null, 2));
+        console.log('=== PARSED TELNYX MESSAGE ===');
+        console.log('Event type:', data.event);
+        console.log('Full JSON data:', JSON.stringify(data, null, 2));
         
         if (data.event === 'start') {
           telnyxStreamId = data.stream_id || data.streamId || (data.start && data.start.stream_id) || null;
@@ -454,11 +473,14 @@ function createPSTNWebSocketHandler(server) {
         
         else if (data.event === 'media') {
           console.log('=== PROCESSING MEDIA MESSAGE ===');
+          console.log('Media timestamp:', data.media?.timestamp);
+          console.log('Media sequence number:', data.media?.sequence_number);
           console.log('OpenAI WebSocket state:', openaiWs ? openaiWs.readyState : 'null');
+          console.log('OpenAI WebSocket ready states: CONNECTING=0, OPEN=1, CLOSING=2, CLOSED=3');
           console.log('Media payload length:', data.media?.payload?.length || 'no payload');
           
           if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-            console.log('Sending audio to OpenAI Realtime API...');
+            console.log('✅ OpenAI WebSocket is OPEN - sending audio...');
             const audioBase64 = data.media.payload;
             const ulawBuffer = Buffer.from(audioBase64, 'base64');
             console.log('Decoded μ-law buffer size:', ulawBuffer.length, 'bytes');
