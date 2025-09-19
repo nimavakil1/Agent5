@@ -111,10 +111,15 @@ async function createOpenAISession(customerRecord = null, sessionOverrides = {})
 }
 
 function createPSTNWebSocketHandler(server) {
+  console.log('=== CREATING PSTN WEBSOCKET SERVER ===');
+  console.log('Server object:', typeof server);
+  
   const wss = new WebSocket.Server({ 
     server,
     path: '/pstn-websocket'
   });
+  
+  console.log('PSTN WebSocket Server created successfully');
 
   wss.on('connection', async (telnyxWs, req) => {
     console.log('=== PSTN WEBSOCKET CONNECTION ESTABLISHED ===');
