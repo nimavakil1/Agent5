@@ -127,9 +127,15 @@ async function createOutboundCall(to, options = {}) {
       };
     }
 
-    // 5. Return Information
+    // 5. Return Information (extract safe properties from call object to avoid circular structure)
     return { 
-      call, 
+      call: {
+        id: call.id,
+        to: call.to,
+        from: call.from,
+        connection_id: call.connection_id,
+        status: call.status
+      }, 
       room, 
       token, 
       call_id: roomName,
@@ -143,18 +149,14 @@ async function createOutboundCall(to, options = {}) {
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
     console.error('Error cause:', error.cause);
-    try {
-      console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-    } catch (circularError) {
-      console.error('Error object has circular references, showing basic properties only');
-      console.error('Error properties:', {
-        name: error.name,
-        message: error.message,
-        code: error.code,
-        statusCode: error.statusCode,
-        response: error.response ? 'Response object exists' : 'No response'
-      });
-    }
+    // Skip JSON.stringify of error object to avoid circular structure issues
+    console.error('Error properties:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      response: error.response ? 'Response object exists' : 'No response'
+    });
     console.error('=== END DETAILED ERROR ===');
     throw error;
   }
