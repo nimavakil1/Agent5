@@ -375,6 +375,11 @@ function createPSTNWebSocketHandler(server) {
           console.log('OpenAI message type:', message.type);
           
           // Handle text responses
+          if (message.type === 'error') {
+            console.log('=== OPENAI ERROR DETAILS ===');
+            console.log('Error message:', JSON.stringify(message, null, 2));
+          }
+          
           if (message.type === 'response.text.delta' && message.delta) {
             console.log('=== OPENAI TEXT DELTA ===');
             console.log('Delta content:', message.delta);
