@@ -87,7 +87,8 @@ const server = http.createServer(app);
 let wss = null;
 let pstnWss = null;
 if (process.env.NODE_ENV !== 'test') {
-  wss = createWebSocketServer(server);
+  // Temporarily disable old WebSocket server to test PSTN-only path
+  // wss = createWebSocketServer(server);
   pstnWss = createPSTNWebSocketHandler(server);
 }
 
