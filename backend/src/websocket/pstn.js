@@ -314,17 +314,24 @@ function createPSTNWebSocketHandler(server) {
         console.error('PSTN: Failed to start recording:', e);
       }
 
-      // Create OpenAI session
+      // Create OpenAI session (optional - we'll proceed with direct WebSocket anyway)
       console.log('=== CREATING OPENAI SESSION ===');
       console.log('OpenAI API Key available:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
       console.log('Customer record:', customerRecord ? 'Present' : 'None');
       console.log('Session overrides:', JSON.stringify(sessionOverrides, null, 2));
       
-      const session = await createOpenAISession(customerRecord, sessionOverrides);
-      console.log('=== OPENAI SESSION CREATED ===');
-      console.log('Session response:', JSON.stringify(session, null, 2));
+      let session = null;
+      try {
+        session = await createOpenAISession(customerRecord, sessionOverrides);
+        console.log('=== OPENAI SESSION CREATED ===');
+        console.log('Session response:', JSON.stringify(session, null, 2));
+      } catch (error) {
+        console.warn('=== OPENAI SESSION CREATION FAILED ===');
+        console.warn('Error:', error.message);
+        console.warn('Continuing with direct WebSocket connection...');
+      }
       
-      // OpenAI Realtime API changed - use direct WebSocket endpoint instead of session.websocket_url
+      // Always use direct WebSocket endpoint (session creation is optional)
       const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
       const OPENAI_REALTIME_API_URL = `wss://api.openai.com/v1/realtime?model=${model}`;
       console.log('Using direct OpenAI WebSocket URL:', OPENAI_REALTIME_API_URL);

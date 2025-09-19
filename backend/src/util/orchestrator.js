@@ -4,7 +4,21 @@ const CampaignDefinition = require('../models/CampaignDefinition');
 async function resolveAgentAndMcp({ campaignId, detectedLanguage }) {
   let campaign = null;
   if (campaignId) {
-    campaign = await CampaignDefinition.findOne({ $or: [{ _id: campaignId }, { campaign_id: campaignId }, { name: campaignId }] }).lean();
+    try {
+      // Try to find campaign by different fields, handle ObjectId validation gracefully
+      const query = { $or: [{ campaign_id: campaignId }, { name: campaignId }] };
+      
+      // Only add ObjectId lookup if campaignId looks like a valid ObjectId
+      const mongoose = require('mongoose');
+      if (mongoose.Types.ObjectId.isValid(campaignId)) {
+        query.$or.unshift({ _id: campaignId });
+      }
+      
+      campaign = await CampaignDefinition.findOne(query).lean();
+    } catch (error) {
+      console.warn(`PSTN: Campaign lookup failed for "${campaignId}":`, error.message);
+      campaign = null;
+    }
   }
   let mcp = campaign?.orchestrator?.mcp_service || '';
   let agentName = '';
