@@ -324,8 +324,10 @@ function createPSTNWebSocketHandler(server) {
       console.log('=== OPENAI SESSION CREATED ===');
       console.log('Session response:', JSON.stringify(session, null, 2));
       
-      const OPENAI_REALTIME_API_URL = session.websocket_url;
-      console.log('Extracted WebSocket URL:', OPENAI_REALTIME_API_URL);
+      // OpenAI Realtime API changed - use direct WebSocket endpoint instead of session.websocket_url
+      const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
+      const OPENAI_REALTIME_API_URL = `wss://api.openai.com/v1/realtime?model=${model}`;
+      console.log('Using direct OpenAI WebSocket URL:', OPENAI_REALTIME_API_URL);
 
       openaiWs = new WebSocket(OPENAI_REALTIME_API_URL, {
         headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
