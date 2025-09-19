@@ -73,8 +73,8 @@ async function createOutboundCall(to, options = {}) {
         data: telnyxError.data,
         errors: telnyxError.errors,
         body: telnyxError.body,
-        rawResponse: telnyxError.rawResponse,
-        fullError: JSON.stringify(telnyxError, Object.getOwnPropertyNames(telnyxError), 2)
+        rawResponse: telnyxError.rawResponse
+        // Removed fullError JSON.stringify to avoid circular structure
       });
       
       // Try to extract more detailed error info
