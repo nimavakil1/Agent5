@@ -2,6 +2,7 @@ const WebSocket = require('ws');
 const OpenAI = require('openai');
 const fs = require('fs');
 const path = require('path');
+const url = require('url');
 const CallLogEntry = require('../models/CallLogEntry');
 const { resolveAgentAndMcp } = require('../util/orchestrator');
 const agentSettings = require('../config/agentSettings');
@@ -9,6 +10,8 @@ const agentSettings = require('../config/agentSettings');
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+let wss;
 
 // μ-law decode/encode for 8kHz PCMU <-> PCM16 conversion
 function ulawDecode(sample) {
@@ -89,6 +92,7 @@ async function createOpenAISession(customerRecord = null, sessionOverrides = {})
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
+        type: 'transcription',
         model,
         modalities: ['text'], // Text-only for PSTN with external TTS
         instructions,
@@ -110,13 +114,11 @@ async function createOpenAISession(customerRecord = null, sessionOverrides = {})
   }
 }
 
-function createPSTNWebSocketHandler(server) {
+function createPSTNWebSocketHandler() {
   console.log('=== CREATING PSTN WEBSOCKET SERVER ===');
-  console.log('Server object:', typeof server);
   
-  const wss = new WebSocket.Server({ 
-    server,
-    path: '/pstn-websocket'
+  wss = new WebSocket.Server({ 
+    noServer: true
   });
   
   console.log('PSTN WebSocket Server created successfully');
@@ -142,7 +144,6 @@ function createPSTNWebSocketHandler(server) {
     
     console.log('=== WEBSOCKET EVENT LISTENERS ATTACHED ===');
     
-    const url = require('url');
     const parsedUrl = url.parse(req.url, true);
     const query = parsedUrl.query || {};
     const roomName = String(query.roomName || '').replace(/[^a-zA-Z0-9_-]/g, '');
@@ -623,4 +624,16 @@ function createPSTNWebSocketHandler(server) {
   return wss;
 }
 
-module.exports = { createPSTNWebSocketHandler };
+function handleUpgrade(request, socket, head) {
+  const pathname = url.parse(request.url).pathname;
+
+  if (pathname === '/pstn-websocket') {
+    wss.handleUpgrade(request, socket, head, function done(ws) {
+      wss.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+}
+
+module.exports = { createPSTNWebSocketHandler, handleUpgrade };

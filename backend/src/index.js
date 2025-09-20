@@ -9,7 +9,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const pinoHttp = require('pino-http');
-const { createPSTNWebSocketHandler } = require('./websocket/pstn');
+const { createPSTNWebSocketHandler, handleUpgrade } = require('./websocket/pstn');
 const callsRouter = require('./api/routes/calls');
 const telnyxRouter = require('./api/routes/telnyx');
 const agentRouter = require('./api/routes/agent');
@@ -83,10 +83,14 @@ app.use(
 );
 app.use(cookieParser());
 const server = http.createServer(app);
-let pstnWss = null;
+
 if (process.env.NODE_ENV !== 'test') {
-  pstnWss = createPSTNWebSocketHandler(server);
+  createPSTNWebSocketHandler();
 }
+
+server.on('upgrade', (request, socket, head) => {
+  handleUpgrade(request, socket, head);
+});
 
 const port = process.env.PORT || 3000;
 
@@ -234,4 +238,4 @@ let COMMIT_SHA = process.env.COMMIT_SHA || '';
 try { if (!COMMIT_SHA) COMMIT_SHA = execSync('git rev-parse --short HEAD', { stdio: ['ignore','pipe','ignore'] }).toString().trim(); } catch(_) {}
 const STARTED_AT = new Date().toISOString();
 
-module.exports = { app, server, pstnWss };
+module.exports = { app, server };
