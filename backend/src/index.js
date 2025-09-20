@@ -9,7 +9,6 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const pinoHttp = require('pino-http');
-const { createWebSocketServer } = require('./websocket');
 const { createPSTNWebSocketHandler } = require('./websocket/pstn');
 const callsRouter = require('./api/routes/calls');
 const telnyxRouter = require('./api/routes/telnyx');
@@ -84,11 +83,8 @@ app.use(
 );
 app.use(cookieParser());
 const server = http.createServer(app);
-let wss = null;
 let pstnWss = null;
 if (process.env.NODE_ENV !== 'test') {
-  // Temporarily disable old WebSocket server to test PSTN-only path
-  // wss = createWebSocketServer(server);
   pstnWss = createPSTNWebSocketHandler(server);
 }
 
@@ -238,4 +234,4 @@ let COMMIT_SHA = process.env.COMMIT_SHA || '';
 try { if (!COMMIT_SHA) COMMIT_SHA = execSync('git rev-parse --short HEAD', { stdio: ['ignore','pipe','ignore'] }).toString().trim(); } catch(_) {}
 const STARTED_AT = new Date().toISOString();
 
-module.exports = { app, server, wss };
+module.exports = { app, server, pstnWss };
