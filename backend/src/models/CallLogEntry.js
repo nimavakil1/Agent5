@@ -7,7 +7,7 @@ const callLogEntrySchema = new mongoose.Schema({
   customer_id: { type: String, required: true },
   campaign_id: { type: String, required: true },
   start_time: { type: Date, required: true },
-  end_time: { type: Date, required: true },
+  end_time: { type: Date },
   language_detected: { type: String, required: true },
   fallback_language: { type: String },
   sentiment_scores: [{ timestamp: Date, sentiment: String, score: Number }],
