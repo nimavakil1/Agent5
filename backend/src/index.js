@@ -39,6 +39,8 @@ const { ensureDefaultRoles } = require('./util/ensureRoles');
 const auth = require('./middleware/auth');
 const { requireSession, allowBearerOrSession } = require('./middleware/sessionAuth');
 const scheduler = require('./scheduler');
+// Initialize WebSocket handlers (Agent Studio, operator bridge)
+const { createWebSocketServer } = require('./websocket');
 const CallLogEntry = require('./models/CallLogEntry');
 const { resolveAgentAndMcp } = require('./util/orchestrator');
 const agentSettings = require('./config/agentSettings');
@@ -92,6 +94,9 @@ app.use(
 );
 app.use(cookieParser());
 const server = http.createServer(app);
+// Attach Agent Studio websocket server (handles /agent-stream, /operator-bridge)
+// This must be registered before custom upgrade handlers to allow fallthrough.
+try { createWebSocketServer(server); } catch (e) { console.error('Failed to init Agent WebSocket server:', e); }
 
 const port = process.env.PORT || 3000;
 
@@ -202,7 +207,7 @@ app.get(/^\/ui(?:\/.*)?$/, requireSession, (req, res) => {
   res.sendFile(path.join(uiDist, 'index.html'));
 });
 
-// WebSocket server
+// PSTN WebSocket server (Telnyx stream) using manual upgrade routing
 const wss = new WebSocket.Server({ noServer: true });
 
 server.on('upgrade', (request, socket, head) => {
@@ -213,7 +218,8 @@ server.on('upgrade', (request, socket, head) => {
       wss.emit('connection', ws, request);
     });
   } else {
-    socket.destroy();
+    // Do not destroy: allow other websocket handlers (e.g., /agent-stream) to process
+    return;
   }
 });
 
