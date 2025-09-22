@@ -12,6 +12,9 @@ const pinoHttp = require('pino-http');
 const WebSocket = require('ws');
 const url = require('url');
 const OpenAI = require('openai');
+// Initialize Agent Studio / operator websocket server
+let createWebSocketServer;
+try { ({ createWebSocketServer } = require('./websocket')); } catch (_) { /* optional */ }
 
 // Feature gates
 const ENABLE_PSTN_WS = String(process.env.ENABLE_PSTN_WS || '1') !== '0';
@@ -95,6 +98,8 @@ app.use(
 );
 app.use(cookieParser());
 const server = http.createServer(app);
+// Attach Agent Studio websocket server (handles /agent-stream, /operator-bridge) if available
+try { if (typeof createWebSocketServer === 'function') createWebSocketServer(server); } catch (e) { console.error('Failed to init Agent WebSocket server:', e); }
 
 const port = process.env.PORT || 3000;
 
