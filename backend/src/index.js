@@ -13,6 +13,9 @@ const WebSocket = require('ws');
 const url = require('url');
 const OpenAI = require('openai');
 
+// Feature gates
+const ENABLE_PSTN_WS = String(process.env.ENABLE_PSTN_WS || '1') !== '0';
+
 const callsRouter = require('./api/routes/calls');
 const telnyxRouter = require('./api/routes/telnyx');
 const agentRouter = require('./api/routes/agent');
@@ -96,7 +99,11 @@ const server = http.createServer(app);
 const port = process.env.PORT || 3000;
 
 // Telnyx webhook must see raw body for signature verification; mount before JSON parser
-app.use('/api/telnyx', telnyxRouter);
+if (ENABLE_PSTN_WS) {
+  app.use('/api/telnyx', telnyxRouter);
+} else {
+  console.log('[pstn] Telnyx API disabled (ENABLE_PSTN_WS=0)');
+}
 
 if (process.env.CORS_ORIGIN) {
   const allowlist = process.env.CORS_ORIGIN.split(',').map((s) => s.trim());
@@ -203,7 +210,6 @@ app.get(/^\/ui(?:\/.*)?$/, requireSession, (req, res) => {
 });
 
 // PSTN WebSocket server (Telnyx). Can be disabled via ENABLE_PSTN_WS=0 for UI-only testing.
-const ENABLE_PSTN_WS = String(process.env.ENABLE_PSTN_WS || '1') !== '0';
 const wss = ENABLE_PSTN_WS ? new WebSocket.Server({ noServer: true }) : null;
 
 if (ENABLE_PSTN_WS && wss) {
