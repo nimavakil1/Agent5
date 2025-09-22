@@ -202,22 +202,26 @@ app.get(/^\/ui(?:\/.*)?$/, requireSession, (req, res) => {
   res.sendFile(path.join(uiDist, 'index.html'));
 });
 
-// WebSocket server
-const wss = new WebSocket.Server({ noServer: true });
+// PSTN WebSocket server (Telnyx). Can be disabled via ENABLE_PSTN_WS=0 for UI-only testing.
+const ENABLE_PSTN_WS = String(process.env.ENABLE_PSTN_WS || '1') !== '0';
+const wss = ENABLE_PSTN_WS ? new WebSocket.Server({ noServer: true }) : null;
 
-server.on('upgrade', (request, socket, head) => {
-  const pathname = url.parse(request.url).pathname;
+if (ENABLE_PSTN_WS && wss) {
+  server.on('upgrade', (request, socket, head) => {
+    const pathname = url.parse(request.url).pathname;
 
-  if (pathname === '/pstn-websocket') {
-    wss.handleUpgrade(request, socket, head, function done(ws) {
-      wss.emit('connection', ws, request);
-    });
-  } else {
-    socket.destroy();
-  }
-});
+    if (pathname === '/pstn-websocket') {
+      wss.handleUpgrade(request, socket, head, function done(ws) {
+        wss.emit('connection', ws, request);
+      });
+    } else {
+      // Do not destroy: allow other websocket handlers (e.g., /agent-stream) to process
+      return;
+    }
+  });
+}
 
-wss.on('connection', async (telnyxWs, req) => {
+wss?.on('connection', async (telnyxWs, req) => {
   console.log('=== PSTN WEBSOCKET CONNECTION ESTABLISHED ===');
   console.log('Connection time:', new Date().toISOString());
   console.log('Connection headers:', JSON.stringify(req.headers, null, 2));
