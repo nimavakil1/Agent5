@@ -30,10 +30,20 @@ function toHttpUrl(u) {
   if (u.startsWith('ws://')) return 'http://' + u.slice(5);
   return u;
 }
-const livekitHost = toHttpUrl(process.env.LIVEKIT_API_URL || process.env.LIVEKIT_SERVER_URL);
+// Separate LiveKit admin host (HTTP) and WebSocket host (WS) to avoid path conflicts
+// - Admin API (Twirp) should be at the site root (e.g., https://host), proxied to LiveKit /twirp
+// - Client/WebSocket should point to the /rtc endpoint (e.g., wss://host/rtc)
+const livekitAdminHost = process.env.LIVEKIT_API_URL || toHttpUrl(process.env.LIVEKIT_SERVER_URL);
+const livekitWsHost = process.env.LIVEKIT_SERVER_URL || (
+  livekitAdminHost ? (
+    livekitAdminHost.startsWith('https://') ? 'wss://' + livekitAdminHost.slice(8)
+    : livekitAdminHost.startsWith('http://') ? 'ws://' + livekitAdminHost.slice(7)
+    : livekitAdminHost
+  ) : ''
+);
 const apiKey = process.env.LIVEKIT_API_KEY;
 const apiSecret = process.env.LIVEKIT_API_SECRET;
-const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
+const roomService = new RoomServiceClient(toHttpUrl(livekitAdminHost), apiKey, apiSecret);
 const agentSettings = require('../config/agentSettings');
 
 // --- Simple server-side PCM16 mono mixer (24kHz) ---
@@ -395,7 +405,7 @@ function createWebSocketServer(server) {
             const at = new AccessToken(apiKey, apiSecret, { identity });
             at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
             const token = await at.toJwt();
-            publisher = await createPublisher({ host: livekitHost, token, roomName });
+            publisher = await createPublisher({ host: livekitWsHost, token, roomName });
           } catch (e) {
             console.error('LiveKit publisher error (continuing without LiveKit):', e?.message || e);
           }
@@ -1111,7 +1121,7 @@ function createWebSocketServer(server) {
         const bridgeTokenAt = new AccessToken(apiKey, apiSecret, { identity: bridgeIdentity });
         bridgeTokenAt.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: false });
         const bridgeToken = bridgeTokenAt.toJwt();
-        livekitPublisher = await createPublisher({ host: livekitHost, token: bridgeToken, roomName });
+        livekitPublisher = await createPublisher({ host: livekitWsHost, token: bridgeToken, roomName });
         if (!livekitPublisher) {
           console.warn('LiveKit publisher not available. Proceeding without LiveKit audio publish.');
         }
