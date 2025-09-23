@@ -106,22 +106,25 @@
           await lkRoom.connect(toWs(host), token);
           const tracksEl = document.getElementById('tracks'); tracksEl.innerHTML='';
           const RoomEvent = (LK && LK.RoomEvent) ? LK.RoomEvent : null;
+          // Only auto-play the 'agent' track to avoid mic echo.
+          // If you need to hear the callee mic for diagnostics, append ?play=all to the page URL.
+          const playAll = (new URLSearchParams(location.search).get('play')||'').toLowerCase()==='all';
           lkRoom.on((RoomEvent||{}).TrackSubscribed || 'trackSubscribed', (track,pub)=>{
-            if(track.kind==='audio'){
-              const name=String((pub&&(pub.trackName||pub.source||pub.sid||'agent'))||'agent');
-              // Play any remote audio track; prefer the one named 'agent'
-              const audio=document.createElement('audio');
-              audio.autoplay=true; audio.controls=true; audio.playsInline=true; audio.muted=false;
-              track.attach(audio); tracksEl.appendChild(audio);
-              audio.play().catch(()=>{
-                const btn=document.createElement('button');
-                btn.textContent='Tap to enable audio ('+name+')';
-                btn.className='mt-2 bg-emerald-600 text-white rounded px-3 py-2';
-                btn.onclick=()=>{audio.muted=false; audio.play().catch(()=>{}); btn.remove();};
-                tracksEl.appendChild(btn);
-              });
-              if (name.toLowerCase() === 'agent') lkAgentAudioEl=audio;
-            }
+            if(track.kind!=='audio') return;
+            const name = String((pub && (pub.trackName||pub.source||''))||'').toLowerCase();
+            if (!playAll && name !== 'agent') return; // suppress callee/mic to prevent echo
+            const label = name || 'audio';
+            const audio=document.createElement('audio');
+            audio.autoplay=true; audio.controls=true; audio.playsInline=true; audio.muted=false;
+            track.attach(audio); tracksEl.appendChild(audio);
+            audio.play().catch(()=>{
+              const btn=document.createElement('button');
+              btn.textContent='Tap to enable audio ('+label+')';
+              btn.className='mt-2 bg-emerald-600 text-white rounded px-3 py-2';
+              btn.onclick=()=>{audio.muted=false; audio.play().catch(()=>{}); btn.remove();};
+              tracksEl.appendChild(btn);
+            });
+            if (label === 'agent') lkAgentAudioEl=audio;
           });
         } catch(_){}
       }
