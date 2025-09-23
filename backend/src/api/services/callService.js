@@ -4,10 +4,21 @@ const telnyx = require('telnyx')(process.env.TELNYX_API_KEY);
 const { RoomServiceClient, AccessToken } = require('livekit-server-sdk');
 const CallLogEntry = require('../../models/CallLogEntry');
 
-const livekitHost = process.env.LIVEKIT_SERVER_URL;
+
+function toHttpUrl(u) {
+  if (!u) return '';
+  if (u.startsWith('https://') || u.startsWith('http://')) return u;
+  if (u.startsWith('wss://')) return 'https://' + u.slice(6);
+  if (u.startsWith('ws://')) return 'http://' + u.slice(5);
+  return u;
+}
+
+// Use HTTP(S) admin host for Twirp (RoomServiceClient)
+const adminHost = toHttpUrl(process.env.LIVEKIT_API_URL || process.env.LIVEKIT_SERVER_URL);
 const apiKey = process.env.LIVEKIT_API_KEY;
 const apiSecret = process.env.LIVEKIT_API_SECRET;
-const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
+const roomService = new RoomServiceClient(adminHost, apiKey, apiSecret);
+
 
 /**
  * Creates an outbound call using Telnyx and a LiveKit room.
@@ -20,8 +31,14 @@ async function createOutboundCall(to, options = {}) {
     // 1. Generate room name for clean PSTN calling (bypass MongoDB allocation)
     // Clean PSTN path doesn't need pooled rooms - generate unique room name
     const roomName = `pstn-clean-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    let room;
-    try { room = await roomService.getRoom(roomName); } catch { room = await roomService.createRoom({ name: roomName }); }
+    
+let room;
+    try { room = await roomService.getRoom(roomName); }
+    catch (e) {
+      try { room = await roomService.createRoom({ name: roomName }); }
+      catch (e2) { console.error('livekit admin error (createRoom)', { message: e2?.message }); throw e2; }
+    }
+
 
     // 2. Create a Telnyx Call
     const connectionId = process.env.TELNYX_CONNECTION_ID;
