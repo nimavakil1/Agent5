@@ -1157,10 +1157,17 @@ function createWebSocketServer(server) {
 
       // 2. Create OpenAI Session and connect WebSocket
       const session = await createOpenAISession(customerRecord);
-      const OPENAI_REALTIME_API_URL = session.websocket_url;
-
-      openaiWs = new WebSocket(OPENAI_REALTIME_API_URL, {
-        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      // Use OpenAI Realtime via ephemeral client_secret when available; fallback to API key
+      const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview';
+      const wsUrl = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
+      const ephemeral = session?.client_secret?.value || '';
+      const authToken = ephemeral || process.env.OPENAI_API_KEY;
+      if (!authToken) throw new Error('Missing OpenAI auth token');
+      openaiWs = new WebSocket(wsUrl, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'OpenAI-Beta': 'realtime=v1',
+        },
       });
 
       // Register session references for operator control
