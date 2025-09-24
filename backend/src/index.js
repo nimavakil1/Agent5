@@ -221,7 +221,8 @@ if (ENABLE_PSTN_WS && wss) {
   server.on('upgrade', (request, socket, head) => {
     const pathname = url.parse(request.url).pathname;
 
-    if (pathname === '/pstn-websocket') {
+    // Disable duplicate PSTN handler; use ./websocket handler instead
+    if (pathname === '/pstn-websocket-disabled') {
       wss.handleUpgrade(request, socket, head, function done(ws) {
         wss.emit('connection', ws, request);
       });

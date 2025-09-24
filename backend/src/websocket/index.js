@@ -956,7 +956,8 @@ function createWebSocketServer(server) {
       return;
     }
     console.log('Telnyx WebSocket client connected');
-    if (pathname !== '/websocket') {
+    // Expect Telnyx to connect to /pstn-websocket (proxied via Nginx)
+    if (pathname !== '/pstn-websocket') {
       console.error('Invalid WebSocket path:', pathname);
       telnyxWs.close();
       return;
