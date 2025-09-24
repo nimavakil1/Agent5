@@ -1176,6 +1176,10 @@ function createWebSocketServer(server) {
           const sessionUpdate = {
             type: 'session.update',
             session: {
+              // Ensure the model returns audio for PSTN playback
+              modalities: ['audio', 'text'],
+              input_audio_format: 'pcm16',
+              output_audio_format: 'pcm16',
               ...(sessionOverrides.instructions ? { instructions: sessionOverrides.instructions } : {}),
               ...(sessionOverrides.voice ? { voice: sessionOverrides.voice } : {}),
               ...(sessionOverrides.language ? { input_audio_transcription: { model: 'whisper-1', language: sessionOverrides.language } } : {}),
