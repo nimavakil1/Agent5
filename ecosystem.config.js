@@ -12,8 +12,11 @@ module.exports = {
         // Add your actual values for these environment variables:
         TELNYX_API_KEY: 'YOUR_TELNYX_API_KEY',
         TELNYX_PHONE_NUMBER: '+3225310001',
-        TELNYX_STREAM_URL: 'https://agent.acropaq.com',
-        LIVEKIT_SERVER_URL: 'YOUR_LIVEKIT_SERVER_URL',
+        // Telnyx should connect to this exact WS path
+        TELNYX_STREAM_URL: 'wss://ai.acropaq.com/pstn-websocket',
+        // LiveKit config split: WS for clients, HTTP(S) admin/Twirp for RoomService
+        LIVEKIT_SERVER_URL: 'wss://ai.acropaq.com',
+        LIVEKIT_API_URL: 'https://ai.acropaq.com',
         LIVEKIT_API_KEY: 'YOUR_LIVEKIT_API_KEY',
         LIVEKIT_API_SECRET: 'YOUR_LIVEKIT_API_SECRET',
         MONGO_URI: 'YOUR_MONGO_URI',
@@ -25,4 +28,3 @@ module.exports = {
     }
   ]
 };
-
