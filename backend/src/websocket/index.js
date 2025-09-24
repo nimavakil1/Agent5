@@ -1202,6 +1202,14 @@ function createWebSocketServer(server) {
         } catch (e) {
           console.error('Failed to apply session overrides (PSTN):', e?.message || e);
         }
+        // Optional: immediately request a greeting so the callee hears the agent without speaking first
+        try {
+          const autoGreet = String(process.env.PSTN_AUTO_GREETING || '0') === '1';
+          if (autoGreet) {
+            console.log('PSTN: Auto-greeting enabled; requesting response.create');
+            openaiWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio','text'] } }));
+          }
+        } catch (_) {}
         // Do not prime an immediate response on PSTN path; wait for caller speech
         // Start LiveKit Room Composite Egress (audio-only)
         try {
@@ -1368,6 +1376,14 @@ function createWebSocketServer(server) {
           try { require('../util/roomsStore').touch(roomName); } catch(_) {}
           bytesWritten = 0;
           await ensureCallLogDefaults();
+          // If we want the agent to speak immediately after streaming starts
+          try {
+            const autoGreet = String(process.env.PSTN_AUTO_GREETING || '0') === '1';
+            if (autoGreet && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+              console.log('PSTN: Auto-greeting on stream start; requesting response.create');
+              openaiWs.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio','text'] } }));
+            }
+          } catch(_) {}
         } else if (data.event === 'media') {
           const audioBase64 = data.media.payload;
           const audioBuffer = Buffer.from(audioBase64, 'base64');
