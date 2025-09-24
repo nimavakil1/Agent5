@@ -981,6 +981,11 @@ function createWebSocketServer(server) {
     let customerRecord = null; // Customer Record for personalization
     let currentTranscription = ''; // To accumulate transcription
     
+    // PSTN test modes and flags
+    const TONE_MODE = String(process.env.PSTN_TONE_MODE || '0') === '1';
+    const ECHO_MODE = String(process.env.PSTN_ECHO_MODE || '0') === '1';
+    const DISABLE_LK_PUBLISHER = String(process.env.DISABLE_LIVEKIT_PUBLISHER || '0') === '1';
+
     // Cost tracking variables
     let callStartTime = new Date();
     let audioInputMinutes = 0;
@@ -1376,6 +1381,32 @@ function createWebSocketServer(server) {
           try { require('../util/roomsStore').touch(roomName); } catch(_) {}
           bytesWritten = 0;
           await ensureCallLogDefaults();
+          // Tone test mode: generate 440Hz PCMU frames at 20ms pacing
+          if (TONE_MODE) {
+            try {
+              let phase = 0; const TWO_PI = Math.PI * 2; const sr = 8000;
+              const freq = Number(process.env.PSTN_TONE_FREQ || '440');
+              const amp = 0.2;
+              if (!aiSendTimer) {
+                let sent = 0;
+                aiSendTimer = setInterval(() => {
+                  try {
+                    if (!telnyxWs || telnyxWs.readyState !== WebSocket.OPEN || !telnyxStreamId) return;
+                    const mu = Buffer.alloc(160);
+                    for (let n = 0; n < 160; n++) {
+                      const s = Math.sin(TWO_PI * phase) * amp;
+                      const pcm = Math.max(-32768, Math.min(32767, (s * 32767) | 0));
+                      mu[n] = linearToUlaw(pcm);
+                      phase += freq / sr; if (phase >= 1) phase -= 1;
+                    }
+                    const payload = mu.toString('base64');
+                    telnyxWs.send(JSON.stringify({ event: 'media', media: { payload }, stream_id: telnyxStreamId }));
+                    sent++; if (sent <= 3 || sent % 50 === 0) console.log(`Tone->PSTN sent frames: ${sent}`);
+                  } catch (_) {}
+                }, 20);
+              }
+            } catch (_) {}
+          }
           // If we want the agent to speak immediately after streaming starts
           try {
             const autoGreet = String(process.env.PSTN_AUTO_GREETING || '0') === '1';
@@ -1388,9 +1419,12 @@ function createWebSocketServer(server) {
           const audioBase64 = data.media.payload;
           const audioBuffer = Buffer.from(audioBase64, 'base64');
           // Legacy raw recorder disabled
-
+          // Echo test mode: loop caller audio back to PSTN
+          if (ECHO_MODE && telnyxWs && telnyxWs.readyState === WebSocket.OPEN && telnyxStreamId) {
+            try { telnyxWs.send(JSON.stringify({ event: 'media', media: { payload: audioBase64 }, stream_id: telnyxStreamId })); } catch(_) {}
+          }
           // Transcode Telnyx PCMU 8kHz to OpenAI PCM16 24kHz mono and send to Realtime API
-          if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+          if (!TONE_MODE && !ECHO_MODE && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
             const pcm8k = decodePCMUtoPCM16(audioBuffer);
             const pcm24k = upsampleTo24kHz(pcm8k);
             const pcmBuf = int16ToLEBuffer(pcm24k);
@@ -1431,7 +1465,7 @@ function createWebSocketServer(server) {
           }
 
           // Also feed callee audio to LiveKit publisher
-          if (livekitPublisher) {
+          if (!TONE_MODE && !ECHO_MODE && livekitPublisher) {
             try {
               const pcm8k = decodePCMUtoPCM16(audioBuffer);
               livekitPublisher.pushCalleeFrom8kPcm16(pcm8k);
@@ -1447,7 +1481,7 @@ function createWebSocketServer(server) {
             clearInterval(aiSendTimer);
             aiSendTimer = null;
           }
-          if (openaiWs) {
+          if (!TONE_MODE && !ECHO_MODE && openaiWs) {
             try {
               // Commit input and request response
               openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
