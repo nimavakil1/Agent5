@@ -5,7 +5,9 @@
  */
 
 const VoiceModule = require('./VoiceModule');
+const { AgentModule } = require('../agents');
 
 module.exports = {
   VoiceModule,
+  AgentModule,
 };

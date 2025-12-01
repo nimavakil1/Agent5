@@ -32,7 +32,10 @@ const shopifyRouter = require('./api/routes/shopify');
 const productsRouter = require('./api/routes/products');
 const notificationsRouter = require('./api/routes/notifications');
 const prospectsRouter = require('./api/routes/prospects');
+const aiAgentsRouter = require('./api/routes/agents.api');
 const connectDB = require('./config/database');
+const { createPlatform } = require('./core/Platform');
+const { AgentModule } = require('./core/agents');
 const validateEnv = require('./config/validateEnv');
 const ensureAdmin = require('./util/ensureAdmin');
 const { ensureDefaultRoles } = require('./util/ensureRoles');
@@ -195,6 +198,7 @@ app.use('/api/shopify', shopifyRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/notifications', allowBearerOrSession, notificationsRouter);
 app.use('/api/prospects', prospectsRouter);
+app.use('/api/ai-agents', allowBearerOrSession, aiAgentsRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
@@ -667,8 +671,24 @@ wss.on('connection', async (telnyxWs, req) => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
-  server.listen(port, () => {
+  server.listen(port, async () => {
     console.log(`Server is running on port ${port}`);
+
+    // Initialize AI Agent Platform
+    if (process.env.ENABLE_AI_AGENTS === '1') {
+      try {
+        const platform = createPlatform({ name: 'Agent5', version: '2.0.0' });
+        const agentModule = new AgentModule({ defaultAgents: ['manager', 'finance'] });
+
+        await platform.registerModule('agents', agentModule);
+        await platform.initialize();
+        await platform.start();
+
+        console.log('AI Agent Platform initialized successfully');
+      } catch (e) {
+        console.error('AI Agent Platform initialization failed:', e.message);
+      }
+    }
   });
   try { scheduler.start(); } catch (e) { console.error('scheduler start error', e); }
 }
