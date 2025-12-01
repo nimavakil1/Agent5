@@ -4,7 +4,7 @@ const telnyx = require('telnyx')(process.env.TELNYX_API_KEY);
 const { RoomServiceClient, AccessToken } = require('livekit-server-sdk');
 const CallLogEntry = require('../../models/CallLogEntry');
 
-const livekitHost = process.env.LIVEKIT_SERVER_URL;
+const livekitHost = process.env.LIVEKIT_SERVER_URL || process.env.LIVEKIT_URL;
 const apiKey = process.env.LIVEKIT_API_KEY;
 const apiSecret = process.env.LIVEKIT_API_SECRET;
 
