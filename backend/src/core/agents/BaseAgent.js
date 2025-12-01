@@ -302,7 +302,7 @@ class BaseAgent extends EventEmitter {
     this.state = 'shutdown';
 
     // Disconnect MCP servers
-    for (const [name, client] of this.mcpServers) {
+    for (const [_name, client] of this.mcpServers) {
       await client.disconnect();
     }
 
@@ -320,7 +320,7 @@ class BaseAgent extends EventEmitter {
    * Think about what action to take
    * Override in subclasses for specialized behavior
    */
-  async _think(task, previousResult) {
+  async _think(_task, _previousResult) {
     // Default implementation - subclasses should override
     throw new Error('_think() must be implemented by subclass');
   }
@@ -413,7 +413,7 @@ class BaseAgent extends EventEmitter {
   /**
    * Handle query from another agent
    */
-  async _handleQuery(query) {
+  async _handleQuery(_query) {
     // Default implementation - subclasses can override
     return {
       status: this.getStatus(),

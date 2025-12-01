@@ -4,7 +4,7 @@
  * Integrates the agent swarm with the Agent5 platform.
  */
 
-const { createAgentRegistry, getAgentRegistry } = require('./AgentRegistry');
+const { createAgentRegistry } = require('./AgentRegistry');
 const { MCPRegistry } = require('./MCPClient');
 const { FinanceAgent } = require('./specialized/FinanceAgent');
 const { ManagerAgent } = require('./specialized/ManagerAgent');
@@ -55,7 +55,7 @@ class AgentModule {
   /**
    * Start the module - create default agents
    */
-  async start(platform) {
+  async start(_platform) {
     this.logger.info('Starting agent module');
 
     // Create and register default agents
@@ -76,7 +76,7 @@ class AgentModule {
   /**
    * Stop the module
    */
-  async stop(platform) {
+  async stop(_platform) {
     this.logger.info('Stopping agent module');
 
     // Shutdown all agents

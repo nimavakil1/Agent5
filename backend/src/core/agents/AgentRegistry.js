@@ -9,7 +9,6 @@
  */
 
 const EventEmitter = require('events');
-const { v4: uuidv4 } = require('uuid');
 
 class AgentRegistry extends EventEmitter {
   constructor(options = {}) {
@@ -116,7 +115,7 @@ class AgentRegistry extends EventEmitter {
    * Get an agent by name
    */
   getByName(name) {
-    for (const [id, registration] of this.agents) {
+    for (const [_id, registration] of this.agents) {
       if (registration.agent.name === name) {
         return registration.agent;
       }
@@ -225,7 +224,7 @@ class AgentRegistry extends EventEmitter {
       messageQueueSize: this.messageQueue.length,
     };
 
-    for (const [id, registration] of this.agents) {
+    for (const [_id, registration] of this.agents) {
       const { agent } = registration;
 
       // Count by state

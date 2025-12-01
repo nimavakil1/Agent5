@@ -7,13 +7,12 @@
 const express = require('express');
 const router = express.Router();
 const { getAgentRegistry } = require('../../core/agents');
-const { getPlatform } = require('../../core/Platform');
 
 /**
  * @route GET /api/agents
  * @desc List all registered agents
  */
-router.get('/', async (req, res) => {
+router.get('/', (req, res) => {
   try {
     const registry = getAgentRegistry();
     const agents = registry.list();
@@ -39,7 +38,7 @@ router.get('/', async (req, res) => {
  * @route GET /api/agents/health
  * @desc Get health status of all agents
  */
-router.get('/health', async (req, res) => {
+router.get('/health', (req, res) => {
   try {
     const registry = getAgentRegistry();
     const health = registry.getHealth();
@@ -57,7 +56,7 @@ router.get('/health', async (req, res) => {
  * @route GET /api/agents/:id
  * @desc Get details of a specific agent
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', (req, res) => {
   try {
     const registry = getAgentRegistry();
     const agent = registry.get(req.params.id);

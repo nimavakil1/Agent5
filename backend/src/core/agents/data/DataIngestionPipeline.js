@@ -222,7 +222,7 @@ class DataIngestionPipeline extends EventEmitter {
   /**
    * Sync Amazon data (placeholder)
    */
-  async _syncAmazon(client) {
+  async _syncAmazon(_client) {
     // TODO: Implement Amazon Seller Central sync
     return { status: 'not_implemented' };
   }
@@ -230,7 +230,7 @@ class DataIngestionPipeline extends EventEmitter {
   /**
    * Sync Bol.com data (placeholder)
    */
-  async _syncBolcom(client) {
+  async _syncBolcom(_client) {
     // TODO: Implement Bol.com Partner API sync
     return { status: 'not_implemented' };
   }

@@ -91,7 +91,7 @@ class MCPClient extends EventEmitter {
             name: 'Agent5',
             version: '2.0.0',
           },
-        }).then((response) => {
+        }).then((_response) => {
           this.connected = true;
 
           // Send initialized notification
@@ -315,7 +315,7 @@ class MCPClient extends EventEmitter {
     this.connected = false;
 
     // Clear pending requests
-    for (const [id, { reject, timer }] of this.pendingRequests) {
+    for (const [_id, { reject, timer }] of this.pendingRequests) {
       clearTimeout(timer);
       reject(new Error('Client disconnected'));
     }
@@ -432,7 +432,7 @@ class MCPRegistry {
    * Disconnect all MCP servers
    */
   async disconnectAll() {
-    for (const [name, client] of this.clients) {
+    for (const [_name, client] of this.clients) {
       await client.disconnect();
     }
     this.clients.clear();

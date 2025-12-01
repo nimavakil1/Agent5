@@ -5,8 +5,8 @@
  * Uses mcp-server-odoo for natural language Odoo queries.
  */
 
-const { MCPClient } = require('../MCPClient');
-const path = require('path');
+// MCPClient import available when needed for MCP server integration
+// const { MCPClient } = require('../MCPClient');
 
 /**
  * Create Odoo MCP configuration

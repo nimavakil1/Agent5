@@ -210,7 +210,7 @@ You have access to all specialized agents and can delegate tasks appropriately.`
 
   // ============ Tool Implementations ============
 
-  async _listAgents(params) {
+  async _listAgents(_params) {
     const registry = getAgentRegistry();
     const agents = registry.list();
 
@@ -391,7 +391,7 @@ You have access to all specialized agents and can delegate tasks appropriately.`
     return performance;
   }
 
-  async _listPendingApprovals(params) {
+  async _listPendingApprovals(_params) {
     const approvals = Array.from(this.pendingApprovals.values());
 
     return {

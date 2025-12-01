@@ -11,7 +11,6 @@
 
 const { LLMAgent } = require('../LLMAgent');
 const { createOdooMCPConfig, OdooDirectClient } = require('../integrations/OdooMCP');
-const { v4: uuidv4 } = require('uuid');
 
 class FinanceAgent extends LLMAgent {
   constructor(config = {}) {
@@ -431,10 +430,11 @@ Always provide context with numbers (e.g., "3 unpaid invoices totaling €15,000
       case 'month':
         dateFrom = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
         break;
-      case 'quarter':
+      case 'quarter': {
         const quarter = Math.floor(today.getMonth() / 3);
         dateFrom = new Date(today.getFullYear(), quarter * 3, 1).toISOString().split('T')[0];
         break;
+      }
       case 'year':
         dateFrom = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
         break;
