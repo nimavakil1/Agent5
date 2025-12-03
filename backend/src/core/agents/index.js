@@ -16,6 +16,7 @@ const { AgentModule } = require('./AgentModule');
 const { FinanceAgent } = require('./specialized/FinanceAgent');
 const { ManagerAgent } = require('./specialized/ManagerAgent');
 const EcommerceAgent = require('./specialized/EcommerceAgent');
+const { AdvertisingAgent } = require('./specialized/AdvertisingAgent');
 
 // Integrations - Phase 1
 const { createOdooMCPConfig, OdooDirectClient } = require('./integrations/OdooMCP');
@@ -24,6 +25,10 @@ const { createOdooMCPConfig, OdooDirectClient } = require('./integrations/OdooMC
 const { getAmazonMCPConfig, AmazonDirectClient, MARKETPLACE_IDS } = require('./integrations/AmazonMCP');
 const { getBolMCPConfig, BolDirectClient, ORDER_STATUS, FULFILMENT_METHOD } = require('./integrations/BolMCP');
 const { getMicrosoftMCPConfig, MicrosoftDirectClient, SCOPES: MS_SCOPES } = require('./integrations/MicrosoftMCP');
+
+// Advertising Integrations - Phase 2
+const { AmazonAdsClient, ADS_REGIONS, CAMPAIGN_TYPE, TARGETING_TYPE, MATCH_TYPE } = require('./integrations/AmazonAds');
+const { BolAdsClient, BOL_ADS_CAMPAIGN_STATUS, BOL_ADS_BID_STRATEGY } = require('./integrations/BolAds');
 
 // Protocols
 const {
@@ -63,6 +68,7 @@ module.exports = {
   FinanceAgent,
   ManagerAgent,
   EcommerceAgent,
+  AdvertisingAgent,
 
   // Integrations - Odoo
   createOdooMCPConfig,
@@ -83,6 +89,18 @@ module.exports = {
   getMicrosoftMCPConfig,
   MicrosoftDirectClient,
   MS_SCOPES,
+
+  // Advertising - Amazon
+  AmazonAdsClient,
+  ADS_REGIONS,
+  CAMPAIGN_TYPE,
+  TARGETING_TYPE,
+  MATCH_TYPE,
+
+  // Advertising - Bol.com
+  BolAdsClient,
+  BOL_ADS_CAMPAIGN_STATUS,
+  BOL_ADS_BID_STRATEGY,
 
   // Protocols
   MessageType,
