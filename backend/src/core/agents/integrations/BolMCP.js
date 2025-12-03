@@ -1,10 +1,15 @@
 /**
  * Bol.com Retailer API MCP Integration
  *
- * Provides MCP server configuration and direct API client for Bol.com.
- * Supports: Orders, Offers, Inventory, Shipments, Returns, Insights
+ * Direct API client for Bol.com Retailer API V10.
  *
- * API Documentation: https://api.bol.com/retailer/public/redoc/v10
+ * Note: The community package 'bol-retailer-api' exists but is marked as
+ * "NOT ready for production usage" by its authors. This implementation
+ * uses direct HTTPS calls to the official Bol.com API.
+ *
+ * When a production-ready SDK becomes available, consider migrating to it.
+ *
+ * API Documentation: https://api.bol.com/retailer/public/Retailer-API/index.html
  *
  * @module BolMCP
  */
@@ -12,8 +17,33 @@
 const https = require('https');
 
 /**
+ * Bol.com API Endpoints
+ */
+const BOL_ENDPOINTS = {
+  auth: 'login.bol.com',
+  api: 'api.bol.com'
+};
+
+/**
+ * Order Status Types
+ */
+const ORDER_STATUS = {
+  OPEN: 'OPEN',
+  SHIPPED: 'SHIPPED',
+  ALL: 'ALL'
+};
+
+/**
+ * Fulfilment Methods
+ */
+const FULFILMENT_METHOD = {
+  FBR: 'FBR', // Fulfilled by Retailer
+  FBB: 'FBB', // Fulfilled by Bol.com (LVB)
+  ALL: 'ALL'
+};
+
+/**
  * Bol.com MCP Server Configuration
- * For use with MCP-compatible Bol.com server (when available)
  */
 function getBolMCPConfig() {
   return {
@@ -23,59 +53,36 @@ function getBolMCPConfig() {
     args: ['-y', 'mcp-server-bolcom'],
     env: {
       BOL_CLIENT_ID: process.env.BOL_CLIENT_ID,
-      BOL_CLIENT_SECRET: process.env.BOL_CLIENT_SECRET,
-      BOL_ENVIRONMENT: process.env.BOL_ENVIRONMENT || 'production' // 'test' or 'production'
+      BOL_CLIENT_SECRET: process.env.BOL_CLIENT_SECRET
     }
   };
 }
 
 /**
- * Bol.com API Endpoints
+ * Bol.com Retailer API Client
+ *
+ * Uses OAuth 2.0 client credentials flow.
+ * Automatically handles token refresh.
  */
-const BOL_ENDPOINTS = {
-  auth: 'login.bol.com',
-  api_test: 'api.bol.com',
-  api_prod: 'api.bol.com'
-};
-
-/**
- * Bol.com Order Status Types
- */
-const ORDER_STATUS = {
-  OPEN: 'OPEN',
-  SHIPPED: 'SHIPPED',
-  ALL: 'ALL'
-};
-
-/**
- * Bol.com Fulfilment Methods
- */
-const FULFILMENT_METHOD = {
-  FBR: 'FBR', // Fulfilled by Retailer
-  FBB: 'FBB', // Fulfilled by Bol.com (LVB)
-  ALL: 'ALL'
-};
-
-/**
- * Direct Bol.com Retailer API Client
- * Fallback when MCP server is not available
- */
-class BolDirectClient {
+class BolClient {
   constructor(config = {}) {
     this.clientId = config.clientId || process.env.BOL_CLIENT_ID;
     this.clientSecret = config.clientSecret || process.env.BOL_CLIENT_SECRET;
-    this.environment = config.environment || process.env.BOL_ENVIRONMENT || 'production';
 
-    this.apiHost = BOL_ENDPOINTS.api_prod;
-    this.authHost = BOL_ENDPOINTS.auth;
     this.accessToken = null;
     this.tokenExpiry = null;
+
+    // Validate credentials
+    if (!this.clientId || !this.clientSecret) {
+      console.warn('Bol.com credentials not configured. Set BOL_CLIENT_ID and BOL_CLIENT_SECRET.');
+    }
   }
 
   /**
-   * Get access token using client credentials
+   * Authenticate and get access token
    */
   async authenticate() {
+    // Return cached token if still valid
     if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
       return this.accessToken;
     }
@@ -84,7 +91,7 @@ class BolDirectClient {
 
     return new Promise((resolve, reject) => {
       const req = https.request({
-        hostname: this.authHost,
+        hostname: BOL_ENDPOINTS.auth,
         port: 443,
         path: '/token?grant_type=client_credentials',
         method: 'POST',
@@ -101,7 +108,6 @@ class BolDirectClient {
             const response = JSON.parse(data);
             if (response.access_token) {
               this.accessToken = response.access_token;
-              // Token expires in 'expires_in' seconds, refresh 60s before
               this.tokenExpiry = Date.now() + (response.expires_in - 60) * 1000;
               resolve(this.accessToken);
             } else {
@@ -121,20 +127,20 @@ class BolDirectClient {
   /**
    * Make authenticated API request
    */
-  async _request(method, path, body = null, apiVersion = 'v10') {
+  async request(method, path, body = null, apiVersion = 'v10') {
     await this.authenticate();
 
     const headers = {
       'Authorization': `Bearer ${this.accessToken}`,
-      'Accept': 'application/vnd.retailer.' + apiVersion + '+json',
-      'Content-Type': 'application/vnd.retailer.' + apiVersion + '+json'
+      'Accept': `application/vnd.retailer.${apiVersion}+json`,
+      'Content-Type': `application/vnd.retailer.${apiVersion}+json`
     };
 
     const payload = body ? JSON.stringify(body) : '';
 
     return new Promise((resolve, reject) => {
       const req = https.request({
-        hostname: this.apiHost,
+        hostname: BOL_ENDPOINTS.api,
         port: 443,
         path: `/retailer${path}`,
         method: method,
@@ -144,7 +150,6 @@ class BolDirectClient {
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
           try {
-            // Handle empty responses (204 No Content)
             if (!data || data.trim() === '') {
               resolve({ success: true, statusCode: res.statusCode });
               return;
@@ -157,7 +162,6 @@ class BolDirectClient {
               reject(new Error(`Bol.com API Error ${res.statusCode}: ${JSON.stringify(response)}`));
             }
           } catch (e) {
-            // If response is not JSON, return raw data
             if (res.statusCode >= 200 && res.statusCode < 300) {
               resolve({ raw: data, statusCode: res.statusCode });
             } else {
@@ -173,153 +177,114 @@ class BolDirectClient {
     });
   }
 
-  // ==================== ORDERS API ====================
+  // ==================== ORDERS ====================
 
   /**
-   * Get orders with filters
+   * Get orders
    */
   async getOrders(params = {}) {
-    const queryParams = new URLSearchParams({
+    const query = new URLSearchParams({
       page: params.page || 1,
       ...(params.fulfilmentMethod && { 'fulfilment-method': params.fulfilmentMethod }),
-      ...(params.status && { status: params.status }),
-      ...(params.changeIntervalMinute && { 'change-interval-minute': params.changeIntervalMinute }),
-      ...(params.latestChangeDate && { 'latest-change-date': params.latestChangeDate })
+      ...(params.status && { status: params.status })
     });
-
-    return this._request('GET', `/orders?${queryParams}`);
+    return this.request('GET', `/orders?${query}`);
   }
 
   /**
-   * Get single order by ID
+   * Get single order
    */
   async getOrder(orderId) {
-    return this._request('GET', `/orders/${orderId}`);
+    return this.request('GET', `/orders/${orderId}`);
   }
 
   /**
    * Cancel order item
    */
   async cancelOrderItem(orderItemId, reasonCode = 'OUT_OF_STOCK') {
-    return this._request('PUT', `/orders/cancellation`, {
-      orderItems: [{
-        orderItemId: orderItemId,
-        reasonCode: reasonCode
-      }]
+    return this.request('PUT', '/orders/cancellation', {
+      orderItems: [{ orderItemId, reasonCode }]
     });
   }
 
-  // ==================== SHIPMENTS API ====================
+  // ==================== SHIPMENTS ====================
 
   /**
    * Get shipments
    */
   async getShipments(params = {}) {
-    const queryParams = new URLSearchParams({
+    const query = new URLSearchParams({
       page: params.page || 1,
       ...(params.fulfilmentMethod && { 'fulfilment-method': params.fulfilmentMethod }),
       ...(params.orderId && { 'order-id': params.orderId })
     });
-
-    return this._request('GET', `/shipments?${queryParams}`);
+    return this.request('GET', `/shipments?${query}`);
   }
 
   /**
    * Get single shipment
    */
   async getShipment(shipmentId) {
-    return this._request('GET', `/shipments/${shipmentId}`);
+    return this.request('GET', `/shipments/${shipmentId}`);
   }
 
   /**
-   * Create shipment (ship order items)
+   * Create shipment
    */
-  async createShipment(shipmentData) {
-    return this._request('POST', '/shipments', {
-      orderItems: shipmentData.orderItems.map(item => ({
+  async createShipment(data) {
+    return this.request('POST', '/shipments', {
+      orderItems: data.orderItems.map(item => ({
         orderItemId: item.orderItemId,
         quantity: item.quantity || 1
       })),
-      shipmentReference: shipmentData.reference,
+      shipmentReference: data.reference,
       transport: {
-        transporterCode: shipmentData.transporterCode,
-        trackAndTrace: shipmentData.trackAndTrace
+        transporterCode: data.transporterCode,
+        trackAndTrace: data.trackAndTrace
       }
     });
   }
 
-  /**
-   * Get shipping labels
-   */
-  async getShippingLabel(orderId) {
-    return this._request('GET', `/shipping-labels/orders/${orderId}`);
-  }
-
-  // ==================== OFFERS API ====================
+  // ==================== OFFERS ====================
 
   /**
-   * Get all offers (your product listings)
-   */
-  async getOffers(params = {}) {
-    const queryParams = new URLSearchParams({
-      page: params.page || 1,
-      ...(params.status && { status: params.status })
-    });
-
-    return this._request('GET', `/offers/export?${queryParams}`);
-  }
-
-  /**
-   * Get single offer by offer ID
+   * Get offer by ID
    */
   async getOffer(offerId) {
-    return this._request('GET', `/offers/${offerId}`);
+    return this.request('GET', `/offers/${offerId}`);
   }
 
   /**
-   * Create new offer
+   * Create offer
    */
-  async createOffer(offerData) {
-    return this._request('POST', '/offers', {
-      ean: offerData.ean,
+  async createOffer(data) {
+    return this.request('POST', '/offers', {
+      ean: data.ean,
       condition: {
-        name: offerData.condition || 'NEW',
-        category: offerData.conditionCategory || 'NEW'
+        name: data.condition || 'NEW',
+        category: data.conditionCategory || 'NEW'
       },
       pricing: {
-        bundlePrices: [{
-          quantity: 1,
-          unitPrice: offerData.price
-        }]
+        bundlePrices: [{ quantity: 1, unitPrice: data.price }]
       },
       stock: {
-        amount: offerData.stock,
+        amount: data.stock,
         managedByRetailer: true
       },
       fulfilment: {
-        method: offerData.fulfilmentMethod || 'FBR',
-        deliveryCode: offerData.deliveryCode || '1-2d'
+        method: data.fulfilmentMethod || 'FBR',
+        deliveryCode: data.deliveryCode || '1-2d'
       }
     });
-  }
-
-  /**
-   * Update offer
-   */
-  async updateOffer(offerId, updates) {
-    return this._request('PUT', `/offers/${offerId}`, updates);
   }
 
   /**
    * Update offer price
    */
   async updateOfferPrice(offerId, price) {
-    return this._request('PUT', `/offers/${offerId}/price`, {
+    return this.request('PUT', `/offers/${offerId}/price`, {
       pricing: {
-        bundlePrices: [{
-          quantity: 1,
-          unitPrice: price
-        }]
+        bundlePrices: [{ quantity: 1, unitPrice: price }]
       }
     });
   }
@@ -327,10 +292,10 @@ class BolDirectClient {
   /**
    * Update offer stock
    */
-  async updateOfferStock(offerId, amount, managedByRetailer = true) {
-    return this._request('PUT', `/offers/${offerId}/stock`, {
+  async updateOfferStock(offerId, amount) {
+    return this.request('PUT', `/offers/${offerId}/stock`, {
       amount: amount,
-      managedByRetailer: managedByRetailer
+      managedByRetailer: true
     });
   }
 
@@ -338,137 +303,112 @@ class BolDirectClient {
    * Delete offer
    */
   async deleteOffer(offerId) {
-    return this._request('DELETE', `/offers/${offerId}`);
+    return this.request('DELETE', `/offers/${offerId}`);
   }
 
-  // ==================== INVENTORY API (FBB/LVB) ====================
+  // ==================== INVENTORY (FBB/LVB) ====================
 
   /**
    * Get LVB/FBB inventory
    */
   async getInventory(params = {}) {
-    const queryParams = new URLSearchParams({
+    const query = new URLSearchParams({
       page: params.page || 1,
-      ...(params.quantity && { quantity: params.quantity }), // 0-10, 10-100, 100+
-      ...(params.stock && { stock: params.stock }), // sufficient, insufficient
-      ...(params.state && { state: params.state }), // saleable, unsaleable
+      ...(params.quantity && { quantity: params.quantity }),
+      ...(params.stock && { stock: params.stock }),
+      ...(params.state && { state: params.state }),
       ...(params.query && { query: params.query })
     });
-
-    return this._request('GET', `/inventory?${queryParams}`);
+    return this.request('GET', `/inventory?${query}`);
   }
 
-  // ==================== RETURNS API ====================
+  // ==================== RETURNS ====================
 
   /**
    * Get returns
    */
   async getReturns(params = {}) {
-    const queryParams = new URLSearchParams({
+    const query = new URLSearchParams({
       page: params.page || 1,
-      ...(params.handled && { handled: params.handled }),
+      ...(params.handled !== undefined && { handled: params.handled }),
       ...(params.fulfilmentMethod && { 'fulfilment-method': params.fulfilmentMethod })
     });
-
-    return this._request('GET', `/returns?${queryParams}`);
+    return this.request('GET', `/returns?${query}`);
   }
 
   /**
    * Get single return
    */
   async getReturn(returnId) {
-    return this._request('GET', `/returns/${returnId}`);
+    return this.request('GET', `/returns/${returnId}`);
   }
 
   /**
-   * Handle return (accept or reject)
+   * Handle return
    */
   async handleReturn(rmaId, handlingResult, quantityReturned) {
-    return this._request('PUT', `/returns/${rmaId}`, {
-      handlingResult: handlingResult, // 'RETURN_RECEIVED', 'EXCHANGE_PRODUCT', 'RETURN_DOES_NOT_MEET_CONDITIONS', 'REPAIR_PRODUCT', 'CUSTOMER_KEEPS_PRODUCT_PAID', 'STILL_APPROVED'
-      quantityReturned: quantityReturned
+    return this.request('PUT', `/returns/${rmaId}`, {
+      handlingResult,
+      quantityReturned
     });
   }
 
-  // ==================== PRODUCTS API ====================
+  // ==================== PRODUCTS ====================
 
   /**
    * Get product by EAN
    */
   async getProduct(ean) {
-    return this._request('GET', `/products/${ean}`);
+    return this.request('GET', `/products/${ean}`);
   }
 
   /**
-   * Get product assets (images, etc.)
+   * Get product assets
    */
   async getProductAssets(ean) {
-    return this._request('GET', `/products/${ean}/assets`);
+    return this.request('GET', `/products/${ean}/assets`);
   }
 
-  /**
-   * Get product placement (category info)
-   */
-  async getProductPlacement(ean) {
-    return this._request('GET', `/products/${ean}/placement`);
-  }
-
-  // ==================== INSIGHTS API ====================
+  // ==================== INSIGHTS ====================
 
   /**
    * Get performance indicators
    */
   async getPerformanceIndicators(params = {}) {
-    const queryParams = new URLSearchParams({
+    const query = new URLSearchParams({
       ...(params.name && { name: params.name.join(',') }),
       ...(params.year && { year: params.year }),
       ...(params.week && { week: params.week })
     });
-
-    return this._request('GET', `/insights/performance/indicator?${queryParams}`);
+    return this.request('GET', `/insights/performance/indicator?${query}`);
   }
 
   /**
    * Get sales forecast
    */
   async getSalesForecast(offerId, weeksAhead = 12) {
-    return this._request('GET', `/insights/sales-forecast?offer-id=${offerId}&weeks-ahead=${weeksAhead}`);
+    return this.request('GET', `/insights/sales-forecast?offer-id=${offerId}&weeks-ahead=${weeksAhead}`);
   }
 
-  /**
-   * Get search terms (what customers search for)
-   */
-  async getSearchTerms(params = {}) {
-    const queryParams = new URLSearchParams({
-      ...(params.searchTerm && { 'search-term': params.searchTerm }),
-      ...(params.period && { period: params.period }), // DAY, WEEK, MONTH
-      ...(params.numberOfPeriods && { 'number-of-periods': params.numberOfPeriods }),
-      ...(params.relatedSearchTerms && { 'related-search-terms': params.relatedSearchTerms })
-    });
-
-    return this._request('GET', `/insights/search-terms?${queryParams}`);
-  }
-
-  // ==================== COMMISSIONS API ====================
+  // ==================== COMMISSIONS ====================
 
   /**
    * Get commission for EAN
    */
   async getCommission(ean, condition = 'NEW', price) {
-    const queryParams = new URLSearchParams({
-      ean: ean,
-      condition: condition,
+    const query = new URLSearchParams({
+      ean,
+      condition,
       'unit-price': price
     });
-
-    return this._request('GET', `/commission?${queryParams}`);
+    return this.request('GET', `/commission?${query}`);
   }
 
   /**
-   * Get commission list (bulk)
+   * Get commissions (bulk)
    */
   async getCommissions(products) {
-    return this._request('POST', '/commission', {
+    return this.request('POST', '/commission', {
       commissionQueries: products.map(p => ({
         ean: p.ean,
         condition: p.condition || 'NEW',
@@ -477,56 +417,22 @@ class BolDirectClient {
     });
   }
 
-  // ==================== REPLENISHMENTS API (FBB/LVB) ====================
+  // ==================== SUBSCRIPTIONS (Webhooks) ====================
 
   /**
-   * Get replenishments
-   */
-  async getReplenishments(params = {}) {
-    const queryParams = new URLSearchParams({
-      page: params.page || 1,
-      ...(params.state && { state: params.state.join(',') }),
-      ...(params.reference && { reference: params.reference })
-    });
-
-    return this._request('GET', `/replenishments?${queryParams}`);
-  }
-
-  /**
-   * Create replenishment (send stock to Bol.com warehouse)
-   */
-  async createReplenishment(replenishmentData) {
-    return this._request('POST', '/replenishments', {
-      reference: replenishmentData.reference,
-      deliveryInfo: {
-        expectedDeliveryDate: replenishmentData.expectedDeliveryDate,
-        transporterCode: replenishmentData.transporterCode
-      },
-      labelingByBol: replenishmentData.labelingByBol || false,
-      numberOfLoadCarriers: replenishmentData.numberOfLoadCarriers || 1,
-      lines: replenishmentData.lines.map(line => ({
-        ean: line.ean,
-        quantity: line.quantity
-      }))
-    });
-  }
-
-  // ==================== SUBSCRIPTIONS API (Webhooks) ====================
-
-  /**
-   * Get push notification subscriptions
+   * Get subscriptions
    */
   async getSubscriptions() {
-    return this._request('GET', '/subscriptions');
+    return this.request('GET', '/subscriptions');
   }
 
   /**
-   * Create subscription (webhook)
+   * Create subscription
    */
   async createSubscription(resourceType, url) {
-    return this._request('POST', '/subscriptions', {
+    return this.request('POST', '/subscriptions', {
       resources: [resourceType],
-      url: url
+      url
     });
   }
 
@@ -534,58 +440,37 @@ class BolDirectClient {
    * Delete subscription
    */
   async deleteSubscription(subscriptionId) {
-    return this._request('DELETE', `/subscriptions/${subscriptionId}`);
+    return this.request('DELETE', `/subscriptions/${subscriptionId}`);
   }
-
-  /**
-   * Subscription resource types
-   */
-  static SUBSCRIPTION_TYPES = {
-    ORDER_PLACED: 'ORDER_PLACED',
-    ORDER_CANCELLED: 'ORDER_CANCELLED',
-    SHIPMENT_CREATED: 'SHIPMENT_CREATED',
-    RETURN_CREATED: 'RETURN_CREATED',
-    RETURN_STATUS_CHANGED: 'RETURN_STATUS_CHANGED',
-    OFFER_STOCK_CHANGED: 'OFFER_STOCK_CHANGED',
-    PROCESS_STATUS: 'PROCESS_STATUS'
-  };
 
   // ==================== UTILITY METHODS ====================
 
   /**
-   * Get sales summary for period
+   * Get sales summary
    */
   async getSalesSummary(daysBack = 30) {
     let allOrders = [];
     let page = 1;
     let hasMore = true;
 
-    // Calculate date range
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - daysBack);
-
-    while (hasMore && page <= 10) { // Max 10 pages to prevent infinite loops
-      const response = await this.getOrders({
-        page: page,
-        status: ORDER_STATUS.ALL
-      });
-
+    while (hasMore && page <= 10) {
+      const response = await this.getOrders({ page, status: ORDER_STATUS.ALL });
       const orders = response.orders || [];
       allOrders = allOrders.concat(orders);
-
       hasMore = orders.length > 0;
       page++;
     }
 
-    // Filter orders within date range and calculate totals
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysBack);
+
     let totalRevenue = 0;
     let orderCount = 0;
     let itemCount = 0;
 
     for (const order of allOrders) {
       const orderDate = new Date(order.orderPlacedDateTime);
-      if (orderDate >= startDate && orderDate <= endDate) {
+      if (orderDate >= startDate) {
         orderCount++;
         for (const item of (order.orderItems || [])) {
           totalRevenue += parseFloat(item.unitPrice || 0) * (item.quantity || 1);
@@ -597,7 +482,7 @@ class BolDirectClient {
     return {
       period: `Last ${daysBack} days`,
       startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
+      endDate: new Date().toISOString(),
       totalOrders: orderCount,
       totalItems: itemCount,
       totalRevenue: totalRevenue.toFixed(2),
@@ -607,34 +492,7 @@ class BolDirectClient {
   }
 
   /**
-   * Get stock health overview
-   */
-  async getStockHealth() {
-    let page = 1;
-    let allOffers = [];
-    let hasMore = true;
-
-    // Note: This is a simplified version - full implementation would use offers export
-    const response = await this.getOffers({ page: 1 });
-
-    // Count stock levels
-    let inStock = 0;
-    let lowStock = 0;
-    let outOfStock = 0;
-
-    // The actual response structure depends on Bol.com API
-    // This is a placeholder for the concept
-    return {
-      totalOffers: allOffers.length,
-      inStock: inStock,
-      lowStock: lowStock,
-      outOfStock: outOfStock,
-      healthScore: allOffers.length > 0 ? ((inStock / allOffers.length) * 100).toFixed(1) : 0
-    };
-  }
-
-  /**
-   * Get pending actions summary
+   * Get pending actions
    */
   async getPendingActions() {
     const [openOrders, unresolvedReturns] = await Promise.all([
@@ -650,8 +508,12 @@ class BolDirectClient {
   }
 }
 
+// Backwards compatibility alias
+const BolDirectClient = BolClient;
+
 module.exports = {
   getBolMCPConfig,
+  BolClient,
   BolDirectClient,
   ORDER_STATUS,
   FULFILMENT_METHOD,

@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@sendinblue/client": "^3.3.1",
+    "amazon-sp-api": "^1.0.0",
     "@shopify/shopify-api": "^11.14.1",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",

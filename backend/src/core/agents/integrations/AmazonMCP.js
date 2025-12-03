@@ -1,37 +1,18 @@
 /**
  * Amazon Selling Partner API MCP Integration
  *
- * Provides MCP server configuration and direct API client for Amazon SP-API.
- * Supports: Orders, Inventory, Products, Reports, Finances, Notifications
+ * Uses the amazon-sp-api package for reliable API access.
+ * Package: https://www.npmjs.com/package/amazon-sp-api
+ *
+ * Features:
+ * - Automatic token refresh
+ * - Rate limit handling
+ * - Report downloading
  *
  * @module AmazonMCP
  */
 
-const crypto = require('crypto');
-const https = require('https');
-
-/**
- * Amazon SP-API MCP Server Configuration
- * For use with MCP-compatible Amazon server (when available)
- */
-function getAmazonMCPConfig() {
-  return {
-    name: 'amazon',
-    type: 'stdio',
-    command: 'npx',
-    args: ['-y', 'mcp-server-amazon-sp'],
-    env: {
-      AMAZON_REFRESH_TOKEN: process.env.AMAZON_REFRESH_TOKEN,
-      AMAZON_CLIENT_ID: process.env.AMAZON_CLIENT_ID,
-      AMAZON_CLIENT_SECRET: process.env.AMAZON_CLIENT_SECRET,
-      AMAZON_MARKETPLACE_ID: process.env.AMAZON_MARKETPLACE_ID || 'A1PA6795UKMFR9', // DE default
-      AMAZON_SELLER_ID: process.env.AMAZON_SELLER_ID,
-      AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
-      AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
-      AWS_REGION: process.env.AWS_REGION || 'eu-west-1'
-    }
-  };
-}
+const SellingPartner = require('amazon-sp-api');
 
 /**
  * Amazon Marketplace IDs
@@ -67,187 +48,103 @@ const MARKETPLACE_IDS = {
 };
 
 /**
- * Amazon SP-API Endpoints by Region
+ * Common Report Types
  */
-const ENDPOINTS = {
-  'na': 'sellingpartnerapi-na.amazon.com',
-  'eu': 'sellingpartnerapi-eu.amazon.com',
-  'fe': 'sellingpartnerapi-fe.amazon.com'
+const REPORT_TYPES = {
+  // Inventory
+  FBA_INVENTORY: 'GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA',
+  MERCHANT_INVENTORY: 'GET_MERCHANT_LISTINGS_ALL_DATA',
+
+  // Orders
+  UNSHIPPED_ORDERS: 'GET_FLAT_FILE_ACTIONABLE_ORDER_DATA_SHIPPING',
+  ALL_ORDERS: 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
+
+  // Financial
+  SETTLEMENT: 'GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2',
+  DATE_RANGE_FINANCIAL: 'GET_DATE_RANGE_FINANCIAL_TRANSACTION_DATA',
+
+  // Sales
+  SALES_TRAFFIC: 'GET_SALES_AND_TRAFFIC_REPORT',
+
+  // Performance
+  FEEDBACK: 'GET_SELLER_FEEDBACK_DATA',
+  RETURNS: 'GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA'
 };
 
 /**
- * Direct Amazon SP-API Client
- * Fallback when MCP server is not available
+ * Amazon MCP Server Configuration
+ * For use with MCP-compatible Amazon server
  */
-class AmazonDirectClient {
+function getAmazonMCPConfig() {
+  return {
+    name: 'amazon',
+    type: 'stdio',
+    command: 'npx',
+    args: ['-y', 'mcp-server-amazon-sp'],
+    env: {
+      AMAZON_REFRESH_TOKEN: process.env.AMAZON_REFRESH_TOKEN,
+      AMAZON_CLIENT_ID: process.env.AMAZON_CLIENT_ID,
+      AMAZON_CLIENT_SECRET: process.env.AMAZON_CLIENT_SECRET,
+      AMAZON_MARKETPLACE_ID: process.env.AMAZON_MARKETPLACE_ID || 'A1PA6795UKMFR9',
+      AMAZON_SELLER_ID: process.env.AMAZON_SELLER_ID,
+      AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+      AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+      AWS_REGION: process.env.AWS_REGION || 'eu-west-1'
+    }
+  };
+}
+
+/**
+ * Amazon SP-API Client using amazon-sp-api package
+ * More reliable than custom implementation
+ */
+class AmazonClient {
   constructor(config = {}) {
-    this.refreshToken = config.refreshToken || process.env.AMAZON_REFRESH_TOKEN;
-    this.clientId = config.clientId || process.env.AMAZON_CLIENT_ID;
-    this.clientSecret = config.clientSecret || process.env.AMAZON_CLIENT_SECRET;
-    this.sellerId = config.sellerId || process.env.AMAZON_SELLER_ID;
-    this.marketplaceId = config.marketplaceId || process.env.AMAZON_MARKETPLACE_ID || MARKETPLACE_IDS.DE;
-    this.awsAccessKey = config.awsAccessKey || process.env.AWS_ACCESS_KEY_ID;
-    this.awsSecretKey = config.awsSecretKey || process.env.AWS_SECRET_ACCESS_KEY;
-    this.region = config.region || process.env.AWS_REGION || 'eu-west-1';
-
-    this.endpoint = this._getEndpointForRegion(this.region);
-    this.accessToken = null;
-    this.tokenExpiry = null;
-  }
-
-  /**
-   * Get SP-API endpoint based on AWS region
-   */
-  _getEndpointForRegion(region) {
-    if (region.startsWith('us-') || region.startsWith('ca-') || region === 'sa-east-1') {
-      return ENDPOINTS.na;
-    } else if (region.startsWith('eu-') || region.startsWith('me-') || region === 'af-south-1') {
-      return ENDPOINTS.eu;
-    } else {
-      return ENDPOINTS.fe;
-    }
-  }
-
-  /**
-   * Refresh access token using LWA (Login with Amazon)
-   */
-  async refreshAccessToken() {
-    if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
-      return this.accessToken;
-    }
-
-    const params = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: this.refreshToken,
-      client_id: this.clientId,
-      client_secret: this.clientSecret
-    });
-
-    return new Promise((resolve, reject) => {
-      const req = https.request({
-        hostname: 'api.amazon.com',
-        port: 443,
-        path: '/auth/o2/token',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Content-Length': Buffer.byteLength(params.toString())
-        }
-      }, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          try {
-            const response = JSON.parse(data);
-            if (response.access_token) {
-              this.accessToken = response.access_token;
-              this.tokenExpiry = Date.now() + (response.expires_in - 60) * 1000;
-              resolve(this.accessToken);
-            } else {
-              reject(new Error(`Token refresh failed: ${data}`));
-            }
-          } catch (e) {
-            reject(new Error(`Token parse error: ${e.message}`));
-          }
-        });
-      });
-
-      req.on('error', reject);
-      req.write(params.toString());
-      req.end();
-    });
-  }
-
-  /**
-   * Sign request with AWS Signature V4
-   */
-  _signRequest(method, path, headers, payload = '') {
-    const service = 'execute-api';
-    const algorithm = 'AWS4-HMAC-SHA256';
-    const date = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const dateStamp = date.substring(0, 8);
-
-    headers['x-amz-date'] = date;
-    headers['host'] = this.endpoint;
-
-    // Create canonical request
-    const sortedHeaders = Object.keys(headers).sort();
-    const signedHeaders = sortedHeaders.map(k => k.toLowerCase()).join(';');
-    const canonicalHeaders = sortedHeaders.map(k => `${k.toLowerCase()}:${headers[k].trim()}`).join('\n') + '\n';
-    const payloadHash = crypto.createHash('sha256').update(payload || '').digest('hex');
-
-    const canonicalRequest = [
-      method,
-      path,
-      '', // query string
-      canonicalHeaders,
-      signedHeaders,
-      payloadHash
-    ].join('\n');
-
-    // Create string to sign
-    const credentialScope = `${dateStamp}/${this.region}/${service}/aws4_request`;
-    const stringToSign = [
-      algorithm,
-      date,
-      credentialScope,
-      crypto.createHash('sha256').update(canonicalRequest).digest('hex')
-    ].join('\n');
-
-    // Calculate signature
-    const kDate = crypto.createHmac('sha256', `AWS4${this.awsSecretKey}`).update(dateStamp).digest();
-    const kRegion = crypto.createHmac('sha256', kDate).update(this.region).digest();
-    const kService = crypto.createHmac('sha256', kRegion).update(service).digest();
-    const kSigning = crypto.createHmac('sha256', kService).update('aws4_request').digest();
-    const signature = crypto.createHmac('sha256', kSigning).update(stringToSign).digest('hex');
-
-    headers['Authorization'] = `${algorithm} Credential=${this.awsAccessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-
-    return headers;
-  }
-
-  /**
-   * Make authenticated API request
-   */
-  async _request(method, path, body = null) {
-    await this.refreshAccessToken();
-
-    const headers = {
-      'x-amz-access-token': this.accessToken,
-      'Content-Type': 'application/json'
+    this.config = {
+      region: config.region || process.env.AWS_REGION || 'eu',
+      refresh_token: config.refreshToken || process.env.AMAZON_REFRESH_TOKEN,
+      credentials: {
+        SELLING_PARTNER_APP_CLIENT_ID: config.clientId || process.env.AMAZON_CLIENT_ID,
+        SELLING_PARTNER_APP_CLIENT_SECRET: config.clientSecret || process.env.AMAZON_CLIENT_SECRET,
+        AWS_ACCESS_KEY_ID: config.awsAccessKey || process.env.AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY: config.awsSecretKey || process.env.AWS_SECRET_ACCESS_KEY,
+        AWS_SELLING_PARTNER_ROLE: config.roleArn || process.env.AWS_SELLING_PARTNER_ROLE
+      },
+      options: {
+        auto_request_tokens: true,
+        auto_request_throttled: true,
+        version_fallback: true,
+        use_sandbox: config.sandbox || process.env.AMAZON_USE_SANDBOX === 'true'
+      }
     };
 
-    const payload = body ? JSON.stringify(body) : '';
-    const signedHeaders = this._signRequest(method, path, headers, payload);
+    this.marketplaceId = config.marketplaceId || process.env.AMAZON_MARKETPLACE_ID || MARKETPLACE_IDS.DE;
+    this.sellerId = config.sellerId || process.env.AMAZON_SELLER_ID;
+    this.client = null;
+  }
 
-    return new Promise((resolve, reject) => {
-      const req = https.request({
-        hostname: this.endpoint,
-        port: 443,
-        path: path,
-        method: method,
-        headers: signedHeaders
-      }, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          try {
-            const response = JSON.parse(data);
-            if (res.statusCode >= 200 && res.statusCode < 300) {
-              resolve(response);
-            } else {
-              reject(new Error(`API Error ${res.statusCode}: ${JSON.stringify(response)}`));
-            }
-          } catch (e) {
-            reject(new Error(`Parse error: ${e.message}, Data: ${data}`));
-          }
-        });
-      });
+  /**
+   * Initialize the SP-API client
+   */
+  async init() {
+    if (this.client) return this.client;
 
-      req.on('error', reject);
-      if (payload) req.write(payload);
-      req.end();
-    });
+    try {
+      this.client = new SellingPartner(this.config);
+      return this.client;
+    } catch (error) {
+      throw new Error(`Failed to initialize Amazon SP-API client: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get client (initializes if needed)
+   */
+  async getClient() {
+    if (!this.client) {
+      await this.init();
+    }
+    return this.client;
   }
 
   // ==================== ORDERS API ====================
@@ -256,38 +153,58 @@ class AmazonDirectClient {
    * Get orders with filters
    */
   async getOrders(params = {}) {
-    const queryParams = new URLSearchParams({
-      MarketplaceIds: params.marketplaceIds || this.marketplaceId,
+    const client = await this.getClient();
+
+    const queryParams = {
+      MarketplaceIds: params.marketplaceIds || [this.marketplaceId],
       ...(params.createdAfter && { CreatedAfter: params.createdAfter }),
       ...(params.createdBefore && { CreatedBefore: params.createdBefore }),
       ...(params.lastUpdatedAfter && { LastUpdatedAfter: params.lastUpdatedAfter }),
-      ...(params.orderStatuses && { OrderStatuses: params.orderStatuses.join(',') }),
-      ...(params.fulfillmentChannels && { FulfillmentChannels: params.fulfillmentChannels.join(',') }),
+      ...(params.orderStatuses && { OrderStatuses: params.orderStatuses }),
+      ...(params.fulfillmentChannels && { FulfillmentChannels: params.fulfillmentChannels }),
       ...(params.maxResultsPerPage && { MaxResultsPerPage: params.maxResultsPerPage })
-    });
+    };
 
-    return this._request('GET', `/orders/v0/orders?${queryParams}`);
+    return client.callAPI({
+      operation: 'getOrders',
+      query: queryParams
+    });
   }
 
   /**
    * Get order details
    */
   async getOrder(orderId) {
-    return this._request('GET', `/orders/v0/orders/${orderId}`);
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'getOrder',
+      path: { orderId }
+    });
   }
 
   /**
    * Get order items
    */
   async getOrderItems(orderId) {
-    return this._request('GET', `/orders/v0/orders/${orderId}/orderItems`);
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'getOrderItems',
+      path: { orderId }
+    });
   }
 
   /**
-   * Get order buyer info (PII restricted)
+   * Get order buyer info
    */
   async getOrderBuyerInfo(orderId) {
-    return this._request('GET', `/orders/v0/orders/${orderId}/buyerInfo`);
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'getOrderBuyerInfo',
+      path: { orderId }
+    });
   }
 
   // ==================== CATALOG ITEMS API ====================
@@ -296,28 +213,34 @@ class AmazonDirectClient {
    * Search catalog items
    */
   async searchCatalogItems(params = {}) {
-    const queryParams = new URLSearchParams({
-      marketplaceIds: params.marketplaceIds || this.marketplaceId,
-      ...(params.keywords && { keywords: params.keywords }),
-      ...(params.brandNames && { brandNames: params.brandNames.join(',') }),
-      ...(params.classificationIds && { classificationIds: params.classificationIds.join(',') }),
-      ...(params.includedData && { includedData: params.includedData.join(',') }),
-      pageSize: params.pageSize || 20
-    });
+    const client = await this.getClient();
 
-    return this._request('GET', `/catalog/2022-04-01/items?${queryParams}`);
+    return client.callAPI({
+      operation: 'searchCatalogItems',
+      query: {
+        marketplaceIds: params.marketplaceIds || [this.marketplaceId],
+        ...(params.keywords && { keywords: params.keywords }),
+        ...(params.brandNames && { brandNames: params.brandNames }),
+        ...(params.includedData && { includedData: params.includedData }),
+        pageSize: params.pageSize || 20
+      }
+    });
   }
 
   /**
    * Get catalog item by ASIN
    */
   async getCatalogItem(asin, includedData = ['summaries', 'attributes', 'images', 'salesRanks']) {
-    const queryParams = new URLSearchParams({
-      marketplaceIds: this.marketplaceId,
-      includedData: includedData.join(',')
-    });
+    const client = await this.getClient();
 
-    return this._request('GET', `/catalog/2022-04-01/items/${asin}?${queryParams}`);
+    return client.callAPI({
+      operation: 'getCatalogItem',
+      path: { asin },
+      query: {
+        marketplaceIds: [this.marketplaceId],
+        includedData: includedData
+      }
+    });
   }
 
   // ==================== INVENTORY API (FBA) ====================
@@ -326,16 +249,18 @@ class AmazonDirectClient {
    * Get FBA inventory summaries
    */
   async getInventorySummaries(params = {}) {
-    const queryParams = new URLSearchParams({
-      granularityType: params.granularityType || 'Marketplace',
-      granularityId: params.granularityId || this.marketplaceId,
-      marketplaceIds: params.marketplaceIds || this.marketplaceId,
-      ...(params.sellerSkus && { sellerSkus: params.sellerSkus.join(',') }),
-      ...(params.startDateTime && { startDateTime: params.startDateTime }),
-      details: params.details || true
-    });
+    const client = await this.getClient();
 
-    return this._request('GET', `/fba/inventory/v1/summaries?${queryParams}`);
+    return client.callAPI({
+      operation: 'getInventorySummaries',
+      query: {
+        granularityType: params.granularityType || 'Marketplace',
+        granularityId: params.granularityId || this.marketplaceId,
+        marketplaceIds: params.marketplaceIds || [this.marketplaceId],
+        ...(params.sellerSkus && { sellerSkus: params.sellerSkus }),
+        details: params.details !== false
+      }
+    });
   }
 
   // ==================== PRODUCT PRICING API ====================
@@ -344,75 +269,102 @@ class AmazonDirectClient {
    * Get competitive pricing for ASINs
    */
   async getCompetitivePricing(asins) {
-    const queryParams = new URLSearchParams({
-      MarketplaceId: this.marketplaceId,
-      ItemType: 'Asin',
-      Asins: asins.join(',')
-    });
+    const client = await this.getClient();
 
-    return this._request('GET', `/products/pricing/v0/competitivePrice?${queryParams}`);
+    return client.callAPI({
+      operation: 'getCompetitivePricing',
+      query: {
+        MarketplaceId: this.marketplaceId,
+        ItemType: 'Asin',
+        Asins: Array.isArray(asins) ? asins : [asins]
+      }
+    });
   }
 
   /**
    * Get item offers (Buy Box info)
    */
   async getItemOffers(asin, itemCondition = 'New') {
-    const queryParams = new URLSearchParams({
-      MarketplaceId: this.marketplaceId,
-      ItemCondition: itemCondition
-    });
+    const client = await this.getClient();
 
-    return this._request('GET', `/products/pricing/v0/items/${asin}/offers?${queryParams}`);
+    return client.callAPI({
+      operation: 'getItemOffers',
+      path: { Asin: asin },
+      query: {
+        MarketplaceId: this.marketplaceId,
+        ItemCondition: itemCondition
+      }
+    });
   }
 
   // ==================== LISTINGS API ====================
 
   /**
-   * Get listings item (your product listing)
+   * Get listings item
    */
   async getListingsItem(sku) {
-    const queryParams = new URLSearchParams({
-      marketplaceIds: this.marketplaceId,
-      includedData: 'summaries,attributes,issues,offers,fulfillmentAvailability'
-    });
+    const client = await this.getClient();
 
-    return this._request('GET', `/listings/2021-08-01/items/${this.sellerId}/${encodeURIComponent(sku)}?${queryParams}`);
+    return client.callAPI({
+      operation: 'getListingsItem',
+      path: {
+        sellerId: this.sellerId,
+        sku: sku
+      },
+      query: {
+        marketplaceIds: [this.marketplaceId],
+        includedData: ['summaries', 'attributes', 'issues', 'offers', 'fulfillmentAvailability']
+      }
+    });
   }
 
   /**
-   * Update listings item
+   * Patch listings item
    */
   async patchListingsItem(sku, patches) {
-    const queryParams = new URLSearchParams({
-      marketplaceIds: this.marketplaceId
-    });
+    const client = await this.getClient();
 
-    return this._request('PATCH', `/listings/2021-08-01/items/${this.sellerId}/${encodeURIComponent(sku)}?${queryParams}`, {
-      productType: patches.productType,
-      patches: patches.patches
+    return client.callAPI({
+      operation: 'patchListingsItem',
+      path: {
+        sellerId: this.sellerId,
+        sku: sku
+      },
+      query: {
+        marketplaceIds: [this.marketplaceId]
+      },
+      body: patches
     });
   }
 
   // ==================== FINANCES API ====================
 
   /**
-   * Get financial events (settlements, refunds, etc.)
+   * Get financial events
    */
   async getFinancialEvents(params = {}) {
-    const queryParams = new URLSearchParams({
-      ...(params.postedAfter && { PostedAfter: params.postedAfter }),
-      ...(params.postedBefore && { PostedBefore: params.postedBefore }),
-      ...(params.maxResultsPerPage && { MaxResultsPerPage: params.maxResultsPerPage })
-    });
+    const client = await this.getClient();
 
-    return this._request('GET', `/finances/v0/financialEvents?${queryParams}`);
+    return client.callAPI({
+      operation: 'listFinancialEvents',
+      query: {
+        ...(params.postedAfter && { PostedAfter: params.postedAfter }),
+        ...(params.postedBefore && { PostedBefore: params.postedBefore }),
+        ...(params.maxResultsPerPage && { MaxResultsPerPage: params.maxResultsPerPage })
+      }
+    });
   }
 
   /**
    * Get financial events for order
    */
   async getFinancialEventsForOrder(orderId) {
-    return this._request('GET', `/finances/v0/orders/${orderId}/financialEvents`);
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'listFinancialEventsByOrderId',
+      path: { orderId }
+    });
   }
 
   // ==================== REPORTS API ====================
@@ -421,83 +373,102 @@ class AmazonDirectClient {
    * Create a report
    */
   async createReport(reportType, params = {}) {
-    return this._request('POST', '/reports/2021-06-30/reports', {
-      reportType: reportType,
-      marketplaceIds: params.marketplaceIds || [this.marketplaceId],
-      ...(params.dataStartTime && { dataStartTime: params.dataStartTime }),
-      ...(params.dataEndTime && { dataEndTime: params.dataEndTime }),
-      ...(params.reportOptions && { reportOptions: params.reportOptions })
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'createReport',
+      body: {
+        reportType: reportType,
+        marketplaceIds: params.marketplaceIds || [this.marketplaceId],
+        ...(params.dataStartTime && { dataStartTime: params.dataStartTime }),
+        ...(params.dataEndTime && { dataEndTime: params.dataEndTime }),
+        ...(params.reportOptions && { reportOptions: params.reportOptions })
+      }
     });
   }
 
   /**
-   * Get report status
+   * Get report
    */
   async getReport(reportId) {
-    return this._request('GET', `/reports/2021-06-30/reports/${reportId}`);
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'getReport',
+      path: { reportId }
+    });
   }
 
   /**
-   * Get report document
+   * Download report (with automatic decompression)
    */
-  async getReportDocument(reportDocumentId) {
-    return this._request('GET', `/reports/2021-06-30/documents/${reportDocumentId}`);
+  async downloadReport(params = {}) {
+    const client = await this.getClient();
+
+    // The amazon-sp-api package has built-in report downloading
+    return client.downloadReport({
+      body: {
+        reportType: params.reportType,
+        marketplaceIds: params.marketplaceIds || [this.marketplaceId],
+        ...(params.dataStartTime && { dataStartTime: params.dataStartTime }),
+        ...(params.dataEndTime && { dataEndTime: params.dataEndTime })
+      },
+      version: params.version || '2021-06-30',
+      interval: params.pollInterval || 10000, // Poll every 10 seconds
+      timeout: params.timeout || 600000 // 10 minute timeout
+    });
   }
-
-  /**
-   * Common report types
-   */
-  static REPORT_TYPES = {
-    // Inventory
-    FBA_INVENTORY: 'GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA',
-    MERCHANT_INVENTORY: 'GET_MERCHANT_LISTINGS_ALL_DATA',
-
-    // Orders
-    UNSHIPPED_ORDERS: 'GET_FLAT_FILE_ACTIONABLE_ORDER_DATA_SHIPPING',
-    ALL_ORDERS: 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
-
-    // Financial
-    SETTLEMENT: 'GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2',
-    DATE_RANGE_FINANCIAL: 'GET_DATE_RANGE_FINANCIAL_TRANSACTION_DATA',
-
-    // Sales
-    SALES_TRAFFIC: 'GET_SALES_AND_TRAFFIC_REPORT',
-
-    // Performance
-    FEEDBACK: 'GET_SELLER_FEEDBACK_DATA',
-    RETURNS: 'GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA'
-  };
 
   // ==================== NOTIFICATIONS API ====================
 
   /**
-   * Get subscription for notification type
+   * Get subscription
    */
   async getSubscription(notificationType) {
-    return this._request('GET', `/notifications/v1/subscriptions/${notificationType}`);
-  }
+    const client = await this.getClient();
 
-  /**
-   * Create subscription for notifications
-   */
-  async createSubscription(notificationType, destinationId) {
-    return this._request('POST', `/notifications/v1/subscriptions/${notificationType}`, {
-      destinationId: destinationId,
-      payloadVersion: '1.0'
+    return client.callAPI({
+      operation: 'getSubscription',
+      path: { notificationType }
     });
   }
 
   /**
-   * Common notification types
+   * Create subscription
    */
-  static NOTIFICATION_TYPES = {
-    ORDER_CHANGE: 'ORDER_CHANGE',
-    FEED_PROCESSING_FINISHED: 'FEED_PROCESSING_FINISHED',
-    REPORT_PROCESSING_FINISHED: 'REPORT_PROCESSING_FINISHED',
-    PRICING_HEALTH: 'PRICING_HEALTH',
-    ITEM_INVENTORY_EVENT_CHANGE: 'ITEM_INVENTORY_EVENT_CHANGE',
-    FBA_OUTBOUND_SHIPMENT_STATUS: 'FBA_OUTBOUND_SHIPMENT_STATUS'
-  };
+  async createSubscription(notificationType, destinationId) {
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'createSubscription',
+      path: { notificationType },
+      body: {
+        destinationId: destinationId,
+        payloadVersion: '1.0'
+      }
+    });
+  }
+
+  // ==================== FBA INBOUND ====================
+
+  /**
+   * Get inbound shipments
+   */
+  async getShipments(params = {}) {
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'getShipments',
+      query: {
+        MarketplaceId: this.marketplaceId,
+        ...(params.shipmentStatusList && { ShipmentStatusList: params.shipmentStatusList }),
+        ...(params.shipmentIdList && { ShipmentIdList: params.shipmentIdList }),
+        ...(params.lastUpdatedAfter && { LastUpdatedAfter: params.lastUpdatedAfter }),
+        ...(params.lastUpdatedBefore && { LastUpdatedBefore: params.lastUpdatedBefore }),
+        QueryType: params.queryType || 'SHIPMENT'
+      }
+    });
+  }
 
   // ==================== UTILITY METHODS ====================
 
@@ -513,7 +484,7 @@ class AmazonDirectClient {
 
     let totalSales = 0;
     let orderCount = 0;
-    const orderList = orders.payload?.Orders || [];
+    const orderList = orders.Orders || [];
 
     for (const order of orderList) {
       if (order.OrderTotal) {
@@ -537,7 +508,7 @@ class AmazonDirectClient {
    */
   async getInventoryHealth() {
     const inventory = await this.getInventorySummaries({ details: true });
-    const summaries = inventory.payload?.inventorySummaries || [];
+    const summaries = inventory.inventorySummaries || [];
 
     let totalUnits = 0;
     let inStockSkus = 0;
@@ -566,11 +537,29 @@ class AmazonDirectClient {
       healthScore: summaries.length > 0 ? (inStockSkus / summaries.length * 100).toFixed(1) : 0
     };
   }
+
+  /**
+   * Get pending orders that need attention
+   */
+  async getPendingOrders() {
+    const orders = await this.getOrders({
+      orderStatuses: ['Unshipped', 'PartiallyShipped']
+    });
+
+    return {
+      count: orders.Orders?.length || 0,
+      orders: orders.Orders || []
+    };
+  }
 }
+
+// Backwards compatibility alias
+const AmazonDirectClient = AmazonClient;
 
 module.exports = {
   getAmazonMCPConfig,
+  AmazonClient,
   AmazonDirectClient,
   MARKETPLACE_IDS,
-  ENDPOINTS
+  REPORT_TYPES
 };
