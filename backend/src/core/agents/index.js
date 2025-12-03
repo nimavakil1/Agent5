@@ -3,6 +3,7 @@
  *
  * Exports all agent-related components.
  * Phase 2: Added E-commerce, MCP integrations, protocols, monitoring
+ * Phase 3: Added Communication, SharePoint, Project, Purchasing, Executive agents
  */
 
 // Core components
@@ -12,11 +13,18 @@ const { AgentRegistry, getAgentRegistry, createAgentRegistry } = require('./Agen
 const { MCPClient, MCPRegistry } = require('./MCPClient');
 const { AgentModule } = require('./AgentModule');
 
-// Specialized agents
+// Specialized agents - Phase 1 & 2
 const { FinanceAgent } = require('./specialized/FinanceAgent');
 const { ManagerAgent } = require('./specialized/ManagerAgent');
 const EcommerceAgent = require('./specialized/EcommerceAgent');
 const { AdvertisingAgent } = require('./specialized/AdvertisingAgent');
+
+// Specialized agents - Phase 3: AI-First Company System
+const { CommunicationAgent, CommunicationCategory, UrgencyLevel, Sentiment } = require('./specialized/CommunicationAgent');
+const { SharePointAgent, DocumentType, ActivityType } = require('./specialized/SharePointAgent');
+const { ProjectAgent, TaskStatus, Priority: TaskPriority } = require('./specialized/ProjectAgent');
+const { PurchasingAgent, POStatus, SupplierRating } = require('./specialized/PurchasingAgent');
+const { ExecutiveAgent, AlertSeverity: ExecAlertSeverity, DecisionType } = require('./specialized/ExecutiveAgent');
 
 // Integrations - Phase 1
 const { createOdooMCPConfig, OdooDirectClient } = require('./integrations/OdooMCP');
@@ -64,11 +72,29 @@ module.exports = {
   MCPRegistry,
   AgentModule,
 
-  // Specialized Agents
+  // Specialized Agents - Phase 1 & 2
   FinanceAgent,
   ManagerAgent,
   EcommerceAgent,
   AdvertisingAgent,
+
+  // Specialized Agents - Phase 3: AI-First Company
+  CommunicationAgent,
+  CommunicationCategory,
+  UrgencyLevel,
+  Sentiment,
+  SharePointAgent,
+  DocumentType,
+  ActivityType,
+  ProjectAgent,
+  TaskStatus,
+  TaskPriority,
+  PurchasingAgent,
+  POStatus,
+  SupplierRating,
+  ExecutiveAgent,
+  ExecAlertSeverity,
+  DecisionType,
 
   // Integrations - Odoo
   createOdooMCPConfig,
