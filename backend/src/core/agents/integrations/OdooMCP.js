@@ -3,10 +3,10 @@
  *
  * Configures and manages the connection to the Odoo MCP server.
  * Uses mcp-server-odoo for natural language Odoo queries.
+ * Uses odoo-xmlrpc package for reliable XML-RPC communication.
  */
 
-// MCPClient import available when needed for MCP server integration
-// const { MCPClient } = require('../MCPClient');
+const Odoo = require('odoo-xmlrpc');
 
 /**
  * Create Odoo MCP configuration
@@ -38,39 +38,45 @@ function createOdooMCPConfig() {
 }
 
 /**
- * OdooTools - Direct Odoo XML-RPC integration as fallback
+ * OdooDirectClient - Direct Odoo XML-RPC integration
  *
- * If MCP server is not available, these tools provide direct access.
+ * Uses odoo-xmlrpc package for reliable XML-RPC communication.
+ * Provides both generic execute() and convenience methods.
  */
 class OdooDirectClient {
   constructor(config = {}) {
-    this.url = config.url || process.env.ODOO_URL;
-    this.db = config.db || process.env.ODOO_DB;
-    this.username = config.username || process.env.ODOO_USERNAME;
-    this.password = config.password || process.env.ODOO_PASSWORD;
+    const url = config.url || process.env.ODOO_URL || '';
+    const parsedUrl = new URL(url);
 
-    this.uid = null;
+    this.config = {
+      url: `${parsedUrl.protocol}//${parsedUrl.hostname}`,
+      port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 8069),
+      db: config.db || process.env.ODOO_DB,
+      username: config.username || process.env.ODOO_USERNAME,
+      password: config.password || process.env.ODOO_PASSWORD,
+    };
+
+    this.client = null;
     this.authenticated = false;
   }
 
   /**
-   * Authenticate with Odoo
+   * Connect and authenticate with Odoo
    */
   async authenticate() {
-    const response = await this._xmlRpcCall('/xmlrpc/2/common', 'authenticate', [
-      this.db,
-      this.username,
-      this.password,
-      {},
-    ]);
+    return new Promise((resolve, reject) => {
+      this.client = new Odoo(this.config);
 
-    if (!response) {
-      throw new Error('Odoo authentication failed');
-    }
+      this.client.connect((err) => {
+        if (err) {
+          reject(new Error(`Odoo authentication failed: ${err.message}`));
+          return;
+        }
 
-    this.uid = response;
-    this.authenticated = true;
-    return this.uid;
+        this.authenticated = true;
+        resolve(this.client.uid);
+      });
+    });
   }
 
   /**
@@ -81,15 +87,15 @@ class OdooDirectClient {
       await this.authenticate();
     }
 
-    return this._xmlRpcCall('/xmlrpc/2/object', 'execute_kw', [
-      this.db,
-      this.uid,
-      this.password,
-      model,
-      method,
-      args,
-      kwargs,
-    ]);
+    return new Promise((resolve, reject) => {
+      this.client.execute_kw(model, method, [args, kwargs], (err, result) => {
+        if (err) {
+          reject(new Error(`Odoo execute error: ${err.message}`));
+          return;
+        }
+        resolve(result);
+      });
+    });
   }
 
   /**
@@ -221,170 +227,361 @@ class OdooDirectClient {
     ], options);
   }
 
+  // ==================== CRM ====================
+
   /**
-   * Make XML-RPC call
+   * Get CRM leads
    */
-  async _xmlRpcCall(endpoint, method, params) {
-    const fetch = (await import('node-fetch')).default;
+  async getLeads(domain = [], options = {}) {
+    return this.searchRead('crm.lead', [
+      ['type', '=', 'lead'],
+      ...domain,
+    ], [
+      'name',
+      'partner_id',
+      'email_from',
+      'phone',
+      'expected_revenue',
+      'probability',
+      'stage_id',
+      'user_id',
+      'team_id',
+      'create_date',
+      'date_deadline',
+      'description',
+      'source_id',
+      'medium_id',
+      'campaign_id',
+    ], options);
+  }
 
-    const body = this._buildXmlRpcRequest(method, params);
+  /**
+   * Get CRM opportunities
+   */
+  async getOpportunities(domain = [], options = {}) {
+    return this.searchRead('crm.lead', [
+      ['type', '=', 'opportunity'],
+      ...domain,
+    ], [
+      'name',
+      'partner_id',
+      'email_from',
+      'phone',
+      'expected_revenue',
+      'probability',
+      'stage_id',
+      'user_id',
+      'team_id',
+      'create_date',
+      'date_deadline',
+      'date_closed',
+      'description',
+      'source_id',
+      'medium_id',
+      'campaign_id',
+    ], options);
+  }
 
-    const response = await fetch(`${this.url}${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/xml' },
-      body,
+  /**
+   * Create a CRM lead
+   */
+  async createLead(data) {
+    return this.create('crm.lead', {
+      type: 'lead',
+      name: data.name,
+      partner_id: data.partnerId || false,
+      email_from: data.email || false,
+      phone: data.phone || false,
+      expected_revenue: data.expectedRevenue || 0,
+      description: data.description || false,
+      source_id: data.sourceId || false,
+      medium_id: data.mediumId || false,
+      campaign_id: data.campaignId || false,
+      user_id: data.userId || false,
+      team_id: data.teamId || false,
+    });
+  }
+
+  /**
+   * Convert lead to opportunity
+   */
+  async convertLeadToOpportunity(leadId, partnerId = false) {
+    return this.execute('crm.lead', 'convert_opportunity', [[leadId]], {
+      partner_id: partnerId,
+    });
+  }
+
+  /**
+   * Update lead/opportunity stage
+   */
+  async updateLeadStage(leadId, stageId) {
+    return this.write('crm.lead', [leadId], { stage_id: stageId });
+  }
+
+  /**
+   * Get CRM pipeline stages
+   */
+  async getPipelineStages(domain = [], options = {}) {
+    return this.searchRead('crm.stage', domain, [
+      'name',
+      'sequence',
+      'is_won',
+      'probability',
+      'team_id',
+    ], options);
+  }
+
+  /**
+   * Get scheduled activities
+   */
+  async getActivities(domain = [], options = {}) {
+    return this.searchRead('mail.activity', domain, [
+      'res_model',
+      'res_id',
+      'res_name',
+      'activity_type_id',
+      'summary',
+      'note',
+      'date_deadline',
+      'user_id',
+      'state',
+    ], options);
+  }
+
+  /**
+   * Create an activity
+   */
+  async createActivity(data) {
+    return this.create('mail.activity', {
+      res_model: data.model,
+      res_id: data.recordId,
+      activity_type_id: data.activityTypeId,
+      summary: data.summary || false,
+      note: data.note || false,
+      date_deadline: data.deadline,
+      user_id: data.userId || false,
+    });
+  }
+
+  // ==================== ACCOUNTING ====================
+
+  /**
+   * Get journal entries (account move lines)
+   */
+  async getJournalEntries(domain = [], options = {}) {
+    return this.searchRead('account.move.line', domain, [
+      'move_id',
+      'account_id',
+      'partner_id',
+      'name',
+      'ref',
+      'date',
+      'debit',
+      'credit',
+      'balance',
+      'amount_currency',
+      'currency_id',
+      'reconciled',
+      'journal_id',
+    ], options);
+  }
+
+  /**
+   * Get payments
+   */
+  async getPayments(domain = [], options = {}) {
+    return this.searchRead('account.payment', domain, [
+      'name',
+      'partner_id',
+      'payment_type',
+      'partner_type',
+      'amount',
+      'currency_id',
+      'date',
+      'ref',
+      'journal_id',
+      'payment_method_id',
+      'state',
+      'reconciled_invoices_count',
+    ], options);
+  }
+
+  /**
+   * Create a payment
+   */
+  async createPayment(data) {
+    const paymentId = await this.create('account.payment', {
+      partner_id: data.partnerId,
+      payment_type: data.paymentType || 'inbound', // 'inbound' or 'outbound'
+      partner_type: data.partnerType || 'customer', // 'customer' or 'supplier'
+      amount: data.amount,
+      currency_id: data.currencyId || false,
+      date: data.date || new Date().toISOString().split('T')[0],
+      ref: data.reference || false,
+      journal_id: data.journalId,
+      payment_method_id: data.paymentMethodId || false,
     });
 
-    if (!response.ok) {
-      throw new Error(`Odoo API error: ${response.statusText}`);
+    // Optionally confirm the payment
+    if (data.confirm) {
+      await this.execute('account.payment', 'action_post', [[paymentId]]);
     }
 
-    const text = await response.text();
-    return this._parseXmlRpcResponse(text);
+    return paymentId;
   }
 
   /**
-   * Build XML-RPC request body
+   * Get bank statements
    */
-  _buildXmlRpcRequest(method, params) {
-    const serializeValue = (value) => {
-      if (value === null || value === undefined) {
-        return '<nil/>';
-      }
-      if (typeof value === 'boolean') {
-        return `<boolean>${value ? '1' : '0'}</boolean>`;
-      }
-      if (typeof value === 'number') {
-        if (Number.isInteger(value)) {
-          return `<int>${value}</int>`;
-        }
-        return `<double>${value}</double>`;
-      }
-      if (typeof value === 'string') {
-        return `<string>${this._escapeXml(value)}</string>`;
-      }
-      if (Array.isArray(value)) {
-        const items = value.map(v => `<value>${serializeValue(v)}</value>`).join('');
-        return `<array><data>${items}</data></array>`;
-      }
-      if (typeof value === 'object') {
-        const members = Object.entries(value).map(([k, v]) =>
-          `<member><name>${k}</name><value>${serializeValue(v)}</value></member>`
-        ).join('');
-        return `<struct>${members}</struct>`;
-      }
-      return `<string>${value}</string>`;
-    };
-
-    const paramsXml = params.map(p => `<param><value>${serializeValue(p)}</value></param>`).join('');
-
-    return `<?xml version="1.0"?>
-<methodCall>
-  <methodName>${method}</methodName>
-  <params>${paramsXml}</params>
-</methodCall>`;
+  async getBankStatements(domain = [], options = {}) {
+    return this.searchRead('account.bank.statement', domain, [
+      'name',
+      'journal_id',
+      'date',
+      'balance_start',
+      'balance_end',
+      'balance_end_real',
+      'state',
+      'line_ids',
+    ], options);
   }
 
   /**
-   * Parse XML-RPC response
+   * Get bank statement lines
    */
-  _parseXmlRpcResponse(xml) {
-    // Simple XML-RPC parser
-    const parseValue = (xml) => {
-      // Handle nil
-      if (xml.includes('<nil/>') || xml.includes('<nil></nil>')) {
-        return null;
-      }
-
-      // Handle boolean
-      const boolMatch = xml.match(/<boolean>(\d)<\/boolean>/);
-      if (boolMatch) {
-        return boolMatch[1] === '1';
-      }
-
-      // Handle integer
-      const intMatch = xml.match(/<(?:int|i4)>(-?\d+)<\/(?:int|i4)>/);
-      if (intMatch) {
-        return parseInt(intMatch[1], 10);
-      }
-
-      // Handle double
-      const doubleMatch = xml.match(/<double>(-?[\d.]+)<\/double>/);
-      if (doubleMatch) {
-        return parseFloat(doubleMatch[1]);
-      }
-
-      // Handle string
-      const stringMatch = xml.match(/<string>([\s\S]*?)<\/string>/);
-      if (stringMatch) {
-        return this._unescapeXml(stringMatch[1]);
-      }
-
-      // Handle array
-      if (xml.includes('<array>')) {
-        const values = [];
-        const valueMatches = xml.match(/<value>([\s\S]*?)<\/value>/g) || [];
-        for (const match of valueMatches) {
-          const inner = match.replace(/<\/?value>/g, '');
-          values.push(parseValue(inner));
-        }
-        return values;
-      }
-
-      // Handle struct
-      if (xml.includes('<struct>')) {
-        const obj = {};
-        const memberRegex = /<member>\s*<name>([\s\S]*?)<\/name>\s*<value>([\s\S]*?)<\/value>\s*<\/member>/g;
-        let match;
-        while ((match = memberRegex.exec(xml)) !== null) {
-          obj[match[1]] = parseValue(match[2]);
-        }
-        return obj;
-      }
-
-      // Default: try to extract plain content
-      const plainMatch = xml.match(/>([^<]*)</);
-      if (plainMatch) {
-        return plainMatch[1];
-      }
-
-      return xml;
-    };
-
-    // Check for fault
-    if (xml.includes('<fault>')) {
-      const faultMatch = xml.match(/<fault>([\s\S]*?)<\/fault>/);
-      if (faultMatch) {
-        const fault = parseValue(faultMatch[1]);
-        throw new Error(`Odoo fault: ${fault.faultString || JSON.stringify(fault)}`);
-      }
-    }
-
-    // Extract value from params
-    const valueMatch = xml.match(/<param>\s*<value>([\s\S]*?)<\/value>\s*<\/param>/);
-    if (valueMatch) {
-      return parseValue(valueMatch[1]);
-    }
-
-    return null;
+  async getBankStatementLines(domain = [], options = {}) {
+    return this.searchRead('account.bank.statement.line', domain, [
+      'statement_id',
+      'date',
+      'payment_ref',
+      'partner_id',
+      'amount',
+      'amount_currency',
+      'currency_id',
+      'is_reconciled',
+    ], options);
   }
 
-  _escapeXml(str) {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
+  /**
+   * Get accounts with balances
+   */
+  async getAccountBalances(domain = [], options = {}) {
+    return this.searchRead('account.account', domain, [
+      'code',
+      'name',
+      'account_type',
+      'current_balance',
+      'reconcile',
+      'deprecated',
+    ], options);
   }
 
-  _unescapeXml(str) {
-    return str
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'");
+  /**
+   * Get account types summary (for financial reports)
+   */
+  async getAccountTypeSummary() {
+    const accounts = await this.searchRead('account.account', [
+      ['deprecated', '=', false],
+    ], [
+      'code',
+      'name',
+      'account_type',
+      'current_balance',
+    ], { limit: 1000 });
+
+    // Group by account type
+    const summary = {};
+    for (const account of accounts) {
+      const type = account.account_type || 'other';
+      if (!summary[type]) {
+        summary[type] = { accounts: [], total: 0 };
+      }
+      summary[type].accounts.push(account);
+      summary[type].total += account.current_balance || 0;
+    }
+
+    return summary;
+  }
+
+  /**
+   * Get aged receivables
+   */
+  async getAgedReceivables(partnerId = null) {
+    const domain = [
+      ['account_id.account_type', '=', 'asset_receivable'],
+      ['reconciled', '=', false],
+      ['move_id.state', '=', 'posted'],
+    ];
+
+    if (partnerId) {
+      domain.push(['partner_id', '=', partnerId]);
+    }
+
+    return this.searchRead('account.move.line', domain, [
+      'partner_id',
+      'move_id',
+      'date',
+      'date_maturity',
+      'debit',
+      'credit',
+      'amount_residual',
+      'ref',
+    ], { limit: 500, order: 'date_maturity asc' });
+  }
+
+  /**
+   * Get aged payables
+   */
+  async getAgedPayables(partnerId = null) {
+    const domain = [
+      ['account_id.account_type', '=', 'liability_payable'],
+      ['reconciled', '=', false],
+      ['move_id.state', '=', 'posted'],
+    ];
+
+    if (partnerId) {
+      domain.push(['partner_id', '=', partnerId]);
+    }
+
+    return this.searchRead('account.move.line', domain, [
+      'partner_id',
+      'move_id',
+      'date',
+      'date_maturity',
+      'debit',
+      'credit',
+      'amount_residual',
+      'ref',
+    ], { limit: 500, order: 'date_maturity asc' });
+  }
+
+  /**
+   * Reconcile invoice with payment
+   */
+  async reconcileInvoicePayment(invoiceId, paymentId) {
+    // Get the receivable/payable lines from invoice and payment
+    const invoiceLines = await this.searchRead('account.move.line', [
+      ['move_id', '=', invoiceId],
+      ['account_id.reconcile', '=', true],
+      ['reconciled', '=', false],
+    ], ['id']);
+
+    const paymentLines = await this.searchRead('account.move.line', [
+      ['payment_id', '=', paymentId],
+      ['account_id.reconcile', '=', true],
+      ['reconciled', '=', false],
+    ], ['id']);
+
+    if (invoiceLines.length === 0 || paymentLines.length === 0) {
+      throw new Error('No reconcilable lines found');
+    }
+
+    const lineIds = [
+      ...invoiceLines.map(l => l.id),
+      ...paymentLines.map(l => l.id),
+    ];
+
+    return this.execute('account.move.line', 'reconcile', [lineIds]);
   }
 }
 
