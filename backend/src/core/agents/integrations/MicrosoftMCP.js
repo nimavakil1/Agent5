@@ -650,7 +650,7 @@ class MicrosoftDirectClient {
   async getInboxSummary(userId = null) {
     const user = userId || this.defaultUserId;
 
-    const [unread, flagged, folders] = await Promise.all([
+    const [_unread, flagged, folders] = await Promise.all([
       this.getMessages(user, { filter: 'isRead eq false', top: 1 }),
       this.getMessages(user, { filter: 'flag/flagStatus eq \'flagged\'', top: 1 }),
       this.getMailFolders(user)

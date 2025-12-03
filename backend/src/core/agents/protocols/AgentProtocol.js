@@ -293,7 +293,7 @@ class ConsensusProposal {
     const totalVoters = this.eligibleVoters.size;
     const currentVotes = this.votes.size;
     const approvals = Array.from(this.votes.values()).filter(v => v.vote === true).length;
-    const rejections = currentVotes - approvals;
+    const _rejections = currentVotes - approvals;
 
     let requiredApprovals;
     if (this.requiredVotes === 'majority') {

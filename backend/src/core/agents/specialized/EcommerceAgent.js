@@ -18,13 +18,13 @@
  */
 
 const LLMAgent = require('../LLMAgent');
-const { AmazonDirectClient, MARKETPLACE_IDS } = require('../integrations/AmazonMCP');
-const { BolDirectClient, ORDER_STATUS, FULFILMENT_METHOD } = require('../integrations/BolMCP');
+const { AmazonDirectClient } = require('../integrations/AmazonMCP');
+const { BolDirectClient, ORDER_STATUS } = require('../integrations/BolMCP');
 
 /**
  * E-commerce platform identifiers
  */
-const Platform = {
+const _Platform = {
   AMAZON: 'amazon',
   BOLCOM: 'bolcom',
   ALL: 'all'
@@ -734,7 +734,7 @@ Available platforms: Amazon, Bol.com`,
   }
 
   async _handleReturn(params) {
-    const { platform, return_id, action, reason } = params;
+    const { platform, return_id, action, reason: _reason } = params;
 
     if (platform === 'bolcom' && this.bolClient) {
       const handlingResult = action === 'accept' ? 'RETURN_RECEIVED' : 'RETURN_DOES_NOT_MEET_CONDITIONS';

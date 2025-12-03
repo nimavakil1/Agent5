@@ -17,13 +17,13 @@
  */
 
 const LLMAgent = require('../LLMAgent');
-const { AmazonAdsClient, CAMPAIGN_TYPE, TARGETING_TYPE, MATCH_TYPE } = require('../integrations/AmazonAds');
-const { BolAdsClient, CAMPAIGN_STATUS, AD_STATUS } = require('../integrations/BolAds');
+const { AmazonAdsClient, TARGETING_TYPE } = require('../integrations/AmazonAds');
+const { BolAdsClient, CAMPAIGN_STATUS } = require('../integrations/BolAds');
 
 /**
  * Platform identifiers
  */
-const Platform = {
+const _Platform = {
   AMAZON: 'amazon',
   BOLCOM: 'bolcom',
   ALL: 'all'
@@ -32,7 +32,7 @@ const Platform = {
 /**
  * Optimization goals
  */
-const OptimizationGoal = {
+const _OptimizationGoal = {
   MAXIMIZE_SALES: 'maximize_sales',
   MAXIMIZE_PROFIT: 'maximize_profit',
   TARGET_ACOS: 'target_acos',
@@ -455,7 +455,7 @@ Key metrics to optimize:
     return recommendations;
   }
 
-  _generateRecommendationSummary(recommendations, goal) {
+  _generateRecommendationSummary(recommendations, _goal) {
     const summary = {
       totalRecommendations: recommendations.length,
       byAction: {},

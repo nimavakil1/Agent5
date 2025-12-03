@@ -28,7 +28,7 @@ const { getMicrosoftMCPConfig, MicrosoftDirectClient, SCOPES: MS_SCOPES } = requ
 
 // Advertising Integrations - Phase 2
 const { AmazonAdsClient, ADS_REGIONS, CAMPAIGN_TYPE, TARGETING_TYPE, MATCH_TYPE } = require('./integrations/AmazonAds');
-const { BolAdsClient, BOL_ADS_CAMPAIGN_STATUS, BOL_ADS_BID_STRATEGY } = require('./integrations/BolAds');
+const { BolAdsClient, CAMPAIGN_STATUS: BOL_ADS_CAMPAIGN_STATUS, AD_STATUS: BOL_ADS_AD_STATUS } = require('./integrations/BolAds');
 
 // Protocols
 const {
@@ -100,7 +100,7 @@ module.exports = {
   // Advertising - Bol.com
   BolAdsClient,
   BOL_ADS_CAMPAIGN_STATUS,
-  BOL_ADS_BID_STRATEGY,
+  BOL_ADS_AD_STATUS,
 
   // Protocols
   MessageType,

@@ -411,7 +411,7 @@ class AmazonAdsClient {
   /**
    * Get campaign performance report
    */
-  async getCampaignReport(startDate, endDate) {
+  async getCampaignReport(_startDate, _endDate) {
     // Request report
     const reportRequest = await this.requestSPReport('campaigns', {
       metrics: [

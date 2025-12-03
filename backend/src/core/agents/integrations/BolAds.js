@@ -493,7 +493,7 @@ class BolAdsClient {
   /**
    * Calculate campaign health score
    */
-  _calculateHealthScore(metrics, campaign) {
+  _calculateHealthScore(metrics, _campaign) {
     let score = 100;
     const issues = [];
 
