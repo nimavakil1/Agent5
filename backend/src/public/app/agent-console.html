@@ -342,7 +342,7 @@
       try {
         // Determine which endpoint to use
         let endpoint = '/api/ai-agents/query';
-        let body = { query };
+        let body = { question: query };
 
         if (selectedAgent) {
           if (selectedAgent.id === 'manager') {
