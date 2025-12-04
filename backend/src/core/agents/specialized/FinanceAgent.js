@@ -155,6 +155,19 @@ Always provide context with numbers (e.g., "3 unpaid invoices totaling €15,000
       },
     });
 
+    // Product tools
+    this.registerTool('search_product', this._searchProduct.bind(this), {
+      description: 'Search for a product by reference code, name, or barcode and get its cost/price',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          reference: { type: 'string', description: 'Product reference/SKU code (e.g., 18009)' },
+          name: { type: 'string', description: 'Product name to search for' },
+          barcode: { type: 'string', description: 'Product barcode' },
+        },
+      },
+    });
+
     // Natural language query
     this.registerTool('query_odoo', this._queryOdoo.bind(this), {
       description: 'Run a natural language query against Odoo data',
@@ -614,6 +627,57 @@ Always provide context with numbers (e.g., "3 unpaid invoices totaling €15,000
         total: inv.amount_total,
         remaining: inv.amount_residual,
         type: inv.move_type === 'out_invoice' ? 'receivable' : 'payable',
+      })),
+    };
+  }
+
+  async _searchProduct(params) {
+    if (!this.odooClient) {
+      throw new Error('Odoo client not available');
+    }
+
+    const domain = [];
+
+    if (params.reference) {
+      domain.push('|', '|');
+      domain.push(['default_code', 'ilike', params.reference]);
+      domain.push(['default_code', '=', params.reference]);
+      domain.push(['name', 'ilike', params.reference]);
+    }
+    if (params.name) {
+      domain.push(['name', 'ilike', params.name]);
+    }
+    if (params.barcode) {
+      domain.push(['barcode', '=', params.barcode]);
+    }
+
+    const products = await this.odooClient.searchRead('product.product', domain, [
+      'id', 'name', 'default_code', 'barcode', 'list_price', 'standard_price',
+      'qty_available', 'virtual_available', 'type', 'categ_id', 'uom_id'
+    ], { limit: 10 });
+
+    if (products.length === 0) {
+      return {
+        found: false,
+        message: `No product found matching: ${params.reference || params.name || params.barcode}`,
+      };
+    }
+
+    return {
+      found: true,
+      count: products.length,
+      products: products.map(p => ({
+        id: p.id,
+        name: p.name,
+        reference: p.default_code,
+        barcode: p.barcode,
+        sale_price: p.list_price,
+        cost_price: p.standard_price,
+        qty_on_hand: p.qty_available,
+        qty_forecast: p.virtual_available,
+        type: p.type,
+        category: p.categ_id?.[1],
+        uom: p.uom_id?.[1],
       })),
     };
   }
