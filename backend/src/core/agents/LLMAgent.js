@@ -1,26 +1,41 @@
 /**
  * LLMAgent - Base class for agents that use LLM for reasoning
  *
- * Extends BaseAgent with actual LLM integration for:
+ * Extends BaseAgent with multi-provider LLM integration for:
  * - Tool use / function calling
  * - Chain-of-thought reasoning
- * - Structured output
+ * - Extended thinking (Claude Opus)
+ * - RAG with company knowledge
  */
 
 const { BaseAgent } = require('./BaseAgent');
-const OpenAI = require('openai');
+const { createLLMProvider, getRecommendedModel } = require('./llm');
 
 class LLMAgent extends BaseAgent {
   constructor(config = {}) {
     super(config);
 
-    // OpenAI client
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+    // Get recommended model for this agent type
+    const recommended = getRecommendedModel(config.taskType || this.role || 'general');
+
+    // Create LLM provider
+    this.llmProvider = createLLMProvider({
+      provider: config.llmProvider || recommended.provider,
+      model: config.llmModel || recommended.model,
+      temperature: config.temperature ?? this.llmConfig.temperature,
+      maxTokens: config.maxTokens || this.llmConfig.maxTokens,
+      useExtendedThinking: config.useExtendedThinking ?? recommended.useExtendedThinking,
+      thinkingBudget: config.thinkingBudget || 10000,
     });
 
-    // Tool definitions for function calling
+    // Tool definitions cache
     this.toolDefinitions = [];
+
+    // RAG context (injected from knowledge base)
+    this.ragContext = null;
+
+    // Company context (always available)
+    this.companyContext = null;
   }
 
   /**
@@ -29,8 +44,25 @@ class LLMAgent extends BaseAgent {
   async init(platform) {
     await super.init(platform);
 
-    // Build tool definitions for OpenAI function calling
+    // Build tool definitions
     this._buildToolDefinitions();
+
+    // Load company context if available
+    await this._loadCompanyContext();
+  }
+
+  /**
+   * Set RAG context for current task
+   */
+  setRAGContext(context) {
+    this.ragContext = context;
+  }
+
+  /**
+   * Set company context
+   */
+  setCompanyContext(context) {
+    this.companyContext = context;
   }
 
   /**
@@ -40,66 +72,65 @@ class LLMAgent extends BaseAgent {
     // Build messages for the LLM
     const messages = this._buildMessages(task, previousResult);
 
-    // Call OpenAI with tools
-    const response = await this.openai.chat.completions.create({
-      model: this.llmConfig.model,
-      messages,
-      tools: this.toolDefinitions.length > 0 ? this.toolDefinitions : undefined,
-      tool_choice: this.toolDefinitions.length > 0 ? 'auto' : undefined,
-      temperature: this.llmConfig.temperature,
-      max_tokens: this.llmConfig.maxTokens,
-    });
+    // Get tool list for provider
+    const tools = this._getToolsForProvider();
 
-    const choice = response.choices[0];
-    const message = choice.message;
+    // Call LLM with tools
+    const response = await this.llmProvider.chatWithTools(messages, tools);
+
+    // Log thinking if extended thinking was used
+    if (response.thinking) {
+      this.logger.debug({ thinking: response.thinking.substring(0, 500) }, 'Extended thinking');
+    }
 
     // Check if the model wants to use a tool
-    if (message.tool_calls && message.tool_calls.length > 0) {
-      const toolCall = message.tool_calls[0];
-      const toolName = toolCall.function.name;
-      const toolParams = JSON.parse(toolCall.function.arguments);
-
-      this.logger.debug({ tool: toolName, params: toolParams }, 'LLM requested tool');
+    if (response.toolCall) {
+      this.logger.debug({
+        tool: response.toolCall.name,
+        params: response.toolCall.input,
+      }, 'LLM requested tool');
 
       return {
         action: 'tool',
-        tool: toolName,
-        params: toolParams,
-        reasoning: message.content,
+        tool: this._mapToolName(response.toolCall.name),
+        params: response.toolCall.input,
+        reasoning: response.content,
+        thinking: response.thinking,
       };
     }
 
     // Check if the model is delegating
-    if (message.content && message.content.includes('[DELEGATE:')) {
-      const match = message.content.match(/\[DELEGATE:(\w+)\](.*?)\[\/DELEGATE\]/s);
+    if (response.content && response.content.includes('[DELEGATE:')) {
+      const match = response.content.match(/\[DELEGATE:(\w+)\](.*?)\[\/DELEGATE\]/s);
       if (match) {
         return {
           action: 'delegate',
           targetAgent: match[1],
           subtask: JSON.parse(match[2]),
-          reasoning: message.content,
+          reasoning: response.content,
         };
       }
     }
 
     // Check if escalating
-    if (message.content && message.content.includes('[ESCALATE]')) {
-      const reason = message.content.replace('[ESCALATE]', '').trim();
+    if (response.content && response.content.includes('[ESCALATE]')) {
+      const reason = response.content.replace('[ESCALATE]', '').trim();
       return {
         action: 'escalate',
         reason,
       };
     }
 
-    // Check for completion markers
-    if (choice.finish_reason === 'stop' ||
-        (message.content && message.content.includes('[COMPLETE]'))) {
+    // Check for completion
+    if (response.stopReason === 'end_turn' ||
+        response.stopReason === 'stop' ||
+        (response.content && response.content.includes('[COMPLETE]'))) {
 
       // Try to extract structured result
-      let result = message.content;
+      let result = response.content;
 
       // Look for JSON result
-      const jsonMatch = message.content.match(/```json\n?([\s\S]*?)\n?```/);
+      const jsonMatch = response.content.match(/```json\n?([\s\S]*?)\n?```/);
       if (jsonMatch) {
         try {
           result = JSON.parse(jsonMatch[1]);
@@ -111,13 +142,15 @@ class LLMAgent extends BaseAgent {
       return {
         action: 'complete',
         result,
+        thinking: response.thinking,
       };
     }
 
-    // Default: continue thinking (will be re-called)
+    // Default: complete with content
     return {
       action: 'complete',
-      result: message.content,
+      result: response.content,
+      thinking: response.thinking,
     };
   }
 
@@ -158,27 +191,76 @@ class LLMAgent extends BaseAgent {
   }
 
   /**
-   * Build the system prompt
+   * Build the system prompt with company context and RAG
    */
   _buildSystemPrompt() {
     const toolDescriptions = this._getToolDescriptions();
 
-    return `${this.llmConfig.systemPrompt}
+    let prompt = `${this.llmConfig.systemPrompt}
+
+## Your Identity
+- Agent ID: ${this.id}
+- Agent Name: ${this.name}
+- Agent Role: ${this.role}
+- Current Time: ${new Date().toISOString()}`;
+
+    // Add company context
+    if (this.companyContext) {
+      prompt += `
+
+## Company Context
+${this.companyContext}`;
+    }
+
+    // Add RAG context for current task
+    if (this.ragContext) {
+      prompt += `
+
+## Relevant Knowledge
+${this.ragContext}`;
+    }
+
+    prompt += `
 
 ## Available Tools
 ${toolDescriptions}
 
-## Response Format
+## Response Guidelines
 - Use the provided tools when you need external data or actions
 - When delegating to another agent, use: [DELEGATE:agentName]{"task": "..."}[/DELEGATE]
 - When escalating to human, use: [ESCALATE] reason for escalation
 - When task is complete, respond with [COMPLETE] followed by your answer
 - For structured data, wrap in \`\`\`json code blocks
+- Be concise and actionable
+- Always explain your reasoning`;
 
-## Current Context
-- Date/Time: ${new Date().toISOString()}
-- Agent ID: ${this.id}
-- Agent Role: ${this.role}`;
+    return prompt;
+  }
+
+  /**
+   * Load company context from knowledge base
+   */
+  async _loadCompanyContext() {
+    try {
+      // Try to get company context from knowledge base
+      if (this.platform?.getDb) {
+        const db = this.platform.getDb();
+        if (db) {
+          const companyKnowledge = await db.collection('knowledge')
+            .find({ category: 'company' })
+            .limit(5)
+            .toArray();
+
+          if (companyKnowledge.length > 0) {
+            this.companyContext = companyKnowledge
+              .map(k => `### ${k.title}\n${k.content}`)
+              .join('\n\n');
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.debug({ error: e.message }, 'Could not load company context');
+    }
   }
 
   /**
@@ -189,39 +271,58 @@ ${toolDescriptions}
       return task;
     }
 
-    return `Task Type: ${task.type || 'general'}
+    let formatted = `Task Type: ${task.type || 'general'}
 Task ID: ${task.id || 'N/A'}
-Description: ${task.description || JSON.stringify(task)}
-${task.context ? `Context: ${JSON.stringify(task.context)}` : ''}
-${task.constraints ? `Constraints: ${JSON.stringify(task.constraints)}` : ''}`;
+Description: ${task.description || JSON.stringify(task)}`;
+
+    if (task.context) {
+      formatted += `\nContext: ${JSON.stringify(task.context)}`;
+    }
+    if (task.constraints) {
+      formatted += `\nConstraints: ${JSON.stringify(task.constraints)}`;
+    }
+    if (task.params) {
+      formatted += `\nParameters: ${JSON.stringify(task.params)}`;
+    }
+
+    return formatted;
   }
 
   /**
-   * Build tool definitions for OpenAI
+   * Build tool definitions for LLM
    */
   _buildToolDefinitions() {
     this.toolDefinitions = [];
+    this._toolNameMap = new Map();
 
     for (const [name, tool] of this.tools) {
-      // Skip MCP tools if they don't have schema
-      const definition = {
-        type: 'function',
-        function: {
-          name: name.replace(/:/g, '_'), // OpenAI doesn't like colons
-          description: tool.schema.description || `Tool: ${name}`,
-          parameters: tool.schema.inputSchema || tool.schema.parameters || {
-            type: 'object',
-            properties: {},
-          },
+      const cleanName = name.replace(/:/g, '_');
+
+      this.toolDefinitions.push({
+        name: cleanName,
+        description: tool.schema.description || `Tool: ${name}`,
+        inputSchema: tool.schema.inputSchema || tool.schema.parameters || {
+          type: 'object',
+          properties: {},
         },
-      };
+      });
 
-      this.toolDefinitions.push(definition);
-
-      // Map the clean name back to the original
-      this._toolNameMap = this._toolNameMap || new Map();
-      this._toolNameMap.set(name.replace(/:/g, '_'), name);
+      this._toolNameMap.set(cleanName, name);
     }
+  }
+
+  /**
+   * Get tools formatted for provider
+   */
+  _getToolsForProvider() {
+    return this.toolDefinitions;
+  }
+
+  /**
+   * Map clean tool name back to original
+   */
+  _mapToolName(cleanName) {
+    return this._toolNameMap?.get(cleanName) || cleanName;
   }
 
   /**
@@ -242,7 +343,6 @@ ${task.constraints ? `Constraints: ${JSON.stringify(task.constraints)}` : ''}`;
    * Execute a tool (with name mapping)
    */
   async _executeTool(toolName, params) {
-    // Map back to original name if needed
     const originalName = this._toolNameMap?.get(toolName) || toolName;
     return super._executeTool(originalName, params);
   }
@@ -256,14 +356,8 @@ ${task.constraints ? `Constraints: ${JSON.stringify(task.constraints)}` : ''}`;
       { role: 'user', content: prompt },
     ];
 
-    const response = await this.openai.chat.completions.create({
-      model: options.model || this.llmConfig.model,
-      messages,
-      temperature: options.temperature || this.llmConfig.temperature,
-      max_tokens: options.maxTokens || this.llmConfig.maxTokens,
-    });
-
-    return response.choices[0].message.content;
+    const response = await this.llmProvider.chat(messages, options);
+    return response.content;
   }
 
   /**
@@ -278,15 +372,72 @@ ${task.constraints ? `Constraints: ${JSON.stringify(task.constraints)}` : ''}`;
       { role: 'user', content: prompt },
     ];
 
-    const response = await this.openai.chat.completions.create({
-      model: options.model || this.llmConfig.model,
-      messages,
-      response_format: { type: 'json_object' },
-      temperature: options.temperature || 0.3,
-      max_tokens: options.maxTokens || this.llmConfig.maxTokens,
+    const response = await this.llmProvider.chat(messages, {
+      ...options,
+      temperature: 0.3,
     });
 
-    return JSON.parse(response.choices[0].message.content);
+    // Extract JSON from response
+    const jsonMatch = response.content.match(/```json\n?([\s\S]*?)\n?```/) ||
+                      response.content.match(/\{[\s\S]*\}/);
+
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[1] || jsonMatch[0]);
+    }
+
+    return JSON.parse(response.content);
+  }
+
+  /**
+   * Query with RAG (retrieves relevant knowledge first)
+   */
+  async queryWithRAG(question, options = {}) {
+    // Get relevant knowledge from vector search
+    const ragContext = await this._retrieveRelevantKnowledge(question);
+    this.setRAGContext(ragContext);
+
+    // Generate response
+    const response = await this.generateResponse(question, options);
+
+    // Clear RAG context
+    this.setRAGContext(null);
+
+    return response;
+  }
+
+  /**
+   * Retrieve relevant knowledge for RAG
+   */
+  async _retrieveRelevantKnowledge(query) {
+    try {
+      if (!this.platform?.getDb) return null;
+
+      const db = this.platform.getDb();
+      if (!db) return null;
+
+      // Simple text search for now
+      // TODO: Replace with vector similarity search
+      const results = await db.collection('knowledge')
+        .find({
+          $or: [
+            { title: { $regex: query, $options: 'i' } },
+            { content: { $regex: query, $options: 'i' } },
+            { tags: { $in: query.toLowerCase().split(' ') } },
+          ],
+        })
+        .limit(5)
+        .toArray();
+
+      if (results.length === 0) return null;
+
+      return results
+        .map(r => `### ${r.title} (${r.category})\n${r.content}`)
+        .join('\n\n---\n\n');
+
+    } catch (e) {
+      this.logger.debug({ error: e.message }, 'RAG retrieval failed');
+      return null;
+    }
   }
 }
 

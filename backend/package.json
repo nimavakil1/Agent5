@@ -23,7 +23,8 @@
     "node": ">=18"
   },
   "dependencies": {
-        "@sendinblue/client": "^3.3.1",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@sendinblue/client": "^3.3.1",
     "amazon-sp-api": "^1.0.0",
     "@shopify/shopify-api": "^11.14.1",
     "bcryptjs": "^2.4.3",

@@ -11,6 +11,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const { getDb } = require('../../db');
 const { ObjectId } = require('mongodb');
+const { getRAGManager } = require('../../core/agents/rag');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -111,7 +112,11 @@ router.post('/', async (req, res) => {
     const result = await db.collection('knowledge').insertOne(item);
     item._id = result.insertedId;
 
-    // TODO: Trigger embedding/indexing in background
+    // Index in background (don't block response)
+    const rag = getRAGManager();
+    if (rag.initialized) {
+      rag.indexItem(item).catch(e => console.warn('RAG indexing failed:', e.message));
+    }
 
     res.status(201).json(item);
   } catch (error) {
@@ -176,7 +181,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const result = await db.collection('knowledge').insertOne(item);
     item._id = result.insertedId;
 
-    // TODO: Trigger embedding/indexing in background
+    // Index in background (don't block response)
+    const rag = getRAGManager();
+    if (rag.initialized) {
+      rag.indexItem(item).catch(e => console.warn('RAG indexing failed:', e.message));
+    }
 
     res.status(201).json(item);
   } catch (error) {
@@ -252,7 +261,11 @@ router.delete('/:id', async (req, res) => {
       _id: new ObjectId(req.params.id)
     });
 
-    // TODO: Remove from vector index
+    // Remove from vector index
+    const rag = getRAGManager();
+    if (rag.initialized) {
+      rag.deleteItem(req.params.id).catch(e => console.warn('RAG delete failed:', e.message));
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -266,19 +279,16 @@ router.delete('/:id', async (req, res) => {
  */
 router.post('/rebuild-index', async (req, res) => {
   try {
-    const db = getDb();
+    const rag = getRAGManager();
 
-    // Mark all items as not indexed
-    await db.collection('knowledge').updateMany(
-      {},
-      { $set: { indexed: false } }
-    );
+    if (!rag.initialized) {
+      return res.status(503).json({ error: 'RAG system not initialized' });
+    }
 
-    // TODO: Actually rebuild the vector index
-    // This would involve:
-    // 1. Getting all knowledge items
-    // 2. Generating embeddings for each
-    // 3. Storing in vector database (Pinecone, Chroma, etc.)
+    // Rebuild in background
+    rag.rebuildIndex()
+      .then(result => console.log('RAG rebuild complete:', result))
+      .catch(e => console.error('RAG rebuild failed:', e));
 
     res.json({
       success: true,
@@ -291,39 +301,64 @@ router.post('/rebuild-index', async (req, res) => {
 
 /**
  * @route GET /api/knowledge/search
- * @desc Search knowledge base (RAG query)
+ * @desc Search knowledge base (RAG query with vector similarity)
  */
 router.get('/search', async (req, res) => {
   try {
-    const { q, category, limit = 10 } = req.query;
+    const { q, category, limit = 10, mode = 'hybrid' } = req.query;
 
     if (!q) {
       return res.status(400).json({ error: 'Query is required' });
     }
 
-    const db = getDb();
+    const rag = getRAGManager();
+    let items = [];
 
-    // Simple text search for now
-    // TODO: Replace with vector similarity search
-    const query = {
-      $or: [
-        { title: { $regex: q, $options: 'i' } },
-        { content: { $regex: q, $options: 'i' } },
-        { tags: { $in: [q.toLowerCase()] } }
-      ]
-    };
-
-    if (category) {
-      query.category = category;
+    // Try vector search first if RAG is initialized
+    if (rag.initialized && (mode === 'vector' || mode === 'hybrid')) {
+      try {
+        items = await rag.vectorStore.search(q, {
+          limit: parseInt(limit),
+          category,
+          minScore: 0.6,
+        });
+      } catch (e) {
+        console.warn('Vector search failed, falling back to text:', e.message);
+      }
     }
 
-    const items = await db.collection('knowledge')
-      .find(query)
-      .limit(parseInt(limit))
-      .toArray();
+    // Fall back to text search if no vector results or mode is text/hybrid
+    if (items.length === 0 || mode === 'text') {
+      const db = getDb();
+      const query = {
+        $or: [
+          { title: { $regex: q, $options: 'i' } },
+          { content: { $regex: q, $options: 'i' } },
+          { tags: { $in: [q.toLowerCase()] } }
+        ]
+      };
+
+      if (category) {
+        query.category = category;
+      }
+
+      const textItems = await db.collection('knowledge')
+        .find(query)
+        .limit(parseInt(limit))
+        .toArray();
+
+      // Merge with vector results (deduplicate)
+      const existingIds = new Set(items.map(i => i._id.toString()));
+      for (const item of textItems) {
+        if (!existingIds.has(item._id.toString())) {
+          items.push({ ...item, score: 0.5 }); // Text match score
+        }
+      }
+    }
 
     res.json({
       query: q,
+      mode: rag.initialized ? mode : 'text',
       count: items.length,
       items
     });
@@ -358,11 +393,52 @@ router.get('/stats', async (req, res) => {
     const total = await db.collection('knowledge').countDocuments();
     const indexed = await db.collection('knowledge').countDocuments({ indexed: true });
 
+    // Get RAG stats
+    const rag = getRAGManager();
+    let ragStats = { initialized: false };
+    if (rag.initialized) {
+      try {
+        ragStats = await rag.getStats();
+      } catch (e) {
+        ragStats = { initialized: true, error: e.message };
+      }
+    }
+
     res.json({
       total,
       indexed,
       pendingIndex: total - indexed,
-      byCategory: stats
+      byCategory: stats,
+      rag: ragStats,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/knowledge/ask
+ * @desc Ask a question using RAG-enhanced AI
+ */
+router.post('/ask', async (req, res) => {
+  try {
+    const { question, category } = req.body;
+
+    if (!question) {
+      return res.status(400).json({ error: 'Question is required' });
+    }
+
+    const rag = getRAGManager();
+
+    // Get relevant context
+    const context = await rag.getContext(question, { category, limit: 5 });
+
+    // For now, just return the context
+    // TODO: Pass to LLM agent for final answer
+    res.json({
+      question,
+      context: context || 'No relevant knowledge found.',
+      answer: 'AI answer generation coming soon. For now, review the context above.',
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
