@@ -21,7 +21,7 @@
  * @module MarketingAgent
  */
 
-const LLMAgent = require('../LLMAgent');
+const { LLMAgent } = require('../LLMAgent');
 
 /**
  * Marketing campaign types

@@ -24,7 +24,7 @@
  * @module SharePointAgent
  */
 
-const LLMAgent = require('../LLMAgent');
+const { LLMAgent } = require('../LLMAgent');
 
 /**
  * Document types

@@ -17,7 +17,7 @@
  * @module EcommerceAgent
  */
 
-const LLMAgent = require('../LLMAgent');
+const { LLMAgent } = require('../LLMAgent');
 const { AmazonDirectClient } = require('../integrations/AmazonMCP');
 const { BolDirectClient, ORDER_STATUS } = require('../integrations/BolMCP');
 

@@ -21,7 +21,7 @@
  * @module MeetingIntelligenceAgent
  */
 
-const LLMAgent = require('../LLMAgent');
+const { LLMAgent } = require('../LLMAgent');
 
 /**
  * Meeting types

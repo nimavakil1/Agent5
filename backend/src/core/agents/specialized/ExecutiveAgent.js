@@ -15,7 +15,7 @@
  * @module ExecutiveAgent
  */
 
-const LLMAgent = require('../LLMAgent');
+const { LLMAgent } = require('../LLMAgent');
 
 /**
  * Alert severity levels

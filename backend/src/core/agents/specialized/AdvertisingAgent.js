@@ -16,7 +16,7 @@
  * @module AdvertisingAgent
  */
 
-const LLMAgent = require('../LLMAgent');
+const { LLMAgent } = require('../LLMAgent');
 const { AmazonAdsClient, TARGETING_TYPE } = require('../integrations/AmazonAds');
 const { BolAdsClient, CAMPAIGN_STATUS } = require('../integrations/BolAds');
 

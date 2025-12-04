@@ -18,7 +18,7 @@
  * @module ProductDevelopmentAgent
  */
 
-const LLMAgent = require('../LLMAgent');
+const { LLMAgent } = require('../LLMAgent');
 
 /**
  * Product lifecycle stages

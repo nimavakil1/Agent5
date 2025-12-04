@@ -18,7 +18,7 @@
  * @module ProjectAgent
  */
 
-const LLMAgent = require('../LLMAgent');
+const { LLMAgent } = require('../LLMAgent');
 
 /**
  * Task status
