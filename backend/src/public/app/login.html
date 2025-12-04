@@ -61,7 +61,7 @@
       let next = getParam('next');
       if (!next) { try { next = sessionStorage.getItem('next_url') || ''; sessionStorage.removeItem('next_url'); } catch(_){} }
       if (!next) next = sameOriginReferrer();
-      location.href= next || '/dashboard.html';
+      location.href= next || '/app/index.html';
     }
     else { try{ const j=await res.json(); document.getElementById('msg').textContent = j.message||'Login failed'; }catch(_){ document.getElementById('msg').textContent = 'Login failed'; } }
   };
