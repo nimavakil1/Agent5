@@ -23,9 +23,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@scaleleap/amazon-marketplaces": "^18.0.2",
-    "@scaleleap/amazon-advertising-api-sdk": "^3.0.0",
-    "@sendinblue/client": "^3.3.1",
+        "@sendinblue/client": "^3.3.1",
     "amazon-sp-api": "^1.0.0",
     "@shopify/shopify-api": "^11.14.1",
     "bcryptjs": "^2.4.3",
