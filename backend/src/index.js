@@ -33,6 +33,7 @@ const productsRouter = require('./api/routes/products');
 const notificationsRouter = require('./api/routes/notifications');
 const prospectsRouter = require('./api/routes/prospects');
 const aiAgentsRouter = require('./api/routes/agents.api');
+const knowledgeRouter = require('./api/routes/knowledge.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -199,6 +200,7 @@ app.use('/api/products', productsRouter);
 app.use('/api/notifications', allowBearerOrSession, notificationsRouter);
 app.use('/api/prospects', prospectsRouter);
 app.use('/api/ai-agents', allowBearerOrSession, aiAgentsRouter);
+app.use('/api/knowledge', requireSession, knowledgeRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
