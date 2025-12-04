@@ -242,6 +242,37 @@ router.get('/finance/unpaid', async (req, res) => {
 });
 
 /**
+ * @route GET /api/agents/finance/product
+ * @desc Search for a product by reference, name, or barcode
+ */
+router.get('/finance/product', async (req, res) => {
+  try {
+    const { reference, name, barcode } = req.query;
+
+    if (!reference && !name && !barcode) {
+      return res.status(400).json({ success: false, error: 'Provide reference, name, or barcode' });
+    }
+
+    const registry = getAgentRegistry();
+    const financeAgent = registry.getByName('FinanceAgent');
+
+    if (!financeAgent) {
+      return res.status(503).json({ success: false, error: 'Finance agent not available' });
+    }
+
+    // Call the tool directly without going through AI loop
+    const result = await financeAgent._searchProduct({ reference, name, barcode });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route GET /api/agents/manager/overview
  * @desc Get company overview from Manager Agent
  */
