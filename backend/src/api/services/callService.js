@@ -4,10 +4,15 @@ const telnyx = require('telnyx')(process.env.TELNYX_API_KEY);
 const { RoomServiceClient, AccessToken } = require('livekit-server-sdk');
 const CallLogEntry = require('../../models/CallLogEntry');
 
-const livekitHost = process.env.LIVEKIT_SERVER_URL;
+const livekitHost = process.env.LIVEKIT_SERVER_URL || process.env.LIVEKIT_URL;
 const apiKey = process.env.LIVEKIT_API_KEY;
 const apiSecret = process.env.LIVEKIT_API_SECRET;
-const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
+
+// Only initialize LiveKit if configured
+let roomService = null;
+if (livekitHost && apiKey && apiSecret) {
+  roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
+}
 
 /**
  * Creates an outbound call using Telnyx and a LiveKit room.
@@ -17,6 +22,11 @@ const roomService = new RoomServiceClient(livekitHost, apiKey, apiSecret);
  */
 async function createOutboundCall(to, options = {}) {
   try {
+    // Check if LiveKit is configured
+    if (!roomService) {
+      throw new Error('LiveKit is not configured. Please set LIVEKIT_SERVER_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET in your .env file.');
+    }
+
     // 1. Generate room name for clean PSTN calling (bypass MongoDB allocation)
     // Clean PSTN path doesn't need pooled rooms - generate unique room name
     const roomName = `pstn-clean-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

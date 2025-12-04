@@ -5,80 +5,195 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ACROPAQ AI Platform · Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
     <script>
-      // fetch current user
       async function getMe(){ const r=await fetch('/api/auth/me',{credentials:'include'}); return r.ok?await r.json():null; }
     </script>
+    <style>
+      .tile { transition: all 0.2s ease; }
+      .tile:hover { transform: translateY(-2px); box-shadow: 0 8px 25px -5px rgba(0,0,0,0.1); }
+    </style>
   </head>
-  <body class="min-h-screen bg-slate-50">
-    <div class="flex min-h-screen">
-      <!-- Sidebar -->
-      <aside class="w-64 bg-white border-r hidden md:block">
-        <div class="px-4 py-4 flex items-center gap-3 border-b">
-          <img src="/assets/acropaq-wordmark.png" onerror="this.src='/assets/acropaq-logo-inverted.svg'" class="h-8" alt="ACROPAQ"/>
-          <span class="font-semibold text-slate-800">AI Platform</span>
+  <body class="min-h-screen bg-slate-900">
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <img src="/assets/acropaq-logo-inverted.svg" class="h-8" alt="ACROPAQ"/>
+        <span class="font-semibold text-white text-lg">AI Platform</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <span id="who" class="text-sm text-slate-400"></span>
+        <button id="logout" class="text-sm text-indigo-400 hover:text-indigo-300">Logout</button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-8">
+      <!-- Applications Section -->
+      <section class="mb-10">
+        <h2 class="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-4">Applications</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <!-- Agent Console - PRIMARY -->
+          <a href="/app/agent-console.html" class="tile bg-gradient-to-br from-violet-600 to-violet-700 rounded-xl p-5 text-white ring-2 ring-violet-400">
+            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">psychology</span>
+            <h3 class="font-semibold text-lg">Agent Console</h3>
+            <p class="text-violet-200 text-sm mt-1">12 AI Agents & Integrations</p>
+          </a>
+          <!-- AI Training Center - NEW -->
+          <a href="/app/ai-training.html" class="tile bg-gradient-to-br from-fuchsia-600 to-fuchsia-700 rounded-xl p-5 text-white ring-2 ring-fuchsia-400">
+            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">school</span>
+            <h3 class="font-semibold text-lg">AI Training</h3>
+            <p class="text-fuchsia-200 text-sm mt-1">Teach AI your business</p>
+          </a>
+          <!-- AI Call Center -->
+          <a href="/app/call-center.html" class="tile bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-xl p-5 text-white">
+            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">call</span>
+            <h3 class="font-semibold text-lg">AI Call Center</h3>
+            <p class="text-indigo-200 text-sm mt-1">Voice AI & PSTN calls</p>
+          </a>
+          <!-- Agent Studio -->
+          <a href="/app/agent-studio.html" class="tile bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl p-5 text-white">
+            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">smart_toy</span>
+            <h3 class="font-semibold text-lg">Agent Studio</h3>
+            <p class="text-purple-200 text-sm mt-1">Configure AI agents</p>
+          </a>
+          <!-- MCP Integrations -->
+          <a href="/app/mcp.html" class="tile bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl p-5 text-white">
+            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">hub</span>
+            <h3 class="font-semibold text-lg">MCP Integrations</h3>
+            <p class="text-emerald-200 text-sm mt-1">Odoo, Amazon, Bol.com</p>
+          </a>
+          <!-- Orchestrator -->
+          <a href="/app/orchestrator.html" class="tile bg-gradient-to-br from-orange-600 to-orange-700 rounded-xl p-5 text-white">
+            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">account_tree</span>
+            <h3 class="font-semibold text-lg">Orchestrator</h3>
+            <p class="text-orange-200 text-sm mt-1">Agent coordination</p>
+          </a>
+          <!-- Call Studio -->
+          <a href="/app/call-studio.html" class="tile bg-gradient-to-br from-cyan-600 to-cyan-700 rounded-xl p-5 text-white">
+            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">mic</span>
+            <h3 class="font-semibold text-lg">Call Studio</h3>
+            <p class="text-cyan-200 text-sm mt-1">Call flows & scripts</p>
+          </a>
+          <!-- Campaigns -->
+          <a href="/app/campaigns.html" class="tile bg-gradient-to-br from-rose-600 to-rose-700 rounded-xl p-5 text-white">
+            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">campaign</span>
+            <h3 class="font-semibold text-lg">Campaigns</h3>
+            <p class="text-rose-200 text-sm mt-1">Marketing campaigns</p>
+          </a>
+          <!-- Products -->
+          <a href="/app/products.html" class="tile bg-gradient-to-br from-amber-600 to-amber-700 rounded-xl p-5 text-white">
+            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">inventory_2</span>
+            <h3 class="font-semibold text-lg">Products</h3>
+            <p class="text-amber-200 text-sm mt-1">Product catalog</p>
+          </a>
+          <!-- Contacts -->
+          <a href="/app/prospects.html" class="tile bg-gradient-to-br from-teal-600 to-teal-700 rounded-xl p-5 text-white">
+            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">contacts</span>
+            <h3 class="font-semibold text-lg">Contacts</h3>
+            <p class="text-teal-200 text-sm mt-1">Leads & prospects</p>
+          </a>
         </div>
-        <nav class="p-2 text-sm">
-          <a href="/app/index.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-800">Dashboard</a>
-          <a href="/app/products.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700">Products</a>
-          <a href="/app/agent-studio.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700">Agent Studio</a>
-          <a href="/dashboard.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700">Analytics</a>
-          <a href="/customers.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700">Customers</a>
-          <a href="/call-review.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700">Call Review</a>
-          <a id="nav-admin" href="/app/admin/users.html" class="block px-3 py-2 rounded hover:bg-slate-100 text-slate-700 hidden">Admin</a>
-        </nav>
-      </aside>
-      <!-- Main -->
-      <main class="flex-1">
-        <header class="bg-white border-b px-4 py-3 flex items-center justify-between">
-          <div class="flex items-center gap-3 md:hidden">
-            <img src="/assets/acropaq-wordmark.png" onerror="this.src='/assets/acropaq-logo-inverted.svg'" class="h-7" alt="ACROPAQ"/>
-            <span class="font-semibold text-slate-800">AI Platform</span>
-          </div>
-          <div class="flex items-center gap-3">
-            <span id="who" class="text-sm text-slate-600"></span>
-            <button id="logout" class="text-sm text-indigo-600">Logout</button>
-          </div>
-        </header>
-        <section class="p-4 grid gap-4 md:grid-cols-3">
-          <div class="bg-white rounded-lg shadow p-4">
-            <div class="text-slate-500 text-sm">Quick Actions</div>
-            <div class="mt-3 flex flex-wrap gap-2">
-              <a class="px-3 py-2 rounded bg-indigo-600 text-white" href="/app/agent-studio.html">Open Agent Studio</a>
-              <a class="px-3 py-2 rounded bg-emerald-600 text-white" href="/app/products.html">Manage Products</a>
-              <a class="px-3 py-2 rounded bg-slate-100" href="/app/orchestrator.html">Orchestrator</a>
+      </section>
+
+      <!-- Analytics Section -->
+      <section class="mb-10">
+        <h2 class="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-4">Analytics & Reports</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <!-- Dashboard -->
+          <a href="/dashboard.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
+            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">analytics</span>
+            <h3 class="font-semibold">Analytics</h3>
+            <p class="text-slate-400 text-sm mt-1">Call center metrics</p>
+          </a>
+          <!-- Call Review -->
+          <a href="/call-review.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
+            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">rate_review</span>
+            <h3 class="font-semibold">Call Review</h3>
+            <p class="text-slate-400 text-sm mt-1">Review & analyze calls</p>
+          </a>
+          <!-- Live Monitor -->
+          <a href="/monitor.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
+            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">monitor_heart</span>
+            <h3 class="font-semibold">Live Monitor</h3>
+            <p class="text-slate-400 text-sm mt-1">Real-time call view</p>
+          </a>
+          <!-- Customers -->
+          <a href="/customers.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
+            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">groups</span>
+            <h3 class="font-semibold">Customers</h3>
+            <p class="text-slate-400 text-sm mt-1">Customer management</p>
+          </a>
+        </div>
+      </section>
+
+      <!-- Admin Section (hidden by default) -->
+      <section id="admin-section" class="mb-10 hidden">
+        <h2 class="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-4">Administration</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <a href="/app/admin/users.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
+            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">manage_accounts</span>
+            <h3 class="font-semibold">Users</h3>
+            <p class="text-slate-400 text-sm mt-1">User management</p>
+          </a>
+          <a href="/app/profile.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
+            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">person</span>
+            <h3 class="font-semibold">My Profile</h3>
+            <p class="text-slate-400 text-sm mt-1">Account settings</p>
+          </a>
+        </div>
+      </section>
+
+      <!-- Quick Stats -->
+      <section class="mt-8">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <h3 class="text-white font-semibold mb-4">Quick Stats</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div>
+              <div class="text-slate-400 text-sm">Calls Today</div>
+              <div id="metric-calls" class="text-2xl font-bold text-white mt-1">--</div>
+            </div>
+            <div>
+              <div class="text-slate-400 text-sm">Active Agents</div>
+              <div id="metric-agents" class="text-2xl font-bold text-white mt-1">12</div>
+            </div>
+            <div>
+              <div class="text-slate-400 text-sm">Integrations</div>
+              <div id="metric-integrations" class="text-2xl font-bold text-white mt-1">6</div>
+            </div>
+            <div>
+              <div class="text-slate-400 text-sm">Revenue</div>
+              <div id="metric-rev" class="text-2xl font-bold text-white mt-1">--</div>
             </div>
           </div>
-          <div class="bg-white rounded-lg shadow p-4">
-            <div class="text-slate-500 text-sm">Status</div>
-            <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-              <div><div class="text-slate-500">Calls Today</div><div id="metric-calls" class="text-lg font-semibold">--</div></div>
-              <div><div class="text-slate-500">Revenue</div><div id="metric-rev" class="text-lg font-semibold">--</div></div>
-            </div>
-          </div>
-          <div class="bg-white rounded-lg shadow p-4">
-            <div class="text-slate-500 text-sm">Links</div>
-            <ul class="mt-3 list-disc pl-5 text-sm text-slate-700">
-              <li><a class="text-indigo-600" href="/dashboard.html">Analytics Dashboard</a></li>
-              <li><a class="text-indigo-600" href="/customers.html">Customers & Campaigns</a></li>
-              <li><a class="text-indigo-600" href="/call-review.html">Call Review</a></li>
-            </ul>
-          </div>
-        </section>
-      </main>
-    </div>
-    <script src="/app/shell.js"></script>
+        </div>
+      </section>
+    </main>
+
     <script>
       (async ()=>{
         const me = await getMe();
         const who = document.getElementById('who');
-        if (me) { who.textContent = `${me.email} · ${me.role}`; if (me.role==='admin' || me.role==='superadmin') document.getElementById('nav-admin').classList.remove('hidden'); }
-        document.getElementById('logout').onclick = async ()=>{ try{ await fetch('/api/auth/logout',{method:'POST',credentials:'include'});}catch(_){} location.href='/app/login'; };
-        // simple metrics (placeholder)
+        if (me) {
+          who.textContent = `${me.email} · ${me.role}`;
+          if (me.role==='admin' || me.role==='superadmin') {
+            document.getElementById('admin-section').classList.remove('hidden');
+          }
+        }
+        document.getElementById('logout').onclick = async ()=>{
+          try{ await fetch('/api/auth/logout',{method:'POST',credentials:'include'});}catch(_){}
+          location.href='/app/login';
+        };
+        // Load metrics
         try {
-          const r = await fetch('/api/dashboard/kpi',{credentials:'include'}); if (r.ok){ const k=await r.json(); document.getElementById('metric-calls').textContent = k?.totals?.calls ?? '--'; document.getElementById('metric-rev').textContent = k?.totals?.revenue ?? '--'; }
+          const r = await fetch('/api/dashboard/kpi',{credentials:'include'});
+          if (r.ok){
+            const k=await r.json();
+            document.getElementById('metric-calls').textContent = k?.totals?.calls ?? '--';
+            document.getElementById('metric-rev').textContent = k?.totals?.revenue ?? '--';
+          }
         } catch(_){}
       })();
     </script>
   </body>
-  </html>
+</html>

@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireSession, allowBearerOrSession } = require('../../middleware/sessionAuth');
+const { requireSession: _requireSession, allowBearerOrSession } = require('../../middleware/sessionAuth');
 const {
   createPrefilledCartLink,
   getVariantIdBySku,

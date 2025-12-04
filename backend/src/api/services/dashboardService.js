@@ -1,7 +1,7 @@
 
 const CallLogEntry = require('../../models/CallLogEntry');
-const CampaignDefinition = require('../../models/CampaignDefinition');
-const DashboardKpiSummary = require('../../models/DashboardKpiSummary');
+const _CampaignDefinition = require('../../models/CampaignDefinition');
+const _DashboardKpiSummary = require('../../models/DashboardKpiSummary');
 
 async function getDashboardKpis() {
   try {

@@ -1,0 +1,566 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Console · ACROPAQ AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+  <style>
+    .agent-card { transition: all 0.2s ease; }
+    .agent-card:hover { transform: translateY(-2px); }
+    .agent-card.selected { ring: 2px; ring-color: #6366f1; }
+    .chat-bubble { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .typing-indicator span { animation: blink 1.4s infinite both; }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%, 80%, 100% { opacity: 0; } 40% { opacity: 1; } }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-900 text-white">
+  <!-- Header -->
+  <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <a href="/app/index.html" class="flex items-center gap-2 text-slate-400 hover:text-white">
+        <span class="material-symbols-outlined">arrow_back</span>
+      </a>
+      <img src="/assets/acropaq-logo-inverted.svg" class="h-8" alt="ACROPAQ"/>
+      <h1 class="font-semibold text-lg">Agent Console</h1>
+    </div>
+    <div class="flex items-center gap-4">
+      <span id="who" class="text-sm text-slate-400"></span>
+      <button id="logout" class="text-sm text-indigo-400 hover:text-indigo-300">Logout</button>
+    </div>
+  </header>
+
+  <div class="flex h-[calc(100vh-65px)]">
+    <!-- Left Sidebar: Agent List -->
+    <aside class="w-80 bg-slate-800 border-r border-slate-700 overflow-y-auto">
+      <!-- Agents Section -->
+      <div class="p-4">
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">AI Agents</h2>
+        <div id="agent-list" class="space-y-2">
+          <!-- Agents will be populated here -->
+        </div>
+      </div>
+
+      <!-- Integrations Section -->
+      <div class="p-4 border-t border-slate-700">
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Integrations</h2>
+        <div id="integration-list" class="space-y-2">
+          <!-- Integrations will be populated here -->
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="p-4 border-t border-slate-700">
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Quick Actions</h2>
+        <div class="space-y-2">
+          <button onclick="quickQuery('Give me a company overview')" class="w-full text-left px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 text-sm">
+            <span class="material-symbols-outlined text-base align-middle mr-2">dashboard</span>Company Overview
+          </button>
+          <button onclick="quickQuery('Show pending approvals')" class="w-full text-left px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 text-sm">
+            <span class="material-symbols-outlined text-base align-middle mr-2">pending_actions</span>Pending Approvals
+          </button>
+          <button onclick="quickQuery('Show unpaid invoices from Odoo')" class="w-full text-left px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 text-sm">
+            <span class="material-symbols-outlined text-base align-middle mr-2">receipt_long</span>Unpaid Invoices
+          </button>
+          <button onclick="quickQuery('Show recent Amazon orders')" class="w-full text-left px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 text-sm">
+            <span class="material-symbols-outlined text-base align-middle mr-2">shopping_cart</span>Amazon Orders
+          </button>
+          <button onclick="quickQuery('Show Bol.com inventory status')" class="w-full text-left px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 text-sm">
+            <span class="material-symbols-outlined text-base align-middle mr-2">inventory</span>Bol Inventory
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col">
+      <!-- Selected Agent Header -->
+      <div id="agent-header" class="bg-slate-800/50 border-b border-slate-700 px-6 py-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div id="agent-icon" class="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <span class="material-symbols-outlined">smart_toy</span>
+            </div>
+            <div>
+              <h2 id="agent-name" class="font-semibold">Select an Agent</h2>
+              <p id="agent-desc" class="text-sm text-slate-400">Choose an agent from the sidebar to start</p>
+            </div>
+          </div>
+          <div id="agent-status" class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span class="text-sm text-slate-400">Ready</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat/Response Area -->
+      <div id="chat-area" class="flex-1 overflow-y-auto p-6 space-y-4">
+        <!-- Welcome message -->
+        <div class="text-center py-12">
+          <span class="material-symbols-outlined text-6xl text-slate-600 mb-4">psychology</span>
+          <h3 class="text-xl font-semibold text-slate-400 mb-2">Welcome to Agent Console</h3>
+          <p class="text-slate-500 max-w-md mx-auto">
+            Select an agent from the sidebar or use the quick actions to get started.
+            You can ask questions in natural language and the AI agents will respond.
+          </p>
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <div class="border-t border-slate-700 p-4 bg-slate-800/50">
+        <form id="query-form" class="flex gap-3">
+          <div class="flex-1 relative">
+            <input
+              type="text"
+              id="query-input"
+              placeholder="Ask anything... (e.g., 'Show me today's orders from Amazon')"
+              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+          <button
+            type="submit"
+            id="send-btn"
+            class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span class="material-symbols-outlined">send</span>
+            Send
+          </button>
+        </form>
+        <div class="mt-2 text-xs text-slate-500">
+          <span id="selected-agent-hint">All agents</span> will process your query
+        </div>
+      </div>
+    </main>
+
+    <!-- Right Panel: Details/Data -->
+    <aside id="detail-panel" class="w-96 bg-slate-800 border-l border-slate-700 overflow-y-auto hidden lg:block">
+      <div class="p-4 border-b border-slate-700">
+        <h2 class="font-semibold">Details</h2>
+      </div>
+
+      <!-- Agent Capabilities -->
+      <div id="capabilities-section" class="p-4 border-b border-slate-700">
+        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Capabilities</h3>
+        <ul id="capabilities-list" class="space-y-2 text-sm text-slate-300">
+          <li class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-base text-emerald-500">check_circle</span>
+            Select an agent to see capabilities
+          </li>
+        </ul>
+      </div>
+
+      <!-- Recent Activity -->
+      <div id="activity-section" class="p-4">
+        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Recent Activity</h3>
+        <div id="activity-list" class="space-y-3 text-sm">
+          <p class="text-slate-500">No recent activity</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // Agent definitions
+    const agents = [
+      { id: 'manager', name: 'Manager Agent', icon: 'manage_accounts', color: 'bg-indigo-600', desc: 'CEO-level orchestration, approvals, strategic decisions', capabilities: ['Company overview', 'Pending approvals', 'Strategic recommendations', 'Cross-department coordination'] },
+      { id: 'finance', name: 'Finance Agent', icon: 'account_balance', color: 'bg-emerald-600', desc: 'Invoices, payments, financial reporting via Odoo', capabilities: ['Invoice management', 'Payment tracking', 'Financial reports', 'Odoo queries'] },
+      { id: 'ecommerce', name: 'Ecommerce Agent', icon: 'shopping_cart', color: 'bg-orange-600', desc: 'Amazon & Bol.com orders, inventory, pricing', capabilities: ['Order management', 'Inventory sync', 'Pricing optimization', 'Returns handling'] },
+      { id: 'advertising', name: 'Advertising Agent', icon: 'campaign', color: 'bg-pink-600', desc: 'Campaign optimization, bid management', capabilities: ['Campaign analysis', 'Bid optimization', 'Keyword recommendations', 'Budget allocation'] },
+      { id: 'communication', name: 'Communication Agent', icon: 'mail', color: 'bg-blue-600', desc: 'Email/Teams monitoring, sentiment analysis', capabilities: ['Email monitoring', 'Sentiment detection', 'Urgency flagging', 'Response suggestions'] },
+      { id: 'executive', name: 'Executive Agent', icon: 'psychology', color: 'bg-purple-600', desc: 'Cross-department insights, KPI monitoring', capabilities: ['Executive reports', 'KPI tracking', 'Strategic insights', 'Issue escalation'] },
+      { id: 'marketing', name: 'Marketing Agent', icon: 'trending_up', color: 'bg-rose-600', desc: 'Campaign automation, lead nurturing', capabilities: ['Campaign management', 'Lead scoring', 'Email automation', 'Analytics'] },
+      { id: 'meeting', name: 'Meeting Intelligence', icon: 'groups', color: 'bg-cyan-600', desc: 'Transcription, action items, summaries', capabilities: ['Transcription', 'Action extraction', 'Meeting summaries', 'Decision tracking'] },
+      { id: 'product', name: 'Product Development', icon: 'inventory_2', color: 'bg-amber-600', desc: 'Product lifecycle, competitor analysis', capabilities: ['Product tracking', 'Competitor analysis', 'Roadmap management', 'Performance metrics'] },
+      { id: 'project', name: 'Project Agent', icon: 'assignment', color: 'bg-teal-600', desc: 'Task tracking, team performance', capabilities: ['Project tracking', 'Task management', 'Deadline monitoring', 'Team workload'] },
+      { id: 'purchasing', name: 'Purchasing Agent', icon: 'local_shipping', color: 'bg-lime-600', desc: 'Procurement, supplier management', capabilities: ['PO management', 'Supplier tracking', 'Price monitoring', 'Auto-ordering'] },
+      { id: 'sharepoint', name: 'SharePoint Agent', icon: 'folder_shared', color: 'bg-sky-600', desc: 'Document monitoring, compliance', capabilities: ['Document monitoring', 'Version tracking', 'Compliance checks', 'Content search'] }
+    ];
+
+    const integrations = [
+      { id: 'odoo', name: 'Odoo ERP', icon: 'database', status: 'connected', desc: 'Invoices, Products, CRM' },
+      { id: 'amazon', name: 'Amazon SP-API', icon: 'store', status: 'connected', desc: 'Orders, Inventory, FBA' },
+      { id: 'bol', name: 'Bol.com', icon: 'storefront', status: 'connected', desc: 'Orders, Inventory, FBB' },
+      { id: 'microsoft', name: 'Microsoft 365', icon: 'cloud', status: 'connected', desc: 'Mail, SharePoint, Teams' },
+      { id: 'bolads', name: 'Bol Ads', icon: 'ads_click', status: 'connected', desc: 'Sponsored Products' },
+      { id: 'amazonads', name: 'Amazon Ads', icon: 'ads_click', status: 'limited', desc: 'Stub - SDK issues' }
+    ];
+
+    let selectedAgent = null;
+    let chatHistory = [];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      await checkAuth();
+      renderAgentList();
+      renderIntegrationList();
+      loadAgentHealth();
+    });
+
+    async function checkAuth() {
+      try {
+        const r = await fetch('/api/auth/me', { credentials: 'include' });
+        if (!r.ok) { location.href = '/app/login.html'; return; }
+        const me = await r.json();
+        document.getElementById('who').textContent = me.email;
+      } catch (e) {
+        location.href = '/app/login.html';
+      }
+    }
+
+    function renderAgentList() {
+      const container = document.getElementById('agent-list');
+      container.innerHTML = agents.map(agent => `
+        <button
+          onclick="selectAgent('${agent.id}')"
+          id="agent-btn-${agent.id}"
+          class="agent-card w-full text-left px-3 py-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex items-center gap-3"
+        >
+          <div class="w-8 h-8 rounded ${agent.color} flex items-center justify-center flex-shrink-0">
+            <span class="material-symbols-outlined text-lg">${agent.icon}</span>
+          </div>
+          <div class="min-w-0">
+            <div class="font-medium text-sm truncate">${agent.name}</div>
+            <div class="text-xs text-slate-400 truncate">${agent.desc}</div>
+          </div>
+          <span id="health-${agent.id}" class="w-2 h-2 rounded-full bg-slate-500 ml-auto flex-shrink-0"></span>
+        </button>
+      `).join('');
+    }
+
+    function renderIntegrationList() {
+      const container = document.getElementById('integration-list');
+      container.innerHTML = integrations.map(int => `
+        <div class="flex items-center gap-3 px-3 py-2 rounded bg-slate-700/30">
+          <span class="material-symbols-outlined text-slate-400">${int.icon}</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium">${int.name}</div>
+            <div class="text-xs text-slate-500">${int.desc}</div>
+          </div>
+          <span class="w-2 h-2 rounded-full ${int.status === 'connected' ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
+        </div>
+      `).join('');
+    }
+
+    async function loadAgentHealth() {
+      try {
+        const r = await fetch('/api/ai-agents/health', { credentials: 'include' });
+        if (r.ok) {
+          const data = await r.json();
+          // Update health indicators based on response
+          agents.forEach(agent => {
+            const el = document.getElementById(`health-${agent.id}`);
+            if (el) el.classList.replace('bg-slate-500', 'bg-emerald-500');
+          });
+        }
+      } catch (e) {
+        console.log('Health check not available');
+      }
+    }
+
+    function selectAgent(agentId) {
+      selectedAgent = agents.find(a => a.id === agentId);
+
+      // Update selection UI
+      document.querySelectorAll('.agent-card').forEach(el => {
+        el.classList.remove('ring-2', 'ring-indigo-500');
+      });
+      document.getElementById(`agent-btn-${agentId}`).classList.add('ring-2', 'ring-indigo-500');
+
+      // Update header
+      document.getElementById('agent-icon').className = `w-10 h-10 rounded-lg ${selectedAgent.color} flex items-center justify-center`;
+      document.getElementById('agent-icon').innerHTML = `<span class="material-symbols-outlined">${selectedAgent.icon}</span>`;
+      document.getElementById('agent-name').textContent = selectedAgent.name;
+      document.getElementById('agent-desc').textContent = selectedAgent.desc;
+      document.getElementById('selected-agent-hint').textContent = selectedAgent.name;
+
+      // Update capabilities
+      document.getElementById('capabilities-list').innerHTML = selectedAgent.capabilities.map(cap => `
+        <li class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-base text-emerald-500">check_circle</span>
+          ${cap}
+        </li>
+      `).join('');
+
+      // Focus input
+      document.getElementById('query-input').focus();
+    }
+
+    function quickQuery(query) {
+      document.getElementById('query-input').value = query;
+      document.getElementById('query-form').dispatchEvent(new Event('submit'));
+    }
+
+    // Handle form submission
+    document.getElementById('query-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('query-input');
+      const query = input.value.trim();
+      if (!query) return;
+
+      const chatArea = document.getElementById('chat-area');
+      const sendBtn = document.getElementById('send-btn');
+
+      // Clear welcome message if present
+      if (chatArea.querySelector('.text-center')) {
+        chatArea.innerHTML = '';
+      }
+
+      // Add user message
+      chatArea.innerHTML += `
+        <div class="chat-bubble flex justify-end">
+          <div class="bg-indigo-600 rounded-lg px-4 py-3 max-w-2xl">
+            <p class="text-sm">${escapeHtml(query)}</p>
+          </div>
+        </div>
+      `;
+
+      // Add typing indicator
+      const typingId = 'typing-' + Date.now();
+      chatArea.innerHTML += `
+        <div id="${typingId}" class="chat-bubble flex">
+          <div class="bg-slate-700 rounded-lg px-4 py-3">
+            <div class="typing-indicator flex gap-1">
+              <span class="w-2 h-2 bg-slate-400 rounded-full"></span>
+              <span class="w-2 h-2 bg-slate-400 rounded-full"></span>
+              <span class="w-2 h-2 bg-slate-400 rounded-full"></span>
+            </div>
+          </div>
+        </div>
+      `;
+      chatArea.scrollTop = chatArea.scrollHeight;
+
+      // Disable input
+      input.value = '';
+      input.disabled = true;
+      sendBtn.disabled = true;
+
+      try {
+        // Determine which endpoint to use
+        let endpoint = '/api/ai-agents/query';
+        let body = { question: query };
+
+        if (selectedAgent) {
+          if (selectedAgent.id === 'manager') {
+            if (query.toLowerCase().includes('overview')) {
+              endpoint = '/api/ai-agents/manager/overview';
+              body = null;
+            } else if (query.toLowerCase().includes('approval')) {
+              endpoint = '/api/ai-agents/manager/approvals';
+              body = null;
+            }
+          } else if (selectedAgent.id === 'finance') {
+            if (query.toLowerCase().includes('unpaid') || query.toLowerCase().includes('invoice')) {
+              endpoint = '/api/ai-agents/finance/unpaid';
+              body = null;
+            } else if (query.toLowerCase().includes('summary')) {
+              endpoint = '/api/ai-agents/finance/summary';
+              body = null;
+            }
+          }
+        }
+
+        const options = {
+          method: body ? 'POST' : 'GET',
+          credentials: 'include',
+          headers: body ? { 'Content-Type': 'application/json' } : {}
+        };
+        if (body) options.body = JSON.stringify(body);
+
+        const r = await fetch(endpoint, options);
+        const data = await r.json();
+
+        // Remove typing indicator
+        document.getElementById(typingId)?.remove();
+
+        // Add response
+        const responseHtml = formatResponse(data, selectedAgent);
+        chatArea.innerHTML += `
+          <div class="chat-bubble flex">
+            <div class="bg-slate-700 rounded-lg px-4 py-3 max-w-3xl w-full">
+              ${responseHtml}
+            </div>
+          </div>
+        `;
+
+        // Add to activity
+        addActivity(query, selectedAgent?.name || 'All Agents');
+
+      } catch (err) {
+        document.getElementById(typingId)?.remove();
+        chatArea.innerHTML += `
+          <div class="chat-bubble flex">
+            <div class="bg-red-900/50 border border-red-700 rounded-lg px-4 py-3 max-w-2xl">
+              <p class="text-sm text-red-300">Error: ${err.message || 'Failed to get response'}</p>
+            </div>
+          </div>
+        `;
+      }
+
+      // Re-enable input
+      input.disabled = false;
+      sendBtn.disabled = false;
+      input.focus();
+      chatArea.scrollTop = chatArea.scrollHeight;
+    });
+
+    function formatResponse(data, agent) {
+      if (typeof data === 'string') {
+        return `<p class="text-sm">${escapeHtml(data)}</p>`;
+      }
+
+      if (data.error || data.message) {
+        return `<p class="text-sm">${escapeHtml(data.error || data.message)}</p>`;
+      }
+
+      // Format as structured data
+      let html = '';
+
+      if (data.response) {
+        html += `<p class="text-sm mb-3">${escapeHtml(data.response)}</p>`;
+      }
+
+      if (data.overview || data.summary) {
+        const info = data.overview || data.summary;
+        html += `<div class="bg-slate-800 rounded p-3 mb-3">`;
+        html += formatObject(info);
+        html += `</div>`;
+      }
+
+      if (data.invoices && Array.isArray(data.invoices)) {
+        html += `<div class="text-sm font-medium mb-2">Invoices (${data.invoices.length})</div>`;
+        html += `<div class="space-y-2">`;
+        data.invoices.slice(0, 10).forEach(inv => {
+          html += `
+            <div class="bg-slate-800 rounded p-2 text-sm">
+              <div class="flex justify-between">
+                <span class="font-medium">${escapeHtml(inv.number || inv.name || 'N/A')}</span>
+                <span class="text-emerald-400">${inv.amount_total || inv.amount || 'N/A'}</span>
+              </div>
+              <div class="text-slate-400 text-xs">${escapeHtml(inv.partner_name || inv.customer || '')}</div>
+            </div>
+          `;
+        });
+        if (data.invoices.length > 10) {
+          html += `<p class="text-xs text-slate-500">... and ${data.invoices.length - 10} more</p>`;
+        }
+        html += `</div>`;
+      }
+
+      if (data.orders && Array.isArray(data.orders)) {
+        html += `<div class="text-sm font-medium mb-2">Orders (${data.orders.length})</div>`;
+        html += `<div class="space-y-2">`;
+        data.orders.slice(0, 10).forEach(order => {
+          html += `
+            <div class="bg-slate-800 rounded p-2 text-sm">
+              <div class="flex justify-between">
+                <span class="font-medium">${escapeHtml(order.orderId || order.id || 'N/A')}</span>
+                <span class="${order.status === 'Shipped' ? 'text-emerald-400' : 'text-amber-400'}">${order.status || 'N/A'}</span>
+              </div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      if (data.approvals && Array.isArray(data.approvals)) {
+        html += `<div class="text-sm font-medium mb-2">Pending Approvals (${data.approvals.length})</div>`;
+        if (data.approvals.length === 0) {
+          html += `<p class="text-slate-400 text-sm">No pending approvals</p>`;
+        } else {
+          html += `<div class="space-y-2">`;
+          data.approvals.forEach(app => {
+            html += `
+              <div class="bg-slate-800 rounded p-2 text-sm flex items-center justify-between">
+                <div>
+                  <div class="font-medium">${escapeHtml(app.title || app.type || 'Approval')}</div>
+                  <div class="text-slate-400 text-xs">${escapeHtml(app.description || '')}</div>
+                </div>
+                <div class="flex gap-2">
+                  <button onclick="handleApproval('${app.id}', 'approve')" class="px-2 py-1 bg-emerald-600 rounded text-xs">Approve</button>
+                  <button onclick="handleApproval('${app.id}', 'reject')" class="px-2 py-1 bg-red-600 rounded text-xs">Reject</button>
+                </div>
+              </div>
+            `;
+          });
+          html += `</div>`;
+        }
+      }
+
+      // Fallback: show raw JSON
+      if (!html) {
+        html = `<pre class="text-xs text-slate-300 overflow-x-auto">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+      }
+
+      return html;
+    }
+
+    function formatObject(obj, indent = 0) {
+      let html = '';
+      for (const [key, value] of Object.entries(obj)) {
+        if (value === null || value === undefined) continue;
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        if (typeof value === 'object' && !Array.isArray(value)) {
+          html += `<div class="text-xs text-slate-400 mt-2">${label}</div>`;
+          html += formatObject(value, indent + 1);
+        } else if (Array.isArray(value)) {
+          html += `<div class="flex justify-between text-sm"><span class="text-slate-400">${label}</span><span>${value.length} items</span></div>`;
+        } else {
+          html += `<div class="flex justify-between text-sm"><span class="text-slate-400">${label}</span><span>${escapeHtml(String(value))}</span></div>`;
+        }
+      }
+      return html;
+    }
+
+    async function handleApproval(id, action) {
+      try {
+        const r = await fetch(`/api/ai-agents/manager/${action}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+        const data = await r.json();
+        alert(data.message || `${action} successful`);
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    function addActivity(query, agent) {
+      const container = document.getElementById('activity-list');
+      const time = new Date().toLocaleTimeString();
+      const item = document.createElement('div');
+      item.className = 'bg-slate-700/50 rounded p-2';
+      item.innerHTML = `
+        <div class="text-xs text-slate-500">${time} · ${agent}</div>
+        <div class="text-sm truncate">${escapeHtml(query)}</div>
+      `;
+      if (container.querySelector('.text-slate-500:only-child')) {
+        container.innerHTML = '';
+      }
+      container.insertBefore(item, container.firstChild);
+      // Keep only last 10
+      while (container.children.length > 10) {
+        container.removeChild(container.lastChild);
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Logout handler
+    document.getElementById('logout').onclick = async () => {
+      try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch (_) {}
+      location.href = '/app/login.html';
+    };
+  </script>
+</body>
+</html>
