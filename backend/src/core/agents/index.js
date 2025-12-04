@@ -25,6 +25,9 @@ const { SharePointAgent, DocumentType, ActivityType } = require('./specialized/S
 const { ProjectAgent, TaskStatus, Priority: TaskPriority } = require('./specialized/ProjectAgent');
 const { PurchasingAgent, POStatus, SupplierRating } = require('./specialized/PurchasingAgent');
 const { ExecutiveAgent, AlertSeverity: ExecAlertSeverity, DecisionType } = require('./specialized/ExecutiveAgent');
+const { ProductDevelopmentAgent, ProductStage, ProductCategory } = require('./specialized/ProductDevelopmentAgent');
+const { MarketingAgent, CampaignType, CampaignStatus, LeadStatus, Channel } = require('./specialized/MarketingAgent');
+const { MeetingIntelligenceAgent, MeetingType, MeetingStatus, ActionPriority, EngagementLevel } = require('./specialized/MeetingIntelligenceAgent');
 
 // Integrations - Phase 1
 const { createOdooMCPConfig, OdooDirectClient } = require('./integrations/OdooMCP');
@@ -95,6 +98,19 @@ module.exports = {
   ExecutiveAgent,
   ExecAlertSeverity,
   DecisionType,
+  ProductDevelopmentAgent,
+  ProductStage,
+  ProductCategory,
+  MarketingAgent,
+  CampaignType,
+  CampaignStatus,
+  LeadStatus,
+  Channel,
+  MeetingIntelligenceAgent,
+  MeetingType,
+  MeetingStatus,
+  ActionPriority,
+  EngagementLevel,
 
   // Integrations - Odoo
   createOdooMCPConfig,
