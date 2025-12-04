@@ -48,7 +48,7 @@ class BaseAgent extends EventEmitter {
     };
 
     // Execution settings
-    this.maxIterations = config.maxIterations || 10;
+    this.maxIterations = config.maxIterations || 100;
     this.timeoutMs = config.timeoutMs || 60000;
 
     // Approval settings
