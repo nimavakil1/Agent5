@@ -4,11 +4,11 @@ const OpenAI = require('openai');
 const url = require('url'); // Import url module
 const { RoomServiceClient, AccessToken } = require('livekit-server-sdk'); // Import LiveKit SDK
 const { startRoomAudioEgress, stopEgress } = require('../livekit/egress');
-const { createPublisher, toWsUrl } = require('../livekit/publisher');
+const { createPublisher, toWsUrl: _toWsUrl } = require('../livekit/publisher');
 const CallLogEntry = require('../models/CallLogEntry'); // Import CallLogEntry model
 const CustomerRecord = require('../models/CustomerRecord'); // Import CustomerRecord model
-const CallCostTracking = require('../models/CallCostTracking'); // Import CallCostTracking model
-const { getToolsSpec, callTool } = require('../services/mcpTools');
+const _CallCostTracking = require('../models/CallCostTracking'); // Import CallCostTracking model
+const { getToolsSpec: _getToolsSpec, callTool } = require('../services/mcpTools');
 const { resolveAgentAndMcp } = require('../util/orchestrator');
 const CampaignDefinition = require('../models/CampaignDefinition');
 const costCalculationService = require('../services/costCalculationService');
@@ -16,7 +16,7 @@ const costCalculationService = require('../services/costCalculationService');
 const fs = require('fs'); // Import file system module
 const path = require('path'); // Import path module
 
-const openai = new OpenAI({
+const _openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -235,7 +235,7 @@ function createWebSocketServer(server) {
   })();
 
   // Helper to convert 24kHz PCM to 8kHz u-law for recording browser audio
-  function pcm24kToUlaw8k(pcm24kLeBuf) {
+  function _pcm24kToUlaw8k(pcm24kLeBuf) {
     const pcm16kArr = new Int16Array(pcm24kLeBuf.buffer, pcm24kLeBuf.byteOffset, pcm24kLeBuf.length / 2);
     if (pcm16kArr.length < 3) {
       return Buffer.alloc(0); // Not enough data to downsample
@@ -789,9 +789,9 @@ function createWebSocketServer(server) {
             try { await studioApplyRules(); } catch(_) {}
           } catch (e) { console.error('Error processing OA message:', e); }
         });
-        const closeAll = async () => { 
-          try { oaWs.close(); } catch(e) { console.error('Error closing OA ws:', e); };
-          try { publisher && await publisher.close(); } catch(e) { console.error('Error closing publisher:', e); };
+        const closeAll = async () => {
+          try { oaWs.close(); } catch(e) { console.error('Error closing OA ws:', e); }
+          try { publisher && await publisher.close(); } catch(e) { console.error('Error closing publisher:', e); }
           try { await studioMixer.finalize(); } catch(_) {}
           // Stop LiveKit egress and capture file result
           let egressFile = '';
@@ -963,10 +963,11 @@ function createWebSocketServer(server) {
     console.log(`Telnyx connected for LiveKit room: ${roomName}`);
 
     let openaiWs = null; // WebSocket connection to OpenAI
-    let livekitRoom = null; // LiveKit Room object
-    let telnyxParticipant = null; // LiveKit Participant for Telnyx audio
+    let _livekitRoom = null; // LiveKit Room object
+    let _telnyxParticipant = null; // LiveKit Participant for Telnyx audio
     let livekitPublisher = null; // Node publisher into LiveKit
     let livekitRecorder = null; // Recorder participant
+    let egressId = null; // LiveKit Egress ID for recording
     let customerRecord = null; // Customer Record for personalization
     let currentTranscription = ''; // To accumulate transcription
     
@@ -992,11 +993,11 @@ function createWebSocketServer(server) {
 
     // Recording stream state
     let audioFilePath = null;
-    let audioWriteStream = null;
-    let bytesWritten = 0;
+    let _audioWriteStream = null;
+    let _bytesWritten = 0;
     let telnyxStreamId = null; // Stream ID from Telnyx 'start' event
     // Disable legacy PSTN mixer (we use LiveKit Egress)
-    const pstnMixPath = '';
+    const _pstnMixPath = '';
     const pstnMixer = { appendAgent() {}, appendCallee() {}, async finalize() {} };
 
     // Outgoing AI speech queue (PCMU @8kHz)
@@ -1094,14 +1095,14 @@ function createWebSocketServer(server) {
         canPublish: true,
         canSubscribe: true,
       });
-      const telnyxParticipantToken = telnyxParticipantAccessToken.toJwt();
+      const _telnyxParticipantToken = telnyxParticipantAccessToken.toJwt();
 
       try {
-        livekitRoom = await roomService.getRoom(roomName);
+        const _livekitRoom = await roomService.getRoom(roomName);
         console.log(`LiveKit room ${roomName} exists.`);
       } catch (e) {
         console.log(`LiveKit room ${roomName} does not exist, creating...`);
-        livekitRoom = await roomService.createRoom({ name: roomName });
+        _livekitRoom = await roomService.createRoom({ name: roomName });
         console.log(`LiveKit room ${roomName} created.`);
       }
 
@@ -1127,11 +1128,11 @@ function createWebSocketServer(server) {
       let languageHint = String(q.lang || q.language || '').toLowerCase();
       if (!languageHint && customerRecord?.preferred_language) languageHint = String(customerRecord.preferred_language).toLowerCase();
 
-      let resolved = null;
+      let _resolved = null;
       let sessionOverrides = { instructions: null, voice: null, language: null };
       try {
         const out = await resolveAgentAndMcp({ campaignId: (campaignHint || (callLog?.campaign_id || '')), detectedLanguage: languageHint });
-        resolved = out;
+        _resolved = out;
         if (out?.agent) {
           sessionOverrides.instructions = out.agent.instructions || null;
           sessionOverrides.voice = out.agent.voice || null;
@@ -1344,7 +1345,7 @@ function createWebSocketServer(server) {
           console.log('Telnyx stream started; stream_id=', telnyxStreamId);
           try { sessionRegistry.set(roomName, { telnyxWs, telnyxStreamId }); } catch(_) {}
           try { require('../util/roomsStore').touch(roomName); } catch(_) {}
-          bytesWritten = 0;
+          _bytesWritten = 0;
           await ensureCallLogDefaults();
         } else if (data.event === 'media') {
           const audioBase64 = data.media.payload;
@@ -1455,7 +1456,7 @@ function createWebSocketServer(server) {
                 },
                 pstn: { duration_minutes: durationMinutes },
                 recording: {
-                  local_path: recorderPath || audioFilePath || '',
+                  local_path: livekitRecorder?.outPath || audioFilePath || '',
                   onedrive_url: '',
                   onedrive_file_id: '',
                   upload_status: 'local_only'

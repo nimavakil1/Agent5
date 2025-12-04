@@ -75,7 +75,7 @@ router.post('/upload-csv', upload.single('csv'), async (req, res) => {
 
   try {
     // Read and parse CSV
-    const csvStream = fs.createReadStream(req.file.path)
+    const _csvStream = fs.createReadStream(req.file.path)
       .pipe(csv())
       .on('data', (data) => results.push(data))
       .on('end', async () => {

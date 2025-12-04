@@ -700,7 +700,7 @@ class ProjectAgent extends LLMAgent {
   }
 
   async _updateTaskStatus(params) {
-    const { task_id, status, notes, source = 'odoo' } = params;
+    const { task_id, status, notes: _notes, source = 'odoo' } = params;
 
     if (source === 'odoo' && this.odooClient) {
       const id = parseInt(task_id.replace('odoo_', ''));
@@ -857,7 +857,7 @@ class ProjectAgent extends LLMAgent {
     };
   }
 
-  async _getAtRiskProjects(params = {}) {
+  async _getAtRiskProjects(_params = {}) {
     const projects = await this._getAllProjects({ status: 'active' });
     const atRisk = [];
 
@@ -1024,7 +1024,7 @@ Generate a brief, professional message asking for a status update.`;
   // ==================== REPORTING ====================
 
   async _generateDailyStandup(params = {}) {
-    const { project_id, team } = params;
+    const { project_id: _project_id, team } = params;
 
     const [overdue, upcoming, workload] = await Promise.all([
       this._getOverdueTasks({}),
@@ -1053,7 +1053,7 @@ Generate a brief, professional message asking for a status update.`;
   }
 
   async _generateWeeklyReport(params = {}) {
-    const { project_id } = params;
+    const { project_id: _project_id } = params;
 
     const [performance, atRisk, blockers] = await Promise.all([
       this._getPerformanceMetrics({ period_days: 7 }),

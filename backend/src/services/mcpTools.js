@@ -174,7 +174,7 @@ async function callTool(name, params = {}, { user = { id: 'system', email: 'syst
     if (Array.isArray(params?.tags)) body.tags = params.tags.map(String);
     if (params?.invoice && typeof params.invoice === 'object') body.invoice = params.invoice;
     const doc = await CustomerRecord.create(body);
-    try { await AuditLog.create({ user_id: user.id, user_email: email, action: 'mcp.create_prospect', resource: 'CustomerRecord', resource_id: String(doc._id), details: body, success: true }); } catch(_) {}
+    try { await AuditLog.create({ user_id: user.id, user_email: user.email, action: 'mcp.create_prospect', resource: 'CustomerRecord', resource_id: String(doc._id), details: body, success: true }); } catch(_) {}
     return { ok: true, customer_id: String(doc._id) };
   }
 

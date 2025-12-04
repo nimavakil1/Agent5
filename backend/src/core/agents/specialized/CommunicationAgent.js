@@ -756,7 +756,7 @@ Provide analysis in this JSON format:
 
     // Categorize emails
     const byCategory = {};
-    const byUrgency = {};
+    const _byUrgency = {}; // TODO: Implement urgency categorization
     const byUser = {};
 
     for (const email of emails.emails) {
@@ -817,7 +817,7 @@ Provide analysis in this JSON format:
   // ==================== URGENT ITEM DETECTION ====================
 
   async _detectUrgentItems(params = {}) {
-    const { include_emails = true, include_teams = true } = params;
+    const { include_emails = true, include_teams: _include_teams = true } = params;
 
     const urgentItems = [];
 

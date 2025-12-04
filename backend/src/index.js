@@ -39,14 +39,14 @@ const { AgentModule } = require('./core/agents');
 const validateEnv = require('./config/validateEnv');
 const ensureAdmin = require('./util/ensureAdmin');
 const { ensureDefaultRoles } = require('./util/ensureRoles');
-const auth = require('./middleware/auth');
+const _auth = require('./middleware/auth');
 const { requireSession, allowBearerOrSession } = require('./middleware/sessionAuth');
 const scheduler = require('./scheduler');
 const CallLogEntry = require('./models/CallLogEntry');
 const { resolveAgentAndMcp } = require('./util/orchestrator');
 const agentSettings = require('./config/agentSettings');
 
-const openai = new OpenAI({
+const _openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -260,13 +260,22 @@ wss.on('connection', async (telnyxWs, req) => {
   let currentTranscription = '';
   let customerRecord = null;
 
-  let aiPcmuQueue = Buffer.alloc(0);
+  let _aiPcmuQueue = Buffer.alloc(0);
   let aiSendTimer = null;
-  const AI_FRAME_SAMPLES = 160;
+  const _AI_FRAME_SAMPLES = 160;
 
-  let ttsInFlight = false;
+  let _ttsInFlight = false;
   let ttsAbort = null;
   let outBuf = '';
+
+  // TTS stub function - actual TTS implementation needed
+  async function startTTS(text, _isFinal = false) {
+    console.warn('startTTS called but TTS is not fully implemented:', text?.substring(0, 50));
+    _ttsInFlight = true;
+    // TODO: Implement actual TTS synthesis and audio streaming
+    _ttsInFlight = false;
+    return;
+  }
 
   let recordingFile = null;
   let recordingPath = '';

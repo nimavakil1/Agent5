@@ -191,14 +191,14 @@ class Platform extends EventEmitter {
     }
 
     // Find default provider for this type
-    for (const [key, reg] of this.providers) {
+    for (const [_key, reg] of this.providers) {
       if (reg.type === type && reg.isDefault) {
         return reg.provider;
       }
     }
 
     // Return first provider of this type
-    for (const [key, reg] of this.providers) {
+    for (const [_key, reg] of this.providers) {
       if (reg.type === type) {
         return reg.provider;
       }
@@ -214,7 +214,7 @@ class Platform extends EventEmitter {
    */
   getProvidersByType(type) {
     const providers = [];
-    for (const [key, reg] of this.providers) {
+    for (const [_key, reg] of this.providers) {
       if (reg.type === type) {
         providers.push(reg);
       }

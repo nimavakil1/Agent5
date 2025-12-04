@@ -152,7 +152,7 @@ router.post('/upload_deliveries', requireSession, upload.single('csv'), async (r
             const msg = e.message||'error';
             const code = (String(msg).includes('duplicate key') ? 'DUPLICATE_KEY' : 'UNKNOWN_ERROR');
             errors.push(`Row ${i+1}: ${msg}`);
-            failed_items.push({ row: i+1, error_code: code, error_message: msg, original_row: r });
+            failed_items.push({ row: i+1, error_code: code, error_message: msg, original_row: rows[i] });
           }
         }
         fs.unlink(req.file.path, ()=>{});

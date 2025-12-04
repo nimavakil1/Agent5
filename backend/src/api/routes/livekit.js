@@ -3,7 +3,7 @@ const router = express.Router();
 const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
 const roomsStore = require('../../util/roomsStore');
 const sessionRegistry = require('../../util/sessionRegistry');
-const roomPool = require('../../util/roomPool');
+const _roomPool = require('../../util/roomPool');
 const RoomLock = require('../../models/RoomLock');
 
 function toHttpUrl(u) {

@@ -259,7 +259,7 @@ function wrapError(error, context = {}) {
  * Express error handling middleware
  */
 function errorHandler(logger) {
-  return (err, req, res, next) => {
+  return (err, req, res, _next) => {
     // Determine if this is an operational error
     const isOperational = err instanceof PlatformError ? err.isOperational : false;
 

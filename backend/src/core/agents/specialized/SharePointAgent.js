@@ -825,7 +825,7 @@ Provide analysis in JSON format:
   }
 
   async _detectSensitiveContent(params = {}) {
-    const { site_id } = params;
+    const { site_id: _site_id } = params;
 
     const activity = await this._getRecentActivity({ hours_back: 168 });  // Last week
     const sensitiveFiles = [];
