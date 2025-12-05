@@ -8,6 +8,7 @@ const { createAgentRegistry } = require('./AgentRegistry');
 const { MCPRegistry } = require('./MCPClient');
 const { FinanceAgent } = require('./specialized/FinanceAgent');
 const { ManagerAgent } = require('./specialized/ManagerAgent');
+const { CommunicationAgent } = require('./specialized/CommunicationAgent');
 
 class AgentModule {
   constructor(config = {}) {
@@ -100,6 +101,9 @@ class AgentModule {
         break;
       case 'finance':
         agent = new FinanceAgent();
+        break;
+      case 'communication':
+        agent = new CommunicationAgent();
         break;
       default:
         throw new Error(`Unknown agent type: ${type}`);

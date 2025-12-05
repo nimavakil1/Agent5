@@ -1,0 +1,352 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Microsoft 365 Configuration · ACROPAQ AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+  </head>
+  <body class="min-h-screen bg-slate-900">
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4">
+      <div class="flex items-center justify-between max-w-5xl mx-auto">
+        <div class="flex items-center gap-3">
+          <a href="/app/index.html" class="text-slate-400 hover:text-white">
+            <span class="material-symbols-outlined">arrow_back</span>
+          </a>
+          <span class="material-symbols-outlined text-blue-400 text-2xl">settings</span>
+          <h1 class="text-white text-xl font-semibold">Microsoft 365 Configuration</h1>
+        </div>
+        <div id="status-indicator" class="flex items-center gap-2 text-sm text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+          Checking...
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-6 py-8">
+      <!-- Connection Status Card -->
+      <div id="status-card" class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-white font-semibold text-lg mb-2">Connection Status</h2>
+            <p id="status-message" class="text-slate-400">Checking Microsoft Graph API connection...</p>
+          </div>
+          <div id="status-icon" class="text-4xl">
+            <span class="material-symbols-outlined text-slate-500">hourglass_empty</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Configuration Instructions -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">Setup Instructions</h2>
+
+        <div class="space-y-6">
+          <!-- Step 1 -->
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">1</div>
+            <div>
+              <h3 class="text-white font-medium mb-1">Register an App in Azure AD</h3>
+              <p class="text-slate-400 text-sm mb-2">Go to <a href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" class="text-blue-400 hover:underline">Azure Portal → App registrations</a></p>
+              <ul class="text-slate-400 text-sm list-disc ml-4 space-y-1">
+                <li>Click "New registration"</li>
+                <li>Name: "ACROPAQ AI Agent"</li>
+                <li>Supported account types: "Single tenant"</li>
+                <li>Click "Register"</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">2</div>
+            <div>
+              <h3 class="text-white font-medium mb-1">Create a Client Secret</h3>
+              <p class="text-slate-400 text-sm mb-2">In your app registration:</p>
+              <ul class="text-slate-400 text-sm list-disc ml-4 space-y-1">
+                <li>Go to "Certificates & secrets"</li>
+                <li>Click "New client secret"</li>
+                <li>Copy the secret value (you won't see it again!)</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">3</div>
+            <div>
+              <h3 class="text-white font-medium mb-1">Configure API Permissions</h3>
+              <p class="text-slate-400 text-sm mb-2">In "API permissions", add these Microsoft Graph <strong>Application</strong> permissions:</p>
+              <div class="bg-slate-900 rounded-lg p-3 mt-2 text-sm font-mono text-slate-300">
+                Mail.Read<br>
+                Mail.ReadWrite<br>
+                Mail.Send<br>
+                Calendars.Read<br>
+                Calendars.ReadWrite<br>
+                Files.Read.All<br>
+                Sites.Read.All<br>
+                Team.ReadBasic.All<br>
+                ChannelMessage.Read.All<br>
+                ChannelMessage.Send<br>
+                User.Read.All<br>
+                Presence.Read.All
+              </div>
+              <p class="text-amber-400 text-sm mt-2">Click "Grant admin consent" after adding permissions!</p>
+            </div>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">4</div>
+            <div>
+              <h3 class="text-white font-medium mb-1">Add Environment Variables</h3>
+              <p class="text-slate-400 text-sm mb-2">Add these to your server's <code class="bg-slate-700 px-1 rounded">.env</code> file:</p>
+              <div class="bg-slate-900 rounded-lg p-3 mt-2 text-sm font-mono text-slate-300">
+                MS_TENANT_ID=your-tenant-id<br>
+                MS_CLIENT_ID=your-client-id<br>
+                MS_CLIENT_SECRET=your-client-secret<br>
+                MS_USER_ID=default-user@acropaq.com
+              </div>
+              <p class="text-slate-400 text-sm mt-2">Find Tenant ID and Client ID on the app's "Overview" page.</p>
+            </div>
+          </div>
+
+          <!-- Step 5 -->
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">5</div>
+            <div>
+              <h3 class="text-white font-medium mb-1">Enable Communication Agent</h3>
+              <p class="text-slate-400 text-sm mb-2">Add 'communication' to your agent config and restart:</p>
+              <div class="bg-slate-900 rounded-lg p-3 mt-2 text-sm font-mono text-slate-300">
+                ENABLE_AI_AGENTS=1<br>
+                # Then restart: pm2 restart all
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test Connection -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">Test Connection</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button onclick="testGetUsers()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">group</span>
+            Test: Get Users
+          </button>
+          <button onclick="testGetEmails()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">mail</span>
+            Test: Get Emails
+          </button>
+          <button onclick="testGetTeams()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">groups</span>
+            Test: Get Teams
+          </button>
+          <button onclick="testGetCalendar()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">calendar_month</span>
+            Test: Get Calendar
+          </button>
+        </div>
+
+        <!-- Test Results -->
+        <div id="test-results" class="mt-4 hidden">
+          <h3 class="text-slate-400 text-sm font-semibold mb-2">Results:</h3>
+          <pre id="test-output" class="bg-slate-900 rounded-lg p-4 text-sm text-slate-300 overflow-x-auto max-h-64 overflow-y-auto"></pre>
+        </div>
+      </div>
+
+      <!-- Available Capabilities -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+        <h2 class="text-white font-semibold text-lg mb-4">Available Capabilities</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Outlook -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-blue-400">mail</span>
+              <h3 class="text-white font-medium">Outlook</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• Read inbox emails</li>
+              <li>• Send emails</li>
+              <li>• Reply to emails</li>
+              <li>• Forward emails</li>
+              <li>• Manage folders</li>
+            </ul>
+          </div>
+
+          <!-- Teams -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-purple-400">forum</span>
+              <h3 class="text-white font-medium">Teams</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• List joined teams</li>
+              <li>• Get channel messages</li>
+              <li>• Send channel messages</li>
+              <li>• Check user presence</li>
+            </ul>
+          </div>
+
+          <!-- Calendar -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-green-400">calendar_month</span>
+              <h3 class="text-white font-medium">Calendar</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• View events</li>
+              <li>• Create meetings</li>
+              <li>• Schedule Teams calls</li>
+              <li>• Check availability</li>
+            </ul>
+          </div>
+
+          <!-- SharePoint -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-teal-400">folder_shared</span>
+              <h3 class="text-white font-medium">SharePoint</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• Search documents</li>
+              <li>• Access sites</li>
+              <li>• Read lists</li>
+              <li>• Get file links</li>
+            </ul>
+          </div>
+
+          <!-- OneDrive -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-sky-400">cloud</span>
+              <h3 class="text-white font-medium">OneDrive</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• Browse files</li>
+              <li>• Search content</li>
+              <li>• Share files</li>
+              <li>• Create folders</li>
+            </ul>
+          </div>
+
+          <!-- Users -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-amber-400">person</span>
+              <h3 class="text-white font-medium">Users</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• List employees</li>
+              <li>• Get user details</li>
+              <li>• Check org structure</li>
+              <li>• View managers</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      // Check connection status on load
+      async function checkStatus() {
+        const indicator = document.getElementById('status-indicator');
+        const card = document.getElementById('status-card');
+        const message = document.getElementById('status-message');
+        const icon = document.getElementById('status-icon');
+
+        try {
+          const res = await fetch('/api/agents/health', { credentials: 'include' });
+          if (!res.ok) throw new Error('API error');
+
+          const data = await res.json();
+          const commAgent = data.health?.agents?.find(a => a.name === 'CommunicationAgent');
+
+          if (commAgent) {
+            indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500"></span> Connected';
+            card.classList.remove('border-slate-700');
+            card.classList.add('border-green-600');
+            message.textContent = 'Microsoft 365 integration is active and ready.';
+            icon.innerHTML = '<span class="material-symbols-outlined text-green-500">check_circle</span>';
+          } else {
+            indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span> Not Active';
+            message.textContent = 'Communication Agent is not running. Follow the setup instructions below.';
+            icon.innerHTML = '<span class="material-symbols-outlined text-amber-500">warning</span>';
+          }
+        } catch (e) {
+          indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> Error';
+          message.textContent = 'Could not check status: ' + e.message;
+          icon.innerHTML = '<span class="material-symbols-outlined text-red-500">error</span>';
+        }
+      }
+
+      async function runTest(endpoint, body = {}) {
+        const results = document.getElementById('test-results');
+        const output = document.getElementById('test-output');
+        results.classList.remove('hidden');
+        output.textContent = 'Loading...';
+
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          output.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          output.textContent = 'Error: ' + e.message;
+        }
+      }
+
+      function testGetUsers() {
+        runTest('/api/agents/task', {
+          task: {
+            type: 'query',
+            description: 'List the first 5 users in the organization',
+          },
+          agentRole: 'communication',
+        });
+      }
+
+      function testGetEmails() {
+        runTest('/api/agents/task', {
+          task: {
+            type: 'get_emails',
+            description: 'Get the 5 most recent emails from the default mailbox',
+            params: { count: 5 },
+          },
+          agentRole: 'communication',
+        });
+      }
+
+      function testGetTeams() {
+        runTest('/api/agents/task', {
+          task: {
+            type: 'query',
+            description: 'List all Teams I have joined',
+          },
+          agentRole: 'communication',
+        });
+      }
+
+      function testGetCalendar() {
+        runTest('/api/agents/task', {
+          task: {
+            type: 'query',
+            description: 'What meetings do I have in the next 3 days?',
+          },
+          agentRole: 'communication',
+        });
+      }
+
+      // Check status on load
+      checkStatus();
+    </script>
+  </body>
+</html>

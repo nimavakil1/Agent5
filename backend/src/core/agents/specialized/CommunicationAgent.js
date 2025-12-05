@@ -26,6 +26,7 @@
  */
 
 const { LLMAgent } = require('../LLMAgent');
+const { MicrosoftDirectClient } = require('../integrations/MicrosoftMCP');
 
 /**
  * Communication categories
@@ -66,33 +67,82 @@ const Sentiment = {
 };
 
 class CommunicationAgent extends LLMAgent {
-  constructor(id, config = {}) {
-    super(id, {
-      name: config.name || 'Communication Intelligence Agent',
-      role: 'communication_intelligence',
+  constructor(config = {}) {
+    super({
+      name: 'CommunicationAgent',
+      role: 'communication',
+      taskType: 'general', // Uses Claude Sonnet for balanced speed/quality
+      description: 'Manages all Microsoft 365 communications - Outlook, Teams, SharePoint',
       capabilities: [
         'email_monitoring',
-        'teams_monitoring',
+        'email_sending',
+        'teams_messaging',
+        'teams_meetings',
+        'calendar_management',
+        'sharepoint_access',
         'communication_analysis',
         'urgency_detection',
         'sentiment_analysis',
-        'action_extraction',
         'response_drafting'
       ],
-      ...config
+      systemPrompt: `You are the Communication Agent for ACROPAQ, managing all Microsoft 365 communications.
+
+## Your Identity
+You are the communications hub for ACROPAQ, handling emails, Teams messages, calendar, and SharePoint.
+
+## Your Capabilities
+- **Outlook**: Read inbox, send emails, reply, forward, manage folders
+- **Teams**: Read/send channel messages, manage chats, check presence
+- **Calendar**: View events, schedule meetings, check availability
+- **SharePoint**: Access documents, search files, manage lists
+
+## Your Responsibilities
+
+1. **Email Management**
+   - Monitor inboxes for important emails
+   - Detect urgency and sentiment
+   - Draft responses (require approval before sending)
+   - Categorize emails (customer, supplier, internal, etc.)
+
+2. **Teams Communication**
+   - Monitor channel messages
+   - Send notifications to teams
+   - Track important discussions
+   - Manage meeting requests
+
+3. **Calendar & Scheduling**
+   - Check availability
+   - Schedule meetings
+   - Send calendar invites
+   - Get upcoming events
+
+4. **Document Access**
+   - Search SharePoint for documents
+   - Access shared files
+   - Track document updates
+
+## Communication Guidelines
+- Always verify recipients before sending
+- Require approval for external communications
+- Flag urgent items immediately
+- Maintain professional tone
+- Respect privacy and confidentiality
+
+When drafting responses, always get approval before sending.`,
+
+      // Uses Claude Sonnet for speed with good quality
+      llmProvider: 'anthropic',
+      llmModel: 'sonnet',
+      temperature: 0.4,
+
+      // Require approval for sending
+      requiresApproval: ['send_email', 'send_teams_message', 'create_event'],
+
+      ...config,
     });
 
-    // Microsoft Graph client (application permissions)
-    this.graphClient = null;
-    this.graphConfig = {
-      tenantId: config.tenantId || process.env.MICROSOFT_TENANT_ID,
-      clientId: config.clientId || process.env.MICROSOFT_CLIENT_ID,
-      clientSecret: config.clientSecret || process.env.MICROSOFT_CLIENT_SECRET
-    };
-
-    // Access token management
-    this.accessToken = null;
-    this.tokenExpiry = null;
+    // Microsoft Graph client
+    this.msClient = null;
 
     // Monitoring state
     this.monitoredMailboxes = new Map();  // userId -> { lastSync, deltaToken }
@@ -1032,16 +1082,298 @@ Provide analysis in this JSON format:
 
   // ==================== LIFECYCLE ====================
 
-  async init() {
-    await super.init();
+  async init(platform) {
+    await super.init(platform);
 
-    // Test Graph API connection
+    // Initialize Microsoft Graph client
     try {
-      await this._getAccessToken();
-      console.log('Communication Agent: Microsoft Graph API connected');
+      this.msClient = new MicrosoftDirectClient();
+      await this.msClient.authenticate();
+      this.logger.info('Microsoft Graph API connected');
     } catch (error) {
-      console.warn('Communication Agent: Graph API not configured:', error.message);
+      this.logger.warn({ error: error.message }, 'Microsoft Graph API not configured');
     }
+  }
+
+  /**
+   * Load communication-specific tools using LLMAgent pattern
+   */
+  async _loadTools() {
+    // Email tools
+    this.registerTool('get_emails', this._getEmails.bind(this), {
+      description: 'Get emails from a user mailbox',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          user_id: { type: 'string', description: 'User ID or email address' },
+          folder: { type: 'string', description: 'Folder (inbox, sentItems, drafts)', default: 'inbox' },
+          count: { type: 'number', description: 'Number of emails to get', default: 25 },
+          unread_only: { type: 'boolean', description: 'Only unread emails', default: false },
+        },
+      },
+    });
+
+    this.registerTool('send_email', this._sendEmail.bind(this), {
+      description: 'Send an email (requires approval)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          to: { type: 'array', items: { type: 'string' }, description: 'Recipient email addresses' },
+          subject: { type: 'string', description: 'Email subject' },
+          body: { type: 'string', description: 'Email body (HTML)' },
+          cc: { type: 'array', items: { type: 'string' }, description: 'CC recipients' },
+        },
+        required: ['to', 'subject', 'body'],
+      },
+    });
+
+    this.registerTool('reply_to_email', this._replyToEmail.bind(this), {
+      description: 'Reply to an email',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          message_id: { type: 'string', description: 'ID of email to reply to' },
+          user_id: { type: 'string', description: 'User ID whose mailbox to use' },
+          comment: { type: 'string', description: 'Reply content' },
+          reply_all: { type: 'boolean', description: 'Reply to all recipients', default: false },
+        },
+        required: ['message_id', 'user_id', 'comment'],
+      },
+    });
+
+    // Calendar tools
+    this.registerTool('get_calendar_events', this._getCalendarEvents.bind(this), {
+      description: 'Get calendar events for a user',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          user_id: { type: 'string', description: 'User ID' },
+          days: { type: 'number', description: 'Number of days ahead', default: 7 },
+        },
+      },
+    });
+
+    this.registerTool('create_event', this._createEvent.bind(this), {
+      description: 'Create a calendar event (requires approval)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          user_id: { type: 'string', description: 'User ID to create event for' },
+          subject: { type: 'string', description: 'Event title' },
+          start: { type: 'string', description: 'Start datetime (ISO 8601)' },
+          end: { type: 'string', description: 'End datetime (ISO 8601)' },
+          attendees: { type: 'array', items: { type: 'string' }, description: 'Attendee emails' },
+          location: { type: 'string', description: 'Location' },
+          is_online: { type: 'boolean', description: 'Create Teams meeting', default: false },
+        },
+        required: ['user_id', 'subject', 'start', 'end'],
+      },
+    });
+
+    // Teams tools
+    this.registerTool('get_teams', this._getTeams.bind(this), {
+      description: 'Get Teams the user has joined',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          user_id: { type: 'string', description: 'User ID' },
+        },
+      },
+    });
+
+    this.registerTool('get_team_channels', this._getTeamChannels.bind(this), {
+      description: 'Get channels in a Team',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          team_id: { type: 'string', description: 'Team ID' },
+        },
+        required: ['team_id'],
+      },
+    });
+
+    this.registerTool('send_channel_message', this._sendChannelMessage.bind(this), {
+      description: 'Send a message to a Teams channel',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          team_id: { type: 'string', description: 'Team ID' },
+          channel_id: { type: 'string', description: 'Channel ID' },
+          message: { type: 'string', description: 'Message content (HTML)' },
+        },
+        required: ['team_id', 'channel_id', 'message'],
+      },
+    });
+
+    // SharePoint tools
+    this.registerTool('search_sharepoint', this._searchSharePoint.bind(this), {
+      description: 'Search for files in SharePoint/OneDrive',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query' },
+          user_id: { type: 'string', description: 'User ID (for OneDrive)' },
+        },
+        required: ['query'],
+      },
+    });
+
+    this.registerTool('get_user_presence', this._getUserPresenceNew.bind(this), {
+      description: 'Get user online presence status',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          user_id: { type: 'string', description: 'User ID' },
+        },
+        required: ['user_id'],
+      },
+    });
+
+    this.logger.debug({ toolCount: this.tools.size }, 'Communication tools loaded');
+  }
+
+  // ==================== NEW TOOL IMPLEMENTATIONS ====================
+
+  async _getEmails(params) {
+    if (!this.msClient) throw new Error('Microsoft Graph not configured');
+
+    const filter = params.unread_only ? 'isRead eq false' : undefined;
+    const result = await this.msClient.getMessages(params.user_id, {
+      top: params.count || 25,
+      filter,
+    });
+
+    return {
+      count: result.value?.length || 0,
+      emails: (result.value || []).map(m => ({
+        id: m.id,
+        subject: m.subject,
+        from: m.from?.emailAddress?.address,
+        receivedAt: m.receivedDateTime,
+        isRead: m.isRead,
+        preview: m.bodyPreview?.substring(0, 200),
+      })),
+    };
+  }
+
+  async _sendEmail(params) {
+    if (!this.msClient) throw new Error('Microsoft Graph not configured');
+
+    await this.msClient.sendMail({
+      to: params.to,
+      subject: params.subject,
+      body: params.body,
+      cc: params.cc,
+    });
+
+    return { success: true, message: `Email sent to ${params.to.join(', ')}` };
+  }
+
+  async _replyToEmail(params) {
+    if (!this.msClient) throw new Error('Microsoft Graph not configured');
+
+    await this.msClient.replyToMail(
+      params.message_id,
+      params.comment,
+      params.reply_all || false,
+      params.user_id
+    );
+
+    return { success: true, message: 'Reply sent' };
+  }
+
+  async _getCalendarEvents(params) {
+    if (!this.msClient) throw new Error('Microsoft Graph not configured');
+
+    const result = await this.msClient.getUpcomingEvents(params.days || 7, params.user_id);
+
+    return result;
+  }
+
+  async _createEvent(params) {
+    if (!this.msClient) throw new Error('Microsoft Graph not configured');
+
+    const result = await this.msClient.createEvent({
+      subject: params.subject,
+      start: params.start,
+      end: params.end,
+      attendees: params.attendees,
+      location: params.location,
+      isOnlineMeeting: params.is_online,
+    }, params.user_id);
+
+    return { success: true, eventId: result.id, message: 'Event created' };
+  }
+
+  async _getTeams(params) {
+    if (!this.msClient) throw new Error('Microsoft Graph not configured');
+
+    const result = await this.msClient.getTeams(params.user_id);
+
+    return {
+      count: result.value?.length || 0,
+      teams: (result.value || []).map(t => ({
+        id: t.id,
+        name: t.displayName,
+        description: t.description,
+      })),
+    };
+  }
+
+  async _getTeamChannels(params) {
+    if (!this.msClient) throw new Error('Microsoft Graph not configured');
+
+    const result = await this.msClient.getChannels(params.team_id);
+
+    return {
+      count: result.value?.length || 0,
+      channels: (result.value || []).map(c => ({
+        id: c.id,
+        name: c.displayName,
+        description: c.description,
+      })),
+    };
+  }
+
+  async _sendChannelMessage(params) {
+    if (!this.msClient) throw new Error('Microsoft Graph not configured');
+
+    await this.msClient.sendChannelMessage(
+      params.team_id,
+      params.channel_id,
+      params.message
+    );
+
+    return { success: true, message: 'Message sent to channel' };
+  }
+
+  async _searchSharePoint(params) {
+    if (!this.msClient) throw new Error('Microsoft Graph not configured');
+
+    const result = await this.msClient.searchDrive(params.query, params.user_id);
+
+    return {
+      count: result.value?.length || 0,
+      files: (result.value || []).map(f => ({
+        id: f.id,
+        name: f.name,
+        webUrl: f.webUrl,
+        size: f.size,
+        lastModified: f.lastModifiedDateTime,
+      })),
+    };
+  }
+
+  async _getUserPresenceNew(params) {
+    if (!this.msClient) throw new Error('Microsoft Graph not configured');
+
+    const result = await this.msClient.getUserPresence(params.user_id);
+
+    return {
+      userId: params.user_id,
+      availability: result.availability,
+      activity: result.activity,
+    };
   }
 }
 
