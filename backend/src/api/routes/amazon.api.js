@@ -315,6 +315,184 @@ router.post('/webhook/fba-fees', validateWebhook, async (req, res) => {
   }
 });
 
+// ==================== ADVERTISING WEBHOOKS ====================
+
+/**
+ * @route POST /api/amazon/webhook/ads/campaigns
+ * @desc Receive advertising campaign data
+ */
+router.post('/webhook/ads/campaigns', validateWebhook, async (req, res) => {
+  try {
+    const campaigns = Array.isArray(req.body) ? req.body : [req.body];
+    const db = getDb();
+
+    const results = [];
+    for (const campaign of campaigns) {
+      const doc = {
+        campaignId: campaign.campaignId,
+        campaignName: campaign.campaignName || campaign.name,
+        campaignType: campaign.campaignType || campaign.type, // SP, SB, SD
+        state: campaign.state || campaign.status,
+        dailyBudget: campaign.dailyBudget || campaign.budget,
+        startDate: campaign.startDate ? new Date(campaign.startDate) : null,
+        endDate: campaign.endDate ? new Date(campaign.endDate) : null,
+        targetingType: campaign.targetingType,
+        premiumBidAdjustment: campaign.premiumBidAdjustment,
+        biddingStrategy: campaign.biddingStrategy,
+        rawData: campaign,
+        source: 'make.com',
+        updatedAt: new Date(),
+      };
+
+      await db.collection('amazon_ads_campaigns').updateOne(
+        { campaignId: campaign.campaignId },
+        { $set: doc, $setOnInsert: { createdAt: new Date() } },
+        { upsert: true }
+      );
+
+      results.push({ campaignId: campaign.campaignId, status: 'saved' });
+    }
+
+    res.json({ success: true, processed: results.length, results });
+  } catch (error) {
+    console.error('Amazon ads campaigns webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/webhook/ads/performance
+ * @desc Receive advertising performance/metrics data
+ */
+router.post('/webhook/ads/performance', validateWebhook, async (req, res) => {
+  try {
+    const metrics = Array.isArray(req.body) ? req.body : [req.body];
+    const db = getDb();
+
+    const results = [];
+    for (const metric of metrics) {
+      const doc = {
+        campaignId: metric.campaignId,
+        adGroupId: metric.adGroupId,
+        date: metric.date ? new Date(metric.date) : new Date(),
+        impressions: metric.impressions || 0,
+        clicks: metric.clicks || 0,
+        cost: metric.cost || metric.spend || 0,
+        sales: metric.sales || metric.attributedSales || 0,
+        orders: metric.orders || metric.attributedUnitsOrdered || 0,
+        acos: metric.acos || (metric.cost && metric.sales ? (metric.cost / metric.sales * 100) : 0),
+        roas: metric.roas || (metric.cost && metric.sales ? (metric.sales / metric.cost) : 0),
+        ctr: metric.ctr || (metric.impressions ? (metric.clicks / metric.impressions * 100) : 0),
+        cpc: metric.cpc || (metric.clicks ? (metric.cost / metric.clicks) : 0),
+        conversionRate: metric.conversionRate || (metric.clicks ? (metric.orders / metric.clicks * 100) : 0),
+        currency: metric.currency || 'EUR',
+        rawData: metric,
+        source: 'make.com',
+        createdAt: new Date(),
+      };
+
+      const result = await db.collection('amazon_ads_performance').insertOne(doc);
+      results.push({ _id: result.insertedId, campaignId: doc.campaignId, date: doc.date });
+    }
+
+    res.json({ success: true, processed: results.length, results });
+  } catch (error) {
+    console.error('Amazon ads performance webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/webhook/ads/keywords
+ * @desc Receive keyword performance data
+ */
+router.post('/webhook/ads/keywords', validateWebhook, async (req, res) => {
+  try {
+    const keywords = Array.isArray(req.body) ? req.body : [req.body];
+    const db = getDb();
+
+    const results = [];
+    for (const kw of keywords) {
+      const doc = {
+        keywordId: kw.keywordId,
+        campaignId: kw.campaignId,
+        adGroupId: kw.adGroupId,
+        keywordText: kw.keywordText || kw.keyword,
+        matchType: kw.matchType,
+        state: kw.state || kw.status,
+        bid: kw.bid,
+        impressions: kw.impressions || 0,
+        clicks: kw.clicks || 0,
+        cost: kw.cost || kw.spend || 0,
+        sales: kw.sales || 0,
+        orders: kw.orders || 0,
+        acos: kw.acos || 0,
+        date: kw.date ? new Date(kw.date) : new Date(),
+        rawData: kw,
+        source: 'make.com',
+        updatedAt: new Date(),
+      };
+
+      await db.collection('amazon_ads_keywords').updateOne(
+        { keywordId: kw.keywordId, date: doc.date },
+        { $set: doc, $setOnInsert: { createdAt: new Date() } },
+        { upsert: true }
+      );
+
+      results.push({ keywordId: kw.keywordId, status: 'saved' });
+    }
+
+    res.json({ success: true, processed: results.length, results });
+  } catch (error) {
+    console.error('Amazon ads keywords webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/webhook/ads/products
+ * @desc Receive advertised product performance data
+ */
+router.post('/webhook/ads/products', validateWebhook, async (req, res) => {
+  try {
+    const products = Array.isArray(req.body) ? req.body : [req.body];
+    const db = getDb();
+
+    const results = [];
+    for (const prod of products) {
+      const doc = {
+        asin: prod.asin,
+        sku: prod.sku,
+        campaignId: prod.campaignId,
+        adGroupId: prod.adGroupId,
+        impressions: prod.impressions || 0,
+        clicks: prod.clicks || 0,
+        cost: prod.cost || prod.spend || 0,
+        sales: prod.sales || 0,
+        orders: prod.orders || 0,
+        acos: prod.acos || 0,
+        date: prod.date ? new Date(prod.date) : new Date(),
+        rawData: prod,
+        source: 'make.com',
+        updatedAt: new Date(),
+      };
+
+      await db.collection('amazon_ads_products').updateOne(
+        { asin: prod.asin, campaignId: prod.campaignId, date: doc.date },
+        { $set: doc, $setOnInsert: { createdAt: new Date() } },
+        { upsert: true }
+      );
+
+      results.push({ asin: prod.asin, status: 'saved' });
+    }
+
+    res.json({ success: true, processed: results.length, results });
+  } catch (error) {
+    console.error('Amazon ads products webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== RETURNS WEBHOOKS ====================
 
 /**
@@ -615,6 +793,110 @@ router.get('/financial-summary', async (req, res) => {
 });
 
 /**
+ * @route GET /api/amazon/ads/campaigns
+ * @desc Get advertising campaigns
+ */
+router.get('/ads/campaigns', async (req, res) => {
+  try {
+    const db = getDb();
+    const { state, type, limit = 50 } = req.query;
+
+    const filter = {};
+    if (state) filter.state = state;
+    if (type) filter.campaignType = type;
+
+    const campaigns = await db.collection('amazon_ads_campaigns')
+      .find(filter)
+      .sort({ updatedAt: -1 })
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({ campaigns, count: campaigns.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/ads/performance
+ * @desc Get advertising performance metrics
+ */
+router.get('/ads/performance', async (req, res) => {
+  try {
+    const db = getDb();
+    const { campaignId, from, to, limit = 100 } = req.query;
+
+    const filter = {};
+    if (campaignId) filter.campaignId = campaignId;
+    if (from || to) {
+      filter.date = {};
+      if (from) filter.date.$gte = new Date(from);
+      if (to) filter.date.$lte = new Date(to);
+    }
+
+    const performance = await db.collection('amazon_ads_performance')
+      .find(filter)
+      .sort({ date: -1 })
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({ performance, count: performance.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/ads/summary
+ * @desc Get advertising summary for a period
+ */
+router.get('/ads/summary', async (req, res) => {
+  try {
+    const db = getDb();
+    const { from, to } = req.query;
+
+    const dateFilter = {};
+    if (from) dateFilter.$gte = new Date(from);
+    if (to) dateFilter.$lte = new Date(to);
+
+    const match = {};
+    if (Object.keys(dateFilter).length) match.date = dateFilter;
+
+    const summary = await db.collection('amazon_ads_performance').aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          totalImpressions: { $sum: '$impressions' },
+          totalClicks: { $sum: '$clicks' },
+          totalCost: { $sum: '$cost' },
+          totalSales: { $sum: '$sales' },
+          totalOrders: { $sum: '$orders' },
+        }
+      }
+    ]).toArray();
+
+    const stats = summary[0] || {
+      totalImpressions: 0,
+      totalClicks: 0,
+      totalCost: 0,
+      totalSales: 0,
+      totalOrders: 0,
+    };
+
+    // Calculate derived metrics
+    stats.acos = stats.totalSales > 0 ? (stats.totalCost / stats.totalSales * 100).toFixed(2) : 0;
+    stats.roas = stats.totalCost > 0 ? (stats.totalSales / stats.totalCost).toFixed(2) : 0;
+    stats.ctr = stats.totalImpressions > 0 ? (stats.totalClicks / stats.totalImpressions * 100).toFixed(2) : 0;
+    stats.cpc = stats.totalClicks > 0 ? (stats.totalCost / stats.totalClicks).toFixed(2) : 0;
+
+    res.json({ period: { from, to }, ...stats });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * @route GET /api/amazon/stats
  * @desc Get overall Amazon integration stats
  */
@@ -622,23 +904,27 @@ router.get('/stats', async (req, res) => {
   try {
     const db = getDb();
 
-    const [orders, inventory, returns, settlements, invoices] = await Promise.all([
+    const [orders, inventory, returns, settlements, invoices, adsCampaigns, adsPerformance] = await Promise.all([
       db.collection('amazon_orders').countDocuments(),
       db.collection('amazon_inventory').countDocuments(),
       db.collection('amazon_returns').countDocuments(),
       db.collection('amazon_settlements').countDocuments(),
       db.collection('amazon_vat_invoices').countDocuments(),
+      db.collection('amazon_ads_campaigns').countDocuments(),
+      db.collection('amazon_ads_performance').countDocuments(),
     ]);
 
     // Get last sync times
     const lastOrder = await db.collection('amazon_orders').findOne({}, { sort: { updatedAt: -1 } });
     const lastInventory = await db.collection('amazon_inventory').findOne({}, { sort: { updatedAt: -1 } });
+    const lastAds = await db.collection('amazon_ads_performance').findOne({}, { sort: { createdAt: -1 } });
 
     res.json({
-      counts: { orders, inventory, returns, settlements, invoices },
+      counts: { orders, inventory, returns, settlements, invoices, adsCampaigns, adsPerformance },
       lastSync: {
         orders: lastOrder?.updatedAt,
         inventory: lastInventory?.updatedAt,
+        ads: lastAds?.createdAt,
       },
     });
   } catch (error) {
