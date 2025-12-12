@@ -1,0 +1,479 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Amazon Integration · ACROPAQ AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+  </head>
+  <body class="min-h-screen bg-slate-900">
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4">
+      <div class="flex items-center justify-between max-w-6xl mx-auto">
+        <div class="flex items-center gap-3">
+          <a href="/app/index.html" class="text-slate-400 hover:text-white">
+            <span class="material-symbols-outlined">arrow_back</span>
+          </a>
+          <span class="material-symbols-outlined text-orange-400 text-2xl">shopping_cart</span>
+          <h1 class="text-white text-xl font-semibold">Amazon Seller Central Integration</h1>
+        </div>
+        <div id="status-indicator" class="flex items-center gap-2 text-sm text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+          Checking...
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-6 py-8">
+      <!-- Integration Status Card -->
+      <div id="status-card" class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-white font-semibold text-lg mb-2">Integration Status</h2>
+            <p id="status-message" class="text-slate-400">Checking Amazon data sync status...</p>
+          </div>
+          <div id="status-icon" class="text-4xl">
+            <span class="material-symbols-outlined text-slate-500">hourglass_empty</span>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div id="stats-grid" class="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6 hidden">
+          <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+            <div id="stat-orders" class="text-2xl font-bold text-white">-</div>
+            <div class="text-slate-400 text-sm">Orders</div>
+          </div>
+          <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+            <div id="stat-inventory" class="text-2xl font-bold text-white">-</div>
+            <div class="text-slate-400 text-sm">SKUs</div>
+          </div>
+          <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+            <div id="stat-returns" class="text-2xl font-bold text-white">-</div>
+            <div class="text-slate-400 text-sm">Returns</div>
+          </div>
+          <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+            <div id="stat-settlements" class="text-2xl font-bold text-white">-</div>
+            <div class="text-slate-400 text-sm">Settlements</div>
+          </div>
+          <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+            <div id="stat-invoices" class="text-2xl font-bold text-white">-</div>
+            <div class="text-slate-400 text-sm">VAT Invoices</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- How It Works -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">How It Works</h2>
+        <div class="bg-slate-900 rounded-lg p-4 mb-4">
+          <div class="flex items-center justify-center gap-4 text-sm">
+            <div class="flex items-center gap-2 text-orange-400">
+              <span class="material-symbols-outlined">storefront</span>
+              Amazon Seller Central
+            </div>
+            <span class="material-symbols-outlined text-slate-500">arrow_forward</span>
+            <div class="flex items-center gap-2 text-purple-400">
+              <span class="material-symbols-outlined">hub</span>
+              Make.com
+            </div>
+            <span class="material-symbols-outlined text-slate-500">arrow_forward</span>
+            <div class="flex items-center gap-2 text-blue-400">
+              <span class="material-symbols-outlined">webhook</span>
+              Agent5 Webhooks
+            </div>
+          </div>
+        </div>
+        <p class="text-slate-400 text-sm">
+          <strong class="text-white">No developer approval needed!</strong> Make.com is an approved Amazon SP-API app.
+          You simply authorize Make.com in Seller Central, then configure Make.com to send data to Agent5 webhooks.
+        </p>
+      </div>
+
+      <!-- Setup Instructions -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">Setup Instructions</h2>
+
+        <div class="space-y-6">
+          <!-- Step 1 -->
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white font-bold">1</div>
+            <div>
+              <h3 class="text-white font-medium mb-1">Create a Make.com Account</h3>
+              <p class="text-slate-400 text-sm mb-2">Sign up at <a href="https://www.make.com" target="_blank" class="text-blue-400 hover:underline">make.com</a> (free tier available)</p>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white font-bold">2</div>
+            <div>
+              <h3 class="text-white font-medium mb-1">Connect Amazon Seller Central</h3>
+              <p class="text-slate-400 text-sm mb-2">In Make.com:</p>
+              <ul class="text-slate-400 text-sm list-disc ml-4 space-y-1">
+                <li>Create a new scenario</li>
+                <li>Add "Amazon Seller Central" module</li>
+                <li>Click "Create a connection"</li>
+                <li>You'll be redirected to Amazon to authorize Make.com</li>
+                <li>Select your marketplace (EU, US, etc.)</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white font-bold">3</div>
+            <div>
+              <h3 class="text-white font-medium mb-1">Configure Webhook Endpoints</h3>
+              <p class="text-slate-400 text-sm mb-2">Use these webhook URLs in your Make.com HTTP modules:</p>
+              <div class="bg-slate-900 rounded-lg p-3 mt-2 text-sm font-mono text-slate-300 space-y-2">
+                <div><span class="text-orange-400">Orders:</span> <span id="webhook-orders" class="select-all">https://your-domain.com/api/amazon/webhook/orders</span></div>
+                <div><span class="text-orange-400">Inventory:</span> <span id="webhook-inventory" class="select-all">https://your-domain.com/api/amazon/webhook/inventory</span></div>
+                <div><span class="text-orange-400">Returns:</span> <span id="webhook-returns" class="select-all">https://your-domain.com/api/amazon/webhook/returns</span></div>
+                <div><span class="text-orange-400">Settlements:</span> <span id="webhook-settlements" class="select-all">https://your-domain.com/api/amazon/webhook/settlements</span></div>
+                <div><span class="text-orange-400">FBA Fees:</span> <span id="webhook-fba-fees" class="select-all">https://your-domain.com/api/amazon/webhook/fba-fees</span></div>
+                <div><span class="text-orange-400">VAT Invoices:</span> <span id="webhook-vat" class="select-all">https://your-domain.com/api/amazon/webhook/vat-invoices</span></div>
+                <div><span class="text-orange-400">Financial Events:</span> <span id="webhook-financial" class="select-all">https://your-domain.com/api/amazon/webhook/financial-events</span></div>
+                <div><span class="text-orange-400">Any Report:</span> <span id="webhook-report" class="select-all">https://your-domain.com/api/amazon/webhook/report</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white font-bold">4</div>
+            <div>
+              <h3 class="text-white font-medium mb-1">Create Make.com Scenarios</h3>
+              <p class="text-slate-400 text-sm mb-2">Example scenario for syncing orders:</p>
+              <div class="bg-slate-900 rounded-lg p-3 mt-2 text-sm text-slate-300">
+                <ol class="list-decimal ml-4 space-y-1">
+                  <li><strong>Trigger:</strong> Amazon Seller Central → Watch New Orders</li>
+                  <li><strong>Action:</strong> HTTP → Make a request</li>
+                  <li>URL: <code class="bg-slate-700 px-1 rounded">[your webhook URL]</code></li>
+                  <li>Method: <code class="bg-slate-700 px-1 rounded">POST</code></li>
+                  <li>Body: <code class="bg-slate-700 px-1 rounded">JSON</code> with order data</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 5 -->
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white font-bold">5</div>
+            <div>
+              <h3 class="text-white font-medium mb-1">Optional: Secure Your Webhooks</h3>
+              <p class="text-slate-400 text-sm mb-2">Add webhook secret to your <code class="bg-slate-700 px-1 rounded">.env</code>:</p>
+              <div class="bg-slate-900 rounded-lg p-3 mt-2 text-sm font-mono text-slate-300">
+                AMAZON_WEBHOOK_SECRET=your-secret-key-here
+              </div>
+              <p class="text-slate-400 text-sm mt-2">Then in Make.com HTTP module, add headers:</p>
+              <div class="bg-slate-900 rounded-lg p-3 mt-2 text-sm font-mono text-slate-300">
+                x-webhook-signature: [HMAC-SHA256 of body + timestamp]<br>
+                x-webhook-timestamp: [current timestamp in ms]
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Available Data -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">Available Data via Make.com</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Orders -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-orange-400">receipt_long</span>
+              <h3 class="text-white font-medium">Orders</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• New orders (trigger)</li>
+              <li>• Order updates (trigger)</li>
+              <li>• Order details</li>
+              <li>• Order items</li>
+              <li>• Buyer info (limited)</li>
+            </ul>
+          </div>
+
+          <!-- Inventory -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-green-400">inventory_2</span>
+              <h3 class="text-white font-medium">Inventory</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• FBA inventory levels</li>
+              <li>• Fulfillable quantity</li>
+              <li>• Reserved quantity</li>
+              <li>• Inbound shipments</li>
+              <li>• Low stock alerts</li>
+            </ul>
+          </div>
+
+          <!-- Financial -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-blue-400">payments</span>
+              <h3 class="text-white font-medium">Financial</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• Settlement reports</li>
+              <li>• Financial events</li>
+              <li>• FBA fees breakdown</li>
+              <li>• Reimbursements</li>
+              <li>• Storage fees</li>
+            </ul>
+          </div>
+
+          <!-- Returns -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-red-400">assignment_return</span>
+              <h3 class="text-white font-medium">Returns</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• Return requests</li>
+              <li>• Return reasons</li>
+              <li>• Refund amounts</li>
+              <li>• Resolution status</li>
+            </ul>
+          </div>
+
+          <!-- VAT/Tax -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-purple-400">description</span>
+              <h3 class="text-white font-medium">VAT & Invoices</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• VCS invoice data</li>
+              <li>• VAT transaction reports</li>
+              <li>• Tax calculation details</li>
+              <li>• Invoice PDFs (links)</li>
+            </ul>
+          </div>
+
+          <!-- Reports -->
+          <div class="bg-slate-700/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="material-symbols-outlined text-cyan-400">analytics</span>
+              <h3 class="text-white font-medium">Reports</h3>
+            </div>
+            <ul class="text-slate-400 text-sm space-y-1">
+              <li>• Sales reports</li>
+              <li>• Traffic reports</li>
+              <li>• Catalog items</li>
+              <li>• Pricing data</li>
+              <li>• Any SP-API report</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test Section -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">Test Webhooks</h2>
+        <p class="text-slate-400 text-sm mb-4">Send test data to verify your webhooks are working:</p>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <button onclick="sendTestOrder()" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">receipt_long</span>
+            Test Order
+          </button>
+          <button onclick="sendTestInventory()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">inventory_2</span>
+            Test Inventory
+          </button>
+          <button onclick="sendTestReturn()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">assignment_return</span>
+            Test Return
+          </button>
+          <button onclick="sendTestFinancial()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">payments</span>
+            Test Financial
+          </button>
+        </div>
+
+        <!-- Test Results -->
+        <div id="test-results" class="mt-4 hidden">
+          <h3 class="text-slate-400 text-sm font-semibold mb-2">Results:</h3>
+          <pre id="test-output" class="bg-slate-900 rounded-lg p-4 text-sm text-slate-300 overflow-x-auto max-h-64 overflow-y-auto"></pre>
+        </div>
+      </div>
+
+      <!-- Recent Data -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+        <h2 class="text-white font-semibold text-lg mb-4">Recent Orders</h2>
+        <div id="recent-orders" class="text-slate-400 text-sm">Loading...</div>
+      </div>
+    </main>
+
+    <script>
+      const baseUrl = window.location.origin;
+
+      // Update webhook URLs with actual domain
+      document.querySelectorAll('[id^="webhook-"]').forEach(el => {
+        el.textContent = el.textContent.replace('https://your-domain.com', baseUrl);
+      });
+
+      // Check status on load
+      async function checkStatus() {
+        const indicator = document.getElementById('status-indicator');
+        const card = document.getElementById('status-card');
+        const message = document.getElementById('status-message');
+        const icon = document.getElementById('status-icon');
+        const statsGrid = document.getElementById('stats-grid');
+
+        try {
+          const res = await fetch('/api/amazon/stats', { credentials: 'include' });
+          if (!res.ok) throw new Error('API error');
+
+          const data = await res.json();
+          const hasData = data.counts.orders > 0 || data.counts.inventory > 0;
+
+          if (hasData) {
+            indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500"></span> Connected';
+            card.classList.remove('border-slate-700');
+            card.classList.add('border-green-600');
+            message.textContent = 'Amazon data is syncing via Make.com';
+            icon.innerHTML = '<span class="material-symbols-outlined text-green-500">check_circle</span>';
+
+            statsGrid.classList.remove('hidden');
+            document.getElementById('stat-orders').textContent = data.counts.orders;
+            document.getElementById('stat-inventory').textContent = data.counts.inventory;
+            document.getElementById('stat-returns').textContent = data.counts.returns;
+            document.getElementById('stat-settlements').textContent = data.counts.settlements;
+            document.getElementById('stat-invoices').textContent = data.counts.invoices;
+          } else {
+            indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span> Not Connected';
+            message.textContent = 'No Amazon data received yet. Set up Make.com integration below.';
+            icon.innerHTML = '<span class="material-symbols-outlined text-amber-500">sync_disabled</span>';
+          }
+        } catch (e) {
+          indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> Error';
+          message.textContent = 'Could not check status: ' + e.message;
+          icon.innerHTML = '<span class="material-symbols-outlined text-red-500">error</span>';
+        }
+      }
+
+      // Load recent orders
+      async function loadRecentOrders() {
+        const container = document.getElementById('recent-orders');
+        try {
+          const res = await fetch('/api/amazon/orders?limit=5', { credentials: 'include' });
+          if (!res.ok) throw new Error('Failed to load orders');
+
+          const data = await res.json();
+          if (data.orders.length === 0) {
+            container.innerHTML = '<p class="text-slate-500">No orders yet. Set up Make.com to start syncing.</p>';
+            return;
+          }
+
+          let html = '<div class="space-y-2">';
+          for (const order of data.orders) {
+            const date = order.purchaseDate ? new Date(order.purchaseDate).toLocaleDateString() : 'N/A';
+            const total = order.orderTotal ? `${order.orderTotal.Amount} ${order.orderTotal.CurrencyCode}` : 'N/A';
+            html += `
+              <div class="flex items-center justify-between bg-slate-700/50 rounded-lg px-4 py-2">
+                <div>
+                  <span class="text-white font-mono text-sm">${order.amazonOrderId}</span>
+                  <span class="text-slate-500 text-xs ml-2">${date}</span>
+                </div>
+                <div class="flex items-center gap-4">
+                  <span class="text-white">${total}</span>
+                  <span class="px-2 py-1 rounded text-xs ${
+                    order.orderStatus === 'Shipped' ? 'bg-green-600' :
+                    order.orderStatus === 'Pending' ? 'bg-amber-600' : 'bg-slate-600'
+                  }">${order.orderStatus}</span>
+                </div>
+              </div>
+            `;
+          }
+          html += '</div>';
+          container.innerHTML = html;
+        } catch (e) {
+          container.innerHTML = '<p class="text-red-400">Error: ' + e.message + '</p>';
+        }
+      }
+
+      // Test functions
+      async function sendTest(endpoint, data) {
+        const results = document.getElementById('test-results');
+        const output = document.getElementById('test-output');
+        results.classList.remove('hidden');
+        output.textContent = 'Sending...';
+
+        try {
+          const res = await fetch(`/api/amazon/webhook/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(data),
+          });
+          const result = await res.json();
+          output.textContent = JSON.stringify(result, null, 2);
+
+          // Refresh stats
+          setTimeout(() => {
+            checkStatus();
+            loadRecentOrders();
+          }, 500);
+        } catch (e) {
+          output.textContent = 'Error: ' + e.message;
+        }
+      }
+
+      function sendTestOrder() {
+        sendTest('orders', {
+          AmazonOrderId: 'TEST-' + Date.now(),
+          PurchaseDate: new Date().toISOString(),
+          OrderStatus: 'Unshipped',
+          FulfillmentChannel: 'MFN',
+          SalesChannel: 'Amazon.de',
+          OrderTotal: { Amount: '49.99', CurrencyCode: 'EUR' },
+          NumberOfItemsShipped: 0,
+          NumberOfItemsUnshipped: 1,
+        });
+      }
+
+      function sendTestInventory() {
+        sendTest('inventory', {
+          sellerSku: 'TEST-SKU-001',
+          asin: 'B00TEST123',
+          productName: 'Test Product',
+          totalQuantity: 100,
+          fulfillableQuantity: 95,
+          reservedQuantity: 5,
+        });
+      }
+
+      function sendTestReturn() {
+        sendTest('returns', {
+          returnId: 'RET-' + Date.now(),
+          amazonOrderId: 'TEST-ORDER-001',
+          sellerSku: 'TEST-SKU-001',
+          returnRequestDate: new Date().toISOString(),
+          returnQuantity: 1,
+          returnReason: 'Customer changed mind',
+          status: 'Pending',
+        });
+      }
+
+      function sendTestFinancial() {
+        sendTest('financial-events', {
+          eventType: 'OrderPayment',
+          eventDate: new Date().toISOString(),
+          amazonOrderId: 'TEST-ORDER-001',
+          amount: 49.99,
+          currency: 'EUR',
+          description: 'Test payment event',
+        });
+      }
+
+      // Initialize
+      checkStatus();
+      loadRecentOrders();
+    </script>
+  </body>
+</html>

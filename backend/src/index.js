@@ -34,6 +34,7 @@ const notificationsRouter = require('./api/routes/notifications');
 const prospectsRouter = require('./api/routes/prospects');
 const aiAgentsRouter = require('./api/routes/agents.api');
 const knowledgeRouter = require('./api/routes/knowledge.api');
+const amazonRouter = require('./api/routes/amazon.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -206,6 +207,7 @@ app.use('/api/notifications', allowBearerOrSession, notificationsRouter);
 app.use('/api/prospects', prospectsRouter);
 app.use('/api/ai-agents', allowBearerOrSession, aiAgentsRouter);
 app.use('/api/knowledge', requireSession, knowledgeRouter);
+app.use('/api/amazon', amazonRouter); // Webhooks are public (validated by signature), GET routes need auth
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
