@@ -1,0 +1,142 @@
+{
+  "name": "Amazon Inventory to Agent5 (Scheduled)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "builtin:BasicScheduler",
+      "version": 1,
+      "parameters": {
+        "type": "interval",
+        "interval": 360
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {},
+        "expect": []
+      }
+    },
+    {
+      "id": 2,
+      "module": "amazon-seller:makeApiCall",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "__AMAZON_SELLER_CONNECTION__"
+      },
+      "mapper": {
+        "url": "/fba/inventory/v1/summaries",
+        "method": "get",
+        "headers": [],
+        "qs": [
+          {
+            "key": "granularityType",
+            "value": "Marketplace"
+          },
+          {
+            "key": "granularityId",
+            "value": "A1PA6795UKMFR9"
+          },
+          {
+            "key": "marketplaceIds",
+            "value": "A1PA6795UKMFR9"
+          },
+          {
+            "key": "details",
+            "value": "true"
+          }
+        ],
+        "body": ""
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "method": {
+              "label": "GET"
+            }
+          }
+        },
+        "expect": [
+          {
+            "name": "url",
+            "type": "text",
+            "label": "URL",
+            "required": true
+          },
+          {
+            "name": "method",
+            "type": "select",
+            "label": "Method",
+            "required": true
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicIterator",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "array": "{{2.body.payload.inventorySummaries}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://ai.acropaq.com/api/amazon/webhook/inventory",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "contentType": "application/json",
+        "data": "{\n  \"sellerSku\": \"{{3.sellerSku}}\",\n  \"asin\": \"{{3.asin}}\",\n  \"fnSku\": \"{{3.fnSku}}\",\n  \"productName\": \"{{3.productName}}\",\n  \"condition\": \"{{3.condition}}\",\n  \"totalQuantity\": {{3.totalQuantity}},\n  \"fulfillableQuantity\": {{3.inventoryDetails.fulfillableQuantity}},\n  \"inboundWorkingQuantity\": {{3.inventoryDetails.inboundWorkingQuantity}},\n  \"inboundShippedQuantity\": {{3.inventoryDetails.inboundShippedQuantity}},\n  \"inboundReceivingQuantity\": {{3.inventoryDetails.inboundReceivingQuantity}},\n  \"reservedQuantity\": {{3.inventoryDetails.reservedQuantity.totalReservedQuantity}},\n  \"unfulfillableQuantity\": {{3.inventoryDetails.unfulfillableQuantity.totalUnfulfillableQuantity}},\n  \"marketplaceId\": \"A1PA6795UKMFR9\"\n}",
+        "followAllRedirects": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false
+    },
+    "designer": {
+      "orphans": []
+    }
+  }
+}

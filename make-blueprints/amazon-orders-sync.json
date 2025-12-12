@@ -1,0 +1,119 @@
+{
+  "name": "Amazon Orders to Agent5",
+  "flow": [
+    {
+      "id": 1,
+      "module": "amazon-seller:watchOrders",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "__AMAZON_SELLER_CONNECTION__"
+      },
+      "mapper": {
+        "limit": 10
+      },
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {},
+        "expect": [
+          {
+            "name": "limit",
+            "type": "number",
+            "label": "Limit",
+            "required": true
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://ai.acropaq.com/api/amazon/webhook/orders",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authUser": "",
+        "authPass": "",
+        "timeout": "",
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json",
+        "data": "{\n  \"AmazonOrderId\": \"{{1.AmazonOrderId}}\",\n  \"SellerOrderId\": \"{{1.SellerOrderId}}\",\n  \"PurchaseDate\": \"{{1.PurchaseDate}}\",\n  \"LastUpdateDate\": \"{{1.LastUpdateDate}}\",\n  \"OrderStatus\": \"{{1.OrderStatus}}\",\n  \"FulfillmentChannel\": \"{{1.FulfillmentChannel}}\",\n  \"SalesChannel\": \"{{1.SalesChannel}}\",\n  \"ShipServiceLevel\": \"{{1.ShipServiceLevel}}\",\n  \"OrderTotal\": {\n    \"Amount\": \"{{1.OrderTotal.Amount}}\",\n    \"CurrencyCode\": \"{{1.OrderTotal.CurrencyCode}}\"\n  },\n  \"NumberOfItemsShipped\": {{1.NumberOfItemsShipped}},\n  \"NumberOfItemsUnshipped\": {{1.NumberOfItemsUnshipped}},\n  \"PaymentMethod\": \"{{1.PaymentMethod}}\",\n  \"MarketplaceId\": \"{{1.MarketplaceId}}\",\n  \"BuyerEmail\": \"{{1.BuyerEmail}}\",\n  \"ShippingAddress\": {{1.ShippingAddress}}\n}",
+        "followAllRedirects": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "method": {
+              "label": "POST"
+            },
+            "bodyType": {
+              "label": "Raw"
+            },
+            "contentType": {
+              "label": "JSON (application/json)"
+            }
+          }
+        },
+        "expect": [
+          {
+            "name": "url",
+            "type": "url",
+            "label": "URL",
+            "required": true
+          },
+          {
+            "name": "method",
+            "type": "select",
+            "label": "Method",
+            "required": true,
+            "validate": {
+              "enum": ["get", "head", "post", "put", "patch", "delete", "options"]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false
+    },
+    "designer": {
+      "orphans": []
+    }
+  }
+}

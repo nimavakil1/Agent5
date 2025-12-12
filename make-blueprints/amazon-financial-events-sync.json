@@ -1,0 +1,96 @@
+{
+  "name": "Amazon Financial Events to Agent5 (Daily)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "builtin:BasicScheduler",
+      "version": 1,
+      "parameters": {
+        "type": "interval",
+        "interval": 1440
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "amazon-seller:makeApiCall",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "__AMAZON_SELLER_CONNECTION__"
+      },
+      "mapper": {
+        "url": "/finances/v0/financialEvents",
+        "method": "get",
+        "headers": [],
+        "qs": [
+          {
+            "key": "PostedAfter",
+            "value": "{{formatDate(addDays(now; -1); \"YYYY-MM-DDTHH:mm:ssZ\")}}"
+          },
+          {
+            "key": "MaxResultsPerPage",
+            "value": "100"
+          }
+        ],
+        "body": ""
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://ai.acropaq.com/api/amazon/webhook/financial-events",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "contentType": "application/json",
+        "data": "{{2.body.payload.FinancialEvents}}",
+        "followAllRedirects": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false
+    },
+    "designer": {
+      "orphans": []
+    }
+  }
+}

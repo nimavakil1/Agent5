@@ -1,0 +1,111 @@
+{
+  "name": "Amazon Ads Campaigns to Agent5 (Daily)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "builtin:BasicScheduler",
+      "version": 1,
+      "parameters": {
+        "type": "interval",
+        "interval": 1440
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "amazon-advertising:makeApiCall",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "__AMAZON_ADS_CONNECTION__"
+      },
+      "mapper": {
+        "url": "/sp/campaigns/list",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/vnd.spCampaign.v3+json"
+          },
+          {
+            "name": "Accept",
+            "value": "application/vnd.spCampaign.v3+json"
+          }
+        ],
+        "qs": [],
+        "body": "{\n  \"maxResults\": 100\n}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicIterator",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "array": "{{2.body.campaigns}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://ai.acropaq.com/api/amazon/webhook/ads/campaigns",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "contentType": "application/json",
+        "data": "{\n  \"campaignId\": \"{{3.campaignId}}\",\n  \"campaignName\": \"{{3.name}}\",\n  \"campaignType\": \"SP\",\n  \"state\": \"{{3.state}}\",\n  \"dailyBudget\": {{3.budget.budget}},\n  \"startDate\": \"{{3.startDate}}\",\n  \"endDate\": \"{{3.endDate}}\",\n  \"targetingType\": \"{{3.targetingType}}\",\n  \"biddingStrategy\": \"{{3.dynamicBidding.strategy}}\"\n}",
+        "followAllRedirects": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false
+    },
+    "designer": {
+      "orphans": []
+    }
+  }
+}

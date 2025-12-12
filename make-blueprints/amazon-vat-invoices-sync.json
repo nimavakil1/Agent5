@@ -1,0 +1,128 @@
+{
+  "name": "Amazon VAT Invoices to Agent5 (Daily)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "builtin:BasicScheduler",
+      "version": 1,
+      "parameters": {
+        "type": "interval",
+        "interval": 1440
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "amazon-seller:makeApiCall",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "__AMAZON_SELLER_CONNECTION__"
+      },
+      "mapper": {
+        "url": "/reports/2021-06-30/reports",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "body": "{\n  \"reportType\": \"SC_VAT_TAX_REPORT\",\n  \"marketplaceIds\": [\"A1PA6795UKMFR9\"],\n  \"dataStartTime\": \"{{formatDate(addDays(now; -7); \"YYYY-MM-DDTHH:mm:ssZ\")}}\",\n  \"dataEndTime\": \"{{formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\")}}\"\n}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:Sleep",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "timeout": 60
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "amazon-seller:makeApiCall",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "__AMAZON_SELLER_CONNECTION__"
+      },
+      "mapper": {
+        "url": "/reports/2021-06-30/reports/{{2.body.reportId}}",
+        "method": "get",
+        "headers": [],
+        "qs": [],
+        "body": ""
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://ai.acropaq.com/api/amazon/webhook/report",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "contentType": "application/json",
+        "data": "{\n  \"reportType\": \"SC_VAT_TAX_REPORT\",\n  \"reportId\": \"{{2.body.reportId}}\",\n  \"processingStatus\": \"{{4.body.processingStatus}}\",\n  \"reportDocumentId\": \"{{4.body.reportDocumentId}}\"\n}",
+        "followAllRedirects": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true
+    },
+    "designer": {
+      "orphans": []
+    }
+  }
+}

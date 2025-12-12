@@ -1,0 +1,136 @@
+{
+  "name": "Amazon Settlements to Agent5 (Weekly)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "builtin:BasicScheduler",
+      "version": 1,
+      "parameters": {
+        "type": "interval",
+        "interval": 10080
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "amazon-seller:makeApiCall",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "__AMAZON_SELLER_CONNECTION__"
+      },
+      "mapper": {
+        "url": "/reports/2021-06-30/reports",
+        "method": "get",
+        "headers": [],
+        "qs": [
+          {
+            "key": "reportTypes",
+            "value": "GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2"
+          },
+          {
+            "key": "marketplaceIds",
+            "value": "A1PA6795UKMFR9"
+          },
+          {
+            "key": "pageSize",
+            "value": "10"
+          }
+        ],
+        "body": ""
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicIterator",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "array": "{{2.body.reports}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "amazon-seller:makeApiCall",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "__AMAZON_SELLER_CONNECTION__"
+      },
+      "mapper": {
+        "url": "/reports/2021-06-30/documents/{{3.reportDocumentId}}",
+        "method": "get",
+        "headers": [],
+        "qs": [],
+        "body": ""
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://ai.acropaq.com/api/amazon/webhook/settlements",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "contentType": "application/json",
+        "data": "{\n  \"settlementId\": \"{{3.reportId}}\",\n  \"settlementStartDate\": \"{{3.dataStartTime}}\",\n  \"settlementEndDate\": \"{{3.dataEndTime}}\",\n  \"marketplaceId\": \"{{3.marketplaceIds[0]}}\",\n  \"reportDocumentId\": \"{{3.reportDocumentId}}\",\n  \"processingStatus\": \"{{3.processingStatus}}\",\n  \"documentUrl\": \"{{4.body.url}}\"\n}",
+        "followAllRedirects": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true
+    },
+    "designer": {
+      "orphans": []
+    }
+  }
+}

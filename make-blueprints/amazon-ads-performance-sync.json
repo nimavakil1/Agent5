@@ -1,0 +1,144 @@
+{
+  "name": "Amazon Ads Performance to Agent5 (Daily)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "builtin:BasicScheduler",
+      "version": 1,
+      "parameters": {
+        "type": "interval",
+        "interval": 1440
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "amazon-advertising:makeApiCall",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "__AMAZON_ADS_CONNECTION__"
+      },
+      "mapper": {
+        "url": "/reporting/reports",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/vnd.createasyncreportrequest.v3+json"
+          }
+        ],
+        "qs": [],
+        "body": "{\n  \"name\": \"SP Campaign Performance Report\",\n  \"startDate\": \"{{formatDate(addDays(now; -1); \"YYYY-MM-DD\")}}\",\n  \"endDate\": \"{{formatDate(now; \"YYYY-MM-DD\")}}\",\n  \"configuration\": {\n    \"adProduct\": \"SPONSORED_PRODUCTS\",\n    \"groupBy\": [\"campaign\"],\n    \"columns\": [\n      \"campaignId\",\n      \"campaignName\",\n      \"impressions\",\n      \"clicks\",\n      \"cost\",\n      \"sales14d\",\n      \"unitsSoldSameSku14d\",\n      \"attributedConversions14d\"\n    ],\n    \"reportTypeId\": \"spCampaigns\",\n    \"timeUnit\": \"DAILY\",\n    \"format\": \"GZIP_JSON\"\n  }\n}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:Sleep",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "timeout": 60
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "amazon-advertising:makeApiCall",
+      "version": 1,
+      "parameters": {
+        "__IMTCONN__": "__AMAZON_ADS_CONNECTION__"
+      },
+      "mapper": {
+        "url": "/reporting/reports/{{2.body.reportId}}",
+        "method": "get",
+        "headers": [],
+        "qs": [],
+        "body": ""
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionGetFile",
+      "version": 2,
+      "parameters": {},
+      "mapper": {
+        "url": "{{4.body.url}}",
+        "method": "get"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 6,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://ai.acropaq.com/api/amazon/webhook/ads/performance",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "contentType": "application/json",
+        "data": "{{5.data}}",
+        "followAllRedirects": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 1500,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true
+    },
+    "designer": {
+      "orphans": []
+    }
+  }
+}
