@@ -118,22 +118,41 @@ router.post('/webhook/orders', validateWebhook, async (req, res) => {
 /**
  * @route POST /api/amazon/webhook/order-items
  * @desc Receive order items details from Make.com
+ * Accepts either: {amazonOrderId, items: [...]} OR {amazonOrderId, item: {...}} for single items
  */
 router.post('/webhook/order-items', validateWebhook, async (req, res) => {
   try {
-    const { amazonOrderId, items } = req.body;
+    const { amazonOrderId, items, ...singleItem } = req.body;
 
-    if (!amazonOrderId || !items) {
-      return res.status(400).json({ error: 'amazonOrderId and items required' });
+    // Check if this is a single item (all fields at root level with amazonOrderId)
+    const isSingleItem = amazonOrderId && !items && Object.keys(singleItem).length > 0;
+
+    if (!amazonOrderId) {
+      return res.status(400).json({ error: 'amazonOrderId required' });
     }
 
     const db = getDb();
-    await db.collection('amazon_orders').updateOne(
-      { amazonOrderId },
-      { $set: { orderItems: items, updatedAt: new Date() } }
-    );
 
-    res.json({ success: true, amazonOrderId, itemCount: items.length });
+    if (isSingleItem) {
+      // Single item mode - push to orderItems array
+      await db.collection('amazon_orders').updateOne(
+        { amazonOrderId },
+        {
+          $push: { orderItems: singleItem },
+          $set: { updatedAt: new Date() }
+        }
+      );
+      res.json({ success: true, amazonOrderId, mode: 'single-item' });
+    } else if (items) {
+      // Batch mode - replace entire orderItems array
+      await db.collection('amazon_orders').updateOne(
+        { amazonOrderId },
+        { $set: { orderItems: items, updatedAt: new Date() } }
+      );
+      res.json({ success: true, amazonOrderId, itemCount: items.length });
+    } else {
+      return res.status(400).json({ error: 'items array or item fields required' });
+    }
   } catch (error) {
     console.error('Amazon order-items webhook error:', error);
     res.status(500).json({ error: error.message });
