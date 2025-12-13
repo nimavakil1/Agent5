@@ -120,25 +120,30 @@ router.get('/status', async (req, res) => {
 });
 
 /**
- * Get users (internal members only, excludes guests)
+ * Get users (all users by default, can filter by type)
  */
 router.get('/users', async (req, res) => {
   try {
-    const { limit = 999, includeGuests = 'false' } = req.query;
+    const { limit = 999, filterType = 'all' } = req.query;
 
-    // Filter to only show Member users (excludes Guest users)
-    let filter = includeGuests === 'true'
-      ? ''
-      : "&$filter=userType eq 'Member'";
+    // filterType: 'all' = everyone, 'members' = only Member type, 'guests' = only Guest type
+    let filter = '';
+    if (filterType === 'members') {
+      filter = "&$filter=userType eq 'Member'";
+    } else if (filterType === 'guests') {
+      filter = "&$filter=userType eq 'Guest'";
+    }
 
-    const data = await graphRequest(`/users?$top=${limit}&$select=id,displayName,mail,jobTitle,department,userType,accountEnabled${filter}`);
+    const data = await graphRequest(`/users?$top=${limit}&$select=id,displayName,mail,jobTitle,department,userType,accountEnabled,userPrincipalName${filter}`);
 
     res.json({
       success: true,
+      count: data.value.length,
       users: data.value.map(u => ({
         id: u.id,
         name: u.displayName,
         email: u.mail,
+        userPrincipalName: u.userPrincipalName,
         jobTitle: u.jobTitle,
         department: u.department,
         userType: u.userType,
