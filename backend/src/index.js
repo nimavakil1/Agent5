@@ -37,6 +37,7 @@ const knowledgeRouter = require('./api/routes/knowledge.api');
 const amazonRouter = require('./api/routes/amazon.api');
 const odooRouter = require('./api/routes/odoo.api');
 const ms365Router = require('./api/routes/ms365.api');
+const bolcomRouter = require('./api/routes/bolcom.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -212,6 +213,7 @@ app.use('/api/knowledge', requireSession, knowledgeRouter);
 app.use('/api/amazon', amazonRouter); // Webhooks are public (validated by signature), GET routes need auth
 app.use('/api/odoo', requireSession, odooRouter);
 app.use('/api/ms365', requireSession, ms365Router);
+app.use('/api/bolcom', requireSession, bolcomRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));

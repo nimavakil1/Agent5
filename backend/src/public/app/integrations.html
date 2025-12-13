@@ -479,31 +479,49 @@
       </div>
 
       <!-- Bol.com -->
-      <div class="integration-card coming-soon-overlay">
+      <div class="integration-card">
         <div class="integration-card-header">
           <div class="integration-logo" style="background: linear-gradient(135deg, #0066ff, #003399);">Bol</div>
           <div class="integration-info">
             <div class="integration-name">Bol.com</div>
-            <div class="integration-desc">Sync your Bol.com marketplace orders and inventory.</div>
+            <div class="integration-desc">Sync your Bol.com marketplace orders, shipments, and returns.</div>
           </div>
-          <div class="integration-status coming-soon">
+          <div class="integration-status disconnected" id="bolcom-status">
             <span class="status-dot"></span>
-            Coming Soon
+            Not configured
           </div>
         </div>
         <div class="integration-body">
+          <div class="integration-stats">
+            <div class="integration-stat">
+              <div class="integration-stat-value" id="bolcom-orders">--</div>
+              <div class="integration-stat-label">Orders</div>
+            </div>
+            <div class="integration-stat">
+              <div class="integration-stat-value" id="bolcom-shipments">--</div>
+              <div class="integration-stat-label">Shipments</div>
+            </div>
+            <div class="integration-stat">
+              <div class="integration-stat-value" id="bolcom-returns">--</div>
+              <div class="integration-stat-label">Returns</div>
+            </div>
+          </div>
           <div class="integration-features">
             <span class="feature-tag">Orders</span>
-            <span class="feature-tag">Products</span>
-            <span class="feature-tag">Inventory</span>
-            <span class="feature-tag">Returns</span>
+            <span class="feature-tag">Offers</span>
             <span class="feature-tag">Shipments</span>
+            <span class="feature-tag">Returns</span>
+            <span class="feature-tag">Invoices</span>
           </div>
           <div class="integration-actions">
-            <button class="btn btn-secondary" disabled>
-              <span class="material-symbols-outlined">schedule</span>
-              Coming Soon
-            </button>
+            <a href="/app/bolcom-config.html" class="btn btn-primary">
+              <span class="material-symbols-outlined">settings</span>
+              Configure
+            </a>
+            <a href="https://partner.bol.com" target="_blank" class="btn btn-secondary">
+              <span class="material-symbols-outlined">open_in_new</span>
+              Seller Dashboard
+            </a>
           </div>
         </div>
       </div>
@@ -565,6 +583,43 @@
           } else if (data.configured) {
             document.getElementById('ms365-status').innerHTML = '<span class="status-dot"></span>Auth Error';
             document.getElementById('ms365-status').className = 'integration-status disconnected';
+          }
+        }
+      } catch (e) {
+        // Keep default "Not configured" state
+      }
+
+      // Load Bol.com status
+      try {
+        const bolcomRes = await fetch('/api/bolcom/status', { credentials: 'include' });
+        if (bolcomRes.ok) {
+          const data = await bolcomRes.json();
+          if (data.connected) {
+            document.getElementById('bolcom-status').innerHTML = '<span class="status-dot"></span>Connected';
+            document.getElementById('bolcom-status').className = 'integration-status connected';
+
+            // Load stats
+            const [ordersRes, shipmentsRes, returnsRes] = await Promise.all([
+              fetch('/api/bolcom/orders', { credentials: 'include' }),
+              fetch('/api/bolcom/shipments', { credentials: 'include' }),
+              fetch('/api/bolcom/returns?handled=false', { credentials: 'include' })
+            ]);
+
+            if (ordersRes.ok) {
+              const orders = await ordersRes.json();
+              document.getElementById('bolcom-orders').textContent = orders.count || 0;
+            }
+            if (shipmentsRes.ok) {
+              const shipments = await shipmentsRes.json();
+              document.getElementById('bolcom-shipments').textContent = shipments.count || 0;
+            }
+            if (returnsRes.ok) {
+              const returns = await returnsRes.json();
+              document.getElementById('bolcom-returns').textContent = returns.count || 0;
+            }
+          } else if (data.configured) {
+            document.getElementById('bolcom-status').innerHTML = '<span class="status-dot"></span>Auth Error';
+            document.getElementById('bolcom-status').className = 'integration-status disconnected';
           }
         }
       } catch (e) {
