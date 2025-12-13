@@ -400,6 +400,54 @@
       </div>
     </div>
 
+    <!-- Advertising Stats (shown when connected) -->
+    <div class="card" id="advertising-card" style="display: none;">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="material-symbols-outlined">campaign</span>
+          Advertising Overview (Last 30 Days)
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="stats-grid" style="display: grid;">
+          <div class="stat-card">
+            <div class="stat-value" id="ad-spend">--</div>
+            <div class="stat-label">Total Spend</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="ad-revenue">--</div>
+            <div class="stat-label">Ad Revenue</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="ad-acos">--</div>
+            <div class="stat-label">ACoS</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="ad-roas">--</div>
+            <div class="stat-label">ROAS</div>
+          </div>
+        </div>
+        <div class="stats-grid" style="display: grid; margin-top: 16px;">
+          <div class="stat-card">
+            <div class="stat-value" id="ad-campaigns">--</div>
+            <div class="stat-label">Active Campaigns</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="ad-impressions">--</div>
+            <div class="stat-label">Impressions</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="ad-clicks">--</div>
+            <div class="stat-label">Clicks</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="ad-orders">--</div>
+            <div class="stat-label">Orders</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Test Connection -->
     <div class="card">
       <div class="card-header">
@@ -409,6 +457,7 @@
         </div>
       </div>
       <div class="card-body">
+        <p style="font-size: 13px; color: #71717a; margin: 0 0 16px 0;">Retailer API</p>
         <div class="test-grid">
           <button class="test-btn" onclick="testOrders()">
             <span class="material-symbols-outlined">shopping_cart</span>
@@ -429,6 +478,26 @@
           <button class="test-btn" onclick="testInvoices()">
             <span class="material-symbols-outlined">receipt_long</span>
             Get Invoices
+          </button>
+        </div>
+
+        <p style="font-size: 13px; color: #71717a; margin: 24px 0 16px 0;">Advertising API</p>
+        <div class="test-grid">
+          <button class="test-btn" onclick="testCampaigns()">
+            <span class="material-symbols-outlined">campaign</span>
+            Get Campaigns
+          </button>
+          <button class="test-btn" onclick="testAdOverview()">
+            <span class="material-symbols-outlined">analytics</span>
+            Ad Overview
+          </button>
+          <button class="test-btn" onclick="testAdCosts()">
+            <span class="material-symbols-outlined">payments</span>
+            Ad Costs
+          </button>
+          <button class="test-btn" onclick="testProductPerformance()">
+            <span class="material-symbols-outlined">inventory</span>
+            Product Performance
           </button>
         </div>
 
@@ -580,6 +649,20 @@
               <li>Sales analytics</li>
             </ul>
           </div>
+
+          <div class="capability-card">
+            <div class="capability-header">
+              <span class="material-symbols-outlined" style="color: #f97316;">campaign</span>
+              <h4>Advertising</h4>
+            </div>
+            <ul class="capability-list">
+              <li>View campaigns</li>
+              <li>Ad spend & costs</li>
+              <li>ACoS & ROAS metrics</li>
+              <li>Product performance</li>
+              <li>Keyword performance</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -607,6 +690,7 @@
           desc.textContent = `Client ID: ${data.clientId}`;
           statsGrid.style.display = 'grid';
           loadStats();
+          loadAdvertisingStats();
         } else if (data.configured) {
           card.className = 'status-card error';
           icon.textContent = 'error';
@@ -691,6 +775,52 @@
     function testReturns() { runTest('/api/bolcom/returns'); }
     function testRetailer() { runTest('/api/bolcom/retailer'); }
     function testInvoices() { runTest('/api/bolcom/invoices'); }
+
+    // Advertising API test functions
+    function testCampaigns() { runTest('/api/bolcom/advertising/campaigns'); }
+    function testAdOverview() { runTest('/api/bolcom/advertising/overview'); }
+    function testAdCosts() { runTest('/api/bolcom/advertising/costs'); }
+    function testProductPerformance() {
+      const end = new Date().toISOString().split('T')[0];
+      const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      runTest(`/api/bolcom/advertising/reports/products?startDate=${start}&endDate=${end}`);
+    }
+
+    // Load advertising stats
+    async function loadAdvertisingStats() {
+      try {
+        const res = await fetch('/api/bolcom/advertising/overview', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to fetch');
+        const data = await res.json();
+
+        if (data.success && data.overview) {
+          document.getElementById('advertising-card').style.display = 'block';
+
+          const { overview } = data;
+          document.getElementById('ad-campaigns').textContent = overview.activeCampaigns || 0;
+
+          if (overview.last30Days) {
+            const stats = overview.last30Days;
+            document.getElementById('ad-spend').textContent = '\u20AC' + (stats.spend || '0.00');
+            document.getElementById('ad-revenue').textContent = '\u20AC' + (stats.revenue || '0.00');
+            document.getElementById('ad-acos').textContent = stats.acos || 'N/A';
+            document.getElementById('ad-roas').textContent = stats.roas || 'N/A';
+            document.getElementById('ad-impressions').textContent = formatNumber(stats.impressions || 0);
+            document.getElementById('ad-clicks').textContent = formatNumber(stats.clicks || 0);
+            document.getElementById('ad-orders').textContent = stats.orders || 0;
+          }
+        }
+      } catch (e) {
+        console.log('Advertising data not available:', e.message);
+        // Keep advertising card hidden if not available
+      }
+    }
+
+    function formatNumber(num) {
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+      return num.toString();
+    }
 
     // Check status on load
     checkStatus();

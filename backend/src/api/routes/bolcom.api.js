@@ -1,10 +1,13 @@
 /**
- * Bol.com Retailer API Routes
+ * Bol.com Retailer & Advertising API Routes
  *
- * Integration with Bol.com marketplace for orders, offers, shipments, and returns.
+ * Integration with Bol.com marketplace for orders, offers, shipments, returns,
+ * and advertising campaigns/costs.
  * Uses OAuth2 client credentials flow for authentication.
  *
- * API Documentation: https://api.bol.com/retailer/public/Retailer-API/
+ * API Documentation:
+ * - Retailer: https://api.bol.com/retailer/public/Retailer-API/
+ * - Advertising: https://api.bol.com/retailer/public/Advertiser-API/
  */
 
 const express = require('express');
@@ -79,6 +82,41 @@ async function bolRequest(endpoint, method = 'GET', body = null) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
     throw new Error(error.detail || error.message || `Bol.com API error: ${response.status}`);
+  }
+
+  // Handle 204 No Content
+  if (response.status === 204) {
+    return { success: true };
+  }
+
+  return response.json();
+}
+
+/**
+ * Make a request to Bol.com Advertising API
+ * Uses same authentication but different base URL and content type
+ */
+async function advertiserRequest(endpoint, method = 'GET', body = null) {
+  const token = await getAccessToken();
+
+  const options = {
+    method,
+    headers: {
+      'Accept': 'application/vnd.advertiser.v11+json',
+      'Authorization': `Bearer ${token}`
+    }
+  };
+
+  if (body) {
+    options.headers['Content-Type'] = 'application/vnd.advertiser.v11+json';
+    options.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(`https://api.bol.com/advertiser${endpoint}`, options);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || error.message || `Bol.com Advertising API error: ${response.status}`);
   }
 
   // Handle 204 No Content
@@ -565,6 +603,400 @@ router.delete('/orders/:orderId/items/:orderItemId', async (req, res) => {
     });
 
     res.json({ success: true, processStatus: data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ADVERTISING API ENDPOINTS
+// ============================================
+
+/**
+ * Get all advertising campaigns
+ * Query params: state (ACTIVE, PAUSED, ENDED, DRAFT)
+ */
+router.get('/advertising/campaigns', async (req, res) => {
+  try {
+    const { state, page = 1 } = req.query;
+
+    let endpoint = `/sponsored-products/campaigns?page=${page}`;
+    if (state) {
+      endpoint += `&state=${state}`;
+    }
+
+    const data = await advertiserRequest(endpoint);
+
+    res.json({
+      success: true,
+      count: data.campaigns?.length || 0,
+      campaigns: (data.campaigns || []).map(c => ({
+        campaignId: c.campaignId,
+        name: c.name,
+        state: c.state,
+        startDate: c.startDate,
+        endDate: c.endDate,
+        targetingType: c.targetingType,
+        dailyBudget: c.dailyBudget,
+        totalBudget: c.totalBudget,
+        bidAdjustments: c.bidAdjustments
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get single campaign details
+ */
+router.get('/advertising/campaigns/:campaignId', async (req, res) => {
+  try {
+    const data = await advertiserRequest(`/sponsored-products/campaigns/${req.params.campaignId}`);
+    res.json({ success: true, campaign: data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get ad groups for a campaign
+ */
+router.get('/advertising/campaigns/:campaignId/ad-groups', async (req, res) => {
+  try {
+    const { page = 1 } = req.query;
+    const data = await advertiserRequest(`/sponsored-products/campaigns/${req.params.campaignId}/ad-groups?page=${page}`);
+
+    res.json({
+      success: true,
+      count: data.adGroups?.length || 0,
+      adGroups: (data.adGroups || []).map(ag => ({
+        adGroupId: ag.adGroupId,
+        name: ag.name,
+        state: ag.state,
+        defaultBid: ag.defaultBid
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get keywords for an ad group
+ */
+router.get('/advertising/ad-groups/:adGroupId/keywords', async (req, res) => {
+  try {
+    const { page = 1 } = req.query;
+    const data = await advertiserRequest(`/sponsored-products/ad-groups/${req.params.adGroupId}/keywords?page=${page}`);
+
+    res.json({
+      success: true,
+      count: data.keywords?.length || 0,
+      keywords: (data.keywords || []).map(k => ({
+        keywordId: k.keywordId,
+        keywordText: k.keywordText,
+        matchType: k.matchType,
+        state: k.state,
+        bid: k.bid
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get campaign performance report (costs, clicks, impressions, etc.)
+ * Query params: startDate (YYYY-MM-DD), endDate (YYYY-MM-DD)
+ */
+router.get('/advertising/reports/campaigns', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate are required (format: YYYY-MM-DD)'
+      });
+    }
+
+    // Request a campaign performance report
+    const data = await advertiserRequest('/sponsored-products/reports/campaigns', 'POST', {
+      startDate,
+      endDate,
+      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
+    });
+
+    res.json({
+      success: true,
+      report: data
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get daily advertising costs summary
+ * Query params: startDate, endDate
+ */
+router.get('/advertising/costs', async (req, res) => {
+  try {
+    const { startDate, endDate, campaignId } = req.query;
+
+    // Default to last 30 days if no dates provided
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    let endpoint = `/sponsored-products/reports/performance?start-date=${start}&end-date=${end}`;
+    if (campaignId) {
+      endpoint += `&campaign-id=${campaignId}`;
+    }
+
+    const data = await advertiserRequest(endpoint);
+
+    // Calculate totals
+    let totalSpend = 0;
+    let totalClicks = 0;
+    let totalImpressions = 0;
+    let totalOrders = 0;
+    let totalRevenue = 0;
+
+    const dailyData = (data.performance || data.dailyPerformance || []).map(d => {
+      totalSpend += d.spend || 0;
+      totalClicks += d.clicks || 0;
+      totalImpressions += d.impressions || 0;
+      totalOrders += d.orders || 0;
+      totalRevenue += d.revenue || 0;
+
+      return {
+        date: d.date,
+        spend: d.spend,
+        clicks: d.clicks,
+        impressions: d.impressions,
+        ctr: d.ctr,
+        orders: d.orders,
+        revenue: d.revenue,
+        acos: d.acos,
+        roas: d.roas
+      };
+    });
+
+    res.json({
+      success: true,
+      period: { startDate: start, endDate: end },
+      totals: {
+        spend: totalSpend,
+        clicks: totalClicks,
+        impressions: totalImpressions,
+        orders: totalOrders,
+        revenue: totalRevenue,
+        acos: totalRevenue > 0 ? ((totalSpend / totalRevenue) * 100).toFixed(2) + '%' : 'N/A',
+        roas: totalSpend > 0 ? (totalRevenue / totalSpend).toFixed(2) : 'N/A'
+      },
+      dailyData
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get product-level advertising performance
+ */
+router.get('/advertising/reports/products', async (req, res) => {
+  try {
+    const { startDate, endDate, campaignId } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate are required (format: YYYY-MM-DD)'
+      });
+    }
+
+    const body = {
+      startDate,
+      endDate,
+      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
+    };
+
+    if (campaignId) {
+      body.campaignId = campaignId;
+    }
+
+    const data = await advertiserRequest('/sponsored-products/reports/products', 'POST', body);
+
+    res.json({
+      success: true,
+      count: data.products?.length || 0,
+      products: (data.products || []).map(p => ({
+        ean: p.ean,
+        productTitle: p.productTitle,
+        impressions: p.impressions,
+        clicks: p.clicks,
+        ctr: p.ctr,
+        spend: p.spend,
+        orders: p.orders,
+        revenue: p.revenue,
+        acos: p.acos,
+        roas: p.roas
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get keyword-level advertising performance
+ */
+router.get('/advertising/reports/keywords', async (req, res) => {
+  try {
+    const { startDate, endDate, campaignId, adGroupId } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate are required (format: YYYY-MM-DD)'
+      });
+    }
+
+    const body = {
+      startDate,
+      endDate,
+      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
+    };
+
+    if (campaignId) body.campaignId = campaignId;
+    if (adGroupId) body.adGroupId = adGroupId;
+
+    const data = await advertiserRequest('/sponsored-products/reports/keywords', 'POST', body);
+
+    res.json({
+      success: true,
+      count: data.keywords?.length || 0,
+      keywords: (data.keywords || []).map(k => ({
+        keywordText: k.keywordText,
+        matchType: k.matchType,
+        impressions: k.impressions,
+        clicks: k.clicks,
+        ctr: k.ctr,
+        spend: k.spend,
+        orders: k.orders,
+        revenue: k.revenue,
+        acos: k.acos,
+        roas: k.roas
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Update campaign state (pause/activate)
+ */
+router.put('/advertising/campaigns/:campaignId/state', async (req, res) => {
+  try {
+    const { state } = req.body;
+
+    if (!['ACTIVE', 'PAUSED'].includes(state)) {
+      return res.status(400).json({
+        success: false,
+        error: 'state must be ACTIVE or PAUSED'
+      });
+    }
+
+    const data = await advertiserRequest(`/sponsored-products/campaigns/${req.params.campaignId}`, 'PUT', {
+      state
+    });
+
+    res.json({ success: true, processStatus: data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Update campaign budget
+ */
+router.put('/advertising/campaigns/:campaignId/budget', async (req, res) => {
+  try {
+    const { dailyBudget, totalBudget } = req.body;
+
+    if (!dailyBudget && !totalBudget) {
+      return res.status(400).json({
+        success: false,
+        error: 'dailyBudget or totalBudget is required'
+      });
+    }
+
+    const updateData = {};
+    if (dailyBudget) updateData.dailyBudget = dailyBudget;
+    if (totalBudget) updateData.totalBudget = totalBudget;
+
+    const data = await advertiserRequest(`/sponsored-products/campaigns/${req.params.campaignId}`, 'PUT', updateData);
+
+    res.json({ success: true, processStatus: data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get advertising account overview
+ */
+router.get('/advertising/overview', async (req, res) => {
+  try {
+    // Get last 30 days performance summary
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Fetch campaigns and costs in parallel
+    const [campaignsData, costsData] = await Promise.all([
+      advertiserRequest('/sponsored-products/campaigns?state=ACTIVE').catch(() => ({ campaigns: [] })),
+      advertiserRequest(`/sponsored-products/reports/performance?start-date=${startDate}&end-date=${endDate}`).catch(() => ({ performance: [] }))
+    ]);
+
+    // Calculate totals from performance data
+    let totalSpend = 0;
+    let totalClicks = 0;
+    let totalImpressions = 0;
+    let totalOrders = 0;
+    let totalRevenue = 0;
+
+    (costsData.performance || costsData.dailyPerformance || []).forEach(d => {
+      totalSpend += d.spend || 0;
+      totalClicks += d.clicks || 0;
+      totalImpressions += d.impressions || 0;
+      totalOrders += d.orders || 0;
+      totalRevenue += d.revenue || 0;
+    });
+
+    res.json({
+      success: true,
+      overview: {
+        activeCampaigns: campaignsData.campaigns?.length || 0,
+        last30Days: {
+          spend: totalSpend.toFixed(2),
+          clicks: totalClicks,
+          impressions: totalImpressions,
+          orders: totalOrders,
+          revenue: totalRevenue.toFixed(2),
+          acos: totalRevenue > 0 ? ((totalSpend / totalRevenue) * 100).toFixed(2) + '%' : 'N/A',
+          roas: totalSpend > 0 ? (totalRevenue / totalSpend).toFixed(2) : 'N/A',
+          ctr: totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(2) + '%' : 'N/A'
+        }
+      },
+      campaigns: (campaignsData.campaigns || []).slice(0, 10).map(c => ({
+        campaignId: c.campaignId,
+        name: c.name,
+        state: c.state,
+        dailyBudget: c.dailyBudget
+      }))
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
