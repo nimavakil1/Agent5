@@ -121,10 +121,11 @@ router.get('/status', async (req, res) => {
 
 /**
  * Get users (all users by default, can filter by type)
+ * Handles pagination to get all users
  */
 router.get('/users', async (req, res) => {
   try {
-    const { limit = 999, filterType = 'all' } = req.query;
+    const { filterType = 'all' } = req.query;
 
     // filterType: 'all' = everyone, 'members' = only Member type, 'guests' = only Guest type
     let filter = '';
@@ -134,12 +135,30 @@ router.get('/users', async (req, res) => {
       filter = "&$filter=userType eq 'Guest'";
     }
 
-    const data = await graphRequest(`/users?$top=${limit}&$select=id,displayName,mail,jobTitle,department,userType,accountEnabled,userPrincipalName${filter}`);
+    // Collect all users with pagination
+    let allUsers = [];
+    let nextLink = `/users?$top=100&$select=id,displayName,mail,jobTitle,department,userType,accountEnabled,userPrincipalName${filter}`;
+
+    while (nextLink) {
+      const data = await graphRequest(nextLink);
+      allUsers = allUsers.concat(data.value || []);
+
+      // Check for next page
+      if (data['@odata.nextLink']) {
+        // Extract just the path from the full URL
+        nextLink = data['@odata.nextLink'].replace('https://graph.microsoft.com/v1.0', '');
+      } else {
+        nextLink = null;
+      }
+
+      // Safety limit to prevent infinite loops
+      if (allUsers.length > 1000) break;
+    }
 
     res.json({
       success: true,
-      count: data.value.length,
-      users: data.value.map(u => ({
+      count: allUsers.length,
+      users: allUsers.map(u => ({
         id: u.id,
         name: u.displayName,
         email: u.mail,
