@@ -120,12 +120,18 @@ router.get('/status', async (req, res) => {
 });
 
 /**
- * Get users
+ * Get users (internal members only, excludes guests)
  */
 router.get('/users', async (req, res) => {
   try {
-    const { limit = 10 } = req.query;
-    const data = await graphRequest(`/users?$top=${limit}&$select=id,displayName,mail,jobTitle,department`);
+    const { limit = 50, includeGuests = 'false' } = req.query;
+
+    // Filter to only show Member users (excludes Guest users)
+    let filter = includeGuests === 'true'
+      ? ''
+      : "&$filter=userType eq 'Member'";
+
+    const data = await graphRequest(`/users?$top=${limit}&$select=id,displayName,mail,jobTitle,department,userType,accountEnabled${filter}`);
 
     res.json({
       success: true,
@@ -134,7 +140,9 @@ router.get('/users', async (req, res) => {
         name: u.displayName,
         email: u.mail,
         jobTitle: u.jobTitle,
-        department: u.department
+        department: u.department,
+        userType: u.userType,
+        accountEnabled: u.accountEnabled
       }))
     });
   } catch (error) {
