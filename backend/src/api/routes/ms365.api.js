@@ -124,7 +124,7 @@ router.get('/status', async (req, res) => {
  */
 router.get('/users', async (req, res) => {
   try {
-    const { limit = 50, includeGuests = 'false' } = req.query;
+    const { limit = 999, includeGuests = 'false' } = req.query;
 
     // Filter to only show Member users (excludes Guest users)
     let filter = includeGuests === 'true'
