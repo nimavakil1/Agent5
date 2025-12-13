@@ -85,6 +85,15 @@ async function graphRequest(endpoint, method = 'GET', body = null) {
 }
 
 /**
+ * Clear token cache (force re-authentication)
+ */
+router.post('/clear-token', async (req, res) => {
+  accessToken = null;
+  tokenExpiry = null;
+  res.json({ success: true, message: 'Token cache cleared' });
+});
+
+/**
  * Check connection status
  */
 router.get('/status', async (req, res) => {
