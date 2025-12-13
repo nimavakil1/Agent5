@@ -41,11 +41,12 @@ router.get('/status', async (req, res) => {
 });
 
 /**
- * Get products from Odoo
+ * Get products from Odoo with pagination support
+ * Use ?all=true to fetch all products (with pagination handled server-side)
  */
 router.get('/products', async (req, res) => {
   try {
-    const { q, limit = 100, offset = 0, in_stock } = req.query;
+    const { q, limit = 100, offset = 0, in_stock, all, fields } = req.query;
     const client = await getOdooClient();
 
     let domain = [['sale_ok', '=', true]];
@@ -62,21 +63,41 @@ router.get('/products', async (req, res) => {
       domain.push(['qty_available', '>', 0]);
     }
 
-    const products = await client.searchRead('product.product', domain, [
-      'id',
-      'name',
-      'default_code',
-      'barcode',
-      'list_price',
-      'standard_price',
-      'qty_available',
-      'virtual_available',
-      'categ_id',
-      'image_128',
-      'type',
-      'uom_id',
-      'active'
-    ], { limit: parseInt(limit), offset: parseInt(offset), order: 'name asc' });
+    // Extended fields for list view
+    const defaultFields = [
+      'id', 'name', 'default_code', 'barcode', 'list_price', 'standard_price',
+      'qty_available', 'virtual_available', 'categ_id', 'image_128', 'type',
+      'uom_id', 'active', 'create_date', 'write_date', 'weight', 'volume',
+      'description_sale', 'sale_ok', 'purchase_ok'
+    ];
+
+    // If all=true, fetch all products with pagination
+    let products = [];
+    if (all === 'true' || all === '1') {
+      const batchSize = 500;
+      let currentOffset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const batch = await client.searchRead('product.product', domain, defaultFields, {
+          limit: batchSize,
+          offset: currentOffset,
+          order: 'name asc'
+        });
+        products = products.concat(batch);
+        currentOffset += batchSize;
+        hasMore = batch.length === batchSize;
+
+        // Safety limit
+        if (products.length > 50000) break;
+      }
+    } else {
+      products = await client.searchRead('product.product', domain, defaultFields, {
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        order: 'name asc'
+      });
+    }
 
     // Transform for frontend
     const transformed = products.map(p => ({
@@ -93,10 +114,21 @@ router.get('/products', async (req, res) => {
       image: p.image_128 ? `data:image/png;base64,${p.image_128}` : null,
       type: p.type,
       uom: p.uom_id ? p.uom_id[1] : '',
-      active: p.active
+      active: p.active,
+      createdAt: p.create_date,
+      updatedAt: p.write_date,
+      weight: p.weight,
+      volume: p.volume,
+      description: p.description_sale || '',
+      canSell: p.sale_ok,
+      canPurchase: p.purchase_ok
     }));
 
-    res.json(transformed);
+    res.json({
+      success: true,
+      count: transformed.length,
+      products: transformed
+    });
   } catch (error) {
     console.error('Odoo products error:', error);
     res.status(500).json({ error: error.message });
@@ -104,7 +136,7 @@ router.get('/products', async (req, res) => {
 });
 
 /**
- * Get single product
+ * Get single product with all details
  */
 router.get('/products/:id', async (req, res) => {
   try {
@@ -112,7 +144,8 @@ router.get('/products/:id', async (req, res) => {
     const products = await client.read('product.product', [parseInt(req.params.id)], [
       'id', 'name', 'default_code', 'barcode', 'list_price', 'standard_price',
       'qty_available', 'virtual_available', 'categ_id', 'image_1920',
-      'type', 'uom_id', 'active', 'description_sale', 'weight', 'volume'
+      'type', 'uom_id', 'active', 'description_sale', 'weight', 'volume',
+      'sale_ok', 'purchase_ok', 'create_date', 'write_date'
     ]);
 
     if (!products.length) {
@@ -121,25 +154,107 @@ router.get('/products/:id', async (req, res) => {
 
     const p = products[0];
     res.json({
-      id: p.id,
-      name: p.name,
-      sku: p.default_code || '',
-      barcode: p.barcode || '',
-      price: p.list_price,
-      cost: p.standard_price,
-      stock: p.qty_available,
-      available: p.virtual_available,
-      category: p.categ_id ? p.categ_id[1] : '',
-      image: p.image_1920 ? `data:image/png;base64,${p.image_1920}` : null,
-      type: p.type,
-      uom: p.uom_id ? p.uom_id[1] : '',
-      active: p.active,
-      description: p.description_sale || '',
-      weight: p.weight,
-      volume: p.volume
+      success: true,
+      product: {
+        id: p.id,
+        name: p.name,
+        sku: p.default_code || '',
+        barcode: p.barcode || '',
+        price: p.list_price,
+        cost: p.standard_price,
+        stock: p.qty_available,
+        available: p.virtual_available,
+        category: p.categ_id ? p.categ_id[1] : '',
+        categoryId: p.categ_id ? p.categ_id[0] : null,
+        image: p.image_1920 ? `data:image/png;base64,${p.image_1920}` : null,
+        type: p.type,
+        uom: p.uom_id ? p.uom_id[1] : '',
+        uomId: p.uom_id ? p.uom_id[0] : null,
+        active: p.active,
+        description: p.description_sale || '',
+        weight: p.weight,
+        volume: p.volume,
+        canSell: p.sale_ok,
+        canPurchase: p.purchase_ok,
+        createdAt: p.create_date,
+        updatedAt: p.write_date
+      }
     });
   } catch (error) {
     console.error('Odoo product error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Update a product in Odoo
+ */
+router.put('/products/:id', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+    const productId = parseInt(req.params.id);
+    const updates = req.body;
+
+    // Map frontend field names to Odoo field names
+    const fieldMapping = {
+      name: 'name',
+      sku: 'default_code',
+      barcode: 'barcode',
+      price: 'list_price',
+      cost: 'standard_price',
+      description: 'description_sale',
+      weight: 'weight',
+      volume: 'volume',
+      active: 'active',
+      categoryId: 'categ_id',
+      canSell: 'sale_ok',
+      canPurchase: 'purchase_ok'
+    };
+
+    // Build Odoo update object
+    const odooUpdates = {};
+    for (const [frontendKey, odooKey] of Object.entries(fieldMapping)) {
+      if (updates[frontendKey] !== undefined) {
+        odooUpdates[odooKey] = updates[frontendKey];
+      }
+    }
+
+    // Update in Odoo
+    await client.write('product.product', [productId], odooUpdates);
+
+    // Fetch updated product
+    const products = await client.read('product.product', [productId], [
+      'id', 'name', 'default_code', 'barcode', 'list_price', 'standard_price',
+      'qty_available', 'virtual_available', 'categ_id', 'type', 'uom_id',
+      'active', 'description_sale', 'weight', 'volume', 'write_date'
+    ]);
+
+    const p = products[0];
+    res.json({
+      success: true,
+      message: 'Product updated successfully',
+      product: {
+        id: p.id,
+        name: p.name,
+        sku: p.default_code || '',
+        barcode: p.barcode || '',
+        price: p.list_price,
+        cost: p.standard_price,
+        stock: p.qty_available,
+        available: p.virtual_available,
+        category: p.categ_id ? p.categ_id[1] : '',
+        categoryId: p.categ_id ? p.categ_id[0] : null,
+        type: p.type,
+        uom: p.uom_id ? p.uom_id[1] : '',
+        active: p.active,
+        description: p.description_sale || '',
+        weight: p.weight,
+        volume: p.volume,
+        updatedAt: p.write_date
+      }
+    });
+  } catch (error) {
+    console.error('Odoo product update error:', error);
     res.status(500).json({ error: error.message });
   }
 });
