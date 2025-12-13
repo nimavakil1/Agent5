@@ -13,24 +13,28 @@
 const express = require('express');
 const router = express.Router();
 
-// Token cache
-let accessToken = null;
-let tokenExpiry = null;
+// Token cache for Retailer API
+let retailerAccessToken = null;
+let retailerTokenExpiry = null;
+
+// Token cache for Advertising API (separate credentials)
+let advertiserAccessToken = null;
+let advertiserTokenExpiry = null;
 
 /**
- * Get access token using client credentials flow
+ * Get access token for Retailer API using client credentials flow
  */
-async function getAccessToken() {
+async function getRetailerAccessToken() {
   const clientId = process.env.BOL_CLIENT_ID;
   const clientSecret = process.env.BOL_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    throw new Error('Bol.com credentials not configured. Set BOL_CLIENT_ID and BOL_CLIENT_SECRET in .env');
+    throw new Error('Bol.com Retailer credentials not configured. Set BOL_CLIENT_ID and BOL_CLIENT_SECRET in .env');
   }
 
   // Check if we have a valid cached token (with 30 second buffer)
-  if (accessToken && tokenExpiry && Date.now() < tokenExpiry - 30000) {
-    return accessToken;
+  if (retailerAccessToken && retailerTokenExpiry && Date.now() < retailerTokenExpiry - 30000) {
+    return retailerAccessToken;
   }
 
   // Base64 encode credentials
@@ -48,21 +52,63 @@ async function getAccessToken() {
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Failed to get Bol.com access token: ${error}`);
+    throw new Error(`Failed to get Bol.com Retailer access token: ${error}`);
   }
 
   const data = await response.json();
-  accessToken = data.access_token;
-  tokenExpiry = Date.now() + (data.expires_in * 1000);
+  retailerAccessToken = data.access_token;
+  retailerTokenExpiry = Date.now() + (data.expires_in * 1000);
 
-  return accessToken;
+  return retailerAccessToken;
+}
+
+/**
+ * Get access token for Advertising API using client credentials flow
+ * Uses separate credentials (BOL_ADVERTISER_ID and BOL_ADVERTISER_SECRET)
+ */
+async function getAdvertiserAccessToken() {
+  const advertiserId = process.env.BOL_ADVERTISER_ID;
+  const advertiserSecret = process.env.BOL_ADVERTISER_SECRET;
+
+  if (!advertiserId || !advertiserSecret) {
+    throw new Error('Bol.com Advertising credentials not configured. Set BOL_ADVERTISER_ID and BOL_ADVERTISER_SECRET in .env');
+  }
+
+  // Check if we have a valid cached token (with 30 second buffer)
+  if (advertiserAccessToken && advertiserTokenExpiry && Date.now() < advertiserTokenExpiry - 30000) {
+    return advertiserAccessToken;
+  }
+
+  // Base64 encode credentials
+  const credentials = Buffer.from(`${advertiserId}:${advertiserSecret}`).toString('base64');
+
+  const response = await fetch('https://login.bol.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'Authorization': `Basic ${credentials}`
+    },
+    body: 'grant_type=client_credentials'
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to get Bol.com Advertising access token: ${error}`);
+  }
+
+  const data = await response.json();
+  advertiserAccessToken = data.access_token;
+  advertiserTokenExpiry = Date.now() + (data.expires_in * 1000);
+
+  return advertiserAccessToken;
 }
 
 /**
  * Make a request to Bol.com Retailer API
  */
 async function bolRequest(endpoint, method = 'GET', body = null) {
-  const token = await getAccessToken();
+  const token = await getRetailerAccessToken();
 
   const options = {
     method,
@@ -94,10 +140,10 @@ async function bolRequest(endpoint, method = 'GET', body = null) {
 
 /**
  * Make a request to Bol.com Advertising API
- * Uses same authentication but different base URL and content type
+ * Uses separate credentials (BOL_ADVERTISER_ID / BOL_ADVERTISER_SECRET)
  */
 async function advertiserRequest(endpoint, method = 'GET', body = null) {
-  const token = await getAccessToken();
+  const token = await getAdvertiserAccessToken();
 
   const options = {
     method,
@@ -139,12 +185,12 @@ router.get('/status', async (req, res) => {
       return res.json({
         connected: false,
         configured: false,
-        error: 'Environment variables not set'
+        error: 'Retailer API: Environment variables not set (BOL_CLIENT_ID, BOL_CLIENT_SECRET)'
       });
     }
 
     // Try to get a token to verify credentials
-    await getAccessToken();
+    await getRetailerAccessToken();
 
     res.json({
       connected: true,
@@ -161,12 +207,47 @@ router.get('/status', async (req, res) => {
 });
 
 /**
+ * Check Advertising API connection status
+ */
+router.get('/advertising/status', async (req, res) => {
+  try {
+    const advertiserId = process.env.BOL_ADVERTISER_ID;
+    const advertiserSecret = process.env.BOL_ADVERTISER_SECRET;
+
+    if (!advertiserId || !advertiserSecret) {
+      return res.json({
+        connected: false,
+        configured: false,
+        error: 'Advertising API: Environment variables not set (BOL_ADVERTISER_ID, BOL_ADVERTISER_SECRET)'
+      });
+    }
+
+    // Try to get a token to verify credentials
+    await getAdvertiserAccessToken();
+
+    res.json({
+      connected: true,
+      configured: true,
+      advertiserId: advertiserId.slice(0, 8) + '...'
+    });
+  } catch (error) {
+    res.json({
+      connected: false,
+      configured: true,
+      error: error.message
+    });
+  }
+});
+
+/**
  * Clear token cache
  */
 router.post('/clear-token', async (req, res) => {
-  accessToken = null;
-  tokenExpiry = null;
-  res.json({ success: true, message: 'Token cache cleared' });
+  retailerAccessToken = null;
+  retailerTokenExpiry = null;
+  advertiserAccessToken = null;
+  advertiserTokenExpiry = null;
+  res.json({ success: true, message: 'All token caches cleared (Retailer & Advertising)' });
 });
 
 /**

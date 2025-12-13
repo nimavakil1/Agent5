@@ -369,14 +369,25 @@
       <p class="page-subtitle">Manage your Bol.com marketplace orders, offers, and returns</p>
     </header>
 
-    <!-- Status Card -->
+    <!-- Retailer API Status Card -->
     <div class="status-card" id="status-card">
       <div class="status-icon" style="background: rgba(113, 113, 122, 0.2);">
         <span class="material-symbols-outlined" style="color: #71717a;" id="status-icon">hourglass_empty</span>
       </div>
       <div class="status-info">
-        <div class="status-title" id="status-title">Checking connection...</div>
-        <div class="status-desc" id="status-desc">Verifying Bol.com API credentials</div>
+        <div class="status-title" id="status-title">Checking Retailer API...</div>
+        <div class="status-desc" id="status-desc">Verifying BOL_CLIENT_ID and BOL_CLIENT_SECRET</div>
+      </div>
+    </div>
+
+    <!-- Advertising API Status Card -->
+    <div class="status-card" id="ad-status-card">
+      <div class="status-icon" style="background: rgba(113, 113, 122, 0.2);">
+        <span class="material-symbols-outlined" style="color: #71717a;" id="ad-status-icon">hourglass_empty</span>
+      </div>
+      <div class="status-info">
+        <div class="status-title" id="ad-status-title">Checking Advertising API...</div>
+        <div class="status-desc" id="ad-status-desc">Verifying BOL_ADVERTISER_ID and BOL_ADVERTISER_SECRET</div>
       </div>
     </div>
 
@@ -526,19 +537,19 @@
           <div class="setup-step">
             <div class="step-number">1</div>
             <div class="step-content">
-              <h3>Get API Credentials from Bol.com</h3>
-              <p>Log in to your <a href="https://partner.bol.com" target="_blank">Bol.com Seller Dashboard</a>. Go to <strong>Settings → API Settings</strong> and create new API credentials.</p>
+              <h3>Get Retailer API Credentials</h3>
+              <p>Log in to your <a href="https://partner.bol.com" target="_blank">Bol.com Seller Dashboard</a>. Go to <strong>Settings → API Settings → Client credentials voor de Retailer API</strong> and create new credentials.</p>
             </div>
           </div>
 
           <div class="setup-step">
             <div class="step-number">2</div>
             <div class="step-content">
-              <h3>Copy Client ID and Secret</h3>
-              <p>After creating the credentials, you'll receive a Client ID and Client Secret. Copy these values immediately - the secret is only shown once!</p>
+              <h3>Get Advertising API Credentials (Separate!)</h3>
+              <p>In the same API Settings page, go to <strong>Client credentials voor de Advertising API</strong> and create <em>separate</em> credentials for advertising.</p>
               <div class="warning-box">
                 <span class="material-symbols-outlined">warning</span>
-                Store your Client Secret securely - it cannot be retrieved later!
+                The Advertising API requires different credentials than the Retailer API!
               </div>
             </div>
           </div>
@@ -546,17 +557,34 @@
           <div class="setup-step">
             <div class="step-number">3</div>
             <div class="step-content">
-              <h3>Add Environment Variables</h3>
-              <p>Add these to your server's .env file:</p>
-              <div class="code-block">
-                BOL_CLIENT_ID=<span class="highlight">your-client-id</span><br>
-                BOL_CLIENT_SECRET=<span class="highlight">your-client-secret</span>
+              <h3>Copy All Credentials</h3>
+              <p>Copy both sets of credentials immediately - secrets are only shown once!</p>
+              <div class="warning-box">
+                <span class="material-symbols-outlined">warning</span>
+                Store your secrets securely - they cannot be retrieved later!
               </div>
             </div>
           </div>
 
           <div class="setup-step">
             <div class="step-number">4</div>
+            <div class="step-content">
+              <h3>Add Environment Variables</h3>
+              <p>Add these to your server's .env file:</p>
+              <div class="code-block">
+                <span style="color: #71717a;"># Retailer API (orders, shipments, returns, offers)</span><br>
+                BOL_CLIENT_ID=<span class="highlight">your-retailer-client-id</span><br>
+                BOL_CLIENT_SECRET=<span class="highlight">your-retailer-client-secret</span><br>
+                <br>
+                <span style="color: #71717a;"># Advertising API (campaigns, costs, performance)</span><br>
+                BOL_ADVERTISER_ID=<span class="highlight">your-advertiser-id</span><br>
+                BOL_ADVERTISER_SECRET=<span class="highlight">your-advertiser-secret</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="setup-step">
+            <div class="step-number">5</div>
             <div class="step-content">
               <h3>Restart the Server</h3>
               <p>After adding the environment variables, restart the Agent5 server to apply the changes.</p>
@@ -669,8 +697,8 @@
   </div>
 
   <script>
-    // Check connection status
-    async function checkStatus() {
+    // Check Retailer API connection status
+    async function checkRetailerStatus() {
       const card = document.getElementById('status-card');
       const icon = document.getElementById('status-icon');
       const title = document.getElementById('status-title');
@@ -686,24 +714,23 @@
           icon.textContent = 'check_circle';
           icon.style.color = '#22c55e';
           icon.parentElement.style.background = 'rgba(34, 197, 94, 0.2)';
-          title.textContent = 'Connected';
+          title.textContent = 'Retailer API Connected';
           desc.textContent = `Client ID: ${data.clientId}`;
           statsGrid.style.display = 'grid';
           loadStats();
-          loadAdvertisingStats();
         } else if (data.configured) {
           card.className = 'status-card error';
           icon.textContent = 'error';
           icon.style.color = '#ef4444';
           icon.parentElement.style.background = 'rgba(239, 68, 68, 0.2)';
-          title.textContent = 'Connection Failed';
-          desc.textContent = data.error || 'Could not connect to Bol.com API';
+          title.textContent = 'Retailer API Failed';
+          desc.textContent = data.error || 'Could not connect';
         } else {
           card.className = 'status-card';
           icon.textContent = 'settings';
           icon.style.color = '#f59e0b';
           icon.parentElement.style.background = 'rgba(245, 158, 11, 0.2)';
-          title.textContent = 'Not Configured';
+          title.textContent = 'Retailer API Not Configured';
           desc.textContent = 'Add BOL_CLIENT_ID and BOL_CLIENT_SECRET to .env';
         }
       } catch (e) {
@@ -713,6 +740,54 @@
         title.textContent = 'Error';
         desc.textContent = e.message;
       }
+    }
+
+    // Check Advertising API connection status
+    async function checkAdvertisingStatus() {
+      const card = document.getElementById('ad-status-card');
+      const icon = document.getElementById('ad-status-icon');
+      const title = document.getElementById('ad-status-title');
+      const desc = document.getElementById('ad-status-desc');
+
+      try {
+        const res = await fetch('/api/bolcom/advertising/status', { credentials: 'include' });
+        const data = await res.json();
+
+        if (data.connected) {
+          card.className = 'status-card connected';
+          icon.textContent = 'check_circle';
+          icon.style.color = '#22c55e';
+          icon.parentElement.style.background = 'rgba(34, 197, 94, 0.2)';
+          title.textContent = 'Advertising API Connected';
+          desc.textContent = `Advertiser ID: ${data.advertiserId}`;
+          loadAdvertisingStats();
+        } else if (data.configured) {
+          card.className = 'status-card error';
+          icon.textContent = 'error';
+          icon.style.color = '#ef4444';
+          icon.parentElement.style.background = 'rgba(239, 68, 68, 0.2)';
+          title.textContent = 'Advertising API Failed';
+          desc.textContent = data.error || 'Could not connect';
+        } else {
+          card.className = 'status-card';
+          icon.textContent = 'settings';
+          icon.style.color = '#f59e0b';
+          icon.parentElement.style.background = 'rgba(245, 158, 11, 0.2)';
+          title.textContent = 'Advertising API Not Configured';
+          desc.textContent = 'Add BOL_ADVERTISER_ID and BOL_ADVERTISER_SECRET to .env';
+        }
+      } catch (e) {
+        card.className = 'status-card error';
+        icon.textContent = 'error';
+        icon.style.color = '#ef4444';
+        title.textContent = 'Error';
+        desc.textContent = e.message;
+      }
+    }
+
+    // Check both statuses
+    async function checkStatus() {
+      await Promise.all([checkRetailerStatus(), checkAdvertisingStatus()]);
     }
 
     // Load stats
