@@ -1,221 +1,678 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ACROPAQ AI Platform · Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <script>
-      async function getMe(){ const r=await fetch('/api/auth/me',{credentials:'include'}); return r.ok?await r.json():null; }
-    </script>
-    <style>
-      .tile { transition: all 0.2s ease; }
-      .tile:hover { transform: translateY(-2px); box-shadow: 0 8px 25px -5px rgba(0,0,0,0.1); }
-    </style>
-  </head>
-  <body class="min-h-screen bg-slate-900">
-    <!-- Header -->
-    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <img src="/assets/acropaq-logo-inverted.svg" class="h-8" alt="ACROPAQ"/>
-        <span class="font-semibold text-white text-lg">AI Platform</span>
-      </div>
-      <div class="flex items-center gap-4">
-        <span id="who" class="text-sm text-slate-400"></span>
-        <button id="logout" class="text-sm text-indigo-400 hover:text-indigo-300">Logout</button>
-      </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Agent5</title>
+  <script src="/app/shell.js"></script>
+  <style>
+    /* Dashboard specific styles */
+    .dashboard {
+      padding: 32px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .dashboard-header {
+      margin-bottom: 32px;
+    }
+
+    .dashboard-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 8px 0;
+    }
+
+    .dashboard-subtitle {
+      font-size: 14px;
+      color: var(--shell-muted, #71717a);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    @media (max-width: 1200px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 640px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #18181f 0%, #1a1a24 100%);
+      border: 1px solid #252532;
+      border-radius: 16px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--stat-color, #6366f1), transparent);
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(99, 102, 241, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .stat-icon .material-symbols-outlined {
+      font-size: 24px;
+      color: var(--stat-color, #6366f1);
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #71717a;
+      font-weight: 500;
+    }
+
+    .stat-change {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .stat-change.positive {
+      background: rgba(34, 197, 94, 0.1);
+      color: #22c55e;
+    }
+
+    .stat-change.negative {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+    }
+
+    /* Main Grid */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 1024px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Cards */
+    .card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #252532;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title .material-symbols-outlined {
+      font-size: 20px;
+      color: #6366f1;
+    }
+
+    .card-body {
+      padding: 24px;
+    }
+
+    .card-action {
+      font-size: 13px;
+      color: #6366f1;
+      text-decoration: none;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.15s;
+    }
+
+    .card-action:hover {
+      color: #818cf8;
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .quick-action {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: #1a1a24;
+      border: 1px solid #252532;
+      border-radius: 12px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .quick-action:hover {
+      background: #222230;
+      border-color: #6366f1;
+      transform: translateY(-2px);
+    }
+
+    .quick-action-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .quick-action-icon .material-symbols-outlined {
+      font-size: 20px;
+      color: #fff;
+    }
+
+    .quick-action-text {
+      flex: 1;
+    }
+
+    .quick-action-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 2px;
+    }
+
+    .quick-action-desc {
+      font-size: 12px;
+      color: #71717a;
+    }
+
+    /* Activity List */
+    .activity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .activity-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px;
+      background: #1a1a24;
+      border-radius: 10px;
+    }
+
+    .activity-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .activity-icon .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    .activity-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .activity-title {
+      font-size: 13px;
+      color: #fff;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .activity-meta {
+      font-size: 12px;
+      color: #71717a;
+    }
+
+    /* Integrations Status */
+    .integration-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .integration-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: #1a1a24;
+      border-radius: 10px;
+    }
+
+    .integration-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .integration-info {
+      flex: 1;
+    }
+
+    .integration-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #fff;
+    }
+
+    .integration-desc {
+      font-size: 12px;
+      color: #71717a;
+    }
+
+    .integration-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .integration-status.connected {
+      color: #22c55e;
+    }
+
+    .integration-status.disconnected {
+      color: #71717a;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Loading state */
+    .loading {
+      opacity: 0.5;
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, #252532 25%, #2a2a38 50%, #252532 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <header class="dashboard-header">
+      <h1 class="dashboard-title">Welcome back</h1>
+      <p class="dashboard-subtitle" id="greeting">Here's what's happening with your business today.</p>
     </header>
 
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-6 py-8">
-      <!-- Applications Section -->
-      <section class="mb-10">
-        <h2 class="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-4">Applications</h2>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <!-- Agent Console - PRIMARY -->
-          <a href="/app/agent-console.html" class="tile bg-gradient-to-br from-violet-600 to-violet-700 rounded-xl p-5 text-white ring-2 ring-violet-400">
-            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">psychology</span>
-            <h3 class="font-semibold text-lg">Agent Console</h3>
-            <p class="text-violet-200 text-sm mt-1">12 AI Agents & Integrations</p>
-          </a>
-          <!-- AI Training Center - NEW -->
-          <a href="/app/ai-training.html" class="tile bg-gradient-to-br from-fuchsia-600 to-fuchsia-700 rounded-xl p-5 text-white ring-2 ring-fuchsia-400">
-            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">school</span>
-            <h3 class="font-semibold text-lg">AI Training</h3>
-            <p class="text-fuchsia-200 text-sm mt-1">Teach AI your business</p>
-          </a>
-          <!-- AI Call Center -->
-          <a href="/app/call-center.html" class="tile bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-xl p-5 text-white">
-            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">call</span>
-            <h3 class="font-semibold text-lg">AI Call Center</h3>
-            <p class="text-indigo-200 text-sm mt-1">Voice AI & PSTN calls</p>
-          </a>
-          <!-- Agent Studio -->
-          <a href="/app/agent-studio.html" class="tile bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl p-5 text-white">
-            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">smart_toy</span>
-            <h3 class="font-semibold text-lg">Agent Studio</h3>
-            <p class="text-purple-200 text-sm mt-1">Configure AI agents</p>
-          </a>
-          <!-- MCP Integrations -->
-          <a href="/app/mcp.html" class="tile bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl p-5 text-white">
-            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">hub</span>
-            <h3 class="font-semibold text-lg">MCP Integrations</h3>
-            <p class="text-emerald-200 text-sm mt-1">Odoo, Amazon, Bol.com</p>
-          </a>
-          <!-- Orchestrator -->
-          <a href="/app/orchestrator.html" class="tile bg-gradient-to-br from-orange-600 to-orange-700 rounded-xl p-5 text-white">
-            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">account_tree</span>
-            <h3 class="font-semibold text-lg">Orchestrator</h3>
-            <p class="text-orange-200 text-sm mt-1">Agent coordination</p>
-          </a>
-          <!-- Call Studio -->
-          <a href="/app/call-studio.html" class="tile bg-gradient-to-br from-cyan-600 to-cyan-700 rounded-xl p-5 text-white">
-            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">mic</span>
-            <h3 class="font-semibold text-lg">Call Studio</h3>
-            <p class="text-cyan-200 text-sm mt-1">Call flows & scripts</p>
-          </a>
-          <!-- Campaigns -->
-          <a href="/app/campaigns.html" class="tile bg-gradient-to-br from-rose-600 to-rose-700 rounded-xl p-5 text-white">
-            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">campaign</span>
-            <h3 class="font-semibold text-lg">Campaigns</h3>
-            <p class="text-rose-200 text-sm mt-1">Marketing campaigns</p>
-          </a>
-          <!-- Products -->
-          <a href="/app/products.html" class="tile bg-gradient-to-br from-amber-600 to-amber-700 rounded-xl p-5 text-white">
-            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">inventory_2</span>
-            <h3 class="font-semibold text-lg">Products</h3>
-            <p class="text-amber-200 text-sm mt-1">Product catalog</p>
-          </a>
-          <!-- Contacts -->
-          <a href="/app/prospects.html" class="tile bg-gradient-to-br from-teal-600 to-teal-700 rounded-xl p-5 text-white">
-            <span class="material-symbols-outlined text-3xl mb-3 opacity-90">contacts</span>
-            <h3 class="font-semibold text-lg">Contacts</h3>
-            <p class="text-teal-200 text-sm mt-1">Leads & prospects</p>
-          </a>
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card" style="--stat-color: #6366f1;">
+        <div class="stat-icon">
+          <span class="material-symbols-outlined">shopping_cart</span>
         </div>
-      </section>
+        <div class="stat-value" id="stat-orders">--</div>
+        <div class="stat-label">Amazon Orders</div>
+        <div class="stat-change positive" id="orders-change">Loading...</div>
+      </div>
 
-      <!-- Analytics Section -->
-      <section class="mb-10">
-        <h2 class="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-4">Analytics & Reports</h2>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <!-- Dashboard -->
-          <a href="/dashboard.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
-            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">analytics</span>
-            <h3 class="font-semibold">Analytics</h3>
-            <p class="text-slate-400 text-sm mt-1">Call center metrics</p>
-          </a>
-          <!-- Call Review -->
-          <a href="/call-review.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
-            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">rate_review</span>
-            <h3 class="font-semibold">Call Review</h3>
-            <p class="text-slate-400 text-sm mt-1">Review & analyze calls</p>
-          </a>
-          <!-- Live Monitor -->
-          <a href="/monitor.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
-            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">monitor_heart</span>
-            <h3 class="font-semibold">Live Monitor</h3>
-            <p class="text-slate-400 text-sm mt-1">Real-time call view</p>
-          </a>
-          <!-- Customers -->
-          <a href="/customers.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
-            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">groups</span>
-            <h3 class="font-semibold">Customers</h3>
-            <p class="text-slate-400 text-sm mt-1">Customer management</p>
-          </a>
+      <div class="stat-card" style="--stat-color: #8b5cf6;">
+        <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1);">
+          <span class="material-symbols-outlined">inventory_2</span>
         </div>
-      </section>
+        <div class="stat-value" id="stat-products">--</div>
+        <div class="stat-label">Products in Odoo</div>
+      </div>
 
-      <!-- Settings Section -->
-      <section class="mb-10">
-        <h2 class="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-4">Settings & Integrations</h2>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <a href="/app/amazon-config.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
-            <span class="material-symbols-outlined text-3xl mb-3 text-orange-400">shopping_cart</span>
-            <h3 class="font-semibold">Amazon Seller</h3>
-            <p class="text-slate-400 text-sm mt-1">Orders, Inventory, FBA</p>
-          </a>
-          <a href="/app/ms365-config.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
-            <span class="material-symbols-outlined text-3xl mb-3 text-blue-400">cloud_sync</span>
-            <h3 class="font-semibold">Microsoft 365</h3>
-            <p class="text-slate-400 text-sm mt-1">Email, Teams, Calendar</p>
-          </a>
-          <a href="/app/mcp.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
-            <span class="material-symbols-outlined text-3xl mb-3 text-emerald-400">settings_input_component</span>
-            <h3 class="font-semibold">API Connections</h3>
-            <p class="text-slate-400 text-sm mt-1">Odoo, Bol.com, etc.</p>
-          </a>
+      <div class="stat-card" style="--stat-color: #22c55e;">
+        <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1);">
+          <span class="material-symbols-outlined">smart_toy</span>
         </div>
-      </section>
+        <div class="stat-value" id="stat-agents">12</div>
+        <div class="stat-label">AI Agents Active</div>
+      </div>
 
-      <!-- Admin Section (hidden by default) -->
-      <section id="admin-section" class="mb-10 hidden">
-        <h2 class="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-4">Administration</h2>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <a href="/app/admin/users.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
-            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">manage_accounts</span>
-            <h3 class="font-semibold">Users</h3>
-            <p class="text-slate-400 text-sm mt-1">User management</p>
-          </a>
-          <a href="/app/profile.html" class="tile bg-slate-800 border border-slate-700 rounded-xl p-5 text-white hover:border-slate-600">
-            <span class="material-symbols-outlined text-3xl mb-3 text-slate-400">person</span>
-            <h3 class="font-semibold">My Profile</h3>
-            <p class="text-slate-400 text-sm mt-1">Account settings</p>
-          </a>
+      <div class="stat-card" style="--stat-color: #f59e0b;">
+        <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1);">
+          <span class="material-symbols-outlined">hub</span>
         </div>
-      </section>
+        <div class="stat-value" id="stat-integrations">4</div>
+        <div class="stat-label">Integrations</div>
+      </div>
+    </div>
 
-      <!-- Quick Stats -->
-      <section class="mt-8">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <h3 class="text-white font-semibold mb-4">Quick Stats</h3>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div>
-              <div class="text-slate-400 text-sm">Calls Today</div>
-              <div id="metric-calls" class="text-2xl font-bold text-white mt-1">--</div>
+    <!-- Main Grid -->
+    <div class="main-grid">
+      <!-- Left Column -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Quick Actions -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="material-symbols-outlined">bolt</span>
+              Quick Actions
             </div>
-            <div>
-              <div class="text-slate-400 text-sm">Active Agents</div>
-              <div id="metric-agents" class="text-2xl font-bold text-white mt-1">12</div>
-            </div>
-            <div>
-              <div class="text-slate-400 text-sm">Integrations</div>
-              <div id="metric-integrations" class="text-2xl font-bold text-white mt-1">6</div>
-            </div>
-            <div>
-              <div class="text-slate-400 text-sm">Revenue</div>
-              <div id="metric-rev" class="text-2xl font-bold text-white mt-1">--</div>
+          </div>
+          <div class="card-body">
+            <div class="quick-actions">
+              <a href="/app/agent-console.html" class="quick-action">
+                <div class="quick-action-icon" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                  <span class="material-symbols-outlined">smart_toy</span>
+                </div>
+                <div class="quick-action-text">
+                  <div class="quick-action-title">Agent Console</div>
+                  <div class="quick-action-desc">Chat with AI agents</div>
+                </div>
+              </a>
+              <a href="/app/ai-training.html" class="quick-action">
+                <div class="quick-action-icon" style="background: linear-gradient(135deg, #ec4899, #f43f5e);">
+                  <span class="material-symbols-outlined">school</span>
+                </div>
+                <div class="quick-action-text">
+                  <div class="quick-action-title">AI Training</div>
+                  <div class="quick-action-desc">Teach your AI</div>
+                </div>
+              </a>
+              <a href="/app/products.html" class="quick-action">
+                <div class="quick-action-icon" style="background: linear-gradient(135deg, #f59e0b, #ef4444);">
+                  <span class="material-symbols-outlined">inventory_2</span>
+                </div>
+                <div class="quick-action-text">
+                  <div class="quick-action-title">Products</div>
+                  <div class="quick-action-desc">View Odoo catalog</div>
+                </div>
+              </a>
+              <a href="/app/call-center.html" class="quick-action">
+                <div class="quick-action-icon" style="background: linear-gradient(135deg, #22c55e, #14b8a6);">
+                  <span class="material-symbols-outlined">headset_mic</span>
+                </div>
+                <div class="quick-action-text">
+                  <div class="quick-action-title">Call Center</div>
+                  <div class="quick-action-desc">Voice AI calls</div>
+                </div>
+              </a>
             </div>
           </div>
         </div>
-      </section>
-    </main>
 
-    <script>
-      (async ()=>{
-        const me = await getMe();
-        const who = document.getElementById('who');
-        if (me) {
-          who.textContent = `${me.email} · ${me.role}`;
-          if (me.role==='admin' || me.role==='superadmin') {
-            document.getElementById('admin-section').classList.remove('hidden');
+        <!-- Recent Orders -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="material-symbols-outlined">receipt_long</span>
+              Recent Amazon Orders
+            </div>
+            <a href="/app/integrations.html" class="card-action">
+              View all
+              <span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span>
+            </a>
+          </div>
+          <div class="card-body">
+            <div class="activity-list" id="recent-orders">
+              <div class="activity-item">
+                <div class="skeleton" style="width: 36px; height: 36px;"></div>
+                <div class="activity-content">
+                  <div class="skeleton" style="width: 60%; height: 14px; margin-bottom: 6px;"></div>
+                  <div class="skeleton" style="width: 40%; height: 12px;"></div>
+                </div>
+              </div>
+              <div class="activity-item">
+                <div class="skeleton" style="width: 36px; height: 36px;"></div>
+                <div class="activity-content">
+                  <div class="skeleton" style="width: 70%; height: 14px; margin-bottom: 6px;"></div>
+                  <div class="skeleton" style="width: 35%; height: 12px;"></div>
+                </div>
+              </div>
+              <div class="activity-item">
+                <div class="skeleton" style="width: 36px; height: 36px;"></div>
+                <div class="activity-content">
+                  <div class="skeleton" style="width: 55%; height: 14px; margin-bottom: 6px;"></div>
+                  <div class="skeleton" style="width: 45%; height: 12px;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Integrations Status -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="material-symbols-outlined">hub</span>
+              Integrations
+            </div>
+            <a href="/app/integrations.html" class="card-action">
+              Manage
+              <span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span>
+            </a>
+          </div>
+          <div class="card-body">
+            <div class="integration-list">
+              <div class="integration-item">
+                <div class="integration-logo" style="background: linear-gradient(135deg, #7c3aed, #4f46e5); color: #fff;">Odoo</div>
+                <div class="integration-info">
+                  <div class="integration-name">Odoo ERP</div>
+                  <div class="integration-desc">Products, Orders, CRM</div>
+                </div>
+                <div class="integration-status connected" id="odoo-status">
+                  <span class="status-dot"></span>
+                  Connected
+                </div>
+              </div>
+              <div class="integration-item">
+                <div class="integration-logo" style="background: linear-gradient(135deg, #f59e0b, #ea580c); color: #fff;">AMZ</div>
+                <div class="integration-info">
+                  <div class="integration-name">Amazon Seller</div>
+                  <div class="integration-desc">Orders via Make.com</div>
+                </div>
+                <div class="integration-status connected" id="amazon-status">
+                  <span class="status-dot"></span>
+                  <span id="amazon-orders-count">--</span> orders
+                </div>
+              </div>
+              <div class="integration-item">
+                <div class="integration-logo" style="background: linear-gradient(135deg, #0078d4, #00bcf2); color: #fff;">M365</div>
+                <div class="integration-info">
+                  <div class="integration-name">Microsoft 365</div>
+                  <div class="integration-desc">Email, Calendar, Teams</div>
+                </div>
+                <div class="integration-status disconnected" id="ms365-status">
+                  <span class="status-dot"></span>
+                  Setup required
+                </div>
+              </div>
+              <div class="integration-item">
+                <div class="integration-logo" style="background: linear-gradient(135deg, #0066ff, #003399); color: #fff;">Bol</div>
+                <div class="integration-info">
+                  <div class="integration-name">Bol.com</div>
+                  <div class="integration-desc">Marketplace orders</div>
+                </div>
+                <div class="integration-status disconnected">
+                  <span class="status-dot"></span>
+                  Coming soon
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Agents -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="material-symbols-outlined">psychology</span>
+              AI Agents
+            </div>
+            <a href="/app/agent-studio.html" class="card-action">
+              Configure
+              <span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span>
+            </a>
+          </div>
+          <div class="card-body">
+            <div class="activity-list">
+              <div class="activity-item">
+                <div class="activity-icon" style="background: rgba(99, 102, 241, 0.15);">
+                  <span class="material-symbols-outlined" style="color: #6366f1;">support_agent</span>
+                </div>
+                <div class="activity-content">
+                  <div class="activity-title">Customer Support Agent</div>
+                  <div class="activity-meta">Handles inquiries & tickets</div>
+                </div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-icon" style="background: rgba(34, 197, 94, 0.15);">
+                  <span class="material-symbols-outlined" style="color: #22c55e;">trending_up</span>
+                </div>
+                <div class="activity-content">
+                  <div class="activity-title">Sales Agent</div>
+                  <div class="activity-meta">Outbound calls & leads</div>
+                </div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-icon" style="background: rgba(245, 158, 11, 0.15);">
+                  <span class="material-symbols-outlined" style="color: #f59e0b;">inventory</span>
+                </div>
+                <div class="activity-content">
+                  <div class="activity-title">Inventory Agent</div>
+                  <div class="activity-meta">Stock & order management</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Load dashboard data
+    async function loadDashboard() {
+      // Load Amazon orders
+      try {
+        const ordersRes = await fetch('/api/amazon/orders?limit=5', { credentials: 'include' });
+        if (ordersRes.ok) {
+          const data = await ordersRes.json();
+          document.getElementById('stat-orders').textContent = data.total || 0;
+          document.getElementById('amazon-orders-count').textContent = data.total || 0;
+          document.getElementById('orders-change').textContent = 'Today';
+          document.getElementById('orders-change').className = 'stat-change positive';
+
+          // Render recent orders
+          const ordersContainer = document.getElementById('recent-orders');
+          if (data.orders && data.orders.length > 0) {
+            ordersContainer.innerHTML = data.orders.slice(0, 4).map(order => `
+              <div class="activity-item">
+                <div class="activity-icon" style="background: rgba(245, 158, 11, 0.15);">
+                  <span class="material-symbols-outlined" style="color: #f59e0b;">package_2</span>
+                </div>
+                <div class="activity-content">
+                  <div class="activity-title">${order.amazonOrderId}</div>
+                  <div class="activity-meta">${order.salesChannel} · ${order.orderStatus} · ${new Date(order.purchaseDate).toLocaleDateString()}</div>
+                </div>
+              </div>
+            `).join('');
+          } else {
+            ordersContainer.innerHTML = '<div style="text-align: center; color: #71717a; padding: 20px;">No orders yet. Connect Amazon via Make.com.</div>';
           }
         }
-        document.getElementById('logout').onclick = async ()=>{
-          try{ await fetch('/api/auth/logout',{method:'POST',credentials:'include'});}catch(_){}
-          location.href='/app/login';
-        };
-        // Load metrics
-        try {
-          const r = await fetch('/api/dashboard/kpi',{credentials:'include'});
-          if (r.ok){
-            const k=await r.json();
-            document.getElementById('metric-calls').textContent = k?.totals?.calls ?? '--';
-            document.getElementById('metric-rev').textContent = k?.totals?.revenue ?? '--';
-          }
-        } catch(_){}
-      })();
-    </script>
-  </body>
+      } catch (e) {
+        console.error('Failed to load Amazon orders:', e);
+      }
+
+      // Load Odoo products count
+      try {
+        const odooRes = await fetch('/api/odoo/dashboard', { credentials: 'include' });
+        if (odooRes.ok) {
+          const data = await odooRes.json();
+          document.getElementById('stat-products').textContent = data.products || 0;
+          document.getElementById('odoo-status').innerHTML = '<span class="status-dot"></span>Connected';
+          document.getElementById('odoo-status').className = 'integration-status connected';
+        }
+      } catch (e) {
+        document.getElementById('odoo-status').innerHTML = '<span class="status-dot"></span>Not configured';
+        document.getElementById('odoo-status').className = 'integration-status disconnected';
+      }
+
+      // Set greeting based on time
+      const hour = new Date().getHours();
+      let greeting = 'Good morning';
+      if (hour >= 12 && hour < 17) greeting = 'Good afternoon';
+      else if (hour >= 17) greeting = 'Good evening';
+
+      try {
+        const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+        if (meRes.ok) {
+          const me = await meRes.json();
+          const name = me.email ? me.email.split('@')[0] : '';
+          document.querySelector('.dashboard-title').textContent = `${greeting}, ${name}`;
+        }
+      } catch (e) {}
+    }
+
+    loadDashboard();
+  </script>
+</body>
 </html>

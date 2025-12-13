@@ -1,94 +1,616 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Products · ACROPAQ AI</title>
-    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
-    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="/app/shell.js"></script>
-    <style>
-      body { font-family: Inter, "Noto Sans", sans-serif; }
-      .card { background:#181C20; border:1px solid #283039; border-radius:.5rem; }
-      .inp { background:#111418; border:1px solid #283039; color:#fff; border-radius:.375rem; padding:.5rem .75rem; width:100%; }
-      .muted { color:#9cabba; }
-      .btn { display:inline-flex; align-items:center; gap:.5rem; border-radius:.5rem; padding:.5rem .75rem; font-weight:500; }
-      .btn-primary { background:#0d7ff2; color:#fff; }
-      .btn-secondary { background:#0f172a; color:#fff; }
-    </style>
-  </head>
-  <body class="min-h-screen bg-[#111418] text-gray-100">
-    <main class="max-w-6xl mx-auto p-6 grid gap-4">
-      <section class="card p-4">
-        <h2 class="font-medium text-white mb-2">Allowed List</h2>
-        <p class="text-sm muted mb-2">Paste SKUs (one per line). To use a variant ID explicitly, prefix with <span class="font-mono">vid:</span> (e.g., <span class="font-mono">vid:40757434318906</span>). Save, then Sync to pull details from Shopify.</p>
-        <textarea id="allowed" class="inp h-28 font-mono" placeholder="e.g.\nP0063\n40757434318906"></textarea>
-        <div class="mt-3 flex gap-2 items-center">
-          <button id="save" class="btn btn-primary">Save Allowed</button>
-          <button id="sync" class="btn" style="background:#16a34a;color:#fff;">Sync Now</button>
-          <span id="msg" class="text-sm muted"></span>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Products - Agent5</title>
+  <script src="/app/shell.js"></script>
+  <style>
+    .page {
+      padding: 32px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-title-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    .page-badge {
+      font-size: 13px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: rgba(99, 102, 241, 0.1);
+      color: #6366f1;
+      font-weight: 500;
+    }
+
+    /* Search & Filters */
+    .filters-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 300px;
+      padding: 12px 16px 12px 44px;
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+      transition: all 0.15s ease;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .search-wrapper {
+      position: relative;
+      flex: 1;
+      min-width: 300px;
+    }
+
+    .search-wrapper .material-symbols-outlined {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #71717a;
+      font-size: 20px;
+    }
+
+    .filter-select {
+      padding: 12px 16px;
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .filter-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #71717a;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-toggle.active {
+      background: rgba(34, 197, 94, 0.1);
+      border-color: #22c55e;
+      color: #22c55e;
+    }
+
+    .filter-toggle input {
+      display: none;
+    }
+
+    /* Stats Cards */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat-mini {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .stat-mini-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stat-mini-icon .material-symbols-outlined {
+      font-size: 22px;
+      color: #fff;
+    }
+
+    .stat-mini-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .stat-mini-label {
+      font-size: 12px;
+      color: #71717a;
+    }
+
+    /* Products Grid */
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .product-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 14px;
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+
+    .product-card:hover {
+      border-color: #3f3f50;
+      transform: translateY(-2px);
+    }
+
+    .product-image {
+      width: 100%;
+      height: 180px;
+      background: #1a1a24;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .product-image img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .product-image .material-symbols-outlined {
+      font-size: 48px;
+      color: #3f3f50;
+    }
+
+    .product-body {
+      padding: 16px;
+    }
+
+    .product-sku {
+      font-size: 11px;
+      color: #6366f1;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .product-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .product-category {
+      font-size: 12px;
+      color: #71717a;
+      margin-bottom: 12px;
+    }
+
+    .product-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid #252532;
+    }
+
+    .product-price {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .product-stock {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .product-stock.in-stock {
+      color: #22c55e;
+    }
+
+    .product-stock.low-stock {
+      color: #f59e0b;
+    }
+
+    .product-stock.out-of-stock {
+      color: #ef4444;
+    }
+
+    .stock-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #71717a;
+    }
+
+    .empty-state .material-symbols-outlined {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin: 0 0 8px 0;
+    }
+
+    .empty-state p {
+      font-size: 14px;
+      margin: 0;
+    }
+
+    /* Loading */
+    .loading-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .skeleton-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, #252532 25%, #2a2a38 50%, #252532 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Connection Error */
+    .connection-error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .connection-error .material-symbols-outlined {
+      font-size: 24px;
+      color: #ef4444;
+    }
+
+    .connection-error-text {
+      flex: 1;
+    }
+
+    .connection-error-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .connection-error-desc {
+      font-size: 13px;
+      color: #a1a1aa;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s ease;
+    }
+
+    .btn-primary {
+      background: #6366f1;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #5558e6;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div class="page-title-section">
+        <h1 class="page-title">Products</h1>
+        <span class="page-badge" id="product-count">Loading...</span>
+      </div>
+    </header>
+
+    <!-- Connection Error (hidden by default) -->
+    <div class="connection-error" id="connection-error" style="display: none;">
+      <span class="material-symbols-outlined">error</span>
+      <div class="connection-error-text">
+        <div class="connection-error-title">Odoo Connection Failed</div>
+        <div class="connection-error-desc">Unable to connect to Odoo. Please check your configuration.</div>
+      </div>
+      <a href="/app/integrations.html" class="btn btn-primary">Configure</a>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats-row">
+      <div class="stat-mini">
+        <div class="stat-mini-icon" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+          <span class="material-symbols-outlined">inventory_2</span>
         </div>
-      </section>
-      <section class="card p-4">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="font-medium text-white">Synced Products</h2>
-          <div class="flex gap-2 items-center">
-            <input id="q" class="inp w-56" placeholder="Search title/SKU" />
-            <label class="text-sm muted inline-flex items-center gap-1"><input type="checkbox" id="inStock"/> In stock</label>
-            <button id="refresh" class="btn btn-secondary">Refresh</button>
-          </div>
+        <div>
+          <div class="stat-mini-value" id="stat-total">--</div>
+          <div class="stat-mini-label">Total Products</div>
         </div>
-        <div class="overflow-auto">
-          <table class="min-w-full text-sm">
-            <thead><tr class="text-left muted"><th class="p-2">Image</th><th class="p-2">Title</th><th class="p-2">SKU</th><th class="p-2">Variant</th><th class="p-2">Price</th><th class="p-2">Stock</th></tr></thead>
-            <tbody id="rows"></tbody>
-          </table>
+      </div>
+      <div class="stat-mini">
+        <div class="stat-mini-icon" style="background: linear-gradient(135deg, #22c55e, #14b8a6);">
+          <span class="material-symbols-outlined">check_circle</span>
         </div>
-      </section>
-    </main>
-    <script>
-      async function loadAllowed(){
-        const res = await fetch('/api/shopify/allowed', { credentials: 'include' });
-        const list = res.ok ? await res.json() : [];
-        const lines = list.map(x=> x.sku || String(x.variant_id || '')).filter(Boolean);
-        document.getElementById('allowed').value = lines.join('\n');
-      }
-      async function saveAllowed(){
-        const raw = document.getElementById('allowed').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-        const items = raw.map(s=> {
-          if (/^vid:\s*(\d+)$/i.test(s)) { const m = s.match(/^vid:\s*(\d+)$/i); return { variant_id: Number(m[1]) }; }
-          return { sku: s };
-        });
-        const res = await fetch('/api/shopify/allowed', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ items })});
-        const data = await res.json(); document.getElementById('msg').textContent = res.ok ? `Saved ${data.saved}` : (data.message||'Error');
-      }
-      async function syncNow(){
-        const res = await fetch('/api/shopify/sync', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({})});
-        const data = await res.json(); document.getElementById('msg').textContent = res.ok ? `Synced ${data.synced}` : (data.message||'Error');
-        await refreshProducts();
-      }
-      async function refreshProducts(){
-        const q = document.getElementById('q').value.trim();
-        const inStock = document.getElementById('inStock').checked ? '&in_stock=1' : '';
-        const res = await fetch(`/api/products?q=${encodeURIComponent(q)}${inStock}`, { credentials:'include' });
-        const list = res.ok ? await res.json() : [];
-        const tbody = document.getElementById('rows'); tbody.innerHTML='';
-        for (const p of list){
-          const tr = document.createElement('tr'); tr.className='border-t';
-          tr.innerHTML = `<td class="p-2"><img src="${p.image||''}" class="w-12 h-12 object-cover rounded"/></td>
-            <td class="p-2">${p.title||''}</td>
-            <td class="p-2">${p.sku||''}</td>
-            <td class="p-2">${p.variant_title||''}<div class="text-xs text-slate-500">${p.variant_id}</div></td>
-            <td class="p-2">${p.price||''} ${p.currency||''}</td>
-            <td class="p-2">${p.inventory_quantity ?? ''}</td>`;
-          tbody.appendChild(tr);
+        <div>
+          <div class="stat-mini-value" id="stat-in-stock">--</div>
+          <div class="stat-mini-label">In Stock</div>
+        </div>
+      </div>
+      <div class="stat-mini">
+        <div class="stat-mini-icon" style="background: linear-gradient(135deg, #f59e0b, #ef4444);">
+          <span class="material-symbols-outlined">warning</span>
+        </div>
+        <div>
+          <div class="stat-mini-value" id="stat-low-stock">--</div>
+          <div class="stat-mini-label">Low Stock</div>
+        </div>
+      </div>
+      <div class="stat-mini">
+        <div class="stat-mini-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+          <span class="material-symbols-outlined">cancel</span>
+        </div>
+        <div>
+          <div class="stat-mini-value" id="stat-out-of-stock">--</div>
+          <div class="stat-mini-label">Out of Stock</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <div class="search-wrapper">
+        <span class="material-symbols-outlined">search</span>
+        <input type="text" class="search-input" id="search" placeholder="Search products by name, SKU, or barcode...">
+      </div>
+      <label class="filter-toggle" id="in-stock-toggle">
+        <input type="checkbox" id="in-stock-filter">
+        <span class="material-symbols-outlined" style="font-size: 18px;">inventory</span>
+        In Stock Only
+      </label>
+    </div>
+
+    <!-- Products Grid -->
+    <div class="products-grid" id="products-grid">
+      <!-- Loading skeleton -->
+      <div class="skeleton-card">
+        <div class="skeleton" style="height: 180px;"></div>
+        <div style="padding: 16px;">
+          <div class="skeleton" style="height: 12px; width: 60px; margin-bottom: 8px;"></div>
+          <div class="skeleton" style="height: 16px; width: 100%; margin-bottom: 8px;"></div>
+          <div class="skeleton" style="height: 12px; width: 80%; margin-bottom: 16px;"></div>
+          <div class="skeleton" style="height: 24px; width: 60px;"></div>
+        </div>
+      </div>
+      <div class="skeleton-card">
+        <div class="skeleton" style="height: 180px;"></div>
+        <div style="padding: 16px;">
+          <div class="skeleton" style="height: 12px; width: 60px; margin-bottom: 8px;"></div>
+          <div class="skeleton" style="height: 16px; width: 100%; margin-bottom: 8px;"></div>
+          <div class="skeleton" style="height: 12px; width: 80%; margin-bottom: 16px;"></div>
+          <div class="skeleton" style="height: 24px; width: 60px;"></div>
+        </div>
+      </div>
+      <div class="skeleton-card">
+        <div class="skeleton" style="height: 180px;"></div>
+        <div style="padding: 16px;">
+          <div class="skeleton" style="height: 12px; width: 60px; margin-bottom: 8px;"></div>
+          <div class="skeleton" style="height: 16px; width: 100%; margin-bottom: 8px;"></div>
+          <div class="skeleton" style="height: 12px; width: 80%; margin-bottom: 16px;"></div>
+          <div class="skeleton" style="height: 24px; width: 60px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allProducts = [];
+
+    async function loadProducts() {
+      const grid = document.getElementById('products-grid');
+
+      try {
+        const res = await fetch('/api/odoo/products?limit=200', { credentials: 'include' });
+
+        if (!res.ok) {
+          throw new Error('Failed to fetch products');
         }
+
+        allProducts = await res.json();
+        document.getElementById('connection-error').style.display = 'none';
+
+        // Update stats
+        const total = allProducts.length;
+        const inStock = allProducts.filter(p => p.stock > 0).length;
+        const lowStock = allProducts.filter(p => p.stock > 0 && p.stock <= 10).length;
+        const outOfStock = allProducts.filter(p => p.stock <= 0).length;
+
+        document.getElementById('product-count').textContent = `${total} products from Odoo`;
+        document.getElementById('stat-total').textContent = total;
+        document.getElementById('stat-in-stock').textContent = inStock;
+        document.getElementById('stat-low-stock').textContent = lowStock;
+        document.getElementById('stat-out-of-stock').textContent = outOfStock;
+
+        renderProducts(allProducts);
+      } catch (error) {
+        console.error('Failed to load products:', error);
+        document.getElementById('connection-error').style.display = 'flex';
+        grid.innerHTML = `
+          <div class="empty-state" style="grid-column: 1 / -1;">
+            <span class="material-symbols-outlined">cloud_off</span>
+            <h3>Unable to load products</h3>
+            <p>Please check your Odoo connection settings</p>
+          </div>
+        `;
       }
-      document.getElementById('save').onclick = saveAllowed;
-      document.getElementById('sync').onclick = syncNow;
-      document.getElementById('refresh').onclick = refreshProducts;
-      loadAllowed().then(refreshProducts);
-    </script>
-  </body>
-  </html>
+    }
+
+    function renderProducts(products) {
+      const grid = document.getElementById('products-grid');
+
+      if (products.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state" style="grid-column: 1 / -1;">
+            <span class="material-symbols-outlined">inventory_2</span>
+            <h3>No products found</h3>
+            <p>Try adjusting your search or filters</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = products.map(product => {
+        let stockClass = 'in-stock';
+        let stockText = `${product.stock} in stock`;
+        if (product.stock <= 0) {
+          stockClass = 'out-of-stock';
+          stockText = 'Out of stock';
+        } else if (product.stock <= 10) {
+          stockClass = 'low-stock';
+          stockText = `${product.stock} left`;
+        }
+
+        return `
+          <div class="product-card">
+            <div class="product-image">
+              ${product.image
+                ? `<img src="${product.image}" alt="${product.name}">`
+                : '<span class="material-symbols-outlined">image</span>'
+              }
+            </div>
+            <div class="product-body">
+              <div class="product-sku">${product.sku || 'No SKU'}</div>
+              <div class="product-name">${product.name}</div>
+              <div class="product-category">${product.category || 'Uncategorized'}</div>
+              <div class="product-meta">
+                <div class="product-price">${product.price ? '€' + product.price.toFixed(2) : '—'}</div>
+                <div class="product-stock ${stockClass}">
+                  <span class="stock-dot"></span>
+                  ${stockText}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterProducts() {
+      const searchTerm = document.getElementById('search').value.toLowerCase();
+      const inStockOnly = document.getElementById('in-stock-filter').checked;
+
+      let filtered = allProducts;
+
+      if (searchTerm) {
+        filtered = filtered.filter(p =>
+          (p.name && p.name.toLowerCase().includes(searchTerm)) ||
+          (p.sku && p.sku.toLowerCase().includes(searchTerm)) ||
+          (p.barcode && p.barcode.toLowerCase().includes(searchTerm))
+        );
+      }
+
+      if (inStockOnly) {
+        filtered = filtered.filter(p => p.stock > 0);
+      }
+
+      renderProducts(filtered);
+    }
+
+    // Event listeners
+    document.getElementById('search').addEventListener('input', filterProducts);
+    document.getElementById('in-stock-filter').addEventListener('change', function() {
+      document.getElementById('in-stock-toggle').classList.toggle('active', this.checked);
+      filterProducts();
+    });
+
+    // Load products on page load
+    loadProducts();
+  </script>
+</body>
+</html>

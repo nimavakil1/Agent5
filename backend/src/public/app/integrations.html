@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integrations - Agent5</title>
+  <script src="/app/shell.js"></script>
+  <style>
+    .page {
+      padding: 32px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      margin-bottom: 32px;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 8px 0;
+    }
+
+    .page-subtitle {
+      font-size: 14px;
+      color: #71717a;
+    }
+
+    /* Integration Grid */
+    .integrations-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .integrations-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Integration Card */
+    .integration-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+
+    .integration-card:hover {
+      border-color: #3f3f50;
+    }
+
+    .integration-card-header {
+      padding: 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      border-bottom: 1px solid #252532;
+    }
+
+    .integration-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .integration-info {
+      flex: 1;
+    }
+
+    .integration-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .integration-desc {
+      font-size: 13px;
+      color: #71717a;
+      line-height: 1.5;
+    }
+
+    .integration-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 20px;
+    }
+
+    .integration-status.connected {
+      background: rgba(34, 197, 94, 0.1);
+      color: #22c55e;
+    }
+
+    .integration-status.disconnected {
+      background: rgba(113, 113, 122, 0.1);
+      color: #71717a;
+    }
+
+    .integration-status.coming-soon {
+      background: rgba(99, 102, 241, 0.1);
+      color: #6366f1;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Integration Body */
+    .integration-body {
+      padding: 24px;
+    }
+
+    /* Stats Row */
+    .integration-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .integration-stat {
+      text-align: center;
+      padding: 16px;
+      background: #1a1a24;
+      border-radius: 10px;
+    }
+
+    .integration-stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .integration-stat-label {
+      font-size: 12px;
+      color: #71717a;
+    }
+
+    /* Features List */
+    .integration-features {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .feature-tag {
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: #1a1a24;
+      color: #a1a1aa;
+      border: 1px solid #252532;
+    }
+
+    /* Actions */
+    .integration-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-secondary {
+      background: #1a1a24;
+      color: #e4e4e7;
+      border: 1px solid #252532;
+    }
+
+    .btn-secondary:hover {
+      background: #222230;
+      border-color: #3f3f50;
+    }
+
+    .btn .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    /* Setup Guide */
+    .setup-guide {
+      margin-top: 20px;
+      padding: 16px;
+      background: #1a1a24;
+      border-radius: 10px;
+      border: 1px solid #252532;
+    }
+
+    .setup-guide-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .setup-guide-title .material-symbols-outlined {
+      font-size: 18px;
+      color: #f59e0b;
+    }
+
+    .setup-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .setup-step {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .setup-step-number {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: #252532;
+      color: #71717a;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .setup-step-text {
+      font-size: 13px;
+      color: #a1a1aa;
+      line-height: 1.5;
+    }
+
+    .setup-step-text a {
+      color: #6366f1;
+      text-decoration: none;
+    }
+
+    .setup-step-text a:hover {
+      text-decoration: underline;
+    }
+
+    /* Coming soon overlay */
+    .coming-soon-overlay {
+      position: relative;
+    }
+
+    .coming-soon-overlay::after {
+      content: 'Coming Soon';
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 600;
+      color: #6366f1;
+      border-radius: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">Integrations</h1>
+      <p class="page-subtitle">Connect your business tools and services to Agent5</p>
+    </header>
+
+    <div class="integrations-grid">
+      <!-- Odoo -->
+      <div class="integration-card">
+        <div class="integration-card-header">
+          <div class="integration-logo" style="background: linear-gradient(135deg, #7c3aed, #4f46e5);">Odoo</div>
+          <div class="integration-info">
+            <div class="integration-name">Odoo ERP</div>
+            <div class="integration-desc">Connect your Odoo instance for products, orders, customers, and invoices.</div>
+          </div>
+          <div class="integration-status connected" id="odoo-status">
+            <span class="status-dot"></span>
+            Connected
+          </div>
+        </div>
+        <div class="integration-body">
+          <div class="integration-stats">
+            <div class="integration-stat">
+              <div class="integration-stat-value" id="odoo-products">--</div>
+              <div class="integration-stat-label">Products</div>
+            </div>
+            <div class="integration-stat">
+              <div class="integration-stat-value" id="odoo-orders">--</div>
+              <div class="integration-stat-label">Sales Orders</div>
+            </div>
+            <div class="integration-stat">
+              <div class="integration-stat-value" id="odoo-customers">--</div>
+              <div class="integration-stat-label">Customers</div>
+            </div>
+          </div>
+          <div class="integration-features">
+            <span class="feature-tag">Products</span>
+            <span class="feature-tag">Inventory</span>
+            <span class="feature-tag">Sales Orders</span>
+            <span class="feature-tag">Customers</span>
+            <span class="feature-tag">Invoices</span>
+            <span class="feature-tag">CRM</span>
+          </div>
+          <div class="integration-actions">
+            <a href="/app/products.html" class="btn btn-primary">
+              <span class="material-symbols-outlined">inventory_2</span>
+              View Products
+            </a>
+            <button class="btn btn-secondary" onclick="testOdooConnection()">
+              <span class="material-symbols-outlined">refresh</span>
+              Test Connection
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Amazon -->
+      <div class="integration-card">
+        <div class="integration-card-header">
+          <div class="integration-logo" style="background: linear-gradient(135deg, #f59e0b, #ea580c);">AMZ</div>
+          <div class="integration-info">
+            <div class="integration-name">Amazon Seller Central</div>
+            <div class="integration-desc">Sync orders, inventory, and returns via Make.com webhooks.</div>
+          </div>
+          <div class="integration-status connected" id="amazon-status">
+            <span class="status-dot"></span>
+            <span id="amazon-count">--</span> orders
+          </div>
+        </div>
+        <div class="integration-body">
+          <div class="integration-stats">
+            <div class="integration-stat">
+              <div class="integration-stat-value" id="amazon-orders">--</div>
+              <div class="integration-stat-label">Orders</div>
+            </div>
+            <div class="integration-stat">
+              <div class="integration-stat-value" id="amazon-pending">--</div>
+              <div class="integration-stat-label">Pending</div>
+            </div>
+            <div class="integration-stat">
+              <div class="integration-stat-value" id="amazon-shipped">--</div>
+              <div class="integration-stat-label">Shipped</div>
+            </div>
+          </div>
+          <div class="integration-features">
+            <span class="feature-tag">Orders</span>
+            <span class="feature-tag">Order Items</span>
+            <span class="feature-tag">Inventory</span>
+            <span class="feature-tag">Returns</span>
+            <span class="feature-tag">FBA Fees</span>
+            <span class="feature-tag">Settlements</span>
+          </div>
+          <div class="integration-actions">
+            <a href="/app/amazon-config.html" class="btn btn-primary">
+              <span class="material-symbols-outlined">settings</span>
+              Configure
+            </a>
+            <a href="https://make.com" target="_blank" class="btn btn-secondary">
+              <span class="material-symbols-outlined">open_in_new</span>
+              Open Make.com
+            </a>
+          </div>
+          <div class="setup-guide">
+            <div class="setup-guide-title">
+              <span class="material-symbols-outlined">lightbulb</span>
+              Setup via Make.com
+            </div>
+            <div class="setup-steps">
+              <div class="setup-step">
+                <div class="setup-step-number">1</div>
+                <div class="setup-step-text">Create a Make.com account and add the Amazon Seller Central module</div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">2</div>
+                <div class="setup-step-text">Authorize Make.com in your Amazon Seller Central account</div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">3</div>
+                <div class="setup-step-text">Create scenarios to send data to Agent5 webhooks</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Microsoft 365 -->
+      <div class="integration-card">
+        <div class="integration-card-header">
+          <div class="integration-logo" style="background: linear-gradient(135deg, #0078d4, #00bcf2);">M365</div>
+          <div class="integration-info">
+            <div class="integration-name">Microsoft 365</div>
+            <div class="integration-desc">Connect Outlook, Teams, Calendar, and OneDrive for AI-powered communication.</div>
+          </div>
+          <div class="integration-status disconnected" id="ms365-status">
+            <span class="status-dot"></span>
+            Not configured
+          </div>
+        </div>
+        <div class="integration-body">
+          <div class="integration-features">
+            <span class="feature-tag">Outlook Email</span>
+            <span class="feature-tag">Calendar</span>
+            <span class="feature-tag">Teams</span>
+            <span class="feature-tag">OneDrive</span>
+            <span class="feature-tag">Contacts</span>
+          </div>
+          <div class="integration-actions">
+            <a href="/app/ms365-config.html" class="btn btn-primary">
+              <span class="material-symbols-outlined">settings</span>
+              Setup Guide
+            </a>
+          </div>
+          <div class="setup-guide">
+            <div class="setup-guide-title">
+              <span class="material-symbols-outlined">lightbulb</span>
+              Azure AD Setup Required
+            </div>
+            <div class="setup-steps">
+              <div class="setup-step">
+                <div class="setup-step-number">1</div>
+                <div class="setup-step-text">Register an application in <a href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank">Azure AD</a></div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">2</div>
+                <div class="setup-step-text">Configure API permissions for Mail, Calendar, Teams, and Files</div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">3</div>
+                <div class="setup-step-text">Create a client secret and configure environment variables</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bol.com -->
+      <div class="integration-card coming-soon-overlay">
+        <div class="integration-card-header">
+          <div class="integration-logo" style="background: linear-gradient(135deg, #0066ff, #003399);">Bol</div>
+          <div class="integration-info">
+            <div class="integration-name">Bol.com</div>
+            <div class="integration-desc">Sync your Bol.com marketplace orders and inventory.</div>
+          </div>
+          <div class="integration-status coming-soon">
+            <span class="status-dot"></span>
+            Coming Soon
+          </div>
+        </div>
+        <div class="integration-body">
+          <div class="integration-features">
+            <span class="feature-tag">Orders</span>
+            <span class="feature-tag">Products</span>
+            <span class="feature-tag">Inventory</span>
+            <span class="feature-tag">Returns</span>
+            <span class="feature-tag">Shipments</span>
+          </div>
+          <div class="integration-actions">
+            <button class="btn btn-secondary" disabled>
+              <span class="material-symbols-outlined">schedule</span>
+              Coming Soon
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function loadIntegrationStats() {
+      // Load Odoo stats
+      try {
+        const odooRes = await fetch('/api/odoo/dashboard', { credentials: 'include' });
+        if (odooRes.ok) {
+          const data = await odooRes.json();
+          document.getElementById('odoo-products').textContent = data.products || 0;
+          document.getElementById('odoo-orders').textContent = data.orders || 0;
+          document.getElementById('odoo-customers').textContent = data.customers || 0;
+          document.getElementById('odoo-status').innerHTML = '<span class="status-dot"></span>Connected';
+          document.getElementById('odoo-status').className = 'integration-status connected';
+        }
+      } catch (e) {
+        document.getElementById('odoo-status').innerHTML = '<span class="status-dot"></span>Not configured';
+        document.getElementById('odoo-status').className = 'integration-status disconnected';
+      }
+
+      // Load Amazon stats
+      try {
+        const amazonRes = await fetch('/api/amazon/orders?limit=1', { credentials: 'include' });
+        if (amazonRes.ok) {
+          const data = await amazonRes.json();
+          document.getElementById('amazon-orders').textContent = data.total || 0;
+          document.getElementById('amazon-count').textContent = data.total || 0;
+
+          // Get pending/shipped counts
+          const pendingRes = await fetch('/api/amazon/orders?status=Pending&limit=1', { credentials: 'include' });
+          const shippedRes = await fetch('/api/amazon/orders?status=Shipped&limit=1', { credentials: 'include' });
+
+          if (pendingRes.ok) {
+            const pending = await pendingRes.json();
+            document.getElementById('amazon-pending').textContent = pending.total || 0;
+          }
+          if (shippedRes.ok) {
+            const shipped = await shippedRes.json();
+            document.getElementById('amazon-shipped').textContent = shipped.total || 0;
+          }
+        }
+      } catch (e) {
+        document.getElementById('amazon-status').innerHTML = '<span class="status-dot"></span>Not configured';
+        document.getElementById('amazon-status').className = 'integration-status disconnected';
+      }
+    }
+
+    async function testOdooConnection() {
+      try {
+        const res = await fetch('/api/odoo/status', { credentials: 'include' });
+        const data = await res.json();
+        if (data.connected) {
+          alert('Odoo connection successful!\n\nURL: ' + data.url + '\nDatabase: ' + data.db);
+        } else {
+          alert('Odoo connection failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Failed to test Odoo connection: ' + e.message);
+      }
+    }
+
+    loadIntegrationStats();
+  </script>
+</body>
+</html>
