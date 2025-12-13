@@ -553,6 +553,23 @@
         document.getElementById('amazon-status').innerHTML = '<span class="status-dot"></span>Not configured';
         document.getElementById('amazon-status').className = 'integration-status disconnected';
       }
+
+      // Load MS365 status
+      try {
+        const ms365Res = await fetch('/api/ms365/status', { credentials: 'include' });
+        if (ms365Res.ok) {
+          const data = await ms365Res.json();
+          if (data.connected) {
+            document.getElementById('ms365-status').innerHTML = '<span class="status-dot"></span>Connected';
+            document.getElementById('ms365-status').className = 'integration-status connected';
+          } else if (data.configured) {
+            document.getElementById('ms365-status').innerHTML = '<span class="status-dot"></span>Auth Error';
+            document.getElementById('ms365-status').className = 'integration-status disconnected';
+          }
+        }
+      } catch (e) {
+        // Keep default "Not configured" state
+      }
     }
 
     async function testOdooConnection() {
