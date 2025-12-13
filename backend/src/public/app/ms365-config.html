@@ -368,7 +368,11 @@
           </button>
           <button class="test-btn" onclick="testEmails()">
             <span class="material-symbols-outlined">mail</span>
-            Get Emails
+            My Emails
+          </button>
+          <button class="test-btn" onclick="testAllEmails()">
+            <span class="material-symbols-outlined">all_inbox</span>
+            All Company Emails
           </button>
           <button class="test-btn" onclick="testTeams()">
             <span class="material-symbols-outlined">groups</span>
@@ -377,6 +381,10 @@
           <button class="test-btn" onclick="testCalendar()">
             <span class="material-symbols-outlined">calendar_month</span>
             Get Calendar
+          </button>
+          <button class="test-btn" onclick="testFiles()">
+            <span class="material-symbols-outlined">folder</span>
+            Get Files
           </button>
         </div>
 
@@ -613,10 +621,12 @@
       }
     }
 
-    function testUsers() { runTest('/api/ms365/users?limit=5'); }
-    function testEmails() { runTest('/api/ms365/emails?limit=5'); }
+    function testUsers() { runTest('/api/ms365/users'); }
+    function testEmails() { runTest('/api/ms365/emails?limit=20'); }
+    function testAllEmails() { runTest('/api/ms365/emails/all?limit=10'); }
     function testTeams() { runTest('/api/ms365/teams'); }
     function testCalendar() { runTest('/api/ms365/calendar?days=7'); }
+    function testFiles() { runTest('/api/ms365/files'); }
 
     // Check status on load
     checkStatus();

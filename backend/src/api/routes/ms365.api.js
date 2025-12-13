@@ -184,30 +184,142 @@ router.get('/users', async (req, res) => {
 });
 
 /**
- * Get emails for a user
+ * Get emails for a specific user (inbox, sent, or all)
  */
 router.get('/emails', async (req, res) => {
   try {
     const userId = req.query.userId || process.env.MS_USER_ID;
-    const { limit = 10 } = req.query;
+    const { limit = 50, folder = 'all' } = req.query;
 
     if (!userId) {
       return res.status(400).json({ error: 'userId required or set MS_USER_ID in .env' });
     }
 
-    const data = await graphRequest(`/users/${userId}/messages?$top=${limit}&$select=id,subject,from,receivedDateTime,isRead,bodyPreview`);
+    let endpoint;
+    if (folder === 'inbox') {
+      endpoint = `/users/${userId}/mailFolders/inbox/messages`;
+    } else if (folder === 'sent') {
+      endpoint = `/users/${userId}/mailFolders/sentItems/messages`;
+    } else {
+      // All messages
+      endpoint = `/users/${userId}/messages`;
+    }
+
+    const data = await graphRequest(`${endpoint}?$top=${limit}&$orderby=receivedDateTime desc&$select=id,subject,from,toRecipients,receivedDateTime,sentDateTime,isRead,bodyPreview,isDraft`);
 
     res.json({
       success: true,
+      userId,
+      folder,
+      count: data.value.length,
       emails: data.value.map(e => ({
         id: e.id,
         subject: e.subject,
         from: e.from?.emailAddress?.address,
         fromName: e.from?.emailAddress?.name,
+        to: e.toRecipients?.map(r => r.emailAddress?.address).join(', '),
         receivedAt: e.receivedDateTime,
+        sentAt: e.sentDateTime,
         isRead: e.isRead,
+        isDraft: e.isDraft,
         preview: e.bodyPreview?.slice(0, 200)
       }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get emails from ALL users in the organization
+ * Returns recent emails across all mailboxes
+ */
+router.get('/emails/all', async (req, res) => {
+  try {
+    const { limit = 20, folder = 'all' } = req.query;
+
+    // First get all users
+    const usersData = await graphRequest('/users?$top=100&$select=id,displayName,mail,userType&$filter=userType eq \'Member\'');
+    const users = usersData.value.filter(u => u.mail); // Only users with email
+
+    const allEmails = [];
+
+    // Fetch emails from each user
+    for (const user of users) {
+      try {
+        let endpoint;
+        if (folder === 'inbox') {
+          endpoint = `/users/${user.id}/mailFolders/inbox/messages`;
+        } else if (folder === 'sent') {
+          endpoint = `/users/${user.id}/mailFolders/sentItems/messages`;
+        } else {
+          endpoint = `/users/${user.id}/messages`;
+        }
+
+        const emailData = await graphRequest(`${endpoint}?$top=${limit}&$orderby=receivedDateTime desc&$select=id,subject,from,toRecipients,receivedDateTime,sentDateTime,isRead,bodyPreview`);
+
+        for (const e of emailData.value || []) {
+          allEmails.push({
+            id: e.id,
+            mailbox: user.mail,
+            mailboxName: user.displayName,
+            subject: e.subject,
+            from: e.from?.emailAddress?.address,
+            fromName: e.from?.emailAddress?.name,
+            to: e.toRecipients?.map(r => r.emailAddress?.address).join(', '),
+            receivedAt: e.receivedDateTime,
+            sentAt: e.sentDateTime,
+            isRead: e.isRead,
+            preview: e.bodyPreview?.slice(0, 200)
+          });
+        }
+      } catch (err) {
+        // Skip users we can't access
+        console.log(`Could not access emails for ${user.mail}: ${err.message}`);
+      }
+    }
+
+    // Sort by date, most recent first
+    allEmails.sort((a, b) => new Date(b.receivedAt || b.sentAt) - new Date(a.receivedAt || a.sentAt));
+
+    res.json({
+      success: true,
+      folder,
+      usersScanned: users.length,
+      totalEmails: allEmails.length,
+      emails: allEmails
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get a specific email with full body
+ */
+router.get('/emails/:userId/:emailId', async (req, res) => {
+  try {
+    const { userId, emailId } = req.params;
+
+    const email = await graphRequest(`/users/${userId}/messages/${emailId}?$select=id,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,body,isRead,importance,hasAttachments`);
+
+    res.json({
+      success: true,
+      email: {
+        id: email.id,
+        subject: email.subject,
+        from: email.from?.emailAddress?.address,
+        fromName: email.from?.emailAddress?.name,
+        to: email.toRecipients?.map(r => ({ email: r.emailAddress?.address, name: r.emailAddress?.name })),
+        cc: email.ccRecipients?.map(r => ({ email: r.emailAddress?.address, name: r.emailAddress?.name })),
+        receivedAt: email.receivedDateTime,
+        sentAt: email.sentDateTime,
+        body: email.body?.content,
+        bodyType: email.body?.contentType,
+        isRead: email.isRead,
+        importance: email.importance,
+        hasAttachments: email.hasAttachments
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
