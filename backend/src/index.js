@@ -65,6 +65,18 @@ if (process.env.NODE_ENV !== 'test') {
     if (process.env.AUTO_SEED_ADMIN === '1') {
       await ensureAdmin();
     }
+
+    // Initialize RAG system for knowledge retrieval
+    try {
+      const { getRAGManager } = require('./core/agents/rag');
+      const { getDb } = require('./db');
+      const rag = getRAGManager();
+      const db = getDb();
+      await rag.init(db);
+      console.log('RAG system initialized successfully');
+    } catch (e) {
+      console.warn('RAG system initialization skipped:', e.message);
+    }
   });
 }
 
