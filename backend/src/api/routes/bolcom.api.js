@@ -105,9 +105,9 @@ async function getAdvertiserAccessToken() {
 }
 
 /**
- * Make a request to Bol.com Retailer API
+ * Make a request to Bol.com Retailer API with retry logic for rate limiting
  */
-async function bolRequest(endpoint, method = 'GET', body = null) {
+async function bolRequest(endpoint, method = 'GET', body = null, retries = 3) {
   const token = await getRetailerAccessToken();
 
   const options = {
@@ -125,6 +125,14 @@ async function bolRequest(endpoint, method = 'GET', body = null) {
 
   const response = await fetch(`https://api.bol.com/retailer${endpoint}`, options);
 
+  // Handle rate limiting with retry
+  if (response.status === 429 && retries > 0) {
+    const retryAfter = parseInt(response.headers.get('retry-after') || '2', 10);
+    console.log(`Bol.com rate limited, retrying in ${retryAfter}s...`);
+    await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+    return bolRequest(endpoint, method, body, retries - 1);
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
     throw new Error(error.detail || error.message || `Bol.com API error: ${response.status}`);
@@ -139,26 +147,36 @@ async function bolRequest(endpoint, method = 'GET', body = null) {
 }
 
 /**
- * Make a request to Bol.com Advertising API
+ * Make a request to Bol.com Advertising API (v11)
  * Uses separate credentials (BOL_ADVERTISER_ID / BOL_ADVERTISER_SECRET)
+ * Note: Advertising API is now part of Retailer API base URL with v11 headers
  */
-async function advertiserRequest(endpoint, method = 'GET', body = null) {
+async function advertiserRequest(endpoint, method = 'GET', body = null, retries = 3) {
   const token = await getAdvertiserAccessToken();
 
   const options = {
     method,
     headers: {
-      'Accept': 'application/vnd.advertiser.v11+json',
+      'Accept': 'application/vnd.retailer.v11+json',
       'Authorization': `Bearer ${token}`
     }
   };
 
   if (body) {
-    options.headers['Content-Type'] = 'application/vnd.advertiser.v11+json';
+    options.headers['Content-Type'] = 'application/vnd.retailer.v11+json';
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`https://api.bol.com/advertiser${endpoint}`, options);
+  // Advertising API uses /retailer/ base URL with v11
+  const response = await fetch(`https://api.bol.com/retailer${endpoint}`, options);
+
+  // Handle rate limiting with retry
+  if (response.status === 429 && retries > 0) {
+    const retryAfter = parseInt(response.headers.get('retry-after') || '2', 10);
+    console.log(`Bol.com Advertising API rate limited, retrying in ${retryAfter}s...`);
+    await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+    return advertiserRequest(endpoint, method, body, retries - 1);
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
