@@ -390,6 +390,10 @@
         <div class="status-desc" id="ad-status-desc">Verifying BOL_ADVERTISER_ID and BOL_ADVERTISER_SECRET</div>
       </div>
     </div>
+    <div class="warning-box" id="ad-warning" style="display: none; margin-bottom: 24px;">
+      <span class="material-symbols-outlined">info</span>
+      <span>Advertising API requires your account to be migrated to Bol.com's new Sponsored Products platform. Contact advertiserapi-beta@bol.com for access.</span>
+    </div>
 
     <!-- Stats (shown when connected) -->
     <div class="stats-grid" id="stats-grid" style="display: none;">
@@ -865,7 +869,6 @@
     async function loadAdvertisingStats() {
       try {
         const res = await fetch('/api/bolcom/advertising/overview', { credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to fetch');
         const data = await res.json();
 
         if (data.success && data.overview) {
@@ -884,6 +887,9 @@
             document.getElementById('ad-clicks').textContent = formatNumber(stats.clicks || 0);
             document.getElementById('ad-orders').textContent = stats.orders || 0;
           }
+        } else if (data.error && data.error.includes('403')) {
+          // Show warning about needing advertising account migration
+          document.getElementById('ad-warning').style.display = 'flex';
         }
       } catch (e) {
         console.log('Advertising data not available:', e.message);
