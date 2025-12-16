@@ -38,6 +38,7 @@ const amazonRouter = require('./api/routes/amazon.api');
 const odooRouter = require('./api/routes/odoo.api');
 const ms365Router = require('./api/routes/ms365.api');
 const bolcomRouter = require('./api/routes/bolcom.api');
+const purchasingRouter = require('./api/routes/purchasing.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -76,6 +77,25 @@ if (process.env.NODE_ENV !== 'test') {
       console.log('RAG system initialized successfully');
     } catch (e) {
       console.warn('RAG system initialization skipped:', e.message);
+    }
+
+    // Initialize Purchasing Intelligence Agent if Odoo is configured
+    try {
+      if (process.env.ODOO_URL && process.env.ODOO_DB) {
+        const { OdooDirectClient } = require('./core/agents/integrations/OdooMCP');
+        const { initAgent: initPurchasingAgent } = require('./api/routes/purchasing.api');
+        const { getDb } = require('./db');
+
+        const odooClient = new OdooDirectClient();
+        await odooClient.authenticate();
+
+        const db = getDb();
+        await initPurchasingAgent(odooClient, db);
+
+        console.log('Purchasing Intelligence Agent initialized successfully');
+      }
+    } catch (e) {
+      console.warn('Purchasing Agent initialization skipped:', e.message);
     }
   });
 }
@@ -226,6 +246,7 @@ app.use('/api/amazon', amazonRouter); // Webhooks are public (validated by signa
 app.use('/api/odoo', requireSession, odooRouter);
 app.use('/api/ms365', requireSession, ms365Router);
 app.use('/api/bolcom', requireSession, bolcomRouter);
+app.use('/api/purchasing', requireSession, purchasingRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));

@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Purchasing Intelligence - Agent5</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    .urgency-critical { background-color: #fee2e2; border-left: 4px solid #ef4444; }
+    .urgency-high { background-color: #fef3c7; border-left: 4px solid #f59e0b; }
+    .urgency-moderate { background-color: #dbeafe; border-left: 4px solid #3b82f6; }
+    .urgency-none { background-color: #f0fdf4; border-left: 4px solid #22c55e; }
+    .loading-spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #3498db;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .season-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!-- Navigation -->
+  <nav class="bg-white shadow-sm border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center">
+          <a href="/app/dashboard.html" class="text-gray-500 hover:text-gray-700 mr-4">
+            <i class="fas fa-arrow-left"></i>
+          </a>
+          <h1 class="text-xl font-semibold text-gray-900">
+            <i class="fas fa-brain text-purple-600 mr-2"></i>
+            Purchasing Intelligence
+          </h1>
+        </div>
+        <div class="flex items-center space-x-4">
+          <button onclick="refreshDashboard()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+            <i class="fas fa-sync-alt mr-2"></i>Refresh
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Status Banner -->
+    <div id="statusBanner" class="hidden mb-6 p-4 rounded-lg"></div>
+
+    <!-- Supply Chain Alert -->
+    <div id="supplyChainAlert" class="hidden mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+      <div class="flex items-center">
+        <i class="fas fa-exclamation-triangle text-red-600 text-xl mr-3"></i>
+        <div>
+          <h3 class="text-red-800 font-semibold" id="alertTitle">Supply Chain Alert</h3>
+          <p class="text-red-700" id="alertMessage"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">Critical Actions</p>
+            <p class="text-3xl font-bold text-red-600" id="criticalCount">-</p>
+          </div>
+          <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+            <i class="fas fa-exclamation-circle text-red-600 text-xl"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">High Priority</p>
+            <p class="text-3xl font-bold text-amber-600" id="highCount">-</p>
+          </div>
+          <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+            <i class="fas fa-exclamation text-amber-600 text-xl"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">Days to CNY</p>
+            <p class="text-3xl font-bold text-purple-600" id="daysToCNY">-</p>
+          </div>
+          <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+            <i class="fas fa-dragon text-purple-600 text-xl"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">Sea Freight Lead Time</p>
+            <p class="text-3xl font-bold text-blue-600" id="leadTime">-</p>
+          </div>
+          <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+            <i class="fas fa-ship text-blue-600 text-xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two Column Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- Left Column - Recommendations -->
+      <div class="lg:col-span-2">
+        <!-- Purchasing Recommendations -->
+        <div class="bg-white rounded-lg shadow mb-8">
+          <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-900">
+              <i class="fas fa-shopping-cart text-purple-600 mr-2"></i>
+              Purchasing Recommendations
+            </h2>
+            <div class="flex space-x-2">
+              <button onclick="filterRecommendations('all')" class="filter-btn px-3 py-1 text-sm rounded bg-purple-600 text-white" data-filter="all">All</button>
+              <button onclick="filterRecommendations('critical')" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 text-gray-700" data-filter="critical">Critical</button>
+              <button onclick="filterRecommendations('high')" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 text-gray-700" data-filter="high">High</button>
+            </div>
+          </div>
+          <div class="p-6">
+            <div id="recommendationsLoading" class="flex justify-center py-8">
+              <div class="loading-spinner"></div>
+            </div>
+            <div id="recommendationsList" class="space-y-4 hidden"></div>
+            <div id="noRecommendations" class="hidden text-center py-8 text-gray-500">
+              <i class="fas fa-check-circle text-green-500 text-4xl mb-4"></i>
+              <p>All products are well-stocked!</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sales Trends -->
+        <div class="bg-white rounded-lg shadow">
+          <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">
+              <i class="fas fa-chart-line text-green-600 mr-2"></i>
+              Sales Trends
+            </h2>
+          </div>
+          <div class="p-6">
+            <div id="trendsLoading" class="flex justify-center py-8">
+              <div class="loading-spinner"></div>
+            </div>
+            <div id="trendsList" class="hidden">
+              <div class="grid grid-cols-3 gap-4 mb-4">
+                <div class="text-center p-3 bg-green-50 rounded-lg">
+                  <p class="text-2xl font-bold text-green-600" id="trendIncreasing">0</p>
+                  <p class="text-sm text-gray-500">Increasing</p>
+                </div>
+                <div class="text-center p-3 bg-red-50 rounded-lg">
+                  <p class="text-2xl font-bold text-red-600" id="trendDecreasing">0</p>
+                  <p class="text-sm text-gray-500">Decreasing</p>
+                </div>
+                <div class="text-center p-3 bg-blue-50 rounded-lg">
+                  <p class="text-2xl font-bold text-blue-600" id="trendNew">0</p>
+                  <p class="text-sm text-gray-500">New Demand</p>
+                </div>
+              </div>
+              <div id="trendsTable" class="max-h-64 overflow-y-auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column - Calendar & CNY -->
+      <div class="lg:col-span-1">
+        <!-- CNY Preparation -->
+        <div class="bg-white rounded-lg shadow mb-8">
+          <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-red-500 to-yellow-500 rounded-t-lg">
+            <h2 class="text-lg font-semibold text-white">
+              <i class="fas fa-dragon mr-2"></i>
+              Chinese New Year Prep
+            </h2>
+          </div>
+          <div class="p-6">
+            <div id="cnyInfo" class="space-y-4">
+              <div class="text-center">
+                <p class="text-sm text-gray-500">CNY Date</p>
+                <p class="text-xl font-bold text-red-600" id="cnyDate">Loading...</p>
+              </div>
+              <div class="border-t pt-4">
+                <p class="text-sm text-gray-500 mb-2">Order Deadline</p>
+                <p class="text-lg font-semibold text-gray-900" id="orderDeadline">-</p>
+                <p class="text-sm text-gray-500" id="deadlineUrgency">-</p>
+              </div>
+              <div class="border-t pt-4">
+                <p class="text-sm text-gray-500 mb-2">Factory Closure</p>
+                <p class="text-sm text-gray-700" id="closurePeriod">-</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upcoming Seasons -->
+        <div class="bg-white rounded-lg shadow">
+          <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">
+              <i class="fas fa-calendar-alt text-blue-600 mr-2"></i>
+              Upcoming Seasons
+            </h2>
+          </div>
+          <div class="p-6">
+            <div id="seasonsLoading" class="flex justify-center py-4">
+              <div class="loading-spinner"></div>
+            </div>
+            <div id="seasonsList" class="space-y-3 hidden"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calculators Section -->
+    <div class="mt-8 bg-white rounded-lg shadow">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h2 class="text-lg font-semibold text-gray-900">
+          <i class="fas fa-calculator text-purple-600 mr-2"></i>
+          Supply Chain Calculators
+        </h2>
+      </div>
+      <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Reorder Point Calculator -->
+          <div class="border rounded-lg p-4">
+            <h3 class="font-semibold text-gray-900 mb-4">Reorder Point</h3>
+            <div class="space-y-3">
+              <div>
+                <label class="text-sm text-gray-500">Avg Daily Demand</label>
+                <input type="number" id="ropDailyDemand" class="w-full border rounded px-3 py-2" placeholder="Units/day">
+              </div>
+              <div>
+                <label class="text-sm text-gray-500">Demand Std Dev</label>
+                <input type="number" id="ropStdDev" class="w-full border rounded px-3 py-2" placeholder="Optional">
+              </div>
+              <div>
+                <label class="text-sm text-gray-500">Service Level</label>
+                <select id="ropServiceLevel" class="w-full border rounded px-3 py-2">
+                  <option value="0.90">90%</option>
+                  <option value="0.95" selected>95%</option>
+                  <option value="0.98">98%</option>
+                  <option value="0.99">99%</option>
+                </select>
+              </div>
+              <button onclick="calculateReorderPoint()" class="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 transition">
+                Calculate
+              </button>
+              <div id="ropResult" class="hidden p-3 bg-purple-50 rounded text-sm"></div>
+            </div>
+          </div>
+
+          <!-- EOQ Calculator -->
+          <div class="border rounded-lg p-4">
+            <h3 class="font-semibold text-gray-900 mb-4">Economic Order Quantity</h3>
+            <div class="space-y-3">
+              <div>
+                <label class="text-sm text-gray-500">Annual Demand</label>
+                <input type="number" id="eoqAnnualDemand" class="w-full border rounded px-3 py-2" placeholder="Units/year">
+              </div>
+              <div>
+                <label class="text-sm text-gray-500">Unit Cost (€)</label>
+                <input type="number" id="eoqUnitCost" class="w-full border rounded px-3 py-2" placeholder="€">
+              </div>
+              <div>
+                <label class="text-sm text-gray-500">Min Order Qty</label>
+                <input type="number" id="eoqMOQ" class="w-full border rounded px-3 py-2" placeholder="MOQ" value="1">
+              </div>
+              <button onclick="calculateEOQ()" class="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 transition">
+                Calculate
+              </button>
+              <div id="eoqResult" class="hidden p-3 bg-purple-50 rounded text-sm"></div>
+            </div>
+          </div>
+
+          <!-- Stockout Cost Calculator -->
+          <div class="border rounded-lg p-4">
+            <h3 class="font-semibold text-gray-900 mb-4">Stockout Cost</h3>
+            <div class="space-y-3">
+              <div>
+                <label class="text-sm text-gray-500">Stockout Days</label>
+                <input type="number" id="stockoutDays" class="w-full border rounded px-3 py-2" placeholder="Days">
+              </div>
+              <div>
+                <label class="text-sm text-gray-500">Avg Daily Sales</label>
+                <input type="number" id="stockoutDailySales" class="w-full border rounded px-3 py-2" placeholder="Units/day">
+              </div>
+              <div>
+                <label class="text-sm text-gray-500">Selling Price (€)</label>
+                <input type="number" id="stockoutPrice" class="w-full border rounded px-3 py-2" placeholder="€">
+              </div>
+              <button onclick="calculateStockoutCost()" class="w-full bg-red-600 text-white py-2 rounded hover:bg-red-700 transition">
+                Calculate Loss
+              </button>
+              <div id="stockoutResult" class="hidden p-3 bg-red-50 rounded text-sm"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Chat Section -->
+    <div class="mt-8 bg-white rounded-lg shadow">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h2 class="text-lg font-semibold text-gray-900">
+          <i class="fas fa-robot text-purple-600 mr-2"></i>
+          Ask the Purchasing Agent
+        </h2>
+      </div>
+      <div class="p-6">
+        <div id="chatMessages" class="h-48 overflow-y-auto mb-4 p-4 bg-gray-50 rounded-lg">
+          <div class="text-gray-500 text-sm">
+            Ask questions about inventory, forecasting, or purchasing recommendations...
+          </div>
+        </div>
+        <div class="flex space-x-2">
+          <input type="text" id="chatInput" class="flex-1 border rounded-lg px-4 py-2" placeholder="e.g., Which products need to be ordered before CNY?">
+          <button onclick="sendChatMessage()" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let allRecommendations = [];
+    let currentFilter = 'all';
+
+    // Initialize dashboard
+    document.addEventListener('DOMContentLoaded', () => {
+      refreshDashboard();
+
+      // Enter key for chat
+      document.getElementById('chatInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendChatMessage();
+      });
+    });
+
+    async function refreshDashboard() {
+      await Promise.all([
+        loadRecommendations(),
+        loadCNYInfo(),
+        loadSeasons(),
+        loadTrends(),
+        loadLeadTime(),
+      ]);
+    }
+
+    async function loadRecommendations() {
+      document.getElementById('recommendationsLoading').classList.remove('hidden');
+      document.getElementById('recommendationsList').classList.add('hidden');
+      document.getElementById('noRecommendations').classList.add('hidden');
+
+      try {
+        const response = await fetch('/api/purchasing/recommendations?limit=30');
+        const data = await response.json();
+
+        if (data.success && data.data.recommendations) {
+          allRecommendations = data.data.recommendations;
+
+          // Update counts
+          document.getElementById('criticalCount').textContent = data.data.summary?.critical || 0;
+          document.getElementById('highCount').textContent = data.data.summary?.high || 0;
+
+          // Check supply chain status
+          if (data.data.supplyChainStatus?.impacted) {
+            showSupplyChainAlert(data.data.supplyChainStatus);
+          }
+
+          filterRecommendations(currentFilter);
+        }
+      } catch (error) {
+        console.error('Error loading recommendations:', error);
+        showStatus('Error loading recommendations', 'error');
+      }
+
+      document.getElementById('recommendationsLoading').classList.add('hidden');
+    }
+
+    function filterRecommendations(filter) {
+      currentFilter = filter;
+
+      // Update button styles
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        if (btn.dataset.filter === filter) {
+          btn.classList.remove('bg-gray-200', 'text-gray-700');
+          btn.classList.add('bg-purple-600', 'text-white');
+        } else {
+          btn.classList.remove('bg-purple-600', 'text-white');
+          btn.classList.add('bg-gray-200', 'text-gray-700');
+        }
+      });
+
+      let filtered = allRecommendations;
+      if (filter !== 'all') {
+        filtered = allRecommendations.filter(r => r.urgency === filter);
+      }
+
+      const container = document.getElementById('recommendationsList');
+      const noRecs = document.getElementById('noRecommendations');
+
+      if (filtered.length === 0) {
+        container.classList.add('hidden');
+        noRecs.classList.remove('hidden');
+        return;
+      }
+
+      container.classList.remove('hidden');
+      noRecs.classList.add('hidden');
+
+      container.innerHTML = filtered.map(rec => `
+        <div class="urgency-${rec.urgency} rounded-lg p-4 transition hover:shadow-md">
+          <div class="flex justify-between items-start">
+            <div>
+              <h4 class="font-semibold text-gray-900">${rec.product?.name || 'Unknown Product'}</h4>
+              <p class="text-sm text-gray-500">${rec.product?.sku || ''}</p>
+            </div>
+            <span class="px-2 py-1 text-xs font-medium rounded ${getUrgencyBadgeClass(rec.urgency)}">
+              ${rec.urgency?.toUpperCase()}
+            </span>
+          </div>
+          <div class="mt-3 grid grid-cols-4 gap-4 text-sm">
+            <div>
+              <p class="text-gray-500">Current Stock</p>
+              <p class="font-semibold">${rec.currentStock || 0}</p>
+            </div>
+            <div>
+              <p class="text-gray-500">Incoming</p>
+              <p class="font-semibold">${rec.incoming || 0}</p>
+            </div>
+            <div>
+              <p class="text-gray-500">Days of Stock</p>
+              <p class="font-semibold">${rec.daysOfStock || 0}</p>
+            </div>
+            <div>
+              <p class="text-gray-500">Avg Daily Sales</p>
+              <p class="font-semibold">${rec.avgDailySales || 0}</p>
+            </div>
+          </div>
+          ${rec.reorderStatus?.recommendation ? `
+            <div class="mt-3 p-2 bg-white bg-opacity-50 rounded text-sm">
+              <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+              ${rec.reorderStatus.recommendation}
+            </div>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    function getUrgencyBadgeClass(urgency) {
+      switch (urgency) {
+        case 'critical': return 'bg-red-100 text-red-800';
+        case 'high': return 'bg-amber-100 text-amber-800';
+        case 'moderate': return 'bg-blue-100 text-blue-800';
+        default: return 'bg-green-100 text-green-800';
+      }
+    }
+
+    async function loadCNYInfo() {
+      try {
+        const response = await fetch('/api/purchasing/calendar/cny');
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          const cny = data.data.cny;
+          const deadline = data.data.orderDeadline;
+
+          // CNY Date
+          const cnyDate = new Date(cny.cnyDate);
+          document.getElementById('cnyDate').textContent = cnyDate.toLocaleDateString('en-GB', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+          });
+
+          // Days until CNY
+          const daysUntilCNY = Math.ceil((cnyDate - new Date()) / (1000 * 60 * 60 * 24));
+          document.getElementById('daysToCNY').textContent = daysUntilCNY > 0 ? daysUntilCNY : 'Passed';
+
+          // Order deadline
+          if (deadline?.orderDeadline) {
+            const deadlineDate = new Date(deadline.orderDeadline);
+            document.getElementById('orderDeadline').textContent = deadlineDate.toLocaleDateString('en-GB');
+            document.getElementById('deadlineUrgency').textContent =
+              deadline.daysUntilDeadline > 0
+                ? `${deadline.daysUntilDeadline} days remaining`
+                : 'DEADLINE PASSED!';
+
+            if (deadline.daysUntilDeadline <= 0) {
+              document.getElementById('deadlineUrgency').classList.add('text-red-600', 'font-bold');
+            } else if (deadline.daysUntilDeadline <= 14) {
+              document.getElementById('deadlineUrgency').classList.add('text-amber-600', 'font-semibold');
+            }
+          }
+
+          // Closure period
+          if (cny.closureStart && cny.closureEnd) {
+            const start = new Date(cny.closureStart).toLocaleDateString('en-GB');
+            const end = new Date(cny.closureEnd).toLocaleDateString('en-GB');
+            document.getElementById('closurePeriod').textContent = `${start} - ${end} (${cny.totalClosureDays} days)`;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading CNY info:', error);
+      }
+    }
+
+    async function loadSeasons() {
+      document.getElementById('seasonsLoading').classList.remove('hidden');
+      document.getElementById('seasonsList').classList.add('hidden');
+
+      try {
+        const response = await fetch('/api/purchasing/calendar/seasons?months=6');
+        const data = await response.json();
+
+        if (data.success && data.data.seasons) {
+          const container = document.getElementById('seasonsList');
+          container.innerHTML = data.data.seasons.slice(0, 6).map(season => {
+            const startDate = new Date(season.startDate);
+            const daysUntil = Math.ceil((startDate - new Date()) / (1000 * 60 * 60 * 24));
+
+            return `
+              <div class="season-card border rounded-lg p-3 transition cursor-pointer hover:bg-gray-50">
+                <div class="flex justify-between items-center">
+                  <div>
+                    <h4 class="font-medium text-gray-900">${season.name}</h4>
+                    <p class="text-xs text-gray-500">${startDate.toLocaleDateString('en-GB')}</p>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-sm font-semibold ${daysUntil <= 30 ? 'text-amber-600' : 'text-gray-600'}">
+                      ${daysUntil > 0 ? `${daysUntil}d` : 'Now'}
+                    </span>
+                    <p class="text-xs text-gray-500">${season.demandMultiplier}x</p>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          document.getElementById('seasonsList').classList.remove('hidden');
+        }
+      } catch (error) {
+        console.error('Error loading seasons:', error);
+      }
+
+      document.getElementById('seasonsLoading').classList.add('hidden');
+    }
+
+    async function loadTrends() {
+      document.getElementById('trendsLoading').classList.remove('hidden');
+      document.getElementById('trendsList').classList.add('hidden');
+
+      try {
+        const response = await fetch('/api/purchasing/trends?threshold=20&weeks=4');
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          document.getElementById('trendIncreasing').textContent = data.data.summary?.increasing || 0;
+          document.getElementById('trendDecreasing').textContent = data.data.summary?.decreasing || 0;
+          document.getElementById('trendNew').textContent = data.data.summary?.newDemand || 0;
+
+          const trends = data.data.trends?.slice(0, 10) || [];
+          const table = document.getElementById('trendsTable');
+
+          if (trends.length > 0) {
+            table.innerHTML = `
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-gray-500">
+                    <th class="py-2">Product</th>
+                    <th class="py-2">Change</th>
+                    <th class="py-2">Trend</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${trends.map(t => `
+                    <tr class="border-t">
+                      <td class="py-2">#${t.productId}</td>
+                      <td class="py-2 ${t.changePercent > 0 ? 'text-green-600' : 'text-red-600'}">
+                        ${t.changePercent > 0 ? '+' : ''}${t.changePercent}%
+                      </td>
+                      <td class="py-2">
+                        <i class="fas ${t.trend === 'increasing' ? 'fa-arrow-up text-green-500' : t.trend === 'decreasing' ? 'fa-arrow-down text-red-500' : 'fa-star text-blue-500'}"></i>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            `;
+          } else {
+            table.innerHTML = '<p class="text-gray-500 text-center py-4">No significant trends detected</p>';
+          }
+
+          document.getElementById('trendsList').classList.remove('hidden');
+        }
+      } catch (error) {
+        console.error('Error loading trends:', error);
+      }
+
+      document.getElementById('trendsLoading').classList.add('hidden');
+    }
+
+    async function loadLeadTime() {
+      try {
+        const response = await fetch('/api/purchasing/lead-time?shipping_method=sea');
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          document.getElementById('leadTime').textContent = `${data.data.totalDays}d`;
+        }
+      } catch (error) {
+        console.error('Error loading lead time:', error);
+      }
+    }
+
+    function showSupplyChainAlert(status) {
+      const alert = document.getElementById('supplyChainAlert');
+      document.getElementById('alertTitle').textContent = status.reason || 'Supply Chain Alert';
+      document.getElementById('alertMessage').textContent =
+        status.daysUntilClosure
+          ? `${status.daysUntilClosure} days until factory closure. Order now!`
+          : status.details?.description || '';
+
+      alert.classList.remove('hidden');
+    }
+
+    // Calculator functions
+    async function calculateReorderPoint() {
+      const dailyDemand = parseFloat(document.getElementById('ropDailyDemand').value);
+      const stdDev = parseFloat(document.getElementById('ropStdDev').value) || undefined;
+      const serviceLevel = parseFloat(document.getElementById('ropServiceLevel').value);
+
+      if (!dailyDemand) {
+        showStatus('Please enter daily demand', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/purchasing/calculate/reorder-point', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            avg_daily_demand: dailyDemand,
+            demand_std_dev: stdDev,
+            service_level: serviceLevel,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          const result = document.getElementById('ropResult');
+          result.innerHTML = `
+            <p><strong>Reorder Point:</strong> ${data.data.reorderPoint} units</p>
+            <p><strong>Safety Stock:</strong> ${data.data.safetyStock} units</p>
+            <p><strong>Lead Time:</strong> ${data.data.leadTime?.totalDays} days</p>
+          `;
+          result.classList.remove('hidden');
+        }
+      } catch (error) {
+        showStatus('Calculation error', 'error');
+      }
+    }
+
+    async function calculateEOQ() {
+      const annualDemand = parseFloat(document.getElementById('eoqAnnualDemand').value);
+      const unitCost = parseFloat(document.getElementById('eoqUnitCost').value);
+      const moq = parseInt(document.getElementById('eoqMOQ').value) || 1;
+
+      if (!annualDemand || !unitCost) {
+        showStatus('Please enter annual demand and unit cost', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/purchasing/calculate/eoq', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            annual_demand: annualDemand,
+            unit_cost: unitCost,
+            min_order_qty: moq,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          const result = document.getElementById('eoqResult');
+          result.innerHTML = `
+            <p><strong>Optimal Order Qty:</strong> ${data.data.eoq} units</p>
+            <p><strong>Orders/Year:</strong> ${data.data.ordersPerYear}</p>
+            <p><strong>Annual Cost:</strong> €${Math.round(data.data.totalAnnualCost)}</p>
+          `;
+          result.classList.remove('hidden');
+        }
+      } catch (error) {
+        showStatus('Calculation error', 'error');
+      }
+    }
+
+    async function calculateStockoutCost() {
+      const days = parseInt(document.getElementById('stockoutDays').value);
+      const dailySales = parseFloat(document.getElementById('stockoutDailySales').value);
+      const price = parseFloat(document.getElementById('stockoutPrice').value);
+
+      if (!days || !dailySales || !price) {
+        showStatus('Please fill all fields', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/purchasing/stockout/cost', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stockout_days: days,
+            avg_daily_sales: dailySales,
+            avg_selling_price: price,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          const result = document.getElementById('stockoutResult');
+          result.innerHTML = `
+            <p><strong>Lost Units:</strong> ${data.data.directImpact?.lostUnits}</p>
+            <p><strong>Lost Revenue:</strong> €${data.data.directImpact?.lostRevenue}</p>
+            <p><strong>Lost Profit:</strong> €${data.data.directImpact?.lostProfit}</p>
+            <p class="text-red-600 font-semibold mt-2">Daily Cost: €${data.data.dailyCost}/day</p>
+          `;
+          result.classList.remove('hidden');
+        }
+      } catch (error) {
+        showStatus('Calculation error', 'error');
+      }
+    }
+
+    // Chat function
+    async function sendChatMessage() {
+      const input = document.getElementById('chatInput');
+      const message = input.value.trim();
+
+      if (!message) return;
+
+      const chatContainer = document.getElementById('chatMessages');
+
+      // Add user message
+      chatContainer.innerHTML += `
+        <div class="mb-3 text-right">
+          <span class="inline-block px-3 py-2 bg-purple-600 text-white rounded-lg">${message}</span>
+        </div>
+      `;
+
+      input.value = '';
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      // Show loading
+      chatContainer.innerHTML += `
+        <div id="chatLoading" class="mb-3">
+          <span class="inline-block px-3 py-2 bg-gray-200 rounded-lg">
+            <div class="loading-spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+          </span>
+        </div>
+      `;
+
+      try {
+        const response = await fetch('/api/purchasing/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message }),
+        });
+
+        const data = await response.json();
+
+        // Remove loading
+        document.getElementById('chatLoading')?.remove();
+
+        if (data.success) {
+          const aiResponse = typeof data.data.response === 'string'
+            ? data.data.response
+            : JSON.stringify(data.data.response, null, 2);
+
+          chatContainer.innerHTML += `
+            <div class="mb-3">
+              <span class="inline-block px-3 py-2 bg-gray-200 rounded-lg text-sm whitespace-pre-wrap">${aiResponse}</span>
+            </div>
+          `;
+        } else {
+          chatContainer.innerHTML += `
+            <div class="mb-3">
+              <span class="inline-block px-3 py-2 bg-red-100 text-red-700 rounded-lg">Error: ${data.error || 'Unknown error'}</span>
+            </div>
+          `;
+        }
+      } catch (error) {
+        document.getElementById('chatLoading')?.remove();
+        chatContainer.innerHTML += `
+          <div class="mb-3">
+            <span class="inline-block px-3 py-2 bg-red-100 text-red-700 rounded-lg">Connection error</span>
+          </div>
+        `;
+      }
+
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function showStatus(message, type = 'info') {
+      const banner = document.getElementById('statusBanner');
+      banner.textContent = message;
+      banner.className = `mb-6 p-4 rounded-lg ${type === 'error' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`;
+      banner.classList.remove('hidden');
+
+      setTimeout(() => banner.classList.add('hidden'), 5000);
+    }
+  </script>
+</body>
+</html>
