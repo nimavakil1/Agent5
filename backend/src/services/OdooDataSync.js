@@ -608,6 +608,18 @@ class OdooDataSync {
     cutoffDate.setDate(cutoffDate.getDate() - this.config.stockMoveHistoryDays);
     const cutoffStr = cutoffDate.toISOString().split('T')[0];
 
+    // Get total count first for progress reporting
+    let totalCount = 0;
+    try {
+      totalCount = await this.odooClient.searchCount('stock.move', [
+        ['state', '=', 'done'],
+        ['date', '>=', cutoffStr],
+      ]);
+      console.log(`Stock moves to sync: ${totalCount.toLocaleString()} total records (${this.config.stockMoveHistoryDays} days of history)`);
+    } catch (error) {
+      console.warn('Could not get stock moves count:', error.message);
+    }
+
     const collection = this.db.collection(this.collections.stockMoves);
 
     // Fetch in batches to avoid XML-RPC timeouts
@@ -620,7 +632,8 @@ class OdooDataSync {
     const maxConsecutiveErrors = 3;
 
     while (hasMore) {
-      console.log(`Fetching stock moves batch at offset ${offset}...`);
+      const progress = totalCount > 0 ? ` (${Math.round(offset / totalCount * 100)}%)` : '';
+      console.log(`Fetching stock moves batch at offset ${offset.toLocaleString()}${progress}...`);
 
       let moves;
       try {

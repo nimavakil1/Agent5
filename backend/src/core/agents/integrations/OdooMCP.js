@@ -99,6 +99,13 @@ class OdooDirectClient {
   }
 
   /**
+   * Count records matching domain
+   */
+  async searchCount(model, domain = []) {
+    return this.execute(model, 'search_count', [domain], {});
+  }
+
+  /**
    * Search records
    */
   async search(model, domain = [], options = {}) {
