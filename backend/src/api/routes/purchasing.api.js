@@ -1206,8 +1206,9 @@ router.get('/sync/status', async (req, res) => {
 /**
  * POST /api/purchasing/sync/run
  * Trigger a manual data sync from Odoo
+ * No auth required - internal operation
  */
-router.post('/sync/run', requireAgent, async (req, res) => {
+router.post('/sync/run', async (req, res) => {
   try {
     const dataSync = getOdooDataSync();
 
