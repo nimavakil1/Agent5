@@ -599,6 +599,7 @@ class OdooDataSync {
    * Sync stock movements for stockout analysis
    * Uses pagination to avoid XML-RPC timeouts on large datasets
    * Uses upsert strategy for safe incremental syncs
+   * Has retry logic for network failures
    */
   async syncStockMoves() {
     console.log('Syncing stock movements...');
@@ -615,17 +616,38 @@ class OdooDataSync {
     let totalInserted = 0;
     let totalUpdated = 0;
     let hasMore = true;
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 3;
 
     while (hasMore) {
       console.log(`Fetching stock moves batch at offset ${offset}...`);
 
-      const moves = await this.odooClient.searchRead('stock.move', [
-        ['state', '=', 'done'],
-        ['date', '>=', cutoffStr],
-      ], [
-        'product_id', 'product_qty', 'date', 'reference',
-        'location_id', 'location_dest_id', 'picking_type_id',
-      ], { limit: fetchBatchSize, offset, order: 'date desc' });
+      let moves;
+      try {
+        moves = await this.odooClient.searchRead('stock.move', [
+          ['state', '=', 'done'],
+          ['date', '>=', cutoffStr],
+        ], [
+          'product_id', 'product_qty', 'date', 'reference',
+          'location_id', 'location_dest_id', 'picking_type_id',
+        ], { limit: fetchBatchSize, offset, order: 'date desc' });
+
+        consecutiveErrors = 0; // Reset on success
+      } catch (error) {
+        consecutiveErrors++;
+        console.error(`Stock moves fetch error at offset ${offset}: ${error.message}`);
+
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          console.error(`Too many consecutive errors (${consecutiveErrors}), stopping stock moves sync`);
+          console.log(`Stock moves partial sync: ${totalInserted} inserted, ${totalUpdated} updated (stopped at offset ${offset})`);
+          return { total: totalInserted + totalUpdated, inserted: totalInserted, updated: totalUpdated, partial: true, stoppedAtOffset: offset };
+        }
+
+        // Wait before retry
+        console.log(`Retrying in 5 seconds... (attempt ${consecutiveErrors}/${maxConsecutiveErrors})`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        continue;
+      }
 
       if (moves.length === 0) {
         hasMore = false;
