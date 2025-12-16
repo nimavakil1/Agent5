@@ -120,6 +120,15 @@ Example reasoning format:
   }
 
   async init(platform) {
+    // Create a minimal platform with logger if not provided
+    // This allows the agent to run standalone without the full platform
+    if (!platform) {
+      const pino = require('pino');
+      platform = {
+        logger: pino({ name: 'PurchasingAgent' }),
+      };
+    }
+
     await super.init(platform);
 
     // Initialize context with database
