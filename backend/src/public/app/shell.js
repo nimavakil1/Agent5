@@ -415,6 +415,7 @@
 
           ${navSection('Business Data', `
             ${navItem('/app/products.html', 'inventory_2', 'Products', isActive('/app/products.html'))}
+            ${navItem('/app/purchasing.html', 'shopping_cart', 'Purchasing', isActive('/app/purchasing.html'))}
             ${navItem('/app/analytics.html', 'analytics', 'Analytics', isActive('/app/analytics.html') || isActive('/dashboard.html'))}
           `)}
 
