@@ -88,6 +88,7 @@ class OdooDataSync {
 
       // Invoice lines indexes
       const invoiceLines = this.db.collection(this.collections.invoiceLines);
+      await invoiceLines.createIndex({ odooLineId: 1 }, { unique: true });
       await invoiceLines.createIndex({ productId: 1, invoiceDate: -1 });
       await invoiceLines.createIndex({ customerId: 1, invoiceDate: -1 });
       await invoiceLines.createIndex({ invoiceDate: -1 });
@@ -114,6 +115,7 @@ class OdooDataSync {
 
       // Stock moves indexes
       const stockMoves = this.db.collection(this.collections.stockMoves);
+      await stockMoves.createIndex({ odooId: 1 }, { unique: true });
       await stockMoves.createIndex({ productId: 1, date: -1 });
       await stockMoves.createIndex({ date: -1 });
       await stockMoves.createIndex({ type: 1 });
@@ -464,13 +466,13 @@ class OdooDataSync {
     ], { limit: 2000000 });
 
     const collection = this.db.collection(this.collections.invoiceLines);
+    let inserted = 0;
+    let updated = 0;
 
-    // Clear old data and insert fresh (more efficient for large datasets)
-    await collection.deleteMany({ invoiceDate: { $gte: cutoffDate } });
-
-    const docs = invoiceLines.map(line => {
+    // Use bulkWrite with upsert for efficiency and safety
+    const bulkOps = invoiceLines.map(line => {
       const invoice = invoiceMap.get(line.move_id[0]);
-      return {
+      const doc = {
         odooLineId: line.id,
         odooInvoiceId: line.move_id[0],
         invoiceName: invoice?.name || null,
@@ -486,18 +488,28 @@ class OdooDataSync {
         createdAt: new Date(line.create_date),
         syncedAt: new Date(),
       };
+
+      return {
+        updateOne: {
+          filter: { odooLineId: line.id },
+          update: { $set: doc },
+          upsert: true,
+        },
+      };
     });
 
-    if (docs.length > 0) {
-      // Insert in batches
-      for (let i = 0; i < docs.length; i += this.config.batchSize) {
-        const batch = docs.slice(i, i + this.config.batchSize);
-        await collection.insertMany(batch, { ordered: false });
+    if (bulkOps.length > 0) {
+      // Execute in batches
+      for (let i = 0; i < bulkOps.length; i += this.config.batchSize) {
+        const batch = bulkOps.slice(i, i + this.config.batchSize);
+        const result = await collection.bulkWrite(batch, { ordered: false });
+        inserted += result.upsertedCount || 0;
+        updated += result.modifiedCount || 0;
       }
     }
 
-    console.log(`Invoice lines synced: ${docs.length} records`);
-    return { total: docs.length, inserted: docs.length, updated: 0 };
+    console.log(`Invoice lines synced: ${inserted} inserted, ${updated} updated`);
+    return { total: invoiceLines.length, inserted, updated };
   }
 
   /**
@@ -586,6 +598,7 @@ class OdooDataSync {
   /**
    * Sync stock movements for stockout analysis
    * Uses pagination to avoid XML-RPC timeouts on large datasets
+   * Uses upsert strategy for safe incremental syncs
    */
   async syncStockMoves() {
     console.log('Syncing stock movements...');
@@ -596,13 +609,11 @@ class OdooDataSync {
 
     const collection = this.db.collection(this.collections.stockMoves);
 
-    // Clear old data first
-    await collection.deleteMany({ date: { $gte: cutoffDate } });
-
     // Fetch in batches to avoid XML-RPC timeouts
-    const batchSize = 50000;
+    const fetchBatchSize = 50000;
     let offset = 0;
     let totalInserted = 0;
+    let totalUpdated = 0;
     let hasMore = true;
 
     while (hasMore) {
@@ -614,46 +625,58 @@ class OdooDataSync {
       ], [
         'product_id', 'product_qty', 'date', 'reference',
         'location_id', 'location_dest_id', 'picking_type_id',
-      ], { limit: batchSize, offset, order: 'date desc' });
+      ], { limit: fetchBatchSize, offset, order: 'date desc' });
 
       if (moves.length === 0) {
         hasMore = false;
         break;
       }
 
-      const docs = moves.map(move => ({
-        odooId: move.id,
-        productId: move.product_id?.[0],
-        productName: move.product_id?.[1],
-        quantity: move.product_qty,
-        date: new Date(move.date),
-        reference: move.reference,
-        sourceLocation: move.location_id?.[1],
-        destLocation: move.location_dest_id?.[1],
-        pickingType: move.picking_type_id?.[1],
-        type: this._determineMovementType(move),
-        syncedAt: new Date(),
-      }));
+      // Build bulk upsert operations
+      const bulkOps = moves.map(move => {
+        const doc = {
+          odooId: move.id,
+          productId: move.product_id?.[0],
+          productName: move.product_id?.[1],
+          quantity: move.product_qty,
+          date: new Date(move.date),
+          reference: move.reference,
+          sourceLocation: move.location_id?.[1],
+          destLocation: move.location_dest_id?.[1],
+          pickingType: move.picking_type_id?.[1],
+          type: this._determineMovementType(move),
+          syncedAt: new Date(),
+        };
 
-      // Insert in smaller batches for MongoDB
-      for (let i = 0; i < docs.length; i += this.config.batchSize) {
-        const batch = docs.slice(i, i + this.config.batchSize);
-        await collection.insertMany(batch, { ordered: false });
+        return {
+          updateOne: {
+            filter: { odooId: move.id },
+            update: { $set: doc },
+            upsert: true,
+          },
+        };
+      });
+
+      // Execute in smaller batches for MongoDB
+      for (let i = 0; i < bulkOps.length; i += this.config.batchSize) {
+        const batch = bulkOps.slice(i, i + this.config.batchSize);
+        const result = await collection.bulkWrite(batch, { ordered: false });
+        totalInserted += result.upsertedCount || 0;
+        totalUpdated += result.modifiedCount || 0;
       }
 
-      totalInserted += docs.length;
-      console.log(`Stock moves batch synced: ${docs.length} records (total: ${totalInserted})`);
+      console.log(`Stock moves batch synced: ${moves.length} records (total: ${totalInserted + totalUpdated})`);
 
       // Check if we got less than batch size, meaning we're done
-      if (moves.length < batchSize) {
+      if (moves.length < fetchBatchSize) {
         hasMore = false;
       } else {
-        offset += batchSize;
+        offset += fetchBatchSize;
       }
     }
 
-    console.log(`Stock moves synced: ${totalInserted} records`);
-    return { total: totalInserted, inserted: totalInserted, updated: 0 };
+    console.log(`Stock moves synced: ${totalInserted} inserted, ${totalUpdated} updated`);
+    return { total: totalInserted + totalUpdated, inserted: totalInserted, updated: totalUpdated };
   }
 
   /**
