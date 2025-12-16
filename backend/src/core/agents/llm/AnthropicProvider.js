@@ -43,9 +43,16 @@ class AnthropicProvider extends LLMProvider {
     const systemMessage = messages.find(m => m.role === 'system');
     const otherMessages = messages.filter(m => m.role !== 'system');
 
+    // Determine max_tokens - must be greater than thinking budget if extended thinking enabled
+    let maxTokens = options.maxTokens || this.maxTokens;
+    if (this.useExtendedThinking && this.model.includes('opus')) {
+      // Ensure max_tokens > thinking.budget_tokens
+      maxTokens = Math.max(maxTokens, this.thinkingBudget + 4096);
+    }
+
     const requestParams = {
       model: options.model || this.model,
-      max_tokens: options.maxTokens || this.maxTokens,
+      max_tokens: maxTokens,
       messages: this._formatMessages(otherMessages),
     };
 
@@ -85,9 +92,16 @@ class AnthropicProvider extends LLMProvider {
     const systemMessage = messages.find(m => m.role === 'system');
     const otherMessages = messages.filter(m => m.role !== 'system');
 
+    // Determine max_tokens - must be greater than thinking budget if extended thinking enabled
+    let maxTokens = options.maxTokens || this.maxTokens;
+    if (this.useExtendedThinking && this.model.includes('opus')) {
+      // Ensure max_tokens > thinking.budget_tokens
+      maxTokens = Math.max(maxTokens, this.thinkingBudget + 4096);
+    }
+
     const requestParams = {
       model: options.model || this.model,
-      max_tokens: options.maxTokens || this.maxTokens,
+      max_tokens: maxTokens,
       messages: this._formatMessages(otherMessages),
       tools: this.formatToolsForProvider(tools),
     };
@@ -148,9 +162,16 @@ class AnthropicProvider extends LLMProvider {
       },
     ];
 
+    // Determine max_tokens - must be greater than thinking budget if extended thinking enabled
+    let maxTokens = options.maxTokens || this.maxTokens;
+    if (this.useExtendedThinking && this.model.includes('opus')) {
+      // Ensure max_tokens > thinking.budget_tokens
+      maxTokens = Math.max(maxTokens, this.thinkingBudget + 4096);
+    }
+
     const requestParams = {
       model: options.model || this.model,
-      max_tokens: options.maxTokens || this.maxTokens,
+      max_tokens: maxTokens,
       messages: messagesWithResult,
       tools: this.formatToolsForProvider(tools),
     };
