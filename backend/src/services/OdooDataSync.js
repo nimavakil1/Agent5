@@ -37,8 +37,8 @@ class OdooDataSync {
     this.config = {
       syncIntervalHours: config.syncIntervalHours || 6,
       batchSize: config.batchSize || 500,
-      invoiceHistoryDays: config.invoiceHistoryDays || 730, // 2 years
-      stockMoveHistoryDays: config.stockMoveHistoryDays || 365, // 1 year
+      invoiceHistoryDays: config.invoiceHistoryDays || 1095, // 3 years
+      stockMoveHistoryDays: config.stockMoveHistoryDays || 1095, // 3 years
     };
 
     // Sync status
