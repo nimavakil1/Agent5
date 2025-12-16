@@ -13,6 +13,7 @@ const { getForecastEngine } = require('../../core/agents/services/ForecastEngine
 const { getSupplyChainManager } = require('../../core/agents/services/SupplyChainManager');
 const { getStockoutAnalyzer } = require('../../core/agents/services/StockoutAnalyzer');
 const { getPurchasingContext } = require('../../core/agents/services/PurchasingContext');
+const { getOdooDataSync } = require('../../core/agents/services/OdooDataSync');
 
 // Singleton agent instance
 let purchasingAgent = null;
@@ -1176,6 +1177,220 @@ router.post('/init', async (req, res) => {
     res.json({
       success: true,
       message: 'Purchasing agent initialized successfully',
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== DATA SYNC ====================
+
+/**
+ * GET /api/purchasing/sync/status
+ * Get Odoo data sync status
+ */
+router.get('/sync/status', async (req, res) => {
+  try {
+    const dataSync = getOdooDataSync();
+    const status = await dataSync.getStatus();
+
+    res.json({
+      success: true,
+      data: status,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/purchasing/sync/run
+ * Trigger a manual data sync from Odoo
+ */
+router.post('/sync/run', requireAgent, async (req, res) => {
+  try {
+    const dataSync = getOdooDataSync();
+
+    // Check if sync is already running
+    const status = await dataSync.getStatus();
+    if (status.isRunning) {
+      return res.status(409).json({
+        success: false,
+        error: 'Sync already in progress',
+        message: 'Please wait for the current sync to complete',
+      });
+    }
+
+    // Start sync in background
+    dataSync.syncAll().catch(err => {
+      console.error('Manual sync failed:', err.message);
+    });
+
+    res.json({
+      success: true,
+      message: 'Data sync started. Check /sync/status for progress.',
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/purchasing/sync/products
+ * Get synced products from local database
+ */
+router.get('/sync/products', requireAgent, async (req, res) => {
+  try {
+    const { limit = 100, offset = 0, low_stock } = req.query;
+    const dataSync = getOdooDataSync();
+
+    if (low_stock === 'true') {
+      const products = await dataSync.getLowStockProducts();
+      return res.json({
+        success: true,
+        data: products.slice(offset, offset + parseInt(limit)),
+        total: products.length,
+      });
+    }
+
+    const db = req.app.get('db');
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    const products = await db.collection('purchasing_products')
+      .find({})
+      .sort({ 'stock.available': 1 })
+      .skip(parseInt(offset))
+      .limit(parseInt(limit))
+      .toArray();
+
+    const total = await db.collection('purchasing_products').countDocuments();
+
+    res.json({
+      success: true,
+      data: products,
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/purchasing/sync/products/:productId
+ * Get detailed product info from synced data
+ */
+router.get('/sync/products/:productId', requireAgent, async (req, res) => {
+  try {
+    const productId = parseInt(req.params.productId);
+    const dataSync = getOdooDataSync();
+
+    const product = await dataSync.getProduct(productId);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        error: 'Product not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: product,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/purchasing/sync/products/:productId/sales
+ * Get sales history for a product
+ */
+router.get('/sync/products/:productId/sales', requireAgent, async (req, res) => {
+  try {
+    const productId = parseInt(req.params.productId);
+    const { days = 365, period = 'week' } = req.query;
+    const dataSync = getOdooDataSync();
+
+    const sales = await dataSync.getProductSalesByPeriod(
+      productId,
+      parseInt(days),
+      period
+    );
+
+    res.json({
+      success: true,
+      data: sales,
+      productId,
+      days: parseInt(days),
+      periodType: period,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/purchasing/sync/purchase-orders
+ * Get synced purchase orders
+ */
+router.get('/sync/purchase-orders', requireAgent, async (req, res) => {
+  try {
+    const { pending_only, supplier_id } = req.query;
+    const dataSync = getOdooDataSync();
+
+    if (pending_only === 'true') {
+      const orders = await dataSync.getPendingPurchaseOrders(
+        supplier_id ? parseInt(supplier_id) : null
+      );
+      return res.json({
+        success: true,
+        data: orders,
+        count: orders.length,
+      });
+    }
+
+    const db = req.app.get('db');
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    const query = {};
+    if (supplier_id) query.supplierId = parseInt(supplier_id);
+
+    const orders = await db.collection('purchasing_orders')
+      .find(query)
+      .sort({ orderDate: -1 })
+      .limit(100)
+      .toArray();
+
+    res.json({
+      success: true,
+      data: orders,
+      count: orders.length,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/purchasing/sync/low-stock
+ * Get products that need reordering
+ */
+router.get('/sync/low-stock', requireAgent, async (req, res) => {
+  try {
+    const dataSync = getOdooDataSync();
+    const products = await dataSync.getLowStockProducts();
+
+    res.json({
+      success: true,
+      data: products,
+      count: products.length,
+      message: `${products.length} products need attention`,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

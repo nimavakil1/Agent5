@@ -19,6 +19,7 @@ const { getForecastEngine } = require('../services/ForecastEngine');
 const { getSupplyChainManager } = require('../services/SupplyChainManager');
 const { getStockoutAnalyzer } = require('../services/StockoutAnalyzer');
 const { getPurchasingContext } = require('../services/PurchasingContext');
+const { getOdooDataSync } = require('../services/OdooDataSync');
 
 class PurchasingIntelligenceAgent extends LLMAgent {
   constructor(config = {}) {
@@ -102,6 +103,7 @@ Example reasoning format:
     this.supplyChainManager = getSupplyChainManager();
     this.stockoutAnalyzer = getStockoutAnalyzer();
     this.purchasingContext = getPurchasingContext();
+    this.dataSync = getOdooDataSync();
 
     // External clients
     this.odooClient = config.odooClient || null;
@@ -113,6 +115,7 @@ Example reasoning format:
       safetyStockDays: config.safetyStockDays || 21,
       cnyBufferMultiplier: config.cnyBufferMultiplier || 1.3,
       approvalThreshold: config.approvalThreshold || 5000,
+      preferSyncedData: config.preferSyncedData !== false, // Default true
     };
   }
 
@@ -122,6 +125,7 @@ Example reasoning format:
     // Initialize context with database
     if (this.db) {
       this.purchasingContext.setDb(this.db);
+      this.dataSync.db = this.db;
     }
 
     this._registerTools();
@@ -601,8 +605,18 @@ Example reasoning format:
   async _getInvoicedSales(params) {
     const { product_id, sku, days_back = 365, apply_context = true } = params;
 
+    // Try to use synced data first (faster, less load on Odoo)
+    if (this.config.preferSyncedData && this.db) {
+      const syncedResult = await this._getInvoicedSalesFromSync(product_id, sku, days_back, apply_context);
+      if (syncedResult && !syncedResult.error) {
+        return syncedResult;
+      }
+      // Fall back to direct Odoo if synced data not available
+      console.log('Synced data not available, falling back to direct Odoo query');
+    }
+
     if (!this.odooClient) {
-      return { error: 'Odoo client not configured' };
+      return { error: 'Odoo client not configured and no synced data available' };
     }
 
     try {
@@ -683,7 +697,7 @@ Example reasoning format:
 
       return {
         productId,
-        dataSource: 'Odoo Invoices (account.move.line)',
+        dataSource: 'Odoo Invoices (direct query)',
         period: {
           days: days_back,
           from: cutoffDate.toISOString().split('T')[0],
@@ -702,15 +716,117 @@ Example reasoning format:
           avgMonthlySales: Math.round(avgDailySales * 30 * 100) / 100,
         },
         salesHistory, // Raw data for forecasting
-        reasoning: this._buildSalesDataReasoning(rawTotalQuantity, contextAdjustments, days_back),
+        reasoning: this._buildSalesDataReasoning(rawTotalQuantity, contextAdjustments, days_back, 'direct'),
       };
     } catch (error) {
       return { error: error.message };
     }
   }
 
-  _buildSalesDataReasoning(rawQuantity, contextAdjustments, days) {
-    let reasoning = `Data Source: Odoo posted customer invoices (${days} days)\n`;
+  /**
+   * Get invoiced sales from synced MongoDB data (faster than direct Odoo)
+   */
+  async _getInvoicedSalesFromSync(productId, sku, daysBack, applyContext) {
+    try {
+      // Resolve product ID from SKU if needed
+      if (!productId && sku) {
+        const product = await this.db.collection('purchasing_products')
+          .findOne({ sku });
+        if (product) {
+          productId = product.odooId;
+        }
+      }
+
+      if (!productId) {
+        return null; // Will fall back to direct Odoo
+      }
+
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+
+      // Get sales from synced invoice lines
+      const invoiceLines = await this.db.collection('purchasing_invoice_lines')
+        .find({
+          productId,
+          invoiceDate: { $gte: cutoffDate },
+        })
+        .sort({ invoiceDate: 1 })
+        .toArray();
+
+      if (invoiceLines.length === 0) {
+        return null; // No data, fall back to direct Odoo
+      }
+
+      // Build sales history
+      const salesHistory = invoiceLines.map(line => ({
+        date: line.invoiceDate,
+        quantity: line.quantity,
+        revenue: line.subtotal,
+        invoiceId: line.odooInvoiceId,
+      }));
+
+      // Calculate raw statistics
+      const rawTotalQuantity = salesHistory.reduce((sum, s) => sum + s.quantity, 0);
+      const rawTotalRevenue = salesHistory.reduce((sum, s) => sum + s.revenue, 0);
+      const invoiceIds = [...new Set(invoiceLines.map(l => l.odooInvoiceId))];
+
+      // Apply context adjustments if requested
+      let adjustedTotalQuantity = rawTotalQuantity;
+      let contextAdjustments = null;
+
+      if (applyContext) {
+        const productContext = await this.purchasingContext.getProductAdjustments(
+          productId,
+          cutoffDate,
+          new Date()
+        );
+
+        if (productContext.netAdjustment !== 0) {
+          adjustedTotalQuantity = rawTotalQuantity + productContext.netAdjustment;
+          contextAdjustments = {
+            netAdjustment: productContext.netAdjustment,
+            details: productContext.adjustments,
+            explanation: productContext.adjustments.map(a =>
+              `${a.adjustment > 0 ? '+' : ''}${a.adjustment} (${a.reason})`
+            ).join('; '),
+          };
+        }
+      }
+
+      const avgDailySales = adjustedTotalQuantity / daysBack;
+
+      return {
+        productId,
+        dataSource: 'Synced Odoo Data (MongoDB)',
+        period: {
+          days: daysBack,
+          from: cutoffDate.toISOString().split('T')[0],
+          to: new Date().toISOString().split('T')[0],
+        },
+        rawStatistics: {
+          totalInvoicedQuantity: rawTotalQuantity,
+          totalRevenue: Math.round(rawTotalRevenue * 100) / 100,
+          invoiceCount: invoiceIds.length,
+        },
+        contextAdjustments,
+        adjustedStatistics: {
+          totalQuantity: adjustedTotalQuantity,
+          avgDailySales: Math.round(avgDailySales * 100) / 100,
+          avgWeeklySales: Math.round(avgDailySales * 7 * 100) / 100,
+          avgMonthlySales: Math.round(avgDailySales * 30 * 100) / 100,
+        },
+        salesHistory,
+        reasoning: this._buildSalesDataReasoning(rawTotalQuantity, contextAdjustments, daysBack, 'synced'),
+      };
+    } catch (error) {
+      console.error('Error getting synced sales data:', error.message);
+      return null; // Fall back to direct Odoo
+    }
+  }
+
+  _buildSalesDataReasoning(rawQuantity, contextAdjustments, days, source = 'direct') {
+    const sourceLabel = source === 'synced' ? 'MongoDB (synced from Odoo)' : 'Odoo (direct query)';
+    let reasoning = `Data Source: ${sourceLabel} - posted customer invoices (${days} days)\n`;
     reasoning += `Raw Invoiced Quantity: ${rawQuantity} units\n`;
 
     if (contextAdjustments) {

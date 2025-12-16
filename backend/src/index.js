@@ -79,11 +79,12 @@ if (process.env.NODE_ENV !== 'test') {
       console.warn('RAG system initialization skipped:', e.message);
     }
 
-    // Initialize Purchasing Intelligence Agent if Odoo is configured
+    // Initialize Purchasing Intelligence Agent and Data Sync if Odoo is configured
     try {
       if (process.env.ODOO_URL && process.env.ODOO_DB) {
         const { OdooDirectClient } = require('./core/agents/integrations/OdooMCP');
         const { initAgent: initPurchasingAgent } = require('./api/routes/purchasing.api');
+        const { getOdooDataSync } = require('./core/agents/services/OdooDataSync');
         const { getDb } = require('./db');
 
         const odooClient = new OdooDirectClient();
@@ -92,7 +93,13 @@ if (process.env.NODE_ENV !== 'test') {
         const db = getDb();
         await initPurchasingAgent(odooClient, db);
 
+        // Initialize and start Odoo data sync
+        const dataSync = getOdooDataSync();
+        await dataSync.init(odooClient, db);
+        dataSync.startScheduledSync();
+
         console.log('Purchasing Intelligence Agent initialized successfully');
+        console.log('Odoo data sync started (every 6 hours)');
       }
     } catch (e) {
       console.warn('Purchasing Agent initialization skipped:', e.message);

@@ -9,6 +9,7 @@ const { ForecastEngine, getForecastEngine } = require('./ForecastEngine');
 const { SupplyChainManager, getSupplyChainManager } = require('./SupplyChainManager');
 const { StockoutAnalyzer, getStockoutAnalyzer } = require('./StockoutAnalyzer');
 const { PurchasingContext, getPurchasingContext } = require('./PurchasingContext');
+const { OdooDataSync, getOdooDataSync } = require('./OdooDataSync');
 
 module.exports = {
   // Classes
@@ -17,6 +18,7 @@ module.exports = {
   SupplyChainManager,
   StockoutAnalyzer,
   PurchasingContext,
+  OdooDataSync,
 
   // Singleton getters
   getSeasonalCalendar,
@@ -24,4 +26,5 @@ module.exports = {
   getSupplyChainManager,
   getStockoutAnalyzer,
   getPurchasingContext,
+  getOdooDataSync,
 };
