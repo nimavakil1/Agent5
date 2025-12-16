@@ -286,7 +286,7 @@ class OdooDataSync {
       ['customer_rank', '>', 0],
     ], [
       'name', 'email', 'phone', 'mobile', 'country_id', 'city', 'street',
-      'customer_rank', 'active', 'lang', 'company_type',
+      'customer_rank', 'active', 'company_type',
     ], { limit: 100000 });
 
     const collection = this.db.collection(this.collections.customers);
@@ -304,7 +304,6 @@ class OdooDataSync {
         countryId: customer.country_id?.[0] || null,
         city: customer.city || null,
         street: customer.street || null,
-        language: customer.lang || null,
         companyType: customer.company_type || 'person',
         active: customer.active,
         lastUpdated: new Date(),
