@@ -1114,17 +1114,17 @@ router.post('/chat', requireAgent, async (req, res) => {
       return res.status(400).json({ error: 'message is required' });
     }
 
-    // Process the task through the agent
-    const result = await purchasingAgent.process({
-      type: 'chat',
-      description: message,
+    // Generate response using the LLM agent
+    const result = await purchasingAgent.generateResponse(message, {
+      includeTools: true,
     });
 
     res.json({
       success: true,
       data: {
-        response: result.result,
-        thinking: result.thinking,
+        response: result.content || result,
+        thinking: result.thinking || null,
+        toolsUsed: result.toolCalls || [],
       },
     });
   } catch (error) {
