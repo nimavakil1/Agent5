@@ -253,6 +253,9 @@ app.use('/api/amazon', amazonRouter); // Webhooks are public (validated by signa
 app.use('/api/odoo', requireSession, odooRouter);
 app.use('/api/ms365', requireSession, ms365Router);
 app.use('/api/bolcom', requireSession, bolcomRouter);
+// Sync endpoints without auth (internal use)
+app.use('/api/purchasing/sync', purchasingRouter);
+// All other purchasing endpoints require session
 app.use('/api/purchasing', requireSession, purchasingRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
