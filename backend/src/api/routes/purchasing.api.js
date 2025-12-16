@@ -6,6 +6,7 @@
 
 const express = require('express');
 const router = express.Router();
+const syncRouter = express.Router(); // Separate router for sync endpoints (no auth)
 
 const { PurchasingIntelligenceAgent } = require('../../core/agents/specialized/PurchasingIntelligenceAgent');
 const { getSeasonalCalendar } = require('../../core/agents/services/SeasonalCalendar');
@@ -1183,13 +1184,13 @@ router.post('/init', async (req, res) => {
   }
 });
 
-// ==================== DATA SYNC ====================
+// ==================== DATA SYNC (syncRouter - no auth) ====================
 
 /**
- * GET /api/purchasing/sync/status
+ * GET /api/odoo-sync/status
  * Get Odoo data sync status
  */
-router.get('/sync/status', async (req, res) => {
+syncRouter.get('/status', async (req, res) => {
   try {
     const dataSync = getOdooDataSync();
     const status = await dataSync.getStatus();
@@ -1204,11 +1205,11 @@ router.get('/sync/status', async (req, res) => {
 });
 
 /**
- * POST /api/purchasing/sync/run
+ * POST /api/odoo-sync/run
  * Trigger a manual data sync from Odoo
  * No auth required - internal operation
  */
-router.post('/sync/run', async (req, res) => {
+syncRouter.post('/run', async (req, res) => {
   try {
     const dataSync = getOdooDataSync();
 
@@ -1398,6 +1399,7 @@ router.get('/sync/low-stock', requireAgent, async (req, res) => {
   }
 });
 
-// Export router and init function
+// Export routers and init function
 module.exports = router;
+module.exports.syncRouter = syncRouter;
 module.exports.initAgent = initAgent;
