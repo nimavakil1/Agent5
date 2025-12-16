@@ -585,6 +585,7 @@ class OdooDataSync {
 
   /**
    * Sync stock movements for stockout analysis
+   * Uses pagination to avoid XML-RPC timeouts on large datasets
    */
   async syncStockMoves() {
     console.log('Syncing stock movements...');
@@ -593,44 +594,66 @@ class OdooDataSync {
     cutoffDate.setDate(cutoffDate.getDate() - this.config.stockMoveHistoryDays);
     const cutoffStr = cutoffDate.toISOString().split('T')[0];
 
-    // Get done stock moves (actual movements)
-    const moves = await this.odooClient.searchRead('stock.move', [
-      ['state', '=', 'done'],
-      ['date', '>=', cutoffStr],
-    ], [
-      'product_id', 'product_qty', 'date', 'reference',
-      'location_id', 'location_dest_id', 'picking_type_id',
-    ], { limit: 2000000, order: 'date desc' });
-
     const collection = this.db.collection(this.collections.stockMoves);
 
-    // Clear old data and insert fresh
+    // Clear old data first
     await collection.deleteMany({ date: { $gte: cutoffDate } });
 
-    const docs = moves.map(move => ({
-      odooId: move.id,
-      productId: move.product_id?.[0],
-      productName: move.product_id?.[1],
-      quantity: move.product_qty,
-      date: new Date(move.date),
-      reference: move.reference,
-      sourceLocation: move.location_id?.[1],
-      destLocation: move.location_dest_id?.[1],
-      pickingType: move.picking_type_id?.[1],
-      // Determine movement type
-      type: this._determineMovementType(move),
-      syncedAt: new Date(),
-    }));
+    // Fetch in batches to avoid XML-RPC timeouts
+    const batchSize = 50000;
+    let offset = 0;
+    let totalInserted = 0;
+    let hasMore = true;
 
-    if (docs.length > 0) {
+    while (hasMore) {
+      console.log(`Fetching stock moves batch at offset ${offset}...`);
+
+      const moves = await this.odooClient.searchRead('stock.move', [
+        ['state', '=', 'done'],
+        ['date', '>=', cutoffStr],
+      ], [
+        'product_id', 'product_qty', 'date', 'reference',
+        'location_id', 'location_dest_id', 'picking_type_id',
+      ], { limit: batchSize, offset, order: 'date desc' });
+
+      if (moves.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      const docs = moves.map(move => ({
+        odooId: move.id,
+        productId: move.product_id?.[0],
+        productName: move.product_id?.[1],
+        quantity: move.product_qty,
+        date: new Date(move.date),
+        reference: move.reference,
+        sourceLocation: move.location_id?.[1],
+        destLocation: move.location_dest_id?.[1],
+        pickingType: move.picking_type_id?.[1],
+        type: this._determineMovementType(move),
+        syncedAt: new Date(),
+      }));
+
+      // Insert in smaller batches for MongoDB
       for (let i = 0; i < docs.length; i += this.config.batchSize) {
         const batch = docs.slice(i, i + this.config.batchSize);
         await collection.insertMany(batch, { ordered: false });
       }
+
+      totalInserted += docs.length;
+      console.log(`Stock moves batch synced: ${docs.length} records (total: ${totalInserted})`);
+
+      // Check if we got less than batch size, meaning we're done
+      if (moves.length < batchSize) {
+        hasMore = false;
+      } else {
+        offset += batchSize;
+      }
     }
 
-    console.log(`Stock moves synced: ${docs.length} records`);
-    return { total: docs.length, inserted: docs.length, updated: 0 };
+    console.log(`Stock moves synced: ${totalInserted} records`);
+    return { total: totalInserted, inserted: totalInserted, updated: 0 };
   }
 
   /**
