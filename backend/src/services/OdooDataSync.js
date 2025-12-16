@@ -1,13 +1,16 @@
 /**
  * OdooDataSync Service
  *
- * Synchronizes data from Odoo ERP to MongoDB for the Purchasing Intelligence Agent.
+ * General-purpose service that synchronizes data from Odoo ERP to MongoDB.
+ * This data is shared across all agents that need Odoo data.
+ *
  * Syncs:
- * - Products (with stock levels, costs, dimensions)
+ * - Products (with stock levels, costs, dimensions, suppliers)
  * - Invoice lines (INVOICED quantities - source of truth for sales)
  * - Purchase orders (pending and historical)
  * - Suppliers (with lead times, MOQs)
  * - Stock movements
+ * - Customers
  *
  * Data is synced every 6 hours by default, with ability to force sync.
  */
@@ -19,14 +22,15 @@ class OdooDataSync {
     this.odooClient = config.odooClient || null;
     this.db = config.db || null;
 
-    // Collection names
+    // Collection names - generic names for shared use across agents
     this.collections = {
-      products: 'purchasing_products',
-      invoiceLines: 'purchasing_invoice_lines',
-      purchaseOrders: 'purchasing_orders',
-      suppliers: 'purchasing_suppliers',
-      stockMoves: 'purchasing_stock_moves',
-      syncLog: 'purchasing_sync_log',
+      products: 'odoo_products',
+      invoiceLines: 'odoo_invoice_lines',
+      purchaseOrders: 'odoo_purchase_orders',
+      suppliers: 'odoo_suppliers',
+      customers: 'odoo_customers',
+      stockMoves: 'odoo_stock_moves',
+      syncLog: 'odoo_sync_log',
     };
 
     // Sync configuration
@@ -78,11 +82,14 @@ class OdooDataSync {
       await products.createIndex({ odooId: 1 }, { unique: true });
       await products.createIndex({ sku: 1 });
       await products.createIndex({ supplierId: 1 });
+      await products.createIndex({ 'stock.available': 1 });
+      await products.createIndex({ categoryId: 1 });
       await products.createIndex({ lastUpdated: -1 });
 
       // Invoice lines indexes
       const invoiceLines = this.db.collection(this.collections.invoiceLines);
       await invoiceLines.createIndex({ productId: 1, invoiceDate: -1 });
+      await invoiceLines.createIndex({ customerId: 1, invoiceDate: -1 });
       await invoiceLines.createIndex({ invoiceDate: -1 });
       await invoiceLines.createIndex({ odooInvoiceId: 1 });
 
@@ -91,15 +98,25 @@ class OdooDataSync {
       await purchaseOrders.createIndex({ odooId: 1 }, { unique: true });
       await purchaseOrders.createIndex({ state: 1 });
       await purchaseOrders.createIndex({ supplierId: 1 });
+      await purchaseOrders.createIndex({ isPending: 1 });
+      await purchaseOrders.createIndex({ orderDate: -1 });
 
       // Suppliers indexes
       const suppliers = this.db.collection(this.collections.suppliers);
       await suppliers.createIndex({ odooId: 1 }, { unique: true });
+      await suppliers.createIndex({ name: 'text' });
+
+      // Customers indexes
+      const customers = this.db.collection(this.collections.customers);
+      await customers.createIndex({ odooId: 1 }, { unique: true });
+      await customers.createIndex({ email: 1 });
+      await customers.createIndex({ name: 'text' });
 
       // Stock moves indexes
       const stockMoves = this.db.collection(this.collections.stockMoves);
       await stockMoves.createIndex({ productId: 1, date: -1 });
       await stockMoves.createIndex({ date: -1 });
+      await stockMoves.createIndex({ type: 1 });
 
       console.log('OdooDataSync indexes created');
     } catch (error) {
@@ -186,6 +203,7 @@ class OdooDataSync {
 
       // Sync in order of dependencies
       stats.suppliers = await this.syncSuppliers();
+      stats.customers = await this.syncCustomers();
       stats.products = await this.syncProducts();
       stats.invoiceLines = await this.syncInvoiceLines();
       stats.purchaseOrders = await this.syncPurchaseOrders();
@@ -238,6 +256,7 @@ class OdooDataSync {
         email: supplier.email || null,
         phone: supplier.phone || null,
         country: supplier.country_id?.[1] || null,
+        countryId: supplier.country_id?.[0] || null,
         city: supplier.city || null,
         active: supplier.active,
         lastUpdated: new Date(),
@@ -255,6 +274,54 @@ class OdooDataSync {
 
     console.log(`Suppliers synced: ${inserted} inserted, ${updated} updated`);
     return { total: suppliers.length, inserted, updated };
+  }
+
+  /**
+   * Sync customers from Odoo
+   */
+  async syncCustomers() {
+    console.log('Syncing customers...');
+
+    const customers = await this.odooClient.searchRead('res.partner', [
+      ['customer_rank', '>', 0],
+    ], [
+      'name', 'email', 'phone', 'mobile', 'country_id', 'city', 'street',
+      'customer_rank', 'active', 'lang', 'company_type',
+    ], { limit: 100000 });
+
+    const collection = this.db.collection(this.collections.customers);
+    let updated = 0;
+    let inserted = 0;
+
+    for (const customer of customers) {
+      const doc = {
+        odooId: customer.id,
+        name: customer.name,
+        email: customer.email || null,
+        phone: customer.phone || null,
+        mobile: customer.mobile || null,
+        country: customer.country_id?.[1] || null,
+        countryId: customer.country_id?.[0] || null,
+        city: customer.city || null,
+        street: customer.street || null,
+        language: customer.lang || null,
+        companyType: customer.company_type || 'person',
+        active: customer.active,
+        lastUpdated: new Date(),
+      };
+
+      const result = await collection.updateOne(
+        { odooId: customer.id },
+        { $set: doc },
+        { upsert: true }
+      );
+
+      if (result.upsertedCount > 0) inserted++;
+      else if (result.modifiedCount > 0) updated++;
+    }
+
+    console.log(`Customers synced: ${inserted} inserted, ${updated} updated`);
+    return { total: customers.length, inserted, updated };
   }
 
   /**
@@ -648,35 +715,45 @@ class OdooDataSync {
     };
   }
 
-  // ==================== QUERY METHODS FOR AGENT ====================
+  // ==================== QUERY METHODS (for all agents) ====================
 
   /**
-   * Get product with all related data
+   * Get the MongoDB collection for direct queries
    */
-  async getProduct(productId) {
+  getCollection(name) {
+    if (!this.db) return null;
+    return this.db.collection(this.collections[name]);
+  }
+
+  /**
+   * Get product by ID or SKU
+   */
+  async getProduct(productIdOrSku) {
     if (!this.db) return null;
 
-    const product = await this.db.collection(this.collections.products)
-      .findOne({ odooId: productId });
+    const query = typeof productIdOrSku === 'number'
+      ? { odooId: productIdOrSku }
+      : { sku: productIdOrSku };
+
+    const product = await this.db.collection(this.collections.products).findOne(query);
 
     if (!product) return null;
 
-    // Get recent sales
+    // Enrich with recent sales and pending orders
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const recentSales = await this.db.collection(this.collections.invoiceLines)
       .aggregate([
-        { $match: { productId, invoiceDate: { $gte: thirtyDaysAgo } } },
+        { $match: { productId: product.odooId, invoiceDate: { $gte: thirtyDaysAgo } } },
         { $group: { _id: null, totalQty: { $sum: '$quantity' }, totalRevenue: { $sum: '$subtotal' } } },
       ]).toArray();
 
-    // Get pending POs
     const pendingPOs = await this.db.collection(this.collections.purchaseOrders)
       .aggregate([
-        { $match: { isPending: true, 'lines.productId': productId } },
+        { $match: { isPending: true, 'lines.productId': product.odooId } },
         { $unwind: '$lines' },
-        { $match: { 'lines.productId': productId } },
+        { $match: { 'lines.productId': product.odooId } },
         { $group: { _id: null, pendingQty: { $sum: '$lines.quantityPending' } } },
       ]).toArray();
 
@@ -685,6 +762,25 @@ class OdooDataSync {
       recentSales: recentSales[0] || { totalQty: 0, totalRevenue: 0 },
       pendingOrders: pendingPOs[0]?.pendingQty || 0,
     };
+  }
+
+  /**
+   * Search products by name or SKU
+   */
+  async searchProducts(query, limit = 50) {
+    if (!this.db) return [];
+
+    const regex = new RegExp(query, 'i');
+    return this.db.collection(this.collections.products)
+      .find({
+        $or: [
+          { name: regex },
+          { sku: regex },
+          { barcode: query },
+        ],
+      })
+      .limit(limit)
+      .toArray();
   }
 
   /**
@@ -745,13 +841,38 @@ class OdooDataSync {
   }
 
   /**
+   * Get customer purchase history
+   */
+  async getCustomerPurchaseHistory(customerId, days = 365) {
+    if (!this.db) return [];
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    return this.db.collection(this.collections.invoiceLines)
+      .aggregate([
+        { $match: { customerId, invoiceDate: { $gte: cutoff } } },
+        {
+          $group: {
+            _id: '$productId',
+            productName: { $first: '$productName' },
+            totalQuantity: { $sum: '$quantity' },
+            totalRevenue: { $sum: '$subtotal' },
+            orderCount: { $sum: 1 },
+            lastPurchase: { $max: '$invoiceDate' },
+          },
+        },
+        { $sort: { totalRevenue: -1 } },
+      ]).toArray();
+  }
+
+  /**
    * Get products needing reorder (low stock)
    */
   async getLowStockProducts(threshold = 'reorderPoint') {
     if (!this.db) return [];
 
     // Get products where available stock is below a threshold
-    // For now, use a simple heuristic: stock < 30 days of average sales
     const products = await this.db.collection(this.collections.products)
       .find({ 'stock.available': { $gt: 0, $lt: 100 } })
       .toArray();
@@ -799,6 +920,94 @@ class OdooDataSync {
       .find(query)
       .sort({ expectedDate: 1 })
       .toArray();
+  }
+
+  /**
+   * Get supplier by ID
+   */
+  async getSupplier(supplierId) {
+    if (!this.db) return null;
+
+    return this.db.collection(this.collections.suppliers)
+      .findOne({ odooId: supplierId });
+  }
+
+  /**
+   * Get customer by ID or email
+   */
+  async getCustomer(customerIdOrEmail) {
+    if (!this.db) return null;
+
+    const query = typeof customerIdOrEmail === 'number'
+      ? { odooId: customerIdOrEmail }
+      : { email: customerIdOrEmail };
+
+    return this.db.collection(this.collections.customers).findOne(query);
+  }
+
+  /**
+   * Get top selling products
+   */
+  async getTopSellingProducts(days = 30, limit = 20) {
+    if (!this.db) return [];
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    return this.db.collection(this.collections.invoiceLines)
+      .aggregate([
+        { $match: { invoiceDate: { $gte: cutoff } } },
+        {
+          $group: {
+            _id: '$productId',
+            productName: { $first: '$productName' },
+            totalQuantity: { $sum: '$quantity' },
+            totalRevenue: { $sum: '$subtotal' },
+            orderCount: { $sum: 1 },
+          },
+        },
+        { $sort: { totalRevenue: -1 } },
+        { $limit: limit },
+      ]).toArray();
+  }
+
+  /**
+   * Get sales summary for a date range
+   */
+  async getSalesSummary(startDate, endDate) {
+    if (!this.db) return null;
+
+    const result = await this.db.collection(this.collections.invoiceLines)
+      .aggregate([
+        {
+          $match: {
+            invoiceDate: {
+              $gte: new Date(startDate),
+              $lte: new Date(endDate),
+            },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$subtotal' },
+            totalQuantity: { $sum: '$quantity' },
+            orderCount: { $sum: 1 },
+            uniqueProducts: { $addToSet: '$productId' },
+            uniqueCustomers: { $addToSet: '$customerId' },
+          },
+        },
+      ]).toArray();
+
+    if (result.length === 0) return null;
+
+    return {
+      totalRevenue: result[0].totalRevenue,
+      totalQuantity: result[0].totalQuantity,
+      orderCount: result[0].orderCount,
+      uniqueProducts: result[0].uniqueProducts.length,
+      uniqueCustomers: result[0].uniqueCustomers.length,
+    };
   }
 }
 

@@ -19,7 +19,7 @@ const { getForecastEngine } = require('../services/ForecastEngine');
 const { getSupplyChainManager } = require('../services/SupplyChainManager');
 const { getStockoutAnalyzer } = require('../services/StockoutAnalyzer');
 const { getPurchasingContext } = require('../services/PurchasingContext');
-const { getOdooDataSync } = require('../services/OdooDataSync');
+const { getOdooDataSync } = require('../../../services/OdooDataSync');
 
 class PurchasingIntelligenceAgent extends LLMAgent {
   constructor(config = {}) {

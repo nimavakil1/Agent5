@@ -13,7 +13,7 @@ const { getForecastEngine } = require('../../core/agents/services/ForecastEngine
 const { getSupplyChainManager } = require('../../core/agents/services/SupplyChainManager');
 const { getStockoutAnalyzer } = require('../../core/agents/services/StockoutAnalyzer');
 const { getPurchasingContext } = require('../../core/agents/services/PurchasingContext');
-const { getOdooDataSync } = require('../../core/agents/services/OdooDataSync');
+const { getOdooDataSync } = require('../../services/OdooDataSync');
 
 // Singleton agent instance
 let purchasingAgent = null;

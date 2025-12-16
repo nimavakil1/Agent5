@@ -84,7 +84,7 @@ if (process.env.NODE_ENV !== 'test') {
       if (process.env.ODOO_URL && process.env.ODOO_DB) {
         const { OdooDirectClient } = require('./core/agents/integrations/OdooMCP');
         const { initAgent: initPurchasingAgent } = require('./api/routes/purchasing.api');
-        const { getOdooDataSync } = require('./core/agents/services/OdooDataSync');
+        const { getOdooDataSync } = require('./services/OdooDataSync');
         const { getDb } = require('./db');
 
         const odooClient = new OdooDirectClient();
