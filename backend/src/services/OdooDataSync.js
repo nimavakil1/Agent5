@@ -287,7 +287,7 @@ class OdooDataSync {
     ], [
       'name', 'email', 'phone', 'mobile', 'country_id', 'city', 'street',
       'customer_rank', 'active', 'company_type',
-    ], { limit: 500000 });
+    ], { limit: 2000000 });
 
     const collection = this.db.collection(this.collections.customers);
     let updated = 0;
@@ -344,7 +344,7 @@ class OdooDataSync {
     // Get supplier info for all products
     const supplierInfos = await this.odooClient.searchRead('product.supplierinfo', [], [
       'product_tmpl_id', 'partner_id', 'price', 'min_qty', 'delay', 'currency_id',
-    ], { limit: 500000 });
+    ], { limit: 2000000 });
 
     // Build supplier info map by product template
     const supplierInfoMap = new Map();
@@ -443,7 +443,7 @@ class OdooDataSync {
       ['invoice_date', '>=', cutoffStr],
     ], [
       'name', 'invoice_date', 'partner_id', 'amount_total', 'currency_id',
-    ], { limit: 500000 });
+    ], { limit: 2000000 });
 
     const invoiceMap = new Map(invoices.map(inv => [inv.id, inv]));
     const invoiceIds = invoices.map(inv => inv.id);
@@ -461,7 +461,7 @@ class OdooDataSync {
     ], [
       'move_id', 'product_id', 'quantity', 'price_unit', 'price_subtotal',
       'discount', 'create_date',
-    ], { limit: 500000 });
+    ], { limit: 2000000 });
 
     const collection = this.db.collection(this.collections.invoiceLines);
 
@@ -600,7 +600,7 @@ class OdooDataSync {
     ], [
       'product_id', 'product_qty', 'date', 'reference',
       'location_id', 'location_dest_id', 'picking_type_id',
-    ], { limit: 1000000, order: 'date desc' });
+    ], { limit: 2000000, order: 'date desc' });
 
     const collection = this.db.collection(this.collections.stockMoves);
 
