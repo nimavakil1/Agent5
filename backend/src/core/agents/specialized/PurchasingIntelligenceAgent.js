@@ -736,10 +736,15 @@ Example reasoning format:
    * Get invoiced sales from synced MongoDB data (faster than direct Odoo)
    */
   async _getInvoicedSalesFromSync(productId, sku, daysBack, applyContext) {
+    const db = this.db || this.dataSync?.db;
+    if (!db) {
+      return null; // No database available
+    }
+
     try {
       // Resolve product ID from SKU if needed
       if (!productId && sku) {
-        const product = await this.db.collection('odoo_products')
+        const product = await db.collection('odoo_products')
           .findOne({ sku });
         if (product) {
           productId = product.odooId;
@@ -754,7 +759,7 @@ Example reasoning format:
       cutoffDate.setDate(cutoffDate.getDate() - daysBack);
 
       // Get sales from synced invoice lines
-      const invoiceLines = await this.db.collection('odoo_invoice_lines')
+      const invoiceLines = await db.collection('odoo_invoice_lines')
         .find({
           productId,
           invoiceDate: { $gte: cutoffDate },
@@ -1190,8 +1195,9 @@ Example reasoning format:
     try {
       // Try to get stock from synced data first (faster, no Odoo dependency)
       let product = null;
-      if (this.db) {
-        const syncedProduct = await this.db.collection('odoo_products').findOne({ odooId: product_id });
+      const db = this.db || this.dataSync?.db;
+      if (db) {
+        const syncedProduct = await db.collection('odoo_products').findOne({ odooId: product_id });
         if (syncedProduct) {
           product = {
             id: syncedProduct.odooId,
@@ -1226,8 +1232,8 @@ Example reasoning format:
 
       // Find pending POs for this product from synced data
       let pendingQuantity = 0;
-      if (this.db) {
-        const pendingPOs = await this.db.collection('odoo_purchase_orders')
+      if (db) {
+        const pendingPOs = await db.collection('odoo_purchase_orders')
           .find({ state: { $in: ['draft', 'sent', 'to approve', 'purchase'] } })
           .toArray();
         for (const po of pendingPOs) {
