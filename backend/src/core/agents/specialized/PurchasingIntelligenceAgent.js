@@ -615,7 +615,8 @@ Example reasoning format:
     const { product_id, sku, days_back = 365, apply_context = true } = params;
 
     // Try to use synced data first (faster, less load on Odoo)
-    if (this.config.preferSyncedData && this.db) {
+    const hasDb = this.db || this.dataSync?.db;
+    if (this.config.preferSyncedData && hasDb) {
       const syncedResult = await this._getInvoicedSalesFromSync(product_id, sku, days_back, apply_context);
       if (syncedResult && !syncedResult.error) {
         return syncedResult;
