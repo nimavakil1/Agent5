@@ -343,16 +343,16 @@ class OdooDataSync {
   async syncProducts() {
     console.log('Syncing products...');
 
-    // Get all stockable products
+    // Get all stockable products (including inactive for analysis)
     const products = await this.odooClient.searchRead('product.product', [
       ['type', '=', 'product'],
-      ['active', '=', true],
     ], [
       'name', 'default_code', 'barcode', 'categ_id',
       'qty_available', 'virtual_available', 'incoming_qty', 'outgoing_qty',
       'standard_price', 'list_price',
       'volume', 'weight',
       'seller_ids', 'active',
+      'sale_ok', 'purchase_ok',  // Can be sold / Can be purchased flags
     ], { limit: 50000 });
 
     // Get supplier info for all products
@@ -422,7 +422,11 @@ class OdooDataSync {
           leadTimeDays: primarySupplier.leadTimeDays,
         } : null,
 
-        active: product.active,
+        // Product status flags
+        active: product.active !== false,  // Default to true if not set
+        canBeSold: product.sale_ok !== false,  // "Can be Sold" in Odoo
+        canBePurchased: product.purchase_ok !== false,  // "Can be Purchased" in Odoo
+
         lastUpdated: new Date(),
       };
 
@@ -889,6 +893,43 @@ class OdooDataSync {
       })
       .limit(limit)
       .toArray();
+  }
+
+  /**
+   * Get product status statistics (canBeSold, canBePurchased)
+   */
+  async getProductStatusStats() {
+    if (!this.db) return { error: 'Database not connected' };
+
+    const collection = this.db.collection(this.collections.products);
+
+    const [
+      total,
+      canBePurchased,
+      canBeSold,
+      both,
+      neither,
+      active,
+    ] = await Promise.all([
+      collection.countDocuments({}),
+      collection.countDocuments({ canBePurchased: true }),
+      collection.countDocuments({ canBeSold: true }),
+      collection.countDocuments({ canBePurchased: true, canBeSold: true }),
+      collection.countDocuments({ canBePurchased: { $ne: true }, canBeSold: { $ne: true } }),
+      collection.countDocuments({ active: true }),
+    ]);
+
+    return {
+      total,
+      canBePurchased,
+      canBeSold,
+      both,
+      neither,
+      purchaseOnly: canBePurchased - both,
+      saleOnly: canBeSold - both,
+      active,
+      inactive: total - active,
+    };
   }
 
   /**

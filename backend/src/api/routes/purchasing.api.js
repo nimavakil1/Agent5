@@ -1206,6 +1206,24 @@ syncRouter.get('/status', async (req, res) => {
 });
 
 /**
+ * GET /api/odoo-sync/product-stats
+ * Get product status statistics (canBeSold, canBePurchased breakdown)
+ */
+syncRouter.get('/product-stats', async (req, res) => {
+  try {
+    const dataSync = getOdooDataSync();
+    const stats = await dataSync.getProductStatusStats();
+
+    res.json({
+      success: true,
+      data: stats,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/odoo-sync/run
  * Trigger a manual data sync from Odoo
  * No auth required - internal operation
