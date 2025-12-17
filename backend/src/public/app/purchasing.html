@@ -228,8 +228,8 @@
       </div>
     </div>
 
-    <!-- Calculators Section -->
-    <div class="mt-8 bg-white rounded-lg shadow">
+    <!-- Calculators Section - Hidden for now -->
+    <div class="mt-8 bg-white rounded-lg shadow hidden">
       <div class="px-6 py-4 border-b border-gray-200">
         <h2 class="text-lg font-semibold text-gray-900">
           <i class="fas fa-calculator text-purple-600 mr-2"></i>
@@ -425,7 +425,15 @@
       container.classList.remove('hidden');
       noRecs.classList.add('hidden');
 
-      container.innerHTML = filtered.map(rec => `
+      container.innerHTML = filtered.map(rec => {
+        // Data comes from nested objects: currentState and calculations
+        const currentStock = rec.currentState?.currentStock ?? rec.product?.currentStock ?? 0;
+        const incoming = rec.currentState?.incoming ?? 0;
+        const daysOfStock = rec.currentState?.daysOfStock ?? 0;
+        const avgDailySales = rec.calculations?.avgDailySales?.toFixed(2) ?? '0';
+        const orderQty = rec.orderQuantity ?? rec.recommendation?.orderQuantity ?? 0;
+
+        return `
         <div class="urgency-${rec.urgency} rounded-lg p-4 transition hover:shadow-md">
           <div class="flex justify-between items-start">
             <div>
@@ -436,32 +444,36 @@
               ${rec.urgency?.toUpperCase()}
             </span>
           </div>
-          <div class="mt-3 grid grid-cols-4 gap-4 text-sm">
+          <div class="mt-3 grid grid-cols-5 gap-4 text-sm">
             <div>
-              <p class="text-gray-500">Current Stock</p>
-              <p class="font-semibold">${rec.currentStock || 0}</p>
+              <p class="text-gray-500">Stock</p>
+              <p class="font-semibold">${currentStock}</p>
             </div>
             <div>
               <p class="text-gray-500">Incoming</p>
-              <p class="font-semibold">${rec.incoming || 0}</p>
+              <p class="font-semibold">${incoming}</p>
             </div>
             <div>
-              <p class="text-gray-500">Days of Stock</p>
-              <p class="font-semibold">${rec.daysOfStock || 0}</p>
+              <p class="text-gray-500">Days Left</p>
+              <p class="font-semibold ${daysOfStock < 14 ? 'text-red-600' : daysOfStock < 30 ? 'text-amber-600' : ''}">${daysOfStock}d</p>
             </div>
             <div>
-              <p class="text-gray-500">Avg Daily Sales</p>
-              <p class="font-semibold">${rec.avgDailySales || 0}</p>
+              <p class="text-gray-500">Daily Sales</p>
+              <p class="font-semibold">${avgDailySales}</p>
+            </div>
+            <div>
+              <p class="text-gray-500">Order Qty</p>
+              <p class="font-semibold text-purple-600">${orderQty > 0 ? orderQty : '-'}</p>
             </div>
           </div>
-          ${rec.reorderStatus?.recommendation ? `
+          ${rec.reasoning ? `
             <div class="mt-3 p-2 bg-white bg-opacity-50 rounded text-sm">
               <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
-              ${rec.reorderStatus.recommendation}
+              ${rec.reasoning.substring(0, 200)}${rec.reasoning.length > 200 ? '...' : ''}
             </div>
           ` : ''}
         </div>
-      `).join('');
+      `;}).join('');
     }
 
     function getUrgencyBadgeClass(urgency) {
