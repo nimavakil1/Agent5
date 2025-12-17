@@ -33,14 +33,6 @@ class SeasonalCalendar {
         description: 'School supplies and office equipment surge',
       },
       {
-        name: 'Back to Office',
-        startDay: 1, startMonth: 8,  // Sep 1
-        endDay: 30, endMonth: 8,     // Sep 30
-        categories: ['office_supplies', 'furniture', 'electronics', 'ergonomic'],
-        demandMultiplier: 1.5,
-        description: 'Post-vacation office restocking',
-      },
-      {
         name: 'Black Friday Week',
         startDay: 20, startMonth: 10, // Nov 20
         endDay: 30, endMonth: 10,     // Nov 30
@@ -57,12 +49,12 @@ class SeasonalCalendar {
         description: 'Year-end gift giving and corporate purchases',
       },
       {
-        name: 'January Sales',
+        name: 'New Year & Back to Office',
         startDay: 3, startMonth: 0,   // Jan 3
         endDay: 31, endMonth: 0,      // Jan 31
-        categories: ['all'],
-        demandMultiplier: 1.3,
-        description: 'Post-Christmas clearance and sales period',
+        categories: ['office_supplies', 'furniture', 'electronics', 'ergonomic', 'all'],
+        demandMultiplier: 1.5,
+        description: 'Post-Christmas sales and office restocking after holidays',
       },
     ];
 
@@ -309,18 +301,32 @@ class SeasonalCalendar {
   }
 
   /**
+   * Get the NEXT upcoming CNY closure period (always in the future)
+   */
+  getNextCNYClosurePeriod(date = new Date()) {
+    const year = date.getFullYear();
+
+    // Check this year's CNY first
+    const cnyThisYear = this.getCNYClosurePeriod(year);
+
+    // If this year's CNY closure hasn't started yet, use it
+    if (date < cnyThisYear.closureStart) {
+      return cnyThisYear;
+    }
+
+    // Otherwise, use next year's CNY
+    return this.getCNYClosurePeriod(year + 1);
+  }
+
+  /**
    * Check if supply chain is impacted (CNY closure or major holiday)
-   * Always checks the NEXT upcoming CNY, not just current year's
+   * Always checks the NEXT upcoming CNY (always in the future relative to today)
    */
   isSupplyChainImpacted(date = new Date()) {
     const year = date.getFullYear();
 
-    // Get this year's and next year's CNY to find the NEXT upcoming one
-    const cnyThisYear = this.getCNYClosurePeriod(year);
-    const cnyNextYear = this.getCNYClosurePeriod(year + 1);
-
-    // Determine which CNY to use - if this year's CNY has fully passed, use next year's
-    const cny = date > cnyThisYear.fullRecovery ? cnyNextYear : cnyThisYear;
+    // Get the next upcoming CNY (always in the future)
+    const cny = this.getNextCNYClosurePeriod(date);
 
     // Check if within CNY closure
     if (date >= cny.closureStart && date <= cny.fullRecovery) {

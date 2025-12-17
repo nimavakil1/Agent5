@@ -277,18 +277,18 @@ router.get('/calendar/supply-chain-status', (req, res) => {
 
 // ==================== SUPPLY CHAIN ====================
 
-/**
- * POST /api/purchasing/calculate/reorder-point
- * Calculate reorder point
- */
+// ==================== CALCULATORS (HIDDEN FOR NOW) ====================
+// These calculator endpoints are disabled but preserved for future use.
+// To re-enable, uncomment the routes below.
+
+/*
+// POST /api/purchasing/calculate/reorder-point - Calculate reorder point
 router.post('/calculate/reorder-point', (req, res) => {
   try {
     const { avg_daily_demand, demand_std_dev, lead_time_days, service_level } = req.body;
-
     if (!avg_daily_demand) {
       return res.status(400).json({ error: 'avg_daily_demand is required' });
     }
-
     const manager = getSupplyChainManager();
     const result = manager.calculateReorderPoint({
       avgDailyDemand: avg_daily_demand,
@@ -296,25 +296,19 @@ router.post('/calculate/reorder-point', (req, res) => {
       shippingMethod: 'sea',
       serviceLevel: service_level || 0.95,
     });
-
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * POST /api/purchasing/calculate/eoq
- * Calculate Economic Order Quantity
- */
+// POST /api/purchasing/calculate/eoq - Calculate Economic Order Quantity
 router.post('/calculate/eoq', (req, res) => {
   try {
     const { annual_demand, unit_cost, ordering_cost, holding_cost_rate, min_order_qty } = req.body;
-
     if (!annual_demand || !unit_cost) {
       return res.status(400).json({ error: 'annual_demand and unit_cost are required' });
     }
-
     const manager = getSupplyChainManager();
     const result = manager.calculateEOQ({
       annualDemand: annual_demand,
@@ -323,25 +317,19 @@ router.post('/calculate/eoq', (req, res) => {
       holdingCostRate: holding_cost_rate || 0.25,
       minimumOrderQuantity: min_order_qty || 1,
     });
-
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * POST /api/purchasing/calculate/cny-order
- * Calculate CNY order quantity and deadline
- */
+// POST /api/purchasing/calculate/cny-order - Calculate CNY order quantity and deadline
 router.post('/calculate/cny-order', (req, res) => {
   try {
     const { avg_daily_demand, current_stock, pending_orders, year } = req.body;
-
     if (!avg_daily_demand) {
       return res.status(400).json({ error: 'avg_daily_demand is required' });
     }
-
     const manager = getSupplyChainManager();
     const result = manager.calculateCNYOrder({
       avgDailyDemand: avg_daily_demand,
@@ -349,56 +337,54 @@ router.post('/calculate/cny-order', (req, res) => {
       pendingOrders: pending_orders || 0,
       year: year || new Date().getFullYear(),
     });
-
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * POST /api/purchasing/calculate/shipping-options
- * Compare shipping options
- */
+// POST /api/purchasing/calculate/shipping-options - Compare shipping options
 router.post('/calculate/shipping-options', (req, res) => {
   try {
     const { order_quantity, unit_cost, urgency_days } = req.body;
-
     if (!order_quantity || !unit_cost) {
       return res.status(400).json({ error: 'order_quantity and unit_cost are required' });
     }
-
     const manager = getSupplyChainManager();
     const result = manager.compareShippingOptions({
       orderQuantity: order_quantity,
       unitCost: unit_cost,
       urgencyDays: urgency_days,
     });
-
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+*/
+// ==================== END CALCULATORS (HIDDEN) ====================
 
 /**
  * GET /api/purchasing/lead-time
- * Get lead time information
+ * Get lead time information for a supplier
  */
-router.get('/lead-time', (req, res) => {
+router.get('/lead-time', async (req, res) => {
   try {
-    const { shipping_method } = req.query;
+    const { shipping_method, supplier_id } = req.query;
     const manager = getSupplyChainManager();
 
-    const result = manager.getTotalLeadTime(null, shipping_method || 'sea');
+    // Use async method to fetch supplier-specific lead time from DB
+    const supplierId = supplier_id ? parseInt(supplier_id) : null;
+    const result = await manager.getTotalLeadTimeAsync(supplierId, shipping_method || 'sea');
 
-    // Include configuration info for transparency
     res.json({
       success: true,
       data: {
         ...result,
-        configuration: manager.defaults,
-        configurable: 'Set environment variables: SUPPLIER_LEAD_TIME, SEA_FREIGHT_TIME, CUSTOMS_CLEARANCE, INTERNAL_PROCESSING, BUFFER_DAYS',
+        note: supplierId
+          ? 'Lead time based on supplier data'
+          : 'Using default lead times. Pass supplier_id for supplier-specific times.',
+        defaults: manager.defaults,
       },
     });
   } catch (error) {

@@ -17,16 +17,20 @@ class SupplyChainManager {
   constructor(config = {}) {
     this.seasonalCalendar = getSeasonalCalendar();
 
-    // Lead times (in days) - can be configured via config or environment variables
+    // Default lead times (in days) - used when supplier-specific data not available
+    // These are FALLBACK defaults only - actual values should come from supplier data
     this.defaults = {
-      supplierLeadTime: config.supplierLeadTime || parseInt(process.env.SUPPLIER_LEAD_TIME) || 7,
-      seaFreightTime: config.seaFreightTime || parseInt(process.env.SEA_FREIGHT_TIME) || 40,
-      airFreightTime: config.airFreightTime || parseInt(process.env.AIR_FREIGHT_TIME) || 5,
-      railFreightTime: config.railFreightTime || parseInt(process.env.RAIL_FREIGHT_TIME) || 18,
-      customsClearance: config.customsClearance || parseInt(process.env.CUSTOMS_CLEARANCE) || 3,
-      internalProcessing: config.internalProcessing || parseInt(process.env.INTERNAL_PROCESSING) || 2,
-      bufferDays: config.bufferDays || parseInt(process.env.BUFFER_DAYS) || 5,
+      supplierLeadTime: 14,        // Default supplier preparation time
+      seaFreightTime: 40,          // China to Belgium via sea
+      airFreightTime: 5,           // China to Belgium via air
+      railFreightTime: 18,         // China to Belgium via rail
+      customsClearance: 3,         // Belgian customs processing
+      internalProcessing: 2,       // Warehouse receiving
+      bufferDays: 5,               // Safety buffer
     };
+
+    // Database reference for supplier data lookup
+    this.db = config.db || null;
 
     // Shipping cost multipliers (relative to sea freight)
     this.shippingCostMultipliers = {
@@ -102,11 +106,52 @@ class SupplyChainManager {
   }
 
   /**
-   * Get total lead time for a supplier
+   * Set database reference for supplier lookups
    */
-  getTotalLeadTime(supplierId = null, shippingMethod = 'sea') {
-    const supplier = supplierId ? this.suppliers.get(supplierId) : null;
-    const supplierLead = supplier?.leadTimeDays || this.defaults.supplierLeadTime;
+  setDatabase(db) {
+    this.db = db;
+  }
+
+  /**
+   * Get supplier lead time from synced data or registered suppliers
+   */
+  async getSupplierLeadTime(supplierId) {
+    // First check registered suppliers (in-memory)
+    const registered = supplierId ? this.suppliers.get(supplierId) : null;
+    if (registered?.leadTimeDays) {
+      return registered.leadTimeDays;
+    }
+
+    // Then check synced supplier data from MongoDB
+    if (this.db && supplierId) {
+      try {
+        const supplier = await this.db.collection('odoo_suppliers').findOne({ odooId: supplierId });
+        if (supplier?.leadTime) {
+          return supplier.leadTime;
+        }
+      } catch (e) {
+        // Fall through to default
+      }
+    }
+
+    return this.defaults.supplierLeadTime;
+  }
+
+  /**
+   * Get total lead time for a supplier
+   * @param {number} supplierId - Supplier ID (looks up lead time from supplier data)
+   * @param {string} shippingMethod - 'sea', 'air', or 'rail'
+   * @param {number} supplierLeadTimeOverride - Override supplier lead time if known
+   */
+  getTotalLeadTime(supplierId = null, shippingMethod = 'sea', supplierLeadTimeOverride = null) {
+    // Use override if provided, otherwise check registered suppliers
+    let supplierLead;
+    if (supplierLeadTimeOverride !== null) {
+      supplierLead = supplierLeadTimeOverride;
+    } else {
+      const supplier = supplierId ? this.suppliers.get(supplierId) : null;
+      supplierLead = supplier?.leadTimeDays || this.defaults.supplierLeadTime;
+    }
 
     let shippingTime;
     switch (shippingMethod) {
@@ -137,7 +182,16 @@ class SupplyChainManager {
       buffer: this.defaults.bufferDays,
       totalDays: totalLeadTime,
       description: `${totalLeadTime} days total (${supplierLead}d production + ${shippingTime}d ${shippingMethod} + ${this.defaults.customsClearance + this.defaults.internalProcessing}d processing + ${this.defaults.bufferDays}d buffer)`,
+      source: supplierLeadTimeOverride !== null ? 'override' : (supplierId ? 'supplier_data' : 'default'),
     };
+  }
+
+  /**
+   * Get total lead time async (fetches supplier data from DB)
+   */
+  async getTotalLeadTimeAsync(supplierId = null, shippingMethod = 'sea') {
+    const supplierLead = await this.getSupplierLeadTime(supplierId);
+    return this.getTotalLeadTime(supplierId, shippingMethod, supplierLead);
   }
 
   /**
