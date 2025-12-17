@@ -1188,29 +1188,53 @@ Example reasoning format:
     const { product_id, include_cny_buffer = true } = params;
 
     try {
-      // Get all necessary data
-      const [salesData, stockLevels, productContext, pendingPOs] = await Promise.all([
+      // Try to get stock from synced data first (faster, no Odoo dependency)
+      let product = null;
+      if (this.db) {
+        const syncedProduct = await this.db.collection('odoo_products').findOne({ odooId: product_id });
+        if (syncedProduct) {
+          product = {
+            id: syncedProduct.odooId,
+            name: syncedProduct.name,
+            sku: syncedProduct.sku,
+            currentStock: syncedProduct.stock?.available || 0,
+            forecastedStock: syncedProduct.stock?.forecasted || 0,
+            incoming: syncedProduct.stock?.incoming || 0,
+            outgoing: syncedProduct.stock?.outgoing || 0,
+          };
+        }
+      }
+
+      // Get other necessary data (sales don't depend on Odoo client)
+      const [salesData, productContext] = await Promise.all([
         this._getInvoicedSales({ product_id, days_back: 365, apply_context: true }),
-        this._getStockLevels({ product_ids: [product_id] }),
         this._getProductContext({ product_id }),
-        this._getPendingPurchaseOrders({}),
       ]);
 
-      if (salesData.error) return { error: salesData.error };
+      // Fallback to live Odoo if no synced product found
+      if (!product && this.odooClient) {
+        const stockLevels = await this._getStockLevels({ product_ids: [product_id] });
+        product = stockLevels.products?.[0];
+      }
 
-      const product = stockLevels.products[0];
-      if (!product) return { error: 'Product not found in stock' };
+      if (salesData.error) return { error: salesData.error };
+      if (!product) return { error: 'Product not found in stock (sync data unavailable)' };
 
       const avgDailySales = salesData.adjustedStatistics.avgDailySales;
       const currentStock = product.currentStock;
       const incoming = product.incoming;
 
-      // Find pending POs for this product
+      // Find pending POs for this product from synced data
       let pendingQuantity = 0;
-      for (const po of pendingPOs.orders || []) {
-        for (const item of po.items || []) {
-          if (item.productId === product_id) {
-            pendingQuantity += item.pending;
+      if (this.db) {
+        const pendingPOs = await this.db.collection('odoo_purchase_orders')
+          .find({ state: { $in: ['draft', 'sent', 'to approve', 'purchase'] } })
+          .toArray();
+        for (const po of pendingPOs) {
+          for (const item of po.items || []) {
+            if (item.productId === product_id) {
+              pendingQuantity += (item.quantity - item.received) || 0;
+            }
           }
         }
       }
