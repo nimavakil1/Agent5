@@ -123,8 +123,13 @@ Example reasoning format:
    * Always fetches from the singleton to ensure we get the initialized db
    */
   _getDb() {
-    if (this.db) return this.db;
+    if (this.db) {
+      return this.db;
+    }
     const dataSync = getOdooDataSync();
+    if (!dataSync.db) {
+      console.log('WARNING: _getDb() - dataSync.db is NULL');
+    }
     return dataSync.db;
   }
 
