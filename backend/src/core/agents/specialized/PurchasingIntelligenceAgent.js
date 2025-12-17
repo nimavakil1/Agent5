@@ -851,7 +851,7 @@ Example reasoning format:
   }
 
   async _getStockLevels(params) {
-    const { product_ids, low_stock_only = false } = params;
+    const { product_ids, low_stock_only = false, purchasable_only = false } = params;
 
     if (!this.odooClient) {
       return { error: 'Odoo client not configured' };
@@ -864,6 +864,9 @@ Example reasoning format:
       }
       if (low_stock_only) {
         domain.push(['qty_available', '<', 10]);
+      }
+      if (purchasable_only) {
+        domain.push(['purchase_ok', '=', true]);  // Only products that can be purchased
       }
 
       const products = await this.odooClient.searchRead('product.product', domain, [
@@ -1705,8 +1708,10 @@ Example reasoning format:
 
       if (this.dataSync.db) {
         // Get products that might need reordering from synced data
+        // Only include products that CAN be purchased (excludes discontinued)
         // Low stock: available < 100 OR low days of cover
         products = await this.dataSync.getCollection('products')?.find({
+          canBePurchased: true,  // Only products we can actually reorder
           $or: [
             { 'stock.available': { $lt: 100, $gt: 0 } },
             { 'stock.available': { $eq: 0 } },
@@ -1716,7 +1721,7 @@ Example reasoning format:
 
       // Fallback to live Odoo query if no synced data
       if (products.length === 0 && this.odooClient) {
-        const stockLevels = await this._getStockLevels({ low_stock_only: true });
+        const stockLevels = await this._getStockLevels({ low_stock_only: true, purchasable_only: true });
         products = stockLevels.products?.map(p => ({
           odooId: p.id,
           name: p.name,
@@ -1813,8 +1818,10 @@ Example reasoning format:
     const { threshold_percent = 20, compare_weeks = 4 } = params;
 
     try {
-      // Get products from synced data
-      const products = await this.dataSync.getCollection('products')?.find({}).limit(100).toArray() || [];
+      // Get only purchasable products from synced data
+      const products = await this.dataSync.getCollection('products')?.find({
+        canBePurchased: true,  // Only products we can reorder
+      }).limit(100).toArray() || [];
 
       const trends = {
         growing: [],
