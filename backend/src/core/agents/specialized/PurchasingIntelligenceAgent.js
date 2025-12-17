@@ -1204,6 +1204,8 @@ Example reasoning format:
     try {
       // Try to get stock from synced data first (faster, no Odoo dependency)
       let product = null;
+      let supplierLeadTimeDays = null;
+      let supplierMOQ = null;
       const db = this._getDb();
       if (db) {
         const syncedProduct = await db.collection('odoo_products').findOne({ odooId: product_id });
@@ -1217,6 +1219,11 @@ Example reasoning format:
             incoming: syncedProduct.stock?.incoming || 0,
             outgoing: syncedProduct.stock?.outgoing || 0,
           };
+          // Get supplier lead time and MOQ from synced data
+          if (syncedProduct.primarySupplier) {
+            supplierLeadTimeDays = syncedProduct.primarySupplier.leadTimeDays || null;
+            supplierMOQ = syncedProduct.primarySupplier.moq || null;
+          }
         }
       }
 
@@ -1254,14 +1261,17 @@ Example reasoning format:
         }
       }
 
-      // Calculate lead time
-      const leadTime = this.supplyChainManager.getTotalLeadTime(null, 'sea');
+      // Calculate lead time using supplier data if available
+      const leadTime = this.supplyChainManager.getTotalLeadTime(null, 'sea', supplierLeadTimeDays);
 
       // Calculate reorder point
       const reorderPoint = this.supplyChainManager.calculateReorderPoint({
         avgDailyDemand: avgDailySales,
         demandStdDev: avgDailySales * 0.3,
       });
+
+      // Get MOQ from supplier data
+      const moq = supplierMOQ || 1;
 
       // Check CNY
       const cnyInfo = await this._getCNYInfo({});
@@ -1280,7 +1290,12 @@ Example reasoning format:
 
       // Calculate recommendation
       const targetStock = reorderPoint.reorderPoint + cnyBuffer;
-      const recommendedOrder = Math.max(0, targetStock - availableStock);
+      let recommendedOrder = Math.max(0, targetStock - availableStock);
+
+      // Apply MOQ - if we need to order, ensure it meets minimum order quantity
+      if (recommendedOrder > 0 && recommendedOrder < moq) {
+        recommendedOrder = moq;
+      }
 
       // Determine urgency
       let urgency = 'none';
@@ -1342,8 +1357,10 @@ Example reasoning format:
         calculations: {
           avgDailySales,
           leadTimeDays: leadTime.totalDays,
+          supplierLeadTimeDays: supplierLeadTimeDays || 'default',
           reorderPoint: reorderPoint.reorderPoint,
           safetyStock: reorderPoint.safetyStock,
+          moq,
           cnyBuffer,
           targetStock,
         },

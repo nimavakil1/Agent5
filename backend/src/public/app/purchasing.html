@@ -849,7 +849,7 @@
       }
 
       // Build CSV content (Excel compatible)
-      const headers = ['Product Name', 'SKU', 'Urgency', 'Current Stock', 'Incoming', 'Days of Stock', 'Avg Daily Sales', 'Recommended Order Qty', 'Reorder Point', 'Safety Stock', 'Lead Time (days)'];
+      const headers = ['Product Name', 'SKU', 'Urgency', 'Current Stock', 'Incoming', 'Days of Stock', 'Avg Daily Sales', 'Recommended Order Qty', 'MOQ', 'Reorder Point', 'Safety Stock', 'Supplier Lead Time', 'Total Lead Time (days)'];
 
       const rows = allRecommendations.map(rec => {
         const currentStock = rec.currentState?.currentStock ?? rec.product?.currentStock ?? 0;
@@ -857,8 +857,10 @@
         const daysOfStock = rec.currentState?.daysOfStock ?? 0;
         const avgDailySales = rec.calculations?.avgDailySales?.toFixed(2) ?? '0';
         const orderQty = rec.orderQuantity ?? rec.recommendation?.orderQuantity ?? 0;
+        const moq = rec.calculations?.moq ?? 1;
         const reorderPoint = rec.calculations?.reorderPoint ?? '';
         const safetyStock = rec.calculations?.safetyStock ?? '';
+        const supplierLeadTime = rec.calculations?.supplierLeadTimeDays ?? 'default';
         const leadTime = rec.calculations?.leadTimeDays ?? '';
 
         return [
@@ -870,8 +872,10 @@
           daysOfStock,
           avgDailySales,
           orderQty,
+          moq,
           reorderPoint,
           safetyStock,
+          supplierLeadTime,
           leadTime
         ].join(',');
       });
