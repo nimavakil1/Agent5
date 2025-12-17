@@ -44,6 +44,9 @@
           </h1>
         </div>
         <div class="flex items-center space-x-4">
+          <button onclick="downloadExcel()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+            <i class="fas fa-file-excel mr-2"></i>Export Excel
+          </button>
           <button onclick="refreshDashboard()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
             <i class="fas fa-sync-alt mr-2"></i>Refresh
           </button>
@@ -837,6 +840,59 @@
       banner.classList.remove('hidden');
 
       setTimeout(() => banner.classList.add('hidden'), 5000);
+    }
+
+    function downloadExcel() {
+      if (allRecommendations.length === 0) {
+        showStatus('No recommendations to export', 'error');
+        return;
+      }
+
+      // Build CSV content (Excel compatible)
+      const headers = ['Product Name', 'SKU', 'Urgency', 'Current Stock', 'Incoming', 'Days of Stock', 'Avg Daily Sales', 'Recommended Order Qty', 'Reorder Point', 'Safety Stock', 'Lead Time (days)'];
+
+      const rows = allRecommendations.map(rec => {
+        const currentStock = rec.currentState?.currentStock ?? rec.product?.currentStock ?? 0;
+        const incoming = rec.currentState?.incoming ?? 0;
+        const daysOfStock = rec.currentState?.daysOfStock ?? 0;
+        const avgDailySales = rec.calculations?.avgDailySales?.toFixed(2) ?? '0';
+        const orderQty = rec.orderQuantity ?? rec.recommendation?.orderQuantity ?? 0;
+        const reorderPoint = rec.calculations?.reorderPoint ?? '';
+        const safetyStock = rec.calculations?.safetyStock ?? '';
+        const leadTime = rec.calculations?.leadTimeDays ?? '';
+
+        return [
+          `"${(rec.product?.name || '').replace(/"/g, '""')}"`,
+          `"${rec.product?.sku || ''}"`,
+          rec.urgency || '',
+          currentStock,
+          incoming,
+          daysOfStock,
+          avgDailySales,
+          orderQty,
+          reorderPoint,
+          safetyStock,
+          leadTime
+        ].join(',');
+      });
+
+      const csvContent = [headers.join(','), ...rows].join('\n');
+
+      // Add BOM for Excel UTF-8 compatibility
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+      // Create download link
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `purchasing_recommendations_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showStatus('Excel file downloaded', 'info');
     }
   </script>
 </body>
