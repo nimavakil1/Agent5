@@ -103,7 +103,6 @@ Example reasoning format:
     this.supplyChainManager = getSupplyChainManager();
     this.stockoutAnalyzer = getStockoutAnalyzer();
     this.purchasingContext = getPurchasingContext();
-    this.dataSync = getOdooDataSync();
 
     // External clients
     this.odooClient = config.odooClient || null;
@@ -117,6 +116,16 @@ Example reasoning format:
       approvalThreshold: config.approvalThreshold || 5000,
       preferSyncedData: config.preferSyncedData !== false, // Default true
     };
+  }
+
+  /**
+   * Get the MongoDB database connection
+   * Always fetches from the singleton to ensure we get the initialized db
+   */
+  _getDb() {
+    if (this.db) return this.db;
+    const dataSync = getOdooDataSync();
+    return dataSync.db;
   }
 
   async init(platform) {
@@ -134,7 +143,6 @@ Example reasoning format:
     // Initialize context with database
     if (this.db) {
       this.purchasingContext.setDb(this.db);
-      this.dataSync.db = this.db;
     }
 
     this._registerTools();
@@ -615,8 +623,8 @@ Example reasoning format:
     const { product_id, sku, days_back = 365, apply_context = true } = params;
 
     // Try to use synced data first (faster, less load on Odoo)
-    const hasDb = this.db || this.dataSync?.db;
-    if (this.config.preferSyncedData && hasDb) {
+    const db = this._getDb();
+    if (this.config.preferSyncedData && db) {
       const syncedResult = await this._getInvoicedSalesFromSync(product_id, sku, days_back, apply_context);
       if (syncedResult && !syncedResult.error) {
         return syncedResult;
@@ -737,7 +745,7 @@ Example reasoning format:
    * Get invoiced sales from synced MongoDB data (faster than direct Odoo)
    */
   async _getInvoicedSalesFromSync(productId, sku, daysBack, applyContext) {
-    const db = this.db || this.dataSync?.db;
+    const db = this._getDb();
     if (!db) {
       return null; // No database available
     }
@@ -1196,7 +1204,7 @@ Example reasoning format:
     try {
       // Try to get stock from synced data first (faster, no Odoo dependency)
       let product = null;
-      const db = this.db || this.dataSync?.db;
+      const db = this._getDb();
       if (db) {
         const syncedProduct = await db.collection('odoo_products').findOne({ odooId: product_id });
         if (syncedProduct) {
