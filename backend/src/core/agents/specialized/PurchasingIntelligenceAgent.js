@@ -752,6 +752,7 @@ Example reasoning format:
   async _getInvoicedSalesFromSync(productId, sku, daysBack, applyContext) {
     const db = this._getDb();
     if (!db) {
+      console.log('_getInvoicedSalesFromSync: db is null');
       return null; // No database available
     }
 
@@ -766,6 +767,7 @@ Example reasoning format:
       }
 
       if (!productId) {
+        console.log('_getInvoicedSalesFromSync: no productId');
         return null; // Will fall back to direct Odoo
       }
 
@@ -782,6 +784,7 @@ Example reasoning format:
         .toArray();
 
       if (invoiceLines.length === 0) {
+        console.log(`_getInvoicedSalesFromSync: no invoice lines for productId=${productId}, cutoff=${cutoffDate.toISOString()}`);
         return null; // No data, fall back to direct Odoo
       }
 
