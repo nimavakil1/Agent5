@@ -739,7 +739,7 @@ Example reasoning format:
     try {
       // Resolve product ID from SKU if needed
       if (!productId && sku) {
-        const product = await this.db.collection('purchasing_products')
+        const product = await this.db.collection('odoo_products')
           .findOne({ sku });
         if (product) {
           productId = product.odooId;
@@ -754,7 +754,7 @@ Example reasoning format:
       cutoffDate.setDate(cutoffDate.getDate() - daysBack);
 
       // Get sales from synced invoice lines
-      const invoiceLines = await this.db.collection('purchasing_invoice_lines')
+      const invoiceLines = await this.db.collection('odoo_invoice_lines')
         .find({
           productId,
           invoiceDate: { $gte: cutoffDate },
