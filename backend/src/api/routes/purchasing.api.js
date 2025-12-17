@@ -1208,6 +1208,10 @@ syncRouter.get('/status', async (req, res) => {
  * POST /api/odoo-sync/run
  * Trigger a manual data sync from Odoo
  * No auth required - internal operation
+ *
+ * Query params:
+ * - incremental: if true, only sync past 30 days (faster)
+ * - full: if true, sync all historical data (slower, use for initial sync)
  */
 syncRouter.post('/run', async (req, res) => {
   try {
@@ -1223,14 +1227,21 @@ syncRouter.post('/run', async (req, res) => {
       });
     }
 
+    // Determine sync mode: incremental (default) or full
+    const { incremental, full } = req.query;
+    const isIncremental = full !== 'true' && incremental !== 'false'; // Default to incremental
+
+    const syncMode = isIncremental ? 'incremental (past 30 days)' : 'full (all history)';
+
     // Start sync in background
-    dataSync.syncAll().catch(err => {
-      console.error('Manual sync failed:', err.message);
+    dataSync.syncAll({ incremental: isIncremental }).catch(err => {
+      console.error(`Manual ${syncMode} sync failed:`, err.message);
     });
 
     res.json({
       success: true,
-      message: 'Data sync started. Check /sync/status for progress.',
+      message: `Data sync started in ${syncMode} mode. Check /sync/status for progress.`,
+      syncMode: isIncremental ? 'incremental' : 'full',
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

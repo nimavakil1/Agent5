@@ -39,6 +39,7 @@ class OdooDataSync {
       batchSize: config.batchSize || 500,
       invoiceHistoryDays: config.invoiceHistoryDays || 1095, // 3 years
       stockMoveHistoryDays: config.stockMoveHistoryDays || 1095, // 3 years
+      incrementalDays: config.incrementalDays || 30, // For incremental syncs
     };
 
     // Sync status
@@ -138,9 +139,10 @@ class OdooDataSync {
     const cronExpression = `0 */${this.config.syncIntervalHours} * * *`;
 
     this.cronJob = cron.schedule(cronExpression, async () => {
-      console.log('Running scheduled Odoo data sync...');
+      console.log('Running scheduled incremental Odoo data sync...');
       try {
-        await this.syncAll();
+        // Use incremental mode for scheduled syncs (past 30 days only)
+        await this.syncAll({ incremental: true });
       } catch (error) {
         console.error('Scheduled sync failed:', error.message);
       }
@@ -184,8 +186,12 @@ class OdooDataSync {
 
   /**
    * Sync all data from Odoo
+   * @param {Object} options - Sync options
+   * @param {boolean} options.incremental - If true, only sync recent changes (past 30 days)
    */
-  async syncAll() {
+  async syncAll(options = {}) {
+    const { incremental = false } = options;
+
     if (this.syncStatus.isRunning) {
       console.log('Sync already in progress, skipping...');
       return { skipped: true, reason: 'Sync already in progress' };
@@ -198,18 +204,24 @@ class OdooDataSync {
     this.syncStatus.isRunning = true;
     this.syncStatus.lastError = null;
     const startTime = Date.now();
-    const stats = {};
+    const stats = { incremental };
 
     try {
-      console.log('Starting full Odoo data sync...');
+      const syncType = incremental ? 'incremental' : 'full';
+      console.log(`Starting ${syncType} Odoo data sync...`);
+      if (incremental) {
+        console.log(`Incremental mode: syncing only past ${this.config.incrementalDays} days of changes`);
+      }
 
       // Sync in order of dependencies
+      // For incremental: suppliers, customers, products always do full sync (small datasets)
+      // For invoice lines and stock moves: use date filter based on mode
       stats.suppliers = await this.syncSuppliers();
       stats.customers = await this.syncCustomers();
       stats.products = await this.syncProducts();
-      stats.invoiceLines = await this.syncInvoiceLines();
+      stats.invoiceLines = await this.syncInvoiceLines({ incremental });
       stats.purchaseOrders = await this.syncPurchaseOrders();
-      stats.stockMoves = await this.syncStockMoves();
+      stats.stockMoves = await this.syncStockMoves({ incremental });
 
       // Log sync completion
       const duration = (Date.now() - startTime) / 1000;
@@ -220,7 +232,7 @@ class OdooDataSync {
       this.syncStatus.lastSync = new Date();
       this.syncStatus.stats = stats;
 
-      console.log(`Odoo sync completed in ${duration.toFixed(1)}s:`, stats);
+      console.log(`Odoo ${syncType} sync completed in ${duration.toFixed(1)}s:`, stats);
 
       return { success: true, stats };
     } catch (error) {
@@ -430,12 +442,17 @@ class OdooDataSync {
 
   /**
    * Sync invoice lines (INVOICED quantities - source of truth)
+   * @param {Object} options - Sync options
+   * @param {boolean} options.incremental - If true, only sync recent changes
    */
-  async syncInvoiceLines() {
-    console.log('Syncing invoice lines...');
+  async syncInvoiceLines(options = {}) {
+    const { incremental = false } = options;
+    const historyDays = incremental ? this.config.incrementalDays : this.config.invoiceHistoryDays;
+
+    console.log(`Syncing invoice lines (${incremental ? 'incremental' : 'full'}: past ${historyDays} days)...`);
 
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - this.config.invoiceHistoryDays);
+    cutoffDate.setDate(cutoffDate.getDate() - historyDays);
     const cutoffStr = cutoffDate.toISOString().split('T')[0];
 
     // Get posted customer invoices
@@ -600,12 +617,17 @@ class OdooDataSync {
    * Uses pagination to avoid XML-RPC timeouts on large datasets
    * Uses upsert strategy for safe incremental syncs
    * Has retry logic for network failures
+   * @param {Object} options - Sync options
+   * @param {boolean} options.incremental - If true, only sync recent changes
    */
-  async syncStockMoves() {
-    console.log('Syncing stock movements...');
+  async syncStockMoves(options = {}) {
+    const { incremental = false } = options;
+    const historyDays = incremental ? this.config.incrementalDays : this.config.stockMoveHistoryDays;
+
+    console.log(`Syncing stock movements (${incremental ? 'incremental' : 'full'}: past ${historyDays} days)...`);
 
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - this.config.stockMoveHistoryDays);
+    cutoffDate.setDate(cutoffDate.getDate() - historyDays);
     const cutoffStr = cutoffDate.toISOString().split('T')[0];
 
     // Get total count first for progress reporting
@@ -791,6 +813,12 @@ class OdooDataSync {
       config: {
         syncIntervalHours: this.config.syncIntervalHours,
         invoiceHistoryDays: this.config.invoiceHistoryDays,
+        stockMoveHistoryDays: this.config.stockMoveHistoryDays,
+        incrementalDays: this.config.incrementalDays,
+      },
+      syncModes: {
+        scheduled: 'incremental (past 30 days)',
+        manual: 'incremental by default, use ?full=true for full sync',
       },
     };
   }
