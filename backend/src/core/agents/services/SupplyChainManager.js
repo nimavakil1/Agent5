@@ -17,15 +17,15 @@ class SupplyChainManager {
   constructor(config = {}) {
     this.seasonalCalendar = getSeasonalCalendar();
 
-    // Default lead times (in days)
+    // Lead times (in days) - can be configured via config or environment variables
     this.defaults = {
-      supplierLeadTime: 7,         // Days for supplier to prepare shipment
-      seaFreightTime: 40,          // China to Belgium via sea
-      airFreightTime: 5,           // China to Belgium via air
-      railFreightTime: 18,         // China to Belgium via rail
-      customsClearance: 3,         // Belgian customs processing
-      internalProcessing: 2,       // Warehouse receiving
-      bufferDays: 5,               // Safety buffer
+      supplierLeadTime: config.supplierLeadTime || parseInt(process.env.SUPPLIER_LEAD_TIME) || 7,
+      seaFreightTime: config.seaFreightTime || parseInt(process.env.SEA_FREIGHT_TIME) || 40,
+      airFreightTime: config.airFreightTime || parseInt(process.env.AIR_FREIGHT_TIME) || 5,
+      railFreightTime: config.railFreightTime || parseInt(process.env.RAIL_FREIGHT_TIME) || 18,
+      customsClearance: config.customsClearance || parseInt(process.env.CUSTOMS_CLEARANCE) || 3,
+      internalProcessing: config.internalProcessing || parseInt(process.env.INTERNAL_PROCESSING) || 2,
+      bufferDays: config.bufferDays || parseInt(process.env.BUFFER_DAYS) || 5,
     };
 
     // Shipping cost multipliers (relative to sea freight)

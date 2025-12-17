@@ -22,6 +22,7 @@ class SeasonalCalendar {
     };
 
     // Belgian retail seasons with demand multipliers
+    // Only seasons relevant to office supplies / e-commerce importing from China
     this.belgianSeasons = [
       {
         name: 'Back to School',
@@ -40,14 +41,6 @@ class SeasonalCalendar {
         description: 'Post-vacation office restocking',
       },
       {
-        name: 'Halloween',
-        startDay: 15, startMonth: 9, // Oct 15
-        endDay: 31, endMonth: 9,     // Oct 31
-        categories: ['party_supplies', 'decorations', 'costumes'],
-        demandMultiplier: 2.0,
-        description: 'Halloween decorations and party items',
-      },
-      {
         name: 'Black Friday Week',
         startDay: 20, startMonth: 10, // Nov 20
         endDay: 30, endMonth: 10,     // Nov 30
@@ -56,20 +49,12 @@ class SeasonalCalendar {
         description: 'Major promotional period across all categories',
       },
       {
-        name: 'Sinterklaas',
-        startDay: 15, startMonth: 10, // Nov 15
-        endDay: 6, endMonth: 11,      // Dec 6
-        categories: ['toys', 'gifts', 'chocolates', 'books'],
-        demandMultiplier: 1.8,
-        description: 'Dutch/Belgian children gift-giving tradition',
-      },
-      {
         name: 'Christmas Shopping',
         startDay: 1, startMonth: 11,  // Dec 1
         endDay: 24, endMonth: 11,     // Dec 24
-        categories: ['gifts', 'electronics', 'decorations', 'food'],
+        categories: ['gifts', 'electronics', 'office_supplies'],
         demandMultiplier: 2.2,
-        description: 'General Christmas retail peak',
+        description: 'Year-end gift giving and corporate purchases',
       },
       {
         name: 'January Sales',
@@ -78,38 +63,6 @@ class SeasonalCalendar {
         categories: ['all'],
         demandMultiplier: 1.3,
         description: 'Post-Christmas clearance and sales period',
-      },
-      {
-        name: 'Valentine\'s Day',
-        startDay: 1, startMonth: 1,   // Feb 1
-        endDay: 14, endMonth: 1,      // Feb 14
-        categories: ['gifts', 'chocolates', 'jewelry', 'flowers'],
-        demandMultiplier: 1.6,
-        description: 'Valentine\'s Day gift shopping',
-      },
-      {
-        name: 'Easter',
-        startDay: -14, startMonth: 'easter', // 2 weeks before Easter
-        endDay: 0, endMonth: 'easter',       // Easter Sunday
-        categories: ['chocolates', 'decorations', 'gifts', 'toys'],
-        demandMultiplier: 1.5,
-        description: 'Easter holiday shopping',
-      },
-      {
-        name: 'Spring Cleaning',
-        startDay: 1, startMonth: 2,   // Mar 1
-        endDay: 30, endMonth: 3,      // Apr 30
-        categories: ['cleaning', 'storage', 'organization', 'home'],
-        demandMultiplier: 1.4,
-        description: 'Spring cleaning and home organization',
-      },
-      {
-        name: 'Summer Vacation Prep',
-        startDay: 15, startMonth: 5,  // Jun 15
-        endDay: 15, endMonth: 6,      // Jul 15
-        categories: ['travel', 'outdoor', 'luggage', 'summer'],
-        demandMultiplier: 1.6,
-        description: 'Pre-vacation shopping',
       },
     ];
 
@@ -357,10 +310,17 @@ class SeasonalCalendar {
 
   /**
    * Check if supply chain is impacted (CNY closure or major holiday)
+   * Always checks the NEXT upcoming CNY, not just current year's
    */
   isSupplyChainImpacted(date = new Date()) {
     const year = date.getFullYear();
-    const cny = this.getCNYClosurePeriod(year);
+
+    // Get this year's and next year's CNY to find the NEXT upcoming one
+    const cnyThisYear = this.getCNYClosurePeriod(year);
+    const cnyNextYear = this.getCNYClosurePeriod(year + 1);
+
+    // Determine which CNY to use - if this year's CNY has fully passed, use next year's
+    const cny = date > cnyThisYear.fullRecovery ? cnyNextYear : cnyThisYear;
 
     // Check if within CNY closure
     if (date >= cny.closureStart && date <= cny.fullRecovery) {

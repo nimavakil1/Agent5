@@ -55,7 +55,7 @@ function requireAgent(req, res, next) {
 router.get('/dashboard', requireAgent, async (req, res) => {
   try {
     const [recommendations, seasonalForecast, supplyChainStatus] = await Promise.all([
-      purchasingAgent._getPurchasingRecommendations({ limit: 20 }),
+      purchasingAgent._getAllRecommendations({ limit: 20 }),
       getSeasonalCalendar().getSeasonalForecast(new Date(), 6),
       getSeasonalCalendar().isSupplyChainImpacted(),
     ]);
@@ -84,11 +84,10 @@ router.get('/dashboard', requireAgent, async (req, res) => {
  */
 router.get('/recommendations', requireAgent, async (req, res) => {
   try {
-    const { urgent_only, include_cny, limit } = req.query;
+    const { urgent_only, limit } = req.query;
 
-    const recommendations = await purchasingAgent._getPurchasingRecommendations({
+    const recommendations = await purchasingAgent._getAllRecommendations({
       urgent_only: urgent_only === 'true',
-      include_cny_prep: include_cny !== 'false',
       limit: parseInt(limit) || 50,
     });
 
@@ -105,7 +104,7 @@ router.get('/recommendations', requireAgent, async (req, res) => {
 router.get('/products/:id/analysis', requireAgent, async (req, res) => {
   try {
     const productId = parseInt(req.params.id);
-    const analysis = await purchasingAgent._getProductPurchasingAnalysis({ product_id: productId });
+    const analysis = await purchasingAgent._getProductAnalysis({ product_id: productId });
 
     res.json({ success: true, data: analysis });
   } catch (error) {
@@ -125,8 +124,15 @@ router.post('/reorder-check', requireAgent, async (req, res) => {
       return res.status(400).json({ error: 'product_ids must be an array' });
     }
 
-    const status = await purchasingAgent._checkReorderStatus({ product_ids });
-    res.json({ success: true, data: status });
+    // Get analysis for each product
+    const results = await Promise.all(
+      product_ids.map(async (id) => {
+        const analysis = await purchasingAgent._calculateOrderRecommendation({ product_id: id });
+        return { product_id: id, ...analysis };
+      })
+    );
+
+    res.json({ success: true, data: results });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -143,7 +149,7 @@ router.get('/forecast/:productId', requireAgent, async (req, res) => {
     const productId = parseInt(req.params.productId);
     const { weeks, category, seasonality } = req.query;
 
-    const forecast = await purchasingAgent._generateDemandForecast({
+    const forecast = await purchasingAgent._generateForecastWithReasoning({
       product_id: productId,
       forecast_weeks: parseInt(weeks) || 12,
       product_category: category,
@@ -385,7 +391,16 @@ router.get('/lead-time', (req, res) => {
     const manager = getSupplyChainManager();
 
     const result = manager.getTotalLeadTime(null, shipping_method || 'sea');
-    res.json({ success: true, data: result });
+
+    // Include configuration info for transparency
+    res.json({
+      success: true,
+      data: {
+        ...result,
+        configuration: manager.defaults,
+        configurable: 'Set environment variables: SUPPLIER_LEAD_TIME, SEA_FREIGHT_TIME, CUSTOMS_CLEARANCE, INTERNAL_PROCESSING, BUFFER_DAYS',
+      },
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

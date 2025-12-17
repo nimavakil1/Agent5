@@ -1699,30 +1699,60 @@ Example reasoning format:
   async _getAllRecommendations(params) {
     const { urgent_only = false, limit = 30 } = params;
 
-    if (!this.odooClient) {
-      return { error: 'Odoo client not configured' };
-    }
-
     try {
-      // Get low stock products
-      const stockLevels = await this._getStockLevels({ low_stock_only: true });
+      // Try to use synced data first for better performance
+      let products = [];
+
+      if (this.dataSync.db) {
+        // Get products that might need reordering from synced data
+        // Low stock: available < 100 OR low days of cover
+        products = await this.dataSync.getCollection('products')?.find({
+          $or: [
+            { 'stock.available': { $lt: 100, $gt: 0 } },
+            { 'stock.available': { $eq: 0 } },
+          ],
+        }).limit(limit * 2).toArray() || [];
+      }
+
+      // Fallback to live Odoo query if no synced data
+      if (products.length === 0 && this.odooClient) {
+        const stockLevels = await this._getStockLevels({ low_stock_only: true });
+        products = stockLevels.products?.map(p => ({
+          odooId: p.id,
+          name: p.name,
+          sku: p.sku,
+          stock: { available: p.currentStock, forecasted: p.forecastedStock },
+        })) || [];
+      }
+
+      if (products.length === 0) {
+        return {
+          recommendations: [],
+          count: 0,
+          summary: { critical: 0, high: 0, moderate: 0 },
+          message: 'No products found. Ensure Odoo data sync has run.',
+          generatedAt: new Date(),
+        };
+      }
 
       const recommendations = [];
 
-      for (const product of stockLevels.products.slice(0, limit)) {
-        const orderRec = await this._calculateOrderRecommendation({ product_id: product.id });
+      for (const product of products.slice(0, limit)) {
+        const productId = product.odooId || product.id;
+        const orderRec = await this._calculateOrderRecommendation({ product_id: productId });
 
         if (orderRec.error) continue;
 
-        if (urgent_only && orderRec.recommendation.urgency === 'none') continue;
+        if (urgent_only && orderRec.recommendation?.urgency === 'none') continue;
 
         recommendations.push({
           product: {
-            id: product.id,
+            id: productId,
             name: product.name,
             sku: product.sku,
+            currentStock: product.stock?.available || 0,
           },
-          ...orderRec.recommendation,
+          ...(orderRec.recommendation || {}),
           currentState: orderRec.currentState,
           calculations: orderRec.calculations,
           reasoning: orderRec.reasoning,
@@ -1731,7 +1761,11 @@ Example reasoning format:
 
       // Sort by urgency
       const urgencyOrder = { critical: 0, high: 1, moderate: 2, none: 3 };
-      recommendations.sort((a, b) => urgencyOrder[a.urgency] - urgencyOrder[b.urgency]);
+      recommendations.sort((a, b) => {
+        const aUrgency = urgencyOrder[a.urgency] ?? 3;
+        const bUrgency = urgencyOrder[b.urgency] ?? 3;
+        return aUrgency - bUrgency;
+      });
 
       const supplyChainStatus = this.seasonalCalendar.isSupplyChainImpacted();
 
@@ -1768,6 +1802,193 @@ Example reasoning format:
 
   async _checkSupplyChainStatus() {
     return this.seasonalCalendar.isSupplyChainImpacted();
+  }
+
+  // ==================== TRENDS & ANALYSIS ====================
+
+  /**
+   * Detect sales trends by comparing recent period to previous period
+   */
+  async _detectSalesTrends(params) {
+    const { threshold_percent = 20, compare_weeks = 4 } = params;
+
+    try {
+      // Get products from synced data
+      const products = await this.dataSync.getCollection('products')?.find({}).limit(100).toArray() || [];
+
+      const trends = {
+        growing: [],
+        declining: [],
+        stable: [],
+      };
+
+      for (const product of products) {
+        // Get recent sales (last N weeks) vs previous N weeks
+        const now = new Date();
+        const recentStart = new Date(now);
+        recentStart.setDate(recentStart.getDate() - (compare_weeks * 7));
+
+        const previousStart = new Date(recentStart);
+        previousStart.setDate(previousStart.getDate() - (compare_weeks * 7));
+
+        const recentSales = await this.dataSync.getCollection('invoiceLines')?.aggregate([
+          { $match: { productId: product.odooId, invoiceDate: { $gte: recentStart, $lt: now } } },
+          { $group: { _id: null, total: { $sum: '$quantity' } } },
+        ]).toArray() || [];
+
+        const previousSales = await this.dataSync.getCollection('invoiceLines')?.aggregate([
+          { $match: { productId: product.odooId, invoiceDate: { $gte: previousStart, $lt: recentStart } } },
+          { $group: { _id: null, total: { $sum: '$quantity' } } },
+        ]).toArray() || [];
+
+        const recentQty = recentSales[0]?.total || 0;
+        const previousQty = previousSales[0]?.total || 0;
+
+        if (previousQty === 0 && recentQty === 0) continue;
+
+        const changePercent = previousQty > 0
+          ? ((recentQty - previousQty) / previousQty) * 100
+          : (recentQty > 0 ? 100 : 0);
+
+        const trendData = {
+          productId: product.odooId,
+          name: product.name,
+          sku: product.sku,
+          recentQuantity: recentQty,
+          previousQuantity: previousQty,
+          changePercent: Math.round(changePercent),
+          currentStock: product.stock?.available || 0,
+        };
+
+        if (changePercent >= threshold_percent) {
+          trends.growing.push(trendData);
+        } else if (changePercent <= -threshold_percent) {
+          trends.declining.push(trendData);
+        } else {
+          trends.stable.push(trendData);
+        }
+      }
+
+      // Sort by change percent
+      trends.growing.sort((a, b) => b.changePercent - a.changePercent);
+      trends.declining.sort((a, b) => a.changePercent - b.changePercent);
+
+      return {
+        trends,
+        summary: {
+          growing: trends.growing.length,
+          declining: trends.declining.length,
+          stable: trends.stable.length,
+        },
+        params: { threshold_percent, compare_weeks },
+        generatedAt: new Date(),
+      };
+    } catch (error) {
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Analyze stockout history for a product
+   */
+  async _analyzeStockoutHistory(params) {
+    const { product_id, months_back = 12 } = params;
+
+    try {
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - months_back);
+
+      // Get stock movements to identify zero-stock periods
+      const stockMoves = await this.dataSync.getCollection('stockMoves')?.find({
+        productId: product_id,
+        date: { $gte: cutoff },
+      }).sort({ date: 1 }).toArray() || [];
+
+      // Get sales during the period
+      const sales = await this.dataSync.getProductSalesByPeriod(product_id, months_back * 30, 'day');
+
+      // Simple analysis: count days with no sales that might indicate stockout
+      const salesByDay = new Map(sales.map(s => [s._id, s.quantity]));
+
+      let potentialStockoutDays = 0;
+      let currentDate = new Date(cutoff);
+      const today = new Date();
+
+      while (currentDate < today) {
+        const dayKey = currentDate.toISOString().split('T')[0];
+        if (!salesByDay.has(dayKey)) {
+          potentialStockoutDays++;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      // Get average daily sales
+      const totalSales = sales.reduce((sum, s) => sum + s.quantity, 0);
+      const avgDailySales = totalSales / (months_back * 30);
+
+      return {
+        productId: product_id,
+        periodMonths: months_back,
+        analysis: {
+          totalSalesDays: sales.length,
+          potentialStockoutDays,
+          totalQuantitySold: totalSales,
+          avgDailySales: Math.round(avgDailySales * 100) / 100,
+          stockMovements: stockMoves.length,
+        },
+        estimatedLostSales: Math.round(potentialStockoutDays * avgDailySales * 0.5), // Conservative estimate
+        generatedAt: new Date(),
+      };
+    } catch (error) {
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Generate purchasing report
+   */
+  async _generatePurchasingReport(params) {
+    const { report_type = 'summary' } = params;
+
+    try {
+      const recommendations = await this._getAllRecommendations({ limit: 50 });
+      const supplyChainStatus = this.seasonalCalendar.isSupplyChainImpacted();
+      const upcomingSeasons = this.seasonalCalendar.getUpcomingSeasons(new Date(), 90);
+
+      // Get top products by revenue
+      const topProducts = await this.dataSync.getTopSellingProducts(30, 10);
+
+      // Get pending POs
+      const pendingPOs = await this.dataSync.getPendingPurchaseOrders();
+
+      const report = {
+        type: report_type,
+        generatedAt: new Date(),
+        summary: {
+          totalRecommendations: recommendations.count || 0,
+          criticalItems: recommendations.summary?.critical || 0,
+          highPriorityItems: recommendations.summary?.high || 0,
+          pendingPurchaseOrders: pendingPOs?.length || 0,
+        },
+        supplyChain: {
+          status: supplyChainStatus.impacted ? 'impacted' : 'normal',
+          reason: supplyChainStatus.reason || 'No supply chain issues',
+          nextCNY: supplyChainStatus.details?.cnyDate || supplyChainStatus.nextClosure,
+        },
+        upcomingSeasons: upcomingSeasons.slice(0, 3).map(s => ({
+          name: s.name,
+          startDate: s.startDate,
+          daysUntil: s.daysUntilStart,
+          demandMultiplier: s.demandMultiplier,
+        })),
+        topProducts: topProducts.slice(0, 5),
+        recommendations: recommendations.recommendations?.slice(0, 10) || [],
+      };
+
+      return report;
+    } catch (error) {
+      return { error: error.message };
+    }
   }
 
   // ==================== SETTERS ====================
