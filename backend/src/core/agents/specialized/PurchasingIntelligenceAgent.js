@@ -1744,12 +1744,13 @@ Example reasoning format:
     try {
       // Try to use synced data first for better performance
       let products = [];
+      const db = this._getDb();
 
-      if (this.dataSync.db) {
+      if (db) {
         // Get products that might need reordering from synced data
         // Only include products that CAN be purchased (excludes discontinued)
         // Low stock: available < 100 OR low days of cover
-        products = await this.dataSync.getCollection('products')?.find({
+        products = await db.collection('odoo_products').find({
           canBePurchased: true,  // Only products we can actually reorder
           $or: [
             { 'stock.available': { $lt: 100, $gt: 0 } },
@@ -1855,10 +1856,15 @@ Example reasoning format:
    */
   async _detectSalesTrends(params) {
     const { threshold_percent = 20, compare_weeks = 4 } = params;
+    const db = this._getDb();
 
     try {
+      if (!db) {
+        return { error: 'Database not available', growing: [], declining: [], stable: [] };
+      }
+
       // Get only purchasable products from synced data
-      const products = await this.dataSync.getCollection('products')?.find({
+      const products = await db.collection('odoo_products').find({
         canBePurchased: true,  // Only products we can reorder
       }).limit(100).toArray() || [];
 
@@ -1877,12 +1883,12 @@ Example reasoning format:
         const previousStart = new Date(recentStart);
         previousStart.setDate(previousStart.getDate() - (compare_weeks * 7));
 
-        const recentSales = await this.dataSync.getCollection('invoiceLines')?.aggregate([
+        const recentSales = await db.collection('odoo_invoice_lines').aggregate([
           { $match: { productId: product.odooId, invoiceDate: { $gte: recentStart, $lt: now } } },
           { $group: { _id: null, total: { $sum: '$quantity' } } },
         ]).toArray() || [];
 
-        const previousSales = await this.dataSync.getCollection('invoiceLines')?.aggregate([
+        const previousSales = await db.collection('odoo_invoice_lines').aggregate([
           { $match: { productId: product.odooId, invoiceDate: { $gte: previousStart, $lt: recentStart } } },
           { $group: { _id: null, total: { $sum: '$quantity' } } },
         ]).toArray() || [];
@@ -1939,19 +1945,27 @@ Example reasoning format:
    */
   async _analyzeStockoutHistory(params) {
     const { product_id, months_back = 12 } = params;
+    const db = this._getDb();
 
     try {
+      if (!db) {
+        return { error: 'Database not available' };
+      }
+
       const cutoff = new Date();
       cutoff.setMonth(cutoff.getMonth() - months_back);
 
       // Get stock movements to identify zero-stock periods
-      const stockMoves = await this.dataSync.getCollection('stockMoves')?.find({
+      const stockMoves = await db.collection('odoo_stock_moves').find({
         productId: product_id,
         date: { $gte: cutoff },
       }).sort({ date: 1 }).toArray() || [];
 
-      // Get sales during the period
-      const sales = await this.dataSync.getProductSalesByPeriod(product_id, months_back * 30, 'day');
+      // Get sales during the period (aggregate by day)
+      const sales = await db.collection('odoo_invoice_lines').aggregate([
+        { $match: { productId: product_id, invoiceDate: { $gte: cutoff } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$invoiceDate' } }, quantity: { $sum: '$quantity' } } },
+      ]).toArray() || [];
 
       // Simple analysis: count days with no sales that might indicate stockout
       const salesByDay = new Map(sales.map(s => [s._id, s.quantity]));
@@ -1995,17 +2009,33 @@ Example reasoning format:
    */
   async _generatePurchasingReport(params) {
     const { report_type = 'summary' } = params;
+    const db = this._getDb();
 
     try {
       const recommendations = await this._getAllRecommendations({ limit: 50 });
       const supplyChainStatus = this.seasonalCalendar.isSupplyChainImpacted();
       const upcomingSeasons = this.seasonalCalendar.getUpcomingSeasons(new Date(), 90);
 
-      // Get top products by revenue
-      const topProducts = await this.dataSync.getTopSellingProducts(30, 10);
+      // Get top products by revenue (last 30 days)
+      let topProducts = [];
+      let pendingPOs = [];
 
-      // Get pending POs
-      const pendingPOs = await this.dataSync.getPendingPurchaseOrders();
+      if (db) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        topProducts = await db.collection('odoo_invoice_lines').aggregate([
+          { $match: { invoiceDate: { $gte: thirtyDaysAgo } } },
+          { $group: { _id: '$productId', totalRevenue: { $sum: '$subtotal' }, totalQty: { $sum: '$quantity' } } },
+          { $sort: { totalRevenue: -1 } },
+          { $limit: 10 },
+        ]).toArray() || [];
+
+        // Get pending POs
+        pendingPOs = await db.collection('odoo_purchase_orders').find({
+          state: { $in: ['draft', 'sent', 'to approve', 'purchase'] },
+        }).toArray() || [];
+      }
 
       const report = {
         type: report_type,
