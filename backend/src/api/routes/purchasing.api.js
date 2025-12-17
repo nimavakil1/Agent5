@@ -1224,6 +1224,36 @@ syncRouter.get('/product-stats', async (req, res) => {
 });
 
 /**
+ * POST /api/odoo-sync/products
+ * Sync only products (fast - just the product catalog)
+ */
+syncRouter.post('/products', async (req, res) => {
+  try {
+    const dataSync = getOdooDataSync();
+
+    const status = await dataSync.getStatus();
+    if (status.isRunning) {
+      return res.status(409).json({
+        success: false,
+        error: 'Sync already in progress',
+        message: 'Please wait for the current sync to complete',
+      });
+    }
+
+    // Sync just products
+    const result = await dataSync.syncProducts();
+
+    res.json({
+      success: true,
+      message: 'Products synced successfully',
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/odoo-sync/run
  * Trigger a manual data sync from Odoo
  * No auth required - internal operation
