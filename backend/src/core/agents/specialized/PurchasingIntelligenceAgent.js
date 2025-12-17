@@ -123,13 +123,8 @@ Example reasoning format:
    * Always fetches from the singleton to ensure we get the initialized db
    */
   _getDb() {
-    if (this.db) {
-      return this.db;
-    }
+    if (this.db) return this.db;
     const dataSync = getOdooDataSync();
-    if (!dataSync.db) {
-      console.log('WARNING: _getDb() - dataSync.db is NULL');
-    }
     return dataSync.db;
   }
 
@@ -752,7 +747,6 @@ Example reasoning format:
   async _getInvoicedSalesFromSync(productId, sku, daysBack, applyContext) {
     const db = this._getDb();
     if (!db) {
-      console.log('_getInvoicedSalesFromSync: db is null');
       return null; // No database available
     }
 
@@ -767,7 +761,6 @@ Example reasoning format:
       }
 
       if (!productId) {
-        console.log('_getInvoicedSalesFromSync: no productId');
         return null; // Will fall back to direct Odoo
       }
 
@@ -784,7 +777,6 @@ Example reasoning format:
         .toArray();
 
       if (invoiceLines.length === 0) {
-        console.log(`_getInvoicedSalesFromSync: no invoice lines for productId=${productId}, cutoff=${cutoffDate.toISOString()}`);
         return null; // No data, fall back to direct Odoo
       }
 
@@ -1755,11 +1747,22 @@ Example reasoning format:
       const db = this._getDb();
 
       if (db) {
-        // Get products that might need reordering from synced data
-        // Only include products that CAN be purchased (excludes discontinued)
-        // Low stock: available < 100 OR low days of cover
+        // First, get products that have had sales in the last 6 months
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+        const productsWithRecentSales = await db.collection('odoo_invoice_lines').distinct(
+          'productId',
+          { invoiceDate: { $gte: sixMonthsAgo } }
+        );
+
+        // Get products that:
+        // 1. CAN be purchased (not discontinued)
+        // 2. Have low stock (< 100 or 0)
+        // 3. Have had sales in the last 6 months
         products = await db.collection('odoo_products').find({
-          canBePurchased: true,  // Only products we can actually reorder
+          canBePurchased: true,
+          odooId: { $in: productsWithRecentSales },
           $or: [
             { 'stock.available': { $lt: 100, $gt: 0 } },
             { 'stock.available': { $eq: 0 } },
