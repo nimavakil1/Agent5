@@ -212,7 +212,8 @@ Human marks complete → Agent launches experiment → Daily monitoring
 ### Microsoft 365
 - **SharePoint:** Read docs modified in last 90 days
 - **Teams:** Send notifications via channel messages
-- **Method:** Existing MicrosoftMCP integration
+- **Method:** Existing MicrosoftMCP integration + Incoming Webhook
+- **Teams Webhook:** ✅ CONNECTED AND TESTED (stored in .env)
 
 ---
 
@@ -329,7 +330,7 @@ METRICS
 2. Bol.com API issues - need follow-up session
 3. ~~Amazon API~~ ✓ Phase 1 = manual, Make.com later
 4. ~~Odoo task model~~ ✓ Use project.task
-5. Teams channel for agent messages - which channel?
+5. ~~Teams channel for agent messages~~ ✅ AI Agents Test Channel configured
 
 ---
 
