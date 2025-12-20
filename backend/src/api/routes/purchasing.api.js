@@ -743,6 +743,148 @@ router.get('/context/recent', requireAgent, async (req, res) => {
 });
 
 /**
+ * POST /api/purchasing/context/recurring-customer-order
+ * Record a recurring customer order pattern (e.g., annual purchases)
+ * Example: Customer buys P0222 once a year in March
+ */
+router.post('/context/recurring-customer-order', requireAgent, async (req, res) => {
+  try {
+    const {
+      product_id,
+      product_name,
+      customer_id,
+      customer_name,
+      frequency, // 'annual', 'semi-annual', 'quarterly', 'monthly'
+      typical_quantity,
+      typical_month, // 1-12 for annual orders
+      notes,
+    } = req.body;
+
+    if (!product_id || !customer_id || !frequency || !typical_quantity) {
+      return res.status(400).json({
+        error: 'product_id, customer_id, frequency, and typical_quantity are required',
+      });
+    }
+
+    const validFrequencies = ['annual', 'semi-annual', 'quarterly', 'monthly'];
+    if (!validFrequencies.includes(frequency)) {
+      return res.status(400).json({
+        error: `frequency must be one of: ${validFrequencies.join(', ')}`,
+      });
+    }
+
+    const context = getPurchasingContext(req.app.get('db'));
+    const result = await context.addRecurringCustomerOrder({
+      productId: product_id,
+      productName: product_name || `Product ${product_id}`,
+      customerId: customer_id,
+      customerName: customer_name || `Customer ${customer_id}`,
+      frequency,
+      typicalQuantity: typical_quantity,
+      typicalMonth: typical_month,
+      notes: notes || '',
+      createdBy: 'api',
+    });
+
+    res.json({
+      success: true,
+      data: result,
+      message: `Recurring order pattern recorded: ${customer_name || customer_id} buys ${typical_quantity} units ${frequency}`,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/purchasing/context/substitute-relationship
+ * Define a substitute product relationship
+ * Example: 18010 can substitute for 18009 when out of stock
+ */
+router.post('/context/substitute-relationship', requireAgent, async (req, res) => {
+  try {
+    const {
+      primary_product_id,
+      primary_product_name,
+      substitute_product_id,
+      substitute_product_name,
+      direction, // 'one-way' or 'bidirectional'
+      notes,
+    } = req.body;
+
+    if (!primary_product_id || !substitute_product_id) {
+      return res.status(400).json({
+        error: 'primary_product_id and substitute_product_id are required',
+      });
+    }
+
+    const context = getPurchasingContext(req.app.get('db'));
+    const result = await context.addSubstituteRelationship({
+      primaryProductId: primary_product_id,
+      primaryProductName: primary_product_name || `Product ${primary_product_id}`,
+      substituteProductId: substitute_product_id,
+      substituteProductName: substitute_product_name || `Product ${substitute_product_id}`,
+      direction: direction || 'one-way',
+      notes: notes || '',
+      createdBy: 'api',
+    });
+
+    const directionText = direction === 'bidirectional'
+      ? 'can substitute for each other'
+      : `${substitute_product_name || substitute_product_id} can substitute for ${primary_product_name || primary_product_id}`;
+
+    res.json({
+      success: true,
+      data: result,
+      message: `Substitute relationship created: ${directionText}`,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/purchasing/context/product/:productId/substitutes
+ * Get substitute relationships for a product
+ */
+router.get('/context/product/:productId/substitutes', requireAgent, async (req, res) => {
+  try {
+    const productId = parseInt(req.params.productId);
+
+    const context = getPurchasingContext(req.app.get('db'));
+    const result = await context.getSubstituteRelationships(productId);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/purchasing/context/product/:productId/recurring-orders
+ * Get recurring customer order patterns for a product
+ */
+router.get('/context/product/:productId/recurring-orders', requireAgent, async (req, res) => {
+  try {
+    const productId = parseInt(req.params.productId);
+
+    const context = getPurchasingContext(req.app.get('db'));
+    const result = await context.getRecurringCustomerOrders(productId);
+
+    res.json({
+      success: true,
+      data: result,
+      count: result.length,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * DELETE /api/purchasing/context/:contextId
  * Deactivate a context entry
  */

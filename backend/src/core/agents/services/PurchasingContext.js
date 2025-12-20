@@ -223,6 +223,173 @@ class PurchasingContext {
   }
 
   /**
+   * Add a recurring customer order pattern
+   * Example: Customer buys product P0222 once a year
+   * This tells the forecast to expect this demand on a schedule
+   */
+  async addRecurringCustomerOrder(params) {
+    const {
+      productId,
+      productName,
+      customerId,
+      customerName,
+      frequency, // 'annual', 'semi-annual', 'quarterly', 'monthly'
+      typicalQuantity,
+      typicalMonth = null, // For annual orders, which month (1-12)
+      notes = '',
+      createdBy = 'user',
+    } = params;
+
+    const context = {
+      type: 'recurring_customer_order',
+      product: {
+        id: productId,
+        name: productName,
+      },
+      customer: {
+        id: customerId,
+        name: customerName,
+      },
+      pattern: {
+        frequency,
+        typicalQuantity,
+        typicalMonth,
+        // Calculate expected orders per year
+        ordersPerYear: frequency === 'annual' ? 1
+          : frequency === 'semi-annual' ? 2
+          : frequency === 'quarterly' ? 4
+          : frequency === 'monthly' ? 12 : 1,
+      },
+      notes,
+      // No adjustments - this informs forecasting logic
+      adjustments: [],
+      createdBy,
+      createdAt: new Date(),
+      active: true,
+    };
+
+    if (this.db) {
+      const result = await this.db.collection(this.collectionName).insertOne(context);
+      return { ...context, _id: result.insertedId };
+    }
+
+    return context;
+  }
+
+  /**
+   * Add a substitute product relationship
+   * Example: Product 18010 can substitute for 18009 when 18009 is out of stock
+   * This is a permanent relationship, not a one-time event
+   */
+  async addSubstituteRelationship(params) {
+    const {
+      primaryProductId,
+      primaryProductName,
+      substituteProductId,
+      substituteProductName,
+      direction = 'one-way', // 'one-way' (substitute for primary only) or 'bidirectional'
+      notes = '',
+      createdBy = 'user',
+    } = params;
+
+    const context = {
+      type: 'substitute_relationship',
+      primaryProduct: {
+        id: primaryProductId,
+        name: primaryProductName,
+      },
+      substituteProduct: {
+        id: substituteProductId,
+        name: substituteProductName,
+      },
+      direction,
+      notes,
+      // No adjustments - relationships inform how to interpret sales data
+      adjustments: [],
+      createdBy,
+      createdAt: new Date(),
+      active: true,
+    };
+
+    if (this.db) {
+      const result = await this.db.collection(this.collectionName).insertOne(context);
+      return { ...context, _id: result.insertedId };
+    }
+
+    return context;
+  }
+
+  /**
+   * Get substitute relationships for a product
+   * Returns products that can substitute for this one, or that this product substitutes for
+   */
+  async getSubstituteRelationships(productId) {
+    if (!this.db) {
+      return { substitutes: [], substituteFor: [] };
+    }
+
+    const contexts = await this.db.collection(this.collectionName)
+      .find({
+        active: true,
+        type: 'substitute_relationship',
+        $or: [
+          { 'primaryProduct.id': productId },
+          { 'substituteProduct.id': productId },
+        ],
+      })
+      .toArray();
+
+    const substitutes = []; // Products that can substitute for productId
+    const substituteFor = []; // Products that productId can substitute for
+
+    for (const ctx of contexts) {
+      if (ctx.primaryProduct.id === productId) {
+        // This product has substitutes
+        substitutes.push({
+          productId: ctx.substituteProduct.id,
+          productName: ctx.substituteProduct.name,
+          direction: ctx.direction,
+        });
+      }
+      if (ctx.substituteProduct.id === productId) {
+        // This product can substitute for another
+        substituteFor.push({
+          productId: ctx.primaryProduct.id,
+          productName: ctx.primaryProduct.name,
+          direction: ctx.direction,
+        });
+        // If bidirectional, also add reverse
+        if (ctx.direction === 'bidirectional') {
+          substitutes.push({
+            productId: ctx.primaryProduct.id,
+            productName: ctx.primaryProduct.name,
+            direction: ctx.direction,
+          });
+        }
+      }
+    }
+
+    return { substitutes, substituteFor };
+  }
+
+  /**
+   * Get recurring customer order patterns for a product
+   */
+  async getRecurringCustomerOrders(productId) {
+    if (!this.db) {
+      return [];
+    }
+
+    return this.db.collection(this.collectionName)
+      .find({
+        active: true,
+        type: 'recurring_customer_order',
+        'product.id': productId,
+      })
+      .toArray();
+  }
+
+  /**
    * Add a general note/context for a product
    */
   async addProductNote(params) {
@@ -415,6 +582,44 @@ class PurchasingContext {
 
     if (notes.length > 0) {
       summaryParts.push(`NOTES: ${notes.map(n => n.note).join('; ')}`);
+    }
+
+    // Recurring customer orders
+    const recurringOrders = contexts.filter(c => c.type === 'recurring_customer_order');
+    if (recurringOrders.length > 0) {
+      const orderDetails = recurringOrders.map(o =>
+        `${o.customer?.name || 'Unknown customer'}: ${o.pattern?.typicalQuantity} units ${o.pattern?.frequency}` +
+        (o.pattern?.typicalMonth ? ` (typically month ${o.pattern.typicalMonth})` : '')
+      );
+      summaryParts.push(
+        `RECURRING CUSTOMER ORDERS: This product has ${recurringOrders.length} recurring buyer(s). ` +
+        `${orderDetails.join('; ')}. ` +
+        `These are PREDICTABLE orders that should be INCLUDED in forecasts but NOT treated as trends.`
+      );
+    }
+
+    // Substitute relationships
+    const substituteRels = contexts.filter(c => c.type === 'substitute_relationship');
+    if (substituteRels.length > 0) {
+      const asSubstitute = substituteRels.filter(s => s.substituteProduct?.id === productId);
+      const hasSubs = substituteRels.filter(s => s.primaryProduct?.id === productId);
+
+      if (asSubstitute.length > 0) {
+        const primaryProducts = asSubstitute.map(s => s.primaryProduct?.name || `Product ${s.primaryProduct?.id}`);
+        summaryParts.push(
+          `SUBSTITUTE PRODUCT: This product is used as SUBSTITUTE for: ${primaryProducts.join(', ')}. ` +
+          `When those products are out of stock, sales of THIS product may spike. ` +
+          `These substitute sales should NOT increase this product's base forecast.`
+        );
+      }
+
+      if (hasSubs.length > 0) {
+        const subProducts = hasSubs.map(s => s.substituteProduct?.name || `Product ${s.substituteProduct?.id}`);
+        summaryParts.push(
+          `HAS SUBSTITUTES: This product can be substituted with: ${subProducts.join(', ')}. ` +
+          `During stockouts, customers may buy substitutes. TRUE DEMAND may be HIGHER than invoiced.`
+        );
+      }
     }
 
     return summaryParts.join('\n\n');

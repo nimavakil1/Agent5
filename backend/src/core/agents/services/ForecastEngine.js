@@ -134,13 +134,48 @@ class ForecastEngine {
 
   /**
    * Apply context adjustments to sales history
-   * Handles substitutions, one-time orders, etc.
+   * Handles substitutions, one-time orders, recurring orders, and substitute relationships
    */
   async applyContextAdjustments(salesHistory, productId, startDate, endDate) {
     const context = getPurchasingContext(this.db);
+
+    // Get standard adjustments (substitution events, one-time orders, etc.)
     const adjustmentsData = await context.getProductAdjustments(productId, startDate, endDate);
 
+    // Get substitute relationship data for interpretation
+    const substituteRels = await context.getSubstituteRelationships(productId);
+
+    // Get recurring customer order patterns
+    const recurringOrders = await context.getRecurringCustomerOrders(productId);
+
+    // Build context summary for AI reasoning
+    const contextSummary = {
+      hasSubstituteRelationships: substituteRels.substitutes.length > 0 || substituteRels.substituteFor.length > 0,
+      isSubstituteFor: substituteRels.substituteFor.length > 0 ? substituteRels.substituteFor : null,
+      hasSubstitutes: substituteRels.substitutes.length > 0 ? substituteRels.substitutes : null,
+      recurringOrderPatterns: recurringOrders.length > 0 ? recurringOrders.map(r => ({
+        customer: r.customer?.name || r.customer?.id,
+        frequency: r.pattern?.frequency,
+        typicalQuantity: r.pattern?.typicalQuantity,
+        typicalMonth: r.pattern?.typicalMonth,
+      })) : null,
+    };
+
     if (!adjustmentsData.adjustments || adjustmentsData.adjustments.length === 0) {
+      // Even with no adjustments, we still want to include context info
+      if (contextSummary.hasSubstituteRelationships || recurringOrders.length > 0) {
+        return {
+          adjustedSales: salesHistory,
+          adjustments: {
+            totalAdjustment: 0,
+            adjustmentDetails: [],
+            summary: 'No quantity adjustments, but context information available.',
+          },
+          substituteRelationships: contextSummary.isSubstituteFor || contextSummary.hasSubstitutes ? substituteRels : null,
+          recurringOrders: recurringOrders.length > 0 ? recurringOrders : null,
+          interpretationNotes: this._generateInterpretationNotes(contextSummary),
+        };
+      }
       return {
         adjustedSales: salesHistory,
         adjustments: null,
@@ -194,6 +229,10 @@ class ForecastEngine {
       return sale;
     });
 
+    // Get context for additional info
+    const contextInfo = await context.getSubstituteRelationships(productId);
+    const recurringInfo = await context.getRecurringCustomerOrders(productId);
+
     return {
       adjustedSales,
       adjustments: {
@@ -201,7 +240,58 @@ class ForecastEngine {
         adjustmentDetails: adjustmentsData.adjustments,
         summary: this._generateAdjustmentSummary(adjustmentsData),
       },
+      substituteRelationships: (contextInfo.substitutes.length > 0 || contextInfo.substituteFor.length > 0) ? contextInfo : null,
+      recurringOrders: recurringInfo.length > 0 ? recurringInfo : null,
+      interpretationNotes: this._generateInterpretationNotes({
+        hasSubstituteRelationships: contextInfo.substitutes.length > 0 || contextInfo.substituteFor.length > 0,
+        isSubstituteFor: contextInfo.substituteFor.length > 0 ? contextInfo.substituteFor : null,
+        hasSubstitutes: contextInfo.substitutes.length > 0 ? contextInfo.substitutes : null,
+        recurringOrderPatterns: recurringInfo.length > 0 ? recurringInfo.map(r => ({
+          customer: r.customer?.name || r.customer?.id,
+          frequency: r.pattern?.frequency,
+          typicalQuantity: r.pattern?.typicalQuantity,
+        })) : null,
+      }),
     };
+  }
+
+  /**
+   * Generate interpretation notes for AI reasoning
+   * Helps the agent understand how to interpret the sales data
+   */
+  _generateInterpretationNotes(contextSummary) {
+    const notes = [];
+
+    if (contextSummary.isSubstituteFor && contextSummary.isSubstituteFor.length > 0) {
+      const primaryProducts = contextSummary.isSubstituteFor.map(p => p.productName || `#${p.productId}`).join(', ');
+      notes.push(
+        `CAUTION - SUBSTITUTE PRODUCT: This product serves as a substitute for: ${primaryProducts}. ` +
+        `Sales spikes may NOT represent organic demand, but customers buying this when the primary product is out of stock. ` +
+        `Base forecast should be LOWER than raw invoiced quantities suggest.`
+      );
+    }
+
+    if (contextSummary.hasSubstitutes && contextSummary.hasSubstitutes.length > 0) {
+      const subProducts = contextSummary.hasSubstitutes.map(p => p.productName || `#${p.productId}`).join(', ');
+      notes.push(
+        `HAS SUBSTITUTES: When this product is out of stock, customers may buy: ${subProducts}. ` +
+        `True demand for this product may be HIGHER than invoiced quantities during stockout periods.`
+      );
+    }
+
+    if (contextSummary.recurringOrderPatterns && contextSummary.recurringOrderPatterns.length > 0) {
+      const patterns = contextSummary.recurringOrderPatterns.map(p =>
+        `${p.customer}: ${p.typicalQuantity} units ${p.frequency}` +
+        (p.typicalMonth ? ` (month ${p.typicalMonth})` : '')
+      ).join('; ');
+      notes.push(
+        `RECURRING CUSTOMER ORDERS: ${patterns}. ` +
+        `These are predictable, scheduled orders that should be INCLUDED in forecasts as expected demand, ` +
+        `but should NOT be treated as trend indicators.`
+      );
+    }
+
+    return notes.length > 0 ? notes : null;
   }
 
   /**
