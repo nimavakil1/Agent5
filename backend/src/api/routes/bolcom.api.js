@@ -149,7 +149,12 @@ async function bolRequest(endpoint, method = 'GET', body = null, retries = 3) {
 /**
  * Make a request to Bol.com Advertising API (v11)
  * Uses separate credentials (BOL_ADVERTISER_ID / BOL_ADVERTISER_SECRET)
- * Note: Advertising API is now part of Retailer API base URL with v11 headers
+ *
+ * IMPORTANT: As of v11, the Advertising API uses:
+ * - Base URL: https://api.bol.com/advertiser (NOT /retailer/)
+ * - GET endpoints replaced with PUT filter endpoints for listing data
+ *
+ * See: https://api.bol.com/advertiser/docs/redoc/sponsored-products/v11/campaign-management.html
  */
 async function advertiserRequest(endpoint, method = 'GET', body = null, retries = 3) {
   const token = await getAdvertiserAccessToken();
@@ -157,18 +162,18 @@ async function advertiserRequest(endpoint, method = 'GET', body = null, retries 
   const options = {
     method,
     headers: {
-      'Accept': 'application/vnd.retailer.v11+json',
+      'Accept': 'application/vnd.advertiser.v11+json',
       'Authorization': `Bearer ${token}`
     }
   };
 
   if (body) {
-    options.headers['Content-Type'] = 'application/vnd.retailer.v11+json';
+    options.headers['Content-Type'] = 'application/vnd.advertiser.v11+json';
     options.body = JSON.stringify(body);
   }
 
-  // Advertising API uses /retailer/ base URL with v11
-  const response = await fetch(`https://api.bol.com/retailer${endpoint}`, options);
+  // Advertising API uses /advertiser/ base URL (NOT /retailer/)
+  const response = await fetch(`https://api.bol.com/advertiser${endpoint}`, options);
 
   // Handle rate limiting with retry
   if (response.status === 429 && retries > 0) {
@@ -713,32 +718,52 @@ router.delete('/orders/:orderId/items/:orderItemId', async (req, res) => {
 
 /**
  * Get all advertising campaigns
- * Query params: state (ACTIVE, PAUSED, ENDED, DRAFT)
+ * Query params: state (ENABLED, PAUSED, ARCHIVED), page, pageSize
+ *
+ * NOTE: In v11, GET endpoints are replaced with PUT filter endpoints.
+ * Use PUT /sponsored-products/campaigns with filter body to list campaigns.
  */
 router.get('/advertising/campaigns', async (req, res) => {
   try {
-    const { state, page = 1 } = req.query;
+    const { state, page = 1, pageSize = 50, campaignIds } = req.query;
 
-    let endpoint = `/sponsored-products/campaigns?page=${page}`;
-    if (state) {
-      endpoint += `&state=${state}`;
+    // Build filter body for PUT request (v11 style)
+    const filterBody = {
+      page: parseInt(page, 10),
+      pageSize: Math.min(parseInt(pageSize, 10) || 50, 50) // Max 50 per page
+    };
+
+    // Add campaign IDs filter if provided
+    if (campaignIds) {
+      filterBody.campaignIds = Array.isArray(campaignIds) ? campaignIds : [campaignIds];
     }
 
-    const data = await advertiserRequest(endpoint);
+    // v11 uses PUT with filter body to list campaigns (NOT GET)
+    const data = await advertiserRequest('/sponsored-products/campaigns', 'PUT', filterBody);
+
+    // Filter by state client-side if requested (API may not support state filter in PUT)
+    let campaigns = data.campaigns || [];
+    if (state) {
+      campaigns = campaigns.filter(c => c.state === state);
+    }
 
     res.json({
       success: true,
-      count: data.campaigns?.length || 0,
-      campaigns: (data.campaigns || []).map(c => ({
+      count: campaigns.length,
+      campaigns: campaigns.map(c => ({
         campaignId: c.campaignId,
         name: c.name,
         state: c.state,
         startDate: c.startDate,
         endDate: c.endDate,
+        campaignType: c.campaignType,
         targetingType: c.targetingType,
         dailyBudget: c.dailyBudget,
         totalBudget: c.totalBudget,
-        bidAdjustments: c.bidAdjustments
+        targetCountries: c.targetCountries,
+        targetChannels: c.targetChannels,
+        acosTargetPercentage: c.acosTargetPercentage,
+        constraints: c.constraints
       }))
     });
   } catch (error) {
@@ -748,11 +773,23 @@ router.get('/advertising/campaigns', async (req, res) => {
 
 /**
  * Get single campaign details
+ * NOTE: In v11, use PUT /campaigns with campaignIds filter to get specific campaigns
  */
 router.get('/advertising/campaigns/:campaignId', async (req, res) => {
   try {
-    const data = await advertiserRequest(`/sponsored-products/campaigns/${req.params.campaignId}`);
-    res.json({ success: true, campaign: data });
+    // v11 uses PUT with filter to get specific campaign
+    const data = await advertiserRequest('/sponsored-products/campaigns', 'PUT', {
+      campaignIds: [req.params.campaignId],
+      page: 1,
+      pageSize: 1
+    });
+
+    const campaign = data.campaigns?.[0];
+    if (!campaign) {
+      return res.status(404).json({ success: false, error: 'Campaign not found' });
+    }
+
+    res.json({ success: true, campaign });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -760,17 +797,25 @@ router.get('/advertising/campaigns/:campaignId', async (req, res) => {
 
 /**
  * Get ad groups for a campaign
+ * NOTE: In v11, use PUT /ad-groups with filter body
  */
 router.get('/advertising/campaigns/:campaignId/ad-groups', async (req, res) => {
   try {
-    const { page = 1 } = req.query;
-    const data = await advertiserRequest(`/sponsored-products/campaigns/${req.params.campaignId}/ad-groups?page=${page}`);
+    const { page = 1, pageSize = 50 } = req.query;
+
+    // v11 uses PUT with filter body to list ad groups
+    const data = await advertiserRequest('/sponsored-products/ad-groups', 'PUT', {
+      campaignIds: [req.params.campaignId],
+      page: parseInt(page, 10),
+      pageSize: Math.min(parseInt(pageSize, 10) || 50, 50)
+    });
 
     res.json({
       success: true,
       count: data.adGroups?.length || 0,
       adGroups: (data.adGroups || []).map(ag => ({
         adGroupId: ag.adGroupId,
+        campaignId: ag.campaignId,
         name: ag.name,
         state: ag.state,
         defaultBid: ag.defaultBid
@@ -783,17 +828,25 @@ router.get('/advertising/campaigns/:campaignId/ad-groups', async (req, res) => {
 
 /**
  * Get keywords for an ad group
+ * NOTE: In v11, use PUT /keywords with filter body
  */
 router.get('/advertising/ad-groups/:adGroupId/keywords', async (req, res) => {
   try {
-    const { page = 1 } = req.query;
-    const data = await advertiserRequest(`/sponsored-products/ad-groups/${req.params.adGroupId}/keywords?page=${page}`);
+    const { page = 1, pageSize = 50 } = req.query;
+
+    // v11 uses PUT with filter body to list keywords
+    const data = await advertiserRequest('/sponsored-products/keywords', 'PUT', {
+      adGroupIds: [req.params.adGroupId],
+      page: parseInt(page, 10),
+      pageSize: Math.min(parseInt(pageSize, 10) || 50, 50)
+    });
 
     res.json({
       success: true,
       count: data.keywords?.length || 0,
       keywords: (data.keywords || []).map(k => ({
         keywordId: k.keywordId,
+        adGroupId: k.adGroupId,
         keywordText: k.keywordText,
         matchType: k.matchType,
         state: k.state,
@@ -839,6 +892,7 @@ router.get('/advertising/reports/campaigns', async (req, res) => {
 /**
  * Get daily advertising costs summary
  * Query params: startDate, endDate
+ * NOTE: Reporting API likely still uses POST for requesting reports
  */
 router.get('/advertising/costs', async (req, res) => {
   try {
@@ -848,12 +902,19 @@ router.get('/advertising/costs', async (req, res) => {
     const end = endDate || new Date().toISOString().split('T')[0];
     const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    let endpoint = `/sponsored-products/reports/performance?start-date=${start}&end-date=${end}`;
+    // Build report request body
+    const reportBody = {
+      startDate: start,
+      endDate: end,
+      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
+    };
+
     if (campaignId) {
-      endpoint += `&campaign-id=${campaignId}`;
+      reportBody.campaignIds = [campaignId];
     }
 
-    const data = await advertiserRequest(endpoint);
+    // Request performance report via POST
+    const data = await advertiserRequest('/sponsored-products/reports/performance', 'POST', reportBody);
 
     // Calculate totals
     let totalSpend = 0;
@@ -862,7 +923,7 @@ router.get('/advertising/costs', async (req, res) => {
     let totalOrders = 0;
     let totalRevenue = 0;
 
-    const dailyData = (data.performance || data.dailyPerformance || []).map(d => {
+    const dailyData = (data.performance || data.dailyPerformance || data.rows || []).map(d => {
       totalSpend += d.spend || 0;
       totalClicks += d.clicks || 0;
       totalImpressions += d.impressions || 0;
@@ -1046,6 +1107,7 @@ router.put('/advertising/campaigns/:campaignId/budget', async (req, res) => {
 
 /**
  * Get advertising account overview
+ * NOTE: In v11, uses PUT for listing campaigns and POST for reports
  */
 router.get('/advertising/overview', async (req, res) => {
   try {
@@ -1053,11 +1115,23 @@ router.get('/advertising/overview', async (req, res) => {
     const endDate = new Date().toISOString().split('T')[0];
     const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    // Fetch campaigns and costs in parallel
+    // Fetch campaigns (PUT with filter) and costs (POST report) in parallel
     const [campaignsData, costsData] = await Promise.all([
-      advertiserRequest('/sponsored-products/campaigns?state=ACTIVE').catch(() => ({ campaigns: [] })),
-      advertiserRequest(`/sponsored-products/reports/performance?start-date=${startDate}&end-date=${endDate}`).catch(() => ({ performance: [] }))
+      // v11: Use PUT with filter body to list campaigns
+      advertiserRequest('/sponsored-products/campaigns', 'PUT', {
+        page: 1,
+        pageSize: 50
+      }).catch(() => ({ campaigns: [] })),
+      // v11: Use POST to request performance report
+      advertiserRequest('/sponsored-products/reports/performance', 'POST', {
+        startDate,
+        endDate,
+        metrics: ['impressions', 'clicks', 'spend', 'orders', 'revenue']
+      }).catch(() => ({ rows: [] }))
     ]);
+
+    // Filter to only ENABLED campaigns
+    const activeCampaigns = (campaignsData.campaigns || []).filter(c => c.state === 'ENABLED');
 
     // Calculate totals from performance data
     let totalSpend = 0;
@@ -1066,7 +1140,7 @@ router.get('/advertising/overview', async (req, res) => {
     let totalOrders = 0;
     let totalRevenue = 0;
 
-    (costsData.performance || costsData.dailyPerformance || []).forEach(d => {
+    (costsData.performance || costsData.dailyPerformance || costsData.rows || []).forEach(d => {
       totalSpend += d.spend || 0;
       totalClicks += d.clicks || 0;
       totalImpressions += d.impressions || 0;
@@ -1077,7 +1151,8 @@ router.get('/advertising/overview', async (req, res) => {
     res.json({
       success: true,
       overview: {
-        activeCampaigns: campaignsData.campaigns?.length || 0,
+        activeCampaigns: activeCampaigns.length,
+        totalCampaigns: campaignsData.campaigns?.length || 0,
         last30Days: {
           spend: totalSpend.toFixed(2),
           clicks: totalClicks,
@@ -1089,11 +1164,13 @@ router.get('/advertising/overview', async (req, res) => {
           ctr: totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(2) + '%' : 'N/A'
         }
       },
-      campaigns: (campaignsData.campaigns || []).slice(0, 10).map(c => ({
+      campaigns: activeCampaigns.slice(0, 10).map(c => ({
         campaignId: c.campaignId,
         name: c.name,
         state: c.state,
-        dailyBudget: c.dailyBudget
+        campaignType: c.campaignType,
+        dailyBudget: c.dailyBudget,
+        totalBudget: c.totalBudget
       }))
     });
   } catch (error) {

@@ -290,15 +290,35 @@ METRICS
 
 ---
 
+## PENDING ACTIONS (URGENT)
+
+### Amazon SP API Integration via Make.com
+For each Amazon SP API connection needed by the agent:
+- [ ] Create Make.com scenario for price changes
+- [ ] Create Make.com scenario for CPC/advertising changes
+- [ ] Create Make.com scenario for reading sales data
+- [ ] Test each scenario end-to-end
+- [ ] Document webhook URLs for Agent5 integration
+
+### Bol.com API Connection
+- [ ] Resolve current API connection issues
+- [ ] Get Bol.com API fully operational
+- [ ] Test order/sales data retrieval
+- [ ] Test price update capability (for future Phase 2)
+
+---
+
 ## TODO List
 
 ### Phase 1: Foundation
-- [ ] Create Agent Activity Log database schema
-- [ ] Build Inventory Optimization Agent core
-- [ ] Create slow-mover detection algorithm
-- [ ] Build experiment tracking system
-- [ ] Create Odoo task creation/monitoring
-- [ ] Create agent communication panel UI
+- [x] Create Agent Activity Log database schema
+- [x] Build Inventory Optimization Agent core
+- [x] Create slow-mover detection algorithm
+- [x] Build experiment tracking system
+- [x] Create Odoo task creation/monitoring
+- [x] Create Teams notification service
+- [x] Create inventory optimization UI dashboard
+- [ ] Create agent communication panel UI (chat interface)
 
 ### Phase 2: SharePoint Integration
 - [ ] Configure agent to read SharePoint docs (last 90 days)
@@ -356,4 +376,31 @@ METRICS
 - SharePoint: Agent reads docs modified in last 90 days
 - Existing MS365 integration found: SharePointAgent, MicrosoftMCP
 - Agents calculate BENEFIT (not just turnover) for recommendations
+
+### 2024-12-20 (Session 3)
+**Built and deployed Inventory Optimization Agent system:**
+
+Files created:
+- `AgentActivityLog.js` - MongoDB audit trail for all agent actions
+- `SlowMoverDetector.js` - Analyzes inventory for slow-moving products
+- `OdooTaskManager.js` - Creates/monitors Odoo tasks for human action
+- `TeamsNotificationService.js` - Sends alerts via Teams webhook
+- `InventoryOptimizationAgent.js` - Main orchestrator
+- `inventory.api.js` - REST API endpoints
+- `inventory.html` - UI Dashboard
+
+Features:
+- Red flag detection (no sales in 30+ days)
+- Slow-mover detection (6+ months of stock)
+- Automatic Odoo task creation with 48-hour deadline
+- Experiment tracking (14-day watch period, 7-day early stop)
+- Write-off proposals after 3 failed experiments
+- Teams notifications for alerts and daily summaries
+- Navigation link added to app shell
+
+**TEAMS_WEBHOOK_URL added to server .env**
+
+**NEXT STEPS:**
+1. Create Make.com scenarios for Amazon SP API
+2. Fix Bol.com API connection
 

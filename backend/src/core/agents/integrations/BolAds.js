@@ -2,7 +2,12 @@
  * Bol.com Advertising API Integration
  *
  * Manages Bol.com Sponsored Products campaigns.
- * Uses the new Advertising API V11 (launched 2024).
+ * Uses the new Advertising API V11 (launched April 2024).
+ *
+ * IMPORTANT v11 CHANGES:
+ * - Base URL changed from /retailer/ to /advertiser/
+ * - GET endpoints replaced with PUT filter endpoints for listing data
+ * - Endpoint paths changed from /advertising/campaigns to /sponsored-products/campaigns
  *
  * Features:
  * - Campaign management (create, update, pause)
@@ -11,7 +16,7 @@
  * - Bid management
  * - Performance reporting
  *
- * @see https://api.bol.com/retailer/public/Retailer-API/v11/functional/advertising-api/aapi-overview.html
+ * @see https://api.bol.com/advertiser/docs/redoc/sponsored-products/v11/campaign-management.html
  * @see https://developers.bol.com/en/docs/new-advertising-api-everything-you-want-to-know/
  *
  * @module BolAds
@@ -21,6 +26,7 @@ const https = require('https');
 
 /**
  * Bol.com Ads API Endpoints
+ * NOTE: As of v11, Advertising API uses /advertiser/ base path (NOT /retailer/)
  */
 const BOL_ADS_ENDPOINTS = {
   auth: 'login.bol.com',
@@ -119,14 +125,15 @@ class BolAdsClient {
 
   /**
    * Make authenticated API request
+   * NOTE: v11 uses /advertiser/ base path and advertiser content types
    */
   async request(method, path, body = null, apiVersion = 'v11') {
     await this.authenticate();
 
     const headers = {
       'Authorization': `Bearer ${this.accessToken}`,
-      'Accept': `application/vnd.retailer.${apiVersion}+json`,
-      'Content-Type': `application/vnd.retailer.${apiVersion}+json`
+      'Accept': `application/vnd.advertiser.${apiVersion}+json`,
+      'Content-Type': `application/vnd.advertiser.${apiVersion}+json`
     };
 
     const payload = body ? JSON.stringify(body) : '';
@@ -135,7 +142,7 @@ class BolAdsClient {
       const req = https.request({
         hostname: BOL_ADS_ENDPOINTS.api,
         port: 443,
-        path: `/retailer${path}`,
+        path: `/advertiser${path}`,
         method: method,
         headers: headers
       }, (res) => {
@@ -174,55 +181,86 @@ class BolAdsClient {
 
   /**
    * List all campaigns
+   * NOTE: v11 uses PUT with filter body instead of GET
    */
   async listCampaigns(params = {}) {
-    const query = new URLSearchParams({
+    // v11: Use PUT with filter body to list campaigns
+    const filterBody = {
       page: params.page || 1,
-      ...(params.status && { status: params.status })
-    });
-    return this.request('GET', `/advertising/campaigns?${query}`);
+      pageSize: params.pageSize || 50
+    };
+
+    if (params.campaignIds) {
+      filterBody.campaignIds = Array.isArray(params.campaignIds) ? params.campaignIds : [params.campaignIds];
+    }
+
+    const result = await this.request('PUT', '/sponsored-products/campaigns', filterBody);
+
+    // Filter by state client-side if requested
+    if (params.status && result.campaigns) {
+      result.campaigns = result.campaigns.filter(c => c.state === params.status);
+    }
+
+    return result;
   }
 
   /**
    * Get campaign by ID
+   * NOTE: v11 uses PUT with campaignIds filter
    */
   async getCampaign(campaignId) {
-    return this.request('GET', `/advertising/campaigns/${campaignId}`);
+    const result = await this.request('PUT', '/sponsored-products/campaigns', {
+      campaignIds: [campaignId],
+      page: 1,
+      pageSize: 1
+    });
+    return result.campaigns?.[0] || null;
   }
 
   /**
    * Create campaign
+   * NOTE: v11 uses POST /sponsored-products/campaigns
    */
   async createCampaign(campaign) {
-    return this.request('POST', '/advertising/campaigns', {
+    return this.request('POST', '/sponsored-products/campaigns', [{
       name: campaign.name,
       dailyBudget: campaign.dailyBudget,
-      targetingType: campaign.targetingType || TARGETING_TYPE.AUTOMATIC,
-      status: campaign.status || CAMPAIGN_STATUS.ENABLED,
+      totalBudget: campaign.totalBudget,
+      campaignType: campaign.campaignType || 'AUTO', // AUTO or MANUAL
+      state: campaign.state || CAMPAIGN_STATUS.ENABLED,
       startDate: campaign.startDate,
-      endDate: campaign.endDate
-    });
+      endDate: campaign.endDate,
+      targetCountries: campaign.targetCountries || ['NL', 'BE'],
+      targetChannels: campaign.targetChannels || ['DESKTOP', 'MOBILE', 'TABLET', 'APP'],
+      acosTargetPercentage: campaign.acosTargetPercentage
+    }]);
   }
 
   /**
    * Update campaign
+   * NOTE: v11 uses PUT /sponsored-products/campaigns with full campaign object
    */
   async updateCampaign(campaignId, updates) {
-    return this.request('PUT', `/advertising/campaigns/${campaignId}`, updates);
+    return this.request('PUT', '/sponsored-products/campaigns', [{
+      campaignId,
+      ...updates
+    }]);
   }
 
   /**
    * Pause campaign
+   * NOTE: v11 uses 'state' field not 'status'
    */
   async pauseCampaign(campaignId) {
-    return this.updateCampaign(campaignId, { status: CAMPAIGN_STATUS.PAUSED });
+    return this.updateCampaign(campaignId, { state: CAMPAIGN_STATUS.PAUSED });
   }
 
   /**
    * Enable campaign
+   * NOTE: v11 uses 'state' field not 'status'
    */
   async enableCampaign(campaignId) {
-    return this.updateCampaign(campaignId, { status: CAMPAIGN_STATUS.ENABLED });
+    return this.updateCampaign(campaignId, { state: CAMPAIGN_STATUS.ENABLED });
   }
 
   /**
@@ -236,178 +274,234 @@ class BolAdsClient {
 
   /**
    * List ads in campaign
+   * NOTE: v11 uses PUT /ads with filter body
    */
   async listAds(campaignId, params = {}) {
-    const query = new URLSearchParams({
+    const filterBody = {
+      campaignIds: [campaignId],
       page: params.page || 1,
-      ...(params.status && { status: params.status })
-    });
-    return this.request('GET', `/advertising/campaigns/${campaignId}/ads?${query}`);
+      pageSize: params.pageSize || 50
+    };
+
+    const result = await this.request('PUT', '/sponsored-products/ads', filterBody);
+
+    // Filter by state if requested
+    if (params.status && result.ads) {
+      result.ads = result.ads.filter(a => a.state === params.status);
+    }
+
+    return result;
   }
 
   /**
    * Get ad by ID
+   * NOTE: v11 uses PUT /ads with adIds filter
    */
   async getAd(campaignId, adId) {
-    return this.request('GET', `/advertising/campaigns/${campaignId}/ads/${adId}`);
+    const result = await this.request('PUT', '/sponsored-products/ads', {
+      adIds: [adId],
+      page: 1,
+      pageSize: 1
+    });
+    return result.ads?.[0] || null;
   }
 
   /**
    * Create ad (add product to campaign)
+   * NOTE: v11 uses POST /ads with array of ads
    */
   async createAd(campaignId, ad) {
-    return this.request('POST', `/advertising/campaigns/${campaignId}/ads`, {
+    return this.request('POST', '/sponsored-products/ads', [{
+      adGroupId: ad.adGroupId,
       ean: ad.ean,
-      bid: ad.bid,
-      status: ad.status || AD_STATUS.ENABLED
-    });
+      state: ad.state || AD_STATUS.ENABLED
+    }]);
   }
 
   /**
    * Create multiple ads (bulk)
+   * NOTE: v11 supports up to 100 ads per request
    */
   async createAdsBulk(campaignId, ads) {
-    return this.request('POST', `/advertising/campaigns/${campaignId}/ads/bulk`, {
-      ads: ads.map(ad => ({
+    return this.request('POST', '/sponsored-products/ads',
+      ads.map(ad => ({
+        adGroupId: ad.adGroupId,
         ean: ad.ean,
-        bid: ad.bid,
-        status: ad.status || AD_STATUS.ENABLED
+        state: ad.state || AD_STATUS.ENABLED
       }))
-    });
+    );
   }
 
   /**
    * Update ad
+   * NOTE: v11 uses PUT /ads with array
    */
   async updateAd(campaignId, adId, updates) {
-    return this.request('PUT', `/advertising/campaigns/${campaignId}/ads/${adId}`, updates);
+    return this.request('PUT', '/sponsored-products/ads', [{
+      adId,
+      ...updates
+    }]);
   }
 
   /**
-   * Update ad bid
+   * Update ad bid - not directly supported in v11
+   * Bids are managed at ad group or keyword level
    */
   async updateAdBid(campaignId, adId, bid) {
-    return this.updateAd(campaignId, adId, { bid });
+    console.warn('updateAdBid: In v11, bids are managed at ad group or keyword level');
+    return { warning: 'Bids are managed at ad group or keyword level in v11' };
   }
 
   /**
    * Pause ad
+   * NOTE: v11 uses 'state' field not 'status'
    */
   async pauseAd(campaignId, adId) {
-    return this.updateAd(campaignId, adId, { status: AD_STATUS.PAUSED });
+    return this.updateAd(campaignId, adId, { state: AD_STATUS.PAUSED });
   }
 
   /**
    * Enable ad
+   * NOTE: v11 uses 'state' field not 'status'
    */
   async enableAd(campaignId, adId) {
-    return this.updateAd(campaignId, adId, { status: AD_STATUS.ENABLED });
+    return this.updateAd(campaignId, adId, { state: AD_STATUS.ENABLED });
   }
 
   /**
-   * Delete ad
+   * Delete ad - v11 may use archive state instead
    */
   async deleteAd(campaignId, adId) {
-    return this.request('DELETE', `/advertising/campaigns/${campaignId}/ads/${adId}`);
+    // v11 might not support DELETE, use archive state instead
+    return this.updateAd(campaignId, adId, { state: 'ARCHIVED' });
   }
 
   // ==================== TARGETING (Manual Campaigns) ====================
 
   /**
    * List targeting keywords
+   * NOTE: v11 uses PUT /keywords with filter body
    */
-  async listTargetingKeywords(campaignId, params = {}) {
-    const query = new URLSearchParams({
-      page: params.page || 1
-    });
-    return this.request('GET', `/advertising/campaigns/${campaignId}/targeting/keywords?${query}`);
+  async listTargetingKeywords(adGroupId, params = {}) {
+    const filterBody = {
+      adGroupIds: [adGroupId],
+      page: params.page || 1,
+      pageSize: params.pageSize || 50
+    };
+    return this.request('PUT', '/sponsored-products/keywords', filterBody);
   }
 
   /**
    * Add targeting keyword
+   * NOTE: v11 uses POST /keywords with array
    */
-  async addTargetingKeyword(campaignId, keyword) {
-    return this.request('POST', `/advertising/campaigns/${campaignId}/targeting/keywords`, {
-      keyword: keyword.text,
+  async addTargetingKeyword(adGroupId, keyword) {
+    return this.request('POST', '/sponsored-products/keywords', [{
+      adGroupId,
+      keywordText: keyword.text,
       matchType: keyword.matchType || 'BROAD', // BROAD, PHRASE, EXACT
-      bid: keyword.bid
-    });
+      bid: keyword.bid,
+      state: 'ENABLED'
+    }]);
   }
 
   /**
    * Update targeting keyword bid
+   * NOTE: v11 uses PUT /keywords with array
    */
-  async updateTargetingKeywordBid(campaignId, keywordId, bid) {
-    return this.request('PUT', `/advertising/campaigns/${campaignId}/targeting/keywords/${keywordId}`, {
+  async updateTargetingKeywordBid(keywordId, bid) {
+    return this.request('PUT', '/sponsored-products/keywords', [{
+      keywordId,
       bid
-    });
+    }]);
   }
 
   /**
-   * Delete targeting keyword
+   * Delete targeting keyword - use archived state
    */
-  async deleteTargetingKeyword(campaignId, keywordId) {
-    return this.request('DELETE', `/advertising/campaigns/${campaignId}/targeting/keywords/${keywordId}`);
+  async deleteTargetingKeyword(keywordId) {
+    return this.request('PUT', '/sponsored-products/keywords', [{
+      keywordId,
+      state: 'ARCHIVED'
+    }]);
   }
 
   /**
    * List negative keywords
+   * NOTE: v11 uses PUT /negative-keywords with filter body
    */
-  async listNegativeKeywords(campaignId) {
-    return this.request('GET', `/advertising/campaigns/${campaignId}/targeting/negative-keywords`);
+  async listNegativeKeywords(adGroupId) {
+    return this.request('PUT', '/sponsored-products/negative-keywords', {
+      adGroupIds: [adGroupId],
+      page: 1,
+      pageSize: 100
+    });
   }
 
   /**
    * Add negative keyword
+   * NOTE: v11 uses POST /negative-keywords
    */
-  async addNegativeKeyword(campaignId, keyword) {
-    return this.request('POST', `/advertising/campaigns/${campaignId}/targeting/negative-keywords`, {
-      keyword: keyword
-    });
+  async addNegativeKeyword(adGroupId, keyword) {
+    return this.request('POST', '/sponsored-products/negative-keywords', [{
+      adGroupId,
+      keywordText: keyword
+    }]);
   }
 
   // ==================== REPORTING ====================
 
   /**
    * Get campaign performance report
+   * NOTE: v11 uses POST /reports with request body
    */
   async getCampaignReport(campaignId, params = {}) {
-    const query = new URLSearchParams({
-      ...(params.startDate && { 'start-date': params.startDate }),
-      ...(params.endDate && { 'end-date': params.endDate }),
-      granularity: params.granularity || 'DAILY' // DAILY, WEEKLY, MONTHLY
-    });
-    return this.request('GET', `/advertising/campaigns/${campaignId}/report?${query}`);
+    const reportBody = {
+      campaignIds: [campaignId],
+      startDate: params.startDate,
+      endDate: params.endDate,
+      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
+    };
+    return this.request('POST', '/sponsored-products/reports/campaigns', reportBody);
   }
 
   /**
    * Get ad performance report
+   * NOTE: v11 uses POST /reports with request body
    */
-  async getAdReport(campaignId, adId, params = {}) {
-    const query = new URLSearchParams({
-      ...(params.startDate && { 'start-date': params.startDate }),
-      ...(params.endDate && { 'end-date': params.endDate }),
-      granularity: params.granularity || 'DAILY'
-    });
-    return this.request('GET', `/advertising/campaigns/${campaignId}/ads/${adId}/report?${query}`);
+  async getAdReport(adIds, params = {}) {
+    const reportBody = {
+      adIds: Array.isArray(adIds) ? adIds : [adIds],
+      startDate: params.startDate,
+      endDate: params.endDate,
+      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
+    };
+    return this.request('POST', '/sponsored-products/reports/ads', reportBody);
   }
 
   /**
    * Get aggregated performance report
+   * NOTE: v11 uses POST /reports/performance
    */
   async getAggregatedReport(params = {}) {
-    const query = new URLSearchParams({
-      ...(params.startDate && { 'start-date': params.startDate }),
-      ...(params.endDate && { 'end-date': params.endDate }),
-      granularity: params.granularity || 'DAILY'
-    });
-    return this.request('GET', `/advertising/report?${query}`);
+    const reportBody = {
+      startDate: params.startDate,
+      endDate: params.endDate,
+      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
+    };
+
+    if (params.campaignIds) {
+      reportBody.campaignIds = params.campaignIds;
+    }
+
+    return this.request('POST', '/sponsored-products/reports/performance', reportBody);
   }
 
   // ==================== UTILITY / ANALYTICS ====================
 
   /**
    * Get all campaigns with performance summary
+   * NOTE: v11 uses 'state' field not 'status'
    */
   async getCampaignsSummary() {
     const campaigns = await this.listCampaigns();
@@ -415,15 +509,16 @@ class BolAdsClient {
 
     const summary = {
       totalCampaigns: campaignList.length,
-      activeCampaigns: campaignList.filter(c => c.status === CAMPAIGN_STATUS.ENABLED).length,
-      pausedCampaigns: campaignList.filter(c => c.status === CAMPAIGN_STATUS.PAUSED).length,
-      totalDailyBudget: campaignList.reduce((sum, c) => sum + (c.dailyBudget || 0), 0),
+      activeCampaigns: campaignList.filter(c => c.state === CAMPAIGN_STATUS.ENABLED).length,
+      pausedCampaigns: campaignList.filter(c => c.state === CAMPAIGN_STATUS.PAUSED).length,
+      totalDailyBudget: campaignList.reduce((sum, c) => sum + (c.dailyBudget?.amount || 0), 0),
       campaigns: campaignList.map(c => ({
         id: c.campaignId,
         name: c.name,
-        status: c.status,
+        state: c.state,
+        campaignType: c.campaignType,
         dailyBudget: c.dailyBudget,
-        targetingType: c.targetingType
+        totalBudget: c.totalBudget
       }))
     };
 
