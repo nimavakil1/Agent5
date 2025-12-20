@@ -18,7 +18,7 @@ class SubstitutionAnalyzer {
   constructor(config = {}) {
     this.db = config.db || null;
     // Threshold: only consider sales increase as substitution if above this %
-    this.substitutionThreshold = config.substitutionThreshold || 0.20; // 20%
+    this.substitutionThreshold = config.substitutionThreshold || 0.10; // 10%
     // Minimum days of stockout to trigger analysis
     this.minStockoutDays = config.minStockoutDays || 3;
     // Days to use for baseline calculation
