@@ -50,12 +50,13 @@ async function testCampaignsEndpoint(token) {
     pageSize: 10
   };
 
-  const response = await fetch('https://api.bol.com/advertiser/campaigns/list', {
+  // Correct URL from OpenAPI spec: /advertiser/sponsored-products/campaign-management/campaigns/list
+  const response = await fetch('https://api.bol.com/advertiser/sponsored-products/campaign-management/campaigns/list', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
+      'Accept': 'application/vnd.advertiser.v11+json',
+      'Content-Type': 'application/vnd.advertiser.v11+json'
     },
     body: JSON.stringify(filterBody)
   });
@@ -91,12 +92,12 @@ async function testKeywordsEndpoint(token) {
     pageSize: 10
   };
 
-  const response = await fetch('https://api.bol.com/advertiser/keywords/list', {
+  const response = await fetch('https://api.bol.com/advertiser/sponsored-products/campaign-management/keywords/list', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
+      'Accept': 'application/vnd.advertiser.v11+json',
+      'Content-Type': 'application/vnd.advertiser.v11+json'
     },
     body: JSON.stringify(filterBody)
   });
@@ -129,12 +130,12 @@ async function testAdGroupsEndpoint(token) {
     pageSize: 10
   };
 
-  const response = await fetch('https://api.bol.com/advertiser/ad-groups/list', {
+  const response = await fetch('https://api.bol.com/advertiser/sponsored-products/campaign-management/ad-groups/list', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
+      'Accept': 'application/vnd.advertiser.v11+json',
+      'Content-Type': 'application/vnd.advertiser.v11+json'
     },
     body: JSON.stringify(filterBody)
   });

@@ -151,7 +151,7 @@ async function bolRequest(endpoint, method = 'GET', body = null, retries = 3) {
  * Uses separate credentials (BOL_ADVERTISER_ID / BOL_ADVERTISER_SECRET)
  *
  * IMPORTANT: As of v11, the Advertising API uses:
- * - Base URL: https://api.bol.com/advertiser (NOT /retailer/)
+ * - Base URL: https://api.bol.com/advertiser/sponsored-products/campaign-management
  * - Listing endpoints use POST with /list suffix (e.g., POST /campaigns/list)
  * - Create endpoints use POST (e.g., POST /campaigns)
  * - Update endpoints use PUT (e.g., PUT /campaigns)
@@ -164,18 +164,19 @@ async function advertiserRequest(endpoint, method = 'GET', body = null, retries 
   const options = {
     method,
     headers: {
-      'Accept': 'application/json',
+      'Accept': 'application/vnd.advertiser.v11+json',
       'Authorization': `Bearer ${token}`
     }
   };
 
   if (body) {
-    options.headers['Content-Type'] = 'application/json';
+    options.headers['Content-Type'] = 'application/vnd.advertiser.v11+json';
     options.body = JSON.stringify(body);
   }
 
-  // Advertising API uses /advertiser/ base URL (NOT /retailer/)
-  const response = await fetch(`https://api.bol.com/advertiser${endpoint}`, options);
+  // Advertising API v11 full base URL (from OpenAPI spec)
+  const baseUrl = 'https://api.bol.com/advertiser/sponsored-products/campaign-management';
+  const response = await fetch(`${baseUrl}${endpoint}`, options);
 
   // Handle rate limiting with retry
   if (response.status === 429 && retries > 0) {
