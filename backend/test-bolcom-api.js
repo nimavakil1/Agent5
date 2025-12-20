@@ -2,6 +2,12 @@
 /**
  * Test script for Bol.com Advertising API v11
  * Run: node test-bolcom-api.js
+ *
+ * Correct v11 endpoints:
+ * - List campaigns: POST /campaigns/list
+ * - Create campaigns: POST /campaigns
+ * - Update campaigns: PUT /campaigns
+ * - List keywords: POST /keywords/list
  */
 
 require('dotenv').config();
@@ -37,19 +43,19 @@ async function getAccessToken() {
 }
 
 async function testCampaignsEndpoint(token) {
-  console.log('\n📊 Testing GET campaigns (v11 PUT filter)...');
+  console.log('\n📊 Testing POST /campaigns/list ...');
 
   const filterBody = {
     page: 1,
     pageSize: 10
   };
 
-  const response = await fetch('https://api.bol.com/advertiser/sponsored-products/campaigns', {
-    method: 'PUT',
+  const response = await fetch('https://api.bol.com/advertiser/campaigns/list', {
+    method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Accept': 'application/vnd.advertiser.v11+json',
-      'Content-Type': 'application/vnd.advertiser.v11+json'
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify(filterBody)
   });
@@ -78,19 +84,19 @@ async function testCampaignsEndpoint(token) {
 }
 
 async function testKeywordsEndpoint(token) {
-  console.log('\n🔑 Testing keywords endpoint...');
+  console.log('\n🔑 Testing POST /keywords/list ...');
 
   const filterBody = {
     page: 1,
     pageSize: 10
   };
 
-  const response = await fetch('https://api.bol.com/advertiser/sponsored-products/keywords', {
-    method: 'PUT',
+  const response = await fetch('https://api.bol.com/advertiser/keywords/list', {
+    method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Accept': 'application/vnd.advertiser.v11+json',
-      'Content-Type': 'application/vnd.advertiser.v11+json'
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify(filterBody)
   });
@@ -99,9 +105,54 @@ async function testKeywordsEndpoint(token) {
 
   if (response.ok) {
     console.log('✅ Keywords endpoint working!');
+    const text = await response.text();
+    try {
+      const data = JSON.parse(text);
+      console.log(`   Found ${data.keywords?.length || 0} keywords`);
+    } catch (e) {
+      console.log('   Response:', text.substring(0, 200));
+    }
   } else {
     const text = await response.text();
     console.log('❌ Keywords endpoint failed');
+    console.log('   Response:', text.substring(0, 300));
+  }
+
+  return response.ok;
+}
+
+async function testAdGroupsEndpoint(token) {
+  console.log('\n📁 Testing POST /ad-groups/list ...');
+
+  const filterBody = {
+    page: 1,
+    pageSize: 10
+  };
+
+  const response = await fetch('https://api.bol.com/advertiser/ad-groups/list', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(filterBody)
+  });
+
+  console.log(`   Status: ${response.status} ${response.statusText}`);
+
+  if (response.ok) {
+    console.log('✅ Ad Groups endpoint working!');
+    const text = await response.text();
+    try {
+      const data = JSON.parse(text);
+      console.log(`   Found ${data.adGroups?.length || 0} ad groups`);
+    } catch (e) {
+      console.log('   Response:', text.substring(0, 200));
+    }
+  } else {
+    const text = await response.text();
+    console.log('❌ Ad Groups endpoint failed');
     console.log('   Response:', text.substring(0, 300));
   }
 
@@ -118,16 +169,18 @@ async function main() {
     const token = await getAccessToken();
 
     const campaignsOk = await testCampaignsEndpoint(token);
+    const adGroupsOk = await testAdGroupsEndpoint(token);
     const keywordsOk = await testKeywordsEndpoint(token);
 
     console.log('\n' + '='.repeat(50));
     console.log('RESULTS:');
-    console.log(`  Auth:      ✅ Working`);
-    console.log(`  Campaigns: ${campaignsOk ? '✅ Working' : '❌ Failed'}`);
-    console.log(`  Keywords:  ${keywordsOk ? '✅ Working' : '❌ Failed'}`);
+    console.log(`  Auth:       ✅ Working`);
+    console.log(`  Campaigns:  ${campaignsOk ? '✅ Working' : '❌ Failed'}`);
+    console.log(`  Ad Groups:  ${adGroupsOk ? '✅ Working' : '❌ Failed'}`);
+    console.log(`  Keywords:   ${keywordsOk ? '✅ Working' : '❌ Failed'}`);
     console.log('='.repeat(50));
 
-    process.exit(campaignsOk && keywordsOk ? 0 : 1);
+    process.exit(campaignsOk && adGroupsOk && keywordsOk ? 0 : 1);
   } catch (error) {
     console.error('\n❌ Error:', error.message);
     process.exit(1);
