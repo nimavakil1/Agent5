@@ -214,13 +214,12 @@ class OdooDataSync {
       }
 
       // Sync in order of dependencies
-      // For incremental: suppliers, customers, products always do full sync (small datasets)
-      // For invoice lines and stock moves: use date filter based on mode
-      stats.suppliers = await this.syncSuppliers();
-      stats.customers = await this.syncCustomers();
-      stats.products = await this.syncProducts();
+      // For incremental: use write_date filter to only sync records modified since last sync
+      stats.suppliers = await this.syncSuppliers({ incremental });
+      stats.customers = await this.syncCustomers({ incremental });
+      stats.products = await this.syncProducts({ incremental });
       stats.invoiceLines = await this.syncInvoiceLines({ incremental });
-      stats.purchaseOrders = await this.syncPurchaseOrders();
+      stats.purchaseOrders = await this.syncPurchaseOrders({ incremental });
       stats.stockMoves = await this.syncStockMoves({ incremental });
 
       // Log sync completion
@@ -248,15 +247,30 @@ class OdooDataSync {
 
   /**
    * Sync suppliers from Odoo
+   * @param {Object} options - Sync options
+   * @param {boolean} options.incremental - If true, only sync records modified since last sync
    */
-  async syncSuppliers() {
-    console.log('Syncing suppliers...');
+  async syncSuppliers(options = {}) {
+    const { incremental = false } = options;
 
-    const suppliers = await this.odooClient.searchRead('res.partner', [
-      ['supplier_rank', '>', 0],
-    ], [
+    // Build filter - use write_date for incremental sync
+    const filter = [['supplier_rank', '>', 0]];
+    if (incremental) {
+      const lastSync = await this._getLastSyncTime();
+      if (lastSync) {
+        const lastSyncStr = lastSync.toISOString().replace('T', ' ').split('.')[0];
+        filter.push(['write_date', '>=', lastSyncStr]);
+        console.log(`Syncing suppliers modified since ${lastSyncStr}...`);
+      } else {
+        console.log('Syncing suppliers (no previous sync, doing full)...');
+      }
+    } else {
+      console.log('Syncing suppliers (full)...');
+    }
+
+    const suppliers = await this.odooClient.searchRead('res.partner', filter, [
       'name', 'email', 'phone', 'country_id', 'city',
-      'supplier_rank', 'active',
+      'supplier_rank', 'active', 'write_date',
     ], { limit: 10000 });
 
     const collection = this.db.collection(this.collections.suppliers);
@@ -292,15 +306,30 @@ class OdooDataSync {
 
   /**
    * Sync customers from Odoo
+   * @param {Object} options - Sync options
+   * @param {boolean} options.incremental - If true, only sync records modified since last sync
    */
-  async syncCustomers() {
-    console.log('Syncing customers...');
+  async syncCustomers(options = {}) {
+    const { incremental = false } = options;
 
-    const customers = await this.odooClient.searchRead('res.partner', [
-      ['customer_rank', '>', 0],
-    ], [
+    // Build filter - use write_date for incremental sync
+    const filter = [['customer_rank', '>', 0]];
+    if (incremental) {
+      const lastSync = await this._getLastSyncTime();
+      if (lastSync) {
+        const lastSyncStr = lastSync.toISOString().replace('T', ' ').split('.')[0];
+        filter.push(['write_date', '>=', lastSyncStr]);
+        console.log(`Syncing customers modified since ${lastSyncStr}...`);
+      } else {
+        console.log('Syncing customers (no previous sync, doing full)...');
+      }
+    } else {
+      console.log('Syncing customers (full)...');
+    }
+
+    const customers = await this.odooClient.searchRead('res.partner', filter, [
       'name', 'email', 'phone', 'mobile', 'country_id', 'city', 'street',
-      'customer_rank', 'active', 'company_type',
+      'customer_rank', 'active', 'company_type', 'write_date',
     ], { limit: 2000000 });
 
     const collection = this.db.collection(this.collections.customers);
@@ -339,26 +368,74 @@ class OdooDataSync {
 
   /**
    * Sync products with stock levels and supplier info
+   * @param {Object} options - Sync options
+   * @param {boolean} options.incremental - If true, only sync records modified since last sync
    */
-  async syncProducts() {
-    console.log('Syncing products...');
+  async syncProducts(options = {}) {
+    const { incremental = false } = options;
 
-    // Get all stockable products (including inactive for analysis)
-    const products = await this.odooClient.searchRead('product.product', [
-      ['type', '=', 'product'],
-    ], [
+    // Build filter - use write_date for incremental sync
+    const productFilter = [['type', '=', 'product']];
+    let supplierInfoFilter = [];
+
+    if (incremental) {
+      const lastSync = await this._getLastSyncTime();
+      if (lastSync) {
+        const lastSyncStr = lastSync.toISOString().replace('T', ' ').split('.')[0];
+        productFilter.push(['write_date', '>=', lastSyncStr]);
+        supplierInfoFilter = [['write_date', '>=', lastSyncStr]];
+        console.log(`Syncing products and supplier info modified since ${lastSyncStr}...`);
+      } else {
+        console.log('Syncing products (no previous sync, doing full)...');
+      }
+    } else {
+      console.log('Syncing products (full)...');
+    }
+
+    // Get stockable products (including inactive for analysis)
+    const products = await this.odooClient.searchRead('product.product', productFilter, [
       'name', 'default_code', 'barcode', 'categ_id',
       'qty_available', 'virtual_available', 'incoming_qty', 'outgoing_qty',
       'standard_price', 'list_price',
       'volume', 'weight',
       'seller_ids', 'active',
       'sale_ok', 'purchase_ok',  // Can be sold / Can be purchased flags
+      'write_date',
     ], { limit: 50000 });
 
-    // Get supplier info for all products
-    const supplierInfos = await this.odooClient.searchRead('product.supplierinfo', [], [
-      'product_tmpl_id', 'partner_id', 'price', 'min_qty', 'delay', 'currency_id',
-    ], { limit: 2000000 });
+    // Get supplier info - for incremental, get all modified supplier info
+    // and also all supplier info for the modified products
+    let supplierInfos;
+    if (incremental && supplierInfoFilter.length > 0) {
+      // Get supplier info modified since last sync
+      const modifiedSupplierInfos = await this.odooClient.searchRead('product.supplierinfo', supplierInfoFilter, [
+        'product_tmpl_id', 'partner_id', 'price', 'min_qty', 'delay', 'currency_id', 'write_date',
+      ], { limit: 2000000 });
+
+      // Also get all supplier info for products that were modified
+      const modifiedProductIds = products.map(p => p.id);
+      let productSupplierInfos = [];
+      if (modifiedProductIds.length > 0) {
+        productSupplierInfos = await this.odooClient.searchRead('product.supplierinfo', [
+          ['product_tmpl_id', 'in', modifiedProductIds],
+        ], [
+          'product_tmpl_id', 'partner_id', 'price', 'min_qty', 'delay', 'currency_id', 'write_date',
+        ], { limit: 2000000 });
+      }
+
+      // Combine and dedupe
+      const infoMap = new Map();
+      for (const info of [...modifiedSupplierInfos, ...productSupplierInfos]) {
+        infoMap.set(info.id, info);
+      }
+      supplierInfos = Array.from(infoMap.values());
+      console.log(`Found ${supplierInfos.length} supplier info records to sync`);
+    } else {
+      // Full sync - get all supplier info
+      supplierInfos = await this.odooClient.searchRead('product.supplierinfo', [], [
+        'product_tmpl_id', 'partner_id', 'price', 'min_qty', 'delay', 'currency_id', 'write_date',
+      ], { limit: 2000000 });
+    }
 
     // Build supplier info map by product template
     const supplierInfoMap = new Map();
@@ -535,14 +612,31 @@ class OdooDataSync {
 
   /**
    * Sync purchase orders
+   * @param {Object} options - Sync options
+   * @param {boolean} options.incremental - If true, only sync records modified since last sync
    */
-  async syncPurchaseOrders() {
-    console.log('Syncing purchase orders...');
+  async syncPurchaseOrders(options = {}) {
+    const { incremental = false } = options;
 
-    // Get all purchase orders (all states for history)
-    const orders = await this.odooClient.searchRead('purchase.order', [], [
+    // Build filter - use write_date for incremental sync
+    const filter = [];
+    if (incremental) {
+      const lastSync = await this._getLastSyncTime();
+      if (lastSync) {
+        const lastSyncStr = lastSync.toISOString().replace('T', ' ').split('.')[0];
+        filter.push(['write_date', '>=', lastSyncStr]);
+        console.log(`Syncing purchase orders modified since ${lastSyncStr}...`);
+      } else {
+        console.log('Syncing purchase orders (no previous sync, doing full)...');
+      }
+    } else {
+      console.log('Syncing purchase orders (full)...');
+    }
+
+    // Get purchase orders (all states for history)
+    const orders = await this.odooClient.searchRead('purchase.order', filter, [
       'name', 'partner_id', 'date_order', 'date_planned', 'date_approve',
-      'amount_total', 'state', 'order_line', 'currency_id',
+      'amount_total', 'state', 'order_line', 'currency_id', 'write_date',
     ], { limit: 50000, order: 'date_order desc' });
 
     // Get all order lines

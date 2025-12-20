@@ -20,13 +20,14 @@ class SupplyChainManager {
     // Default lead times (in days) - used when supplier-specific data not available
     // These are FALLBACK defaults only - actual values should come from supplier data
     this.defaults = {
-      supplierLeadTime: 14,        // Default supplier preparation time
-      seaFreightTime: 40,          // China to Belgium via sea
-      airFreightTime: 5,           // China to Belgium via air
-      railFreightTime: 18,         // China to Belgium via rail
-      customsClearance: 3,         // Belgian customs processing
-      internalProcessing: 2,       // Warehouse receiving
-      bufferDays: 5,               // Safety buffer
+      orderProcessingTime: 5,     // Time from PO to production start (confirm, payment, scheduling)
+      supplierLeadTime: 60,       // Default supplier production time (China suppliers)
+      seaFreightTime: 42,         // China to Belgium via sea (~6 weeks)
+      airFreightTime: 5,          // China to Belgium via air
+      railFreightTime: 18,        // China to Belgium via rail
+      portAndCustoms: 5,          // Port handling + Belgian customs processing
+      internalProcessing: 2,      // Warehouse receiving
+      bufferDays: 7,              // Safety buffer for delays
     };
 
     // Database reference for supplier data lookup
@@ -167,21 +168,23 @@ class SupplyChainManager {
     }
 
     const totalLeadTime =
+      this.defaults.orderProcessingTime +
       supplierLead +
       shippingTime +
-      this.defaults.customsClearance +
+      this.defaults.portAndCustoms +
       this.defaults.internalProcessing +
       this.defaults.bufferDays;
 
     return {
+      orderProcessingTime: this.defaults.orderProcessingTime,
       supplierLeadTime: supplierLead,
       shippingTime,
       shippingMethod,
-      customsClearance: this.defaults.customsClearance,
+      portAndCustoms: this.defaults.portAndCustoms,
       internalProcessing: this.defaults.internalProcessing,
       buffer: this.defaults.bufferDays,
       totalDays: totalLeadTime,
-      description: `${totalLeadTime} days total (${supplierLead}d production + ${shippingTime}d ${shippingMethod} + ${this.defaults.customsClearance + this.defaults.internalProcessing}d processing + ${this.defaults.bufferDays}d buffer)`,
+      description: `${totalLeadTime} days total (${this.defaults.orderProcessingTime}d order processing + ${supplierLead}d production + ${shippingTime}d ${shippingMethod} + ${this.defaults.portAndCustoms}d port/customs + ${this.defaults.internalProcessing}d receiving + ${this.defaults.bufferDays}d buffer)`,
       source: supplierLeadTimeOverride !== null ? 'override' : (supplierId ? 'supplier_data' : 'default'),
     };
   }
