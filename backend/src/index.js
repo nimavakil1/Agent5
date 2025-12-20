@@ -40,6 +40,7 @@ const ms365Router = require('./api/routes/ms365.api');
 const bolcomRouter = require('./api/routes/bolcom.api');
 const purchasingRouter = require('./api/routes/purchasing.api');
 const { syncRouter: odooSyncRouter } = require('./api/routes/purchasing.api');
+const inventoryRouter = require('./api/routes/inventory.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -85,6 +86,7 @@ if (process.env.NODE_ENV !== 'test') {
       if (process.env.ODOO_URL && process.env.ODOO_DB) {
         const { OdooDirectClient } = require('./core/agents/integrations/OdooMCP');
         const { initAgent: initPurchasingAgent } = require('./api/routes/purchasing.api');
+        const { initAgent: initInventoryAgent } = require('./api/routes/inventory.api');
         const { getOdooDataSync } = require('./services/OdooDataSync');
         const { getDb } = require('./db');
 
@@ -93,6 +95,7 @@ if (process.env.NODE_ENV !== 'test') {
 
         const db = getDb();
         await initPurchasingAgent(odooClient, db);
+        await initInventoryAgent(odooClient, db);
 
         // Initialize and start Odoo data sync
         const dataSync = getOdooDataSync();
@@ -100,6 +103,7 @@ if (process.env.NODE_ENV !== 'test') {
         dataSync.startScheduledSync();
 
         console.log('Purchasing Intelligence Agent initialized successfully');
+        console.log('Inventory Optimization Agent initialized successfully');
         console.log('Odoo data sync started (every 6 hours)');
       }
     } catch (e) {
@@ -258,6 +262,8 @@ app.use('/api/bolcom', requireSession, bolcomRouter);
 app.use('/api/odoo-sync', odooSyncRouter);
 // Purchasing endpoints require session
 app.use('/api/purchasing', requireSession, purchasingRouter);
+// Inventory optimization endpoints require session
+app.use('/api/inventory', requireSession, inventoryRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));

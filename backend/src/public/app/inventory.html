@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory Optimization - Agent5</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    .status-red_flag { background-color: #fee2e2; border-left: 4px solid #ef4444; }
+    .status-slow_mover { background-color: #fef3c7; border-left: 4px solid #f59e0b; }
+    .status-new_listing { background-color: #dbeafe; border-left: 4px solid #3b82f6; }
+    .status-normal { background-color: #f0fdf4; border-left: 4px solid #22c55e; }
+    .loading-spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #3498db;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!-- Navigation -->
+  <nav class="bg-white shadow-sm border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center">
+          <a href="/app/" class="text-gray-500 hover:text-gray-700 mr-4">
+            <i class="fas fa-arrow-left"></i>
+          </a>
+          <h1 class="text-xl font-semibold text-gray-900">
+            <i class="fas fa-warehouse text-indigo-600 mr-2"></i>
+            Inventory Optimization
+          </h1>
+        </div>
+        <div class="flex items-center space-x-4">
+          <button onclick="testTeamsNotification()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+            <i class="fab fa-microsoft mr-2"></i>Test Teams
+          </button>
+          <button onclick="runAnalysis()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+            <i class="fas fa-play mr-2"></i>Run Analysis
+          </button>
+          <button onclick="refreshDashboard()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+            <i class="fas fa-sync-alt mr-2"></i>Refresh
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Status Banner -->
+    <div id="statusBanner" class="hidden mb-6 p-4 rounded-lg"></div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">Red Flags</p>
+            <p class="text-3xl font-bold text-red-600" id="redFlagCount">-</p>
+          </div>
+          <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+            <i class="fas fa-flag text-red-600 text-xl"></i>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-2">No sales in 30+ days</p>
+      </div>
+
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">Slow Movers</p>
+            <p class="text-3xl font-bold text-amber-600" id="slowMoverCount">-</p>
+          </div>
+          <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+            <i class="fas fa-snail text-amber-600 text-xl"></i>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-2">6+ months of stock</p>
+      </div>
+
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">Experiments</p>
+            <p class="text-3xl font-bold text-purple-600" id="experimentCount">-</p>
+          </div>
+          <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+            <i class="fas fa-flask text-purple-600 text-xl"></i>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-2">Currently running</p>
+      </div>
+
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">Pending Tasks</p>
+            <p class="text-3xl font-bold text-blue-600" id="pendingTaskCount">-</p>
+          </div>
+          <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+            <i class="fas fa-tasks text-blue-600 text-xl"></i>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-2">Awaiting action</p>
+      </div>
+
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-500">Total Products</p>
+            <p class="text-3xl font-bold text-gray-600" id="totalProducts">-</p>
+          </div>
+          <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+            <i class="fas fa-boxes text-gray-600 text-xl"></i>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-2">Analyzed</p>
+      </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <!-- Slow Movers List -->
+      <div class="bg-white rounded-lg shadow">
+        <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+          <h2 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-exclamation-triangle text-amber-500 mr-2"></i>
+            Products Needing Attention
+          </h2>
+          <select id="statusFilter" onchange="filterProducts()" class="text-sm border rounded-lg px-3 py-1">
+            <option value="">All</option>
+            <option value="red_flag">Red Flags Only</option>
+            <option value="slow_mover">Slow Movers Only</option>
+          </select>
+        </div>
+        <div id="productList" class="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+          <div class="p-8 text-center text-gray-400">
+            <div class="loading-spinner mx-auto mb-2"></div>
+            Loading...
+          </div>
+        </div>
+      </div>
+
+      <!-- Pending Tasks -->
+      <div class="bg-white rounded-lg shadow">
+        <div class="p-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-clipboard-list text-blue-500 mr-2"></i>
+            Pending Tasks in Odoo
+          </h2>
+        </div>
+        <div id="taskList" class="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+          <div class="p-8 text-center text-gray-400">
+            <div class="loading-spinner mx-auto mb-2"></div>
+            Loading...
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Experiments -->
+      <div class="bg-white rounded-lg shadow lg:col-span-2">
+        <div class="p-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-flask text-purple-500 mr-2"></i>
+            Active Experiments
+          </h2>
+        </div>
+        <div id="experimentList" class="p-4">
+          <div class="text-center text-gray-400 py-4">
+            <div class="loading-spinner mx-auto mb-2"></div>
+            Loading...
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity Log -->
+      <div class="bg-white rounded-lg shadow lg:col-span-2">
+        <div class="p-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-history text-gray-500 mr-2"></i>
+            Recent Activity
+          </h2>
+        </div>
+        <div id="activityLog" class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+          <div class="p-8 text-center text-gray-400">
+            <div class="loading-spinner mx-auto mb-2"></div>
+            Loading...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agent Status -->
+    <div class="mt-8 bg-white rounded-lg shadow p-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center">
+          <div id="agentStatus" class="w-3 h-3 bg-gray-400 rounded-full mr-3"></div>
+          <span class="text-sm text-gray-600">Agent Status: <span id="agentStatusText">Checking...</span></span>
+        </div>
+        <div class="text-sm text-gray-500">
+          Last analysis: <span id="lastRunTime">-</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let allProducts = [];
+
+    async function refreshDashboard() {
+      showStatus('Refreshing...', 'info');
+      await Promise.all([
+        loadSummary(),
+        loadSlowMovers(),
+        loadTasks(),
+        loadExperiments(),
+        loadActivity(),
+        checkAgentStatus()
+      ]);
+      showStatus('Dashboard refreshed', 'success');
+    }
+
+    async function loadSummary() {
+      try {
+        const res = await fetch('/api/inventory/dashboard');
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('redFlagCount').textContent = data.data.summary?.redFlags || 0;
+          document.getElementById('slowMoverCount').textContent = data.data.summary?.slowMovers || 0;
+          document.getElementById('experimentCount').textContent = data.data.activeExperiments?.length || 0;
+          document.getElementById('pendingTaskCount').textContent = data.data.pendingTasks?.length || 0;
+          document.getElementById('totalProducts').textContent = data.data.summary?.totalProducts || '-';
+          if (data.data.lastRunTime) {
+            document.getElementById('lastRunTime').textContent = new Date(data.data.lastRunTime).toLocaleString();
+          }
+        }
+      } catch (e) {
+        console.error('Error loading summary:', e);
+      }
+    }
+
+    async function loadSlowMovers() {
+      try {
+        const res = await fetch('/api/inventory/slow-movers?limit=50');
+        const data = await res.json();
+        if (data.success) {
+          allProducts = data.data.products || [];
+          renderProducts(allProducts);
+        }
+      } catch (e) {
+        console.error('Error loading slow movers:', e);
+        document.getElementById('productList').innerHTML = '<div class="p-4 text-red-500">Error loading data</div>';
+      }
+    }
+
+    function renderProducts(products) {
+      const list = document.getElementById('productList');
+      if (products.length === 0) {
+        list.innerHTML = '<div class="p-8 text-center text-gray-400">No products needing attention</div>';
+        return;
+      }
+
+      list.innerHTML = products.map(p => `
+        <div class="p-4 status-${p.status} hover:bg-opacity-75 transition cursor-pointer" onclick="showProductDetails('${p.productId}')">
+          <div class="flex justify-between items-start">
+            <div>
+              <div class="font-medium text-gray-900">${p.productSku || 'N/A'}</div>
+              <div class="text-sm text-gray-600 truncate" style="max-width: 250px;">${p.productName}</div>
+              <div class="mt-1 flex gap-2">
+                <span class="text-xs px-2 py-1 rounded ${p.status === 'red_flag' ? 'bg-red-200 text-red-800' : 'bg-amber-200 text-amber-800'}">
+                  ${p.status === 'red_flag' ? 'RED FLAG' : 'SLOW MOVER'}
+                </span>
+              </div>
+            </div>
+            <div class="text-right text-sm">
+              <div class="text-gray-600">${p.metrics.daysOfStock} days stock</div>
+              <div class="text-gray-500">${p.metrics.daysSinceLastSale} days no sale</div>
+              <div class="font-medium text-gray-900">EUR ${p.metrics.stockValue}</div>
+            </div>
+          </div>
+          ${p.recommendations?.[0] ? `
+          <div class="mt-2 text-xs text-gray-500">
+            <i class="fas fa-lightbulb text-amber-500 mr-1"></i>
+            ${p.recommendations[0].message}
+          </div>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    function filterProducts() {
+      const status = document.getElementById('statusFilter').value;
+      const filtered = status ? allProducts.filter(p => p.status === status) : allProducts;
+      renderProducts(filtered);
+    }
+
+    async function loadTasks() {
+      try {
+        const res = await fetch('/api/inventory/tasks?status=pending');
+        const data = await res.json();
+        const list = document.getElementById('taskList');
+
+        if (!data.success || !data.data?.length) {
+          list.innerHTML = '<div class="p-8 text-center text-gray-400">No pending tasks</div>';
+          return;
+        }
+
+        list.innerHTML = data.data.map(t => `
+          <div class="p-4 hover:bg-gray-50 transition ${t.isOverdue ? 'bg-red-50' : ''}">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="font-medium text-gray-900">${t.name}</div>
+                <div class="text-sm text-gray-500">${t.stage}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-xs ${t.isOverdue ? 'text-red-600 font-bold' : 'text-gray-500'}">
+                  ${t.isOverdue ? 'OVERDUE' : 'Due: ' + t.deadline}
+                </div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Error loading tasks:', e);
+      }
+    }
+
+    async function loadExperiments() {
+      try {
+        const res = await fetch('/api/inventory/experiments?status=running&limit=10');
+        const data = await res.json();
+        const list = document.getElementById('experimentList');
+
+        if (!data.success || !data.data?.length) {
+          list.innerHTML = '<div class="text-center text-gray-400 py-4">No active experiments</div>';
+          return;
+        }
+
+        list.innerHTML = `
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${data.data.map(e => `
+              <div class="border rounded-lg p-4 bg-purple-50">
+                <div class="font-medium text-gray-900">${e.productSku || 'Unknown'}</div>
+                <div class="text-sm text-gray-600">${e.details?.action || 'Experiment'}</div>
+                <div class="mt-2 flex justify-between text-xs text-gray-500">
+                  <span>Started: ${new Date(e.timestamp).toLocaleDateString()}</span>
+                  <span class="text-purple-600 font-medium">RUNNING</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } catch (e) {
+        console.error('Error loading experiments:', e);
+      }
+    }
+
+    async function loadActivity() {
+      try {
+        const res = await fetch('/api/inventory/activity?limit=20');
+        const data = await res.json();
+        const list = document.getElementById('activityLog');
+
+        if (!data.success || !data.data?.length) {
+          list.innerHTML = '<div class="p-8 text-center text-gray-400">No recent activity</div>';
+          return;
+        }
+
+        list.innerHTML = data.data.map(a => `
+          <div class="p-3 hover:bg-gray-50 flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+              ${getActivityIcon(a.actionType)}
+            </div>
+            <div class="flex-1">
+              <div class="text-sm text-gray-900">${formatActionType(a.actionType)}</div>
+              <div class="text-xs text-gray-500">${a.productSku || ''} ${a.details?.message || ''}</div>
+            </div>
+            <div class="text-xs text-gray-400">${new Date(a.timestamp).toLocaleTimeString()}</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Error loading activity:', e);
+      }
+    }
+
+    function getActivityIcon(type) {
+      const icons = {
+        'slow_mover_detected': '<i class="fas fa-snail text-amber-500"></i>',
+        'task_created': '<i class="fas fa-plus-circle text-blue-500"></i>',
+        'experiment_started': '<i class="fas fa-flask text-purple-500"></i>',
+        'experiment_completed': '<i class="fas fa-check-circle text-green-500"></i>',
+        'task_reminder_sent': '<i class="fas fa-bell text-yellow-500"></i>',
+        'analysis_run': '<i class="fas fa-sync text-gray-500"></i>'
+      };
+      return icons[type] || '<i class="fas fa-info-circle text-gray-400"></i>';
+    }
+
+    function formatActionType(type) {
+      return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    async function checkAgentStatus() {
+      try {
+        const res = await fetch('/api/inventory/status');
+        const data = await res.json();
+        const statusDot = document.getElementById('agentStatus');
+        const statusText = document.getElementById('agentStatusText');
+
+        if (data.success && data.data.agentInitialized) {
+          statusDot.className = 'w-3 h-3 bg-green-500 rounded-full mr-3';
+          statusText.textContent = 'Active';
+        } else {
+          statusDot.className = 'w-3 h-3 bg-red-500 rounded-full mr-3';
+          statusText.textContent = 'Not initialized';
+        }
+
+        if (!data.data.services.teamsWebhookConfigured) {
+          showStatus('Teams webhook not configured. Notifications will not be sent.', 'warning');
+        }
+      } catch (e) {
+        console.error('Error checking agent status:', e);
+      }
+    }
+
+    async function runAnalysis() {
+      showStatus('Starting analysis...', 'info');
+      try {
+        const res = await fetch('/api/inventory/run-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dry_run: false })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showStatus(`Analysis complete: ${data.data.tasksCreated || 0} tasks created`, 'success');
+          await refreshDashboard();
+        } else {
+          showStatus('Analysis failed: ' + data.error, 'error');
+        }
+      } catch (e) {
+        showStatus('Error running analysis', 'error');
+      }
+    }
+
+    async function testTeamsNotification() {
+      showStatus('Sending test notification...', 'info');
+      try {
+        const res = await fetch('/api/inventory/notify/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: 'Test notification from Inventory Optimization Agent' })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showStatus('Test notification sent to Teams!', 'success');
+        } else {
+          showStatus('Failed to send notification: ' + (data.data?.reason || 'Unknown error'), 'error');
+        }
+      } catch (e) {
+        showStatus('Error sending notification', 'error');
+      }
+    }
+
+    function showProductDetails(productId) {
+      // TODO: Show product detail modal
+      console.log('Show details for product:', productId);
+    }
+
+    function showStatus(message, type) {
+      const banner = document.getElementById('statusBanner');
+      banner.textContent = message;
+      banner.className = 'mb-6 p-4 rounded-lg ' + {
+        success: 'bg-green-100 text-green-800',
+        error: 'bg-red-100 text-red-800',
+        warning: 'bg-yellow-100 text-yellow-800',
+        info: 'bg-blue-100 text-blue-800'
+      }[type];
+      banner.classList.remove('hidden');
+      if (type !== 'error' && type !== 'warning') {
+        setTimeout(() => banner.classList.add('hidden'), 3000);
+      }
+    }
+
+    // Initialize
+    refreshDashboard();
+  </script>
+</body>
+</html>
