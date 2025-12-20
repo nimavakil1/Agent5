@@ -1,0 +1,137 @@
+#!/usr/bin/env node
+/**
+ * Test script for Bol.com Advertising API v11
+ * Run: node test-bolcom-api.js
+ */
+
+require('dotenv').config();
+
+const BOL_ADVERTISER_ID = process.env.BOL_ADVERTISER_ID;
+const BOL_ADVERTISER_SECRET = process.env.BOL_ADVERTISER_SECRET;
+
+async function getAccessToken() {
+  console.log('🔐 Getting access token from Bol.com...');
+
+  if (!BOL_ADVERTISER_ID || !BOL_ADVERTISER_SECRET) {
+    throw new Error('Missing BOL_ADVERTISER_ID or BOL_ADVERTISER_SECRET in .env');
+  }
+
+  const credentials = Buffer.from(`${BOL_ADVERTISER_ID}:${BOL_ADVERTISER_SECRET}`).toString('base64');
+
+  const response = await fetch('https://login.bol.com/token?grant_type=client_credentials', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${credentials}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Auth failed: ${response.status} - ${text}`);
+  }
+
+  const data = await response.json();
+  console.log('✅ Access token obtained successfully');
+  return data.access_token;
+}
+
+async function testCampaignsEndpoint(token) {
+  console.log('\n📊 Testing GET campaigns (v11 PUT filter)...');
+
+  const filterBody = {
+    page: 1,
+    pageSize: 10
+  };
+
+  const response = await fetch('https://api.bol.com/advertiser/sponsored-products/campaigns', {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.advertiser.v11+json',
+      'Content-Type': 'application/vnd.advertiser.v11+json'
+    },
+    body: JSON.stringify(filterBody)
+  });
+
+  console.log(`   Status: ${response.status} ${response.statusText}`);
+
+  const text = await response.text();
+
+  if (response.ok) {
+    console.log('✅ Campaigns endpoint working!');
+    try {
+      const data = JSON.parse(text);
+      console.log(`   Found ${data.campaigns?.length || 0} campaigns`);
+      if (data.campaigns && data.campaigns.length > 0) {
+        console.log('   Sample campaign:', data.campaigns[0].name || data.campaigns[0].campaignId);
+      }
+    } catch (e) {
+      console.log('   Response:', text.substring(0, 200));
+    }
+  } else {
+    console.log('❌ Campaigns endpoint failed');
+    console.log('   Response:', text.substring(0, 500));
+  }
+
+  return response.ok;
+}
+
+async function testKeywordsEndpoint(token) {
+  console.log('\n🔑 Testing keywords endpoint...');
+
+  const filterBody = {
+    page: 1,
+    pageSize: 10
+  };
+
+  const response = await fetch('https://api.bol.com/advertiser/sponsored-products/keywords', {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.advertiser.v11+json',
+      'Content-Type': 'application/vnd.advertiser.v11+json'
+    },
+    body: JSON.stringify(filterBody)
+  });
+
+  console.log(`   Status: ${response.status} ${response.statusText}`);
+
+  if (response.ok) {
+    console.log('✅ Keywords endpoint working!');
+  } else {
+    const text = await response.text();
+    console.log('❌ Keywords endpoint failed');
+    console.log('   Response:', text.substring(0, 300));
+  }
+
+  return response.ok;
+}
+
+async function main() {
+  console.log('='.repeat(50));
+  console.log('Bol.com Advertising API v11 Test');
+  console.log('='.repeat(50));
+  console.log(`\nCredentials: ${BOL_ADVERTISER_ID ? 'Found ✓' : 'Missing ✗'}`);
+
+  try {
+    const token = await getAccessToken();
+
+    const campaignsOk = await testCampaignsEndpoint(token);
+    const keywordsOk = await testKeywordsEndpoint(token);
+
+    console.log('\n' + '='.repeat(50));
+    console.log('RESULTS:');
+    console.log(`  Auth:      ✅ Working`);
+    console.log(`  Campaigns: ${campaignsOk ? '✅ Working' : '❌ Failed'}`);
+    console.log(`  Keywords:  ${keywordsOk ? '✅ Working' : '❌ Failed'}`);
+    console.log('='.repeat(50));
+
+    process.exit(campaignsOk && keywordsOk ? 0 : 1);
+  } catch (error) {
+    console.error('\n❌ Error:', error.message);
+    process.exit(1);
+  }
+}
+
+main();
