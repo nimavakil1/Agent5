@@ -1035,13 +1035,73 @@ class OdooDataSync {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
 
-    return this.db.collection(this.collections.invoiceLines)
+    const results = await this.db.collection(this.collections.invoiceLines)
       .find({
         productId,
         invoiceDate: { $gte: cutoff },
       })
       .sort({ invoiceDate: 1 })
       .toArray();
+
+    // Transform to standard format for substitution analyzer
+    return results.map(r => ({
+      date: r.invoiceDate,
+      quantity: r.quantity || 0,
+      revenue: r.subtotal || 0,
+      productId: r.productId,
+    }));
+  }
+
+  /**
+   * Get stock history for a product (from stock moves or estimated from sales)
+   * Note: Odoo doesn't store historical stock snapshots by default,
+   * so we reconstruct from current stock and sales history
+   */
+  async getProductStockHistory(productId, days = 365) {
+    if (!this.db) return [];
+
+    // Get current product stock
+    const product = await this.db.collection(this.collections.products).findOne({ productId });
+    if (!product) return [];
+
+    const currentStock = product.stock?.available || 0;
+
+    // Get sales history to work backwards
+    const salesHistory = await this.getProductSalesHistory(productId, days);
+    if (salesHistory.length === 0) {
+      // No sales, assume current stock was constant
+      return [];
+    }
+
+    // Estimate stock levels by working backwards from current stock
+    // This is an approximation - actual stock moves would be more accurate
+    const stockHistory = [];
+    let cumulativeSales = 0;
+
+    // Aggregate sales by day
+    const salesByDay = new Map();
+    for (const sale of salesHistory) {
+      const dateKey = new Date(sale.date).toISOString().split('T')[0];
+      salesByDay.set(dateKey, (salesByDay.get(dateKey) || 0) + sale.quantity);
+    }
+
+    // Create daily stock estimates (reverse chronological)
+    const sortedDays = Array.from(salesByDay.keys()).sort().reverse();
+    let estimatedStock = currentStock;
+
+    for (const day of sortedDays) {
+      const daySales = salesByDay.get(day);
+      // Before this day's sales, stock was higher
+      stockHistory.push({
+        date: new Date(day),
+        quantity: estimatedStock,
+        estimated: true,
+      });
+      estimatedStock += daySales; // Work backwards
+    }
+
+    // Reverse to chronological order
+    return stockHistory.reverse();
   }
 
   /**

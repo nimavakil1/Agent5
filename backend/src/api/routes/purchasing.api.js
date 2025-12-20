@@ -14,6 +14,7 @@ const { getForecastEngine } = require('../../core/agents/services/ForecastEngine
 const { getSupplyChainManager } = require('../../core/agents/services/SupplyChainManager');
 const { getStockoutAnalyzer } = require('../../core/agents/services/StockoutAnalyzer');
 const { getPurchasingContext } = require('../../core/agents/services/PurchasingContext');
+const { getSubstitutionAnalyzer } = require('../../core/agents/services/SubstitutionAnalyzer');
 const { getOdooDataSync } = require('../../services/OdooDataSync');
 
 // Singleton agent instance
@@ -437,6 +438,219 @@ router.post('/stockout/cost', (req, res) => {
     });
 
     res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== SUBSTITUTION ANALYSIS ====================
+// Smart analysis of substitution patterns to separate organic demand from substitution sales
+
+/**
+ * POST /api/purchasing/substitution/analyze
+ * Analyze substitution patterns between two products
+ * Calculates baseline demand and identifies substitution sales during stockouts
+ */
+router.post('/substitution/analyze', requireAgent, async (req, res) => {
+  try {
+    const {
+      primary_product_id,
+      substitute_product_id,
+      days_back = 365,
+      threshold_percent = 20,
+    } = req.body;
+
+    if (!primary_product_id || !substitute_product_id) {
+      return res.status(400).json({
+        error: 'primary_product_id and substitute_product_id are required',
+      });
+    }
+
+    const dataSync = getOdooDataSync();
+    const analyzer = getSubstitutionAnalyzer({ db: req.app.get('db') });
+    analyzer.substitutionThreshold = threshold_percent / 100;
+
+    // Get sales history for both products
+    const [primarySales, substituteSales] = await Promise.all([
+      dataSync.getProductSalesHistory(primary_product_id, days_back),
+      dataSync.getProductSalesHistory(substitute_product_id, days_back),
+    ]);
+
+    if (!primarySales || primarySales.length === 0) {
+      return res.status(404).json({
+        error: `No sales history found for primary product ${primary_product_id}`,
+      });
+    }
+
+    if (!substituteSales || substituteSales.length === 0) {
+      return res.status(404).json({
+        error: `No sales history found for substitute product ${substitute_product_id}`,
+      });
+    }
+
+    // Get stock history for primary product (for stockout detection)
+    const primaryStock = await dataSync.getProductStockHistory(primary_product_id, days_back);
+
+    // Run substitution analysis
+    const analysis = await analyzer.analyzeSubstitution({
+      primaryProductId: primary_product_id,
+      substituteProductId: substitute_product_id,
+      primarySalesHistory: primarySales,
+      substituteSalesHistory: substituteSales,
+      primaryStockHistory: primaryStock,
+    });
+
+    res.json({
+      success: true,
+      data: analysis,
+      message: analysis.hasSubstitutionEffect
+        ? analysis.recommendation
+        : 'No significant substitution effect detected',
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/purchasing/substitution/product/:productId
+ * Analyze all substitution relationships for a product
+ */
+router.get('/substitution/product/:productId', requireAgent, async (req, res) => {
+  try {
+    const productId = parseInt(req.params.productId);
+    const { days_back = 365 } = req.query;
+
+    const context = getPurchasingContext(req.app.get('db'));
+    const dataSync = getOdooDataSync();
+    const analyzer = getSubstitutionAnalyzer({ db: req.app.get('db') });
+
+    // Get substitute relationships
+    const relationships = await context.getSubstituteRelationships(productId);
+
+    if (relationships.substitutes.length === 0 && relationships.substituteFor.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          productId,
+          hasRelationships: false,
+          message: 'No substitute relationships defined for this product',
+        },
+      });
+    }
+
+    // Get all related product IDs
+    const relatedIds = [
+      productId,
+      ...relationships.substitutes.map(s => s.productId),
+      ...relationships.substituteFor.map(s => s.productId),
+    ];
+
+    // Fetch sales history for all related products
+    const salesData = {};
+    for (const id of relatedIds) {
+      salesData[id] = await dataSync.getProductSalesHistory(id, parseInt(days_back));
+    }
+
+    // Analyze all relationships
+    const analysisResults = await analyzer.analyzeAllSubstitutions(productId, salesData);
+
+    res.json({
+      success: true,
+      data: analysisResults,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/purchasing/substitution/baseline/:productId
+ * Get baseline demand for a product (excluding substitution effects)
+ */
+router.get('/substitution/baseline/:productId', requireAgent, async (req, res) => {
+  try {
+    const productId = parseInt(req.params.productId);
+    const { days_back = 90 } = req.query;
+
+    const context = getPurchasingContext(req.app.get('db'));
+    const dataSync = getOdooDataSync();
+    const analyzer = getSubstitutionAnalyzer({ db: req.app.get('db') });
+
+    // Get substitute relationships - is this product a substitute for anything?
+    const relationships = await context.getSubstituteRelationships(productId);
+
+    // Get this product's sales
+    const salesHistory = await dataSync.getProductSalesHistory(productId, parseInt(days_back));
+
+    if (!salesHistory || salesHistory.length === 0) {
+      return res.status(404).json({
+        error: `No sales history found for product ${productId}`,
+      });
+    }
+
+    // If this product is NOT a substitute for anything, baseline = actual average
+    if (relationships.substituteFor.length === 0) {
+      const baseline = analyzer.calculateBaseline(salesHistory, []);
+      return res.json({
+        success: true,
+        data: {
+          productId,
+          isSubstituteProduct: false,
+          baseline: {
+            avgDailySales: baseline.avgDailySales,
+            stdDev: baseline.stdDev,
+            dataPoints: baseline.dataPoints,
+          },
+          adjustedBaseline: null,
+          message: 'This product is not used as a substitute - baseline equals actual average',
+        },
+      });
+    }
+
+    // This product IS a substitute for other products
+    // Need to find stockout periods of those products and exclude from baseline
+    const allStockoutPeriods = [];
+
+    for (const primary of relationships.substituteFor) {
+      const primarySales = await dataSync.getProductSalesHistory(primary.productId, parseInt(days_back));
+      const primaryStock = await dataSync.getProductStockHistory(primary.productId, parseInt(days_back));
+
+      const stockouts = analyzer.detectStockoutPeriods(primarySales, primaryStock);
+      allStockoutPeriods.push(...stockouts);
+    }
+
+    // Calculate baseline excluding stockout periods
+    const rawBaseline = analyzer.calculateBaseline(salesHistory, []);
+    const adjustedBaseline = analyzer.calculateBaseline(salesHistory, allStockoutPeriods);
+
+    const inflationPercent = rawBaseline.avgDailySales > 0
+      ? ((rawBaseline.avgDailySales - adjustedBaseline.avgDailySales) / adjustedBaseline.avgDailySales * 100).toFixed(1)
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        productId,
+        isSubstituteProduct: true,
+        substituteFor: relationships.substituteFor,
+        rawBaseline: {
+          avgDailySales: rawBaseline.avgDailySales,
+          note: 'Includes all sales (may be inflated by substitution)',
+        },
+        adjustedBaseline: {
+          avgDailySales: adjustedBaseline.avgDailySales,
+          stdDev: adjustedBaseline.stdDev,
+          dataPoints: adjustedBaseline.dataPoints,
+          excludedPeriods: allStockoutPeriods.length,
+          note: 'Excludes periods when primary products were out of stock',
+        },
+        inflationPercent: `${inflationPercent}%`,
+        recommendation: parseFloat(inflationPercent) > 10
+          ? `Use adjusted baseline (${adjustedBaseline.avgDailySales.toFixed(2)}/day) for forecasting - raw average is ${inflationPercent}% inflated`
+          : 'Minimal substitution effect - either baseline can be used',
+      },
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
