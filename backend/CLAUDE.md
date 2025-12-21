@@ -1,5 +1,34 @@
 # Claude Code Project Notes
 
+## Production Server Access
+
+**SSH Command:**
+```bash
+sshpass -p 'Sage2o15@' ssh -o StrictHostKeyChecking=no ubuntu@ai.acropaq.com
+```
+
+**Server Details:**
+- Host: `ai.acropaq.com`
+- User: `ubuntu`
+- Password: `Sage2o15@`
+- Agent5 Path: `/home/ubuntu/Agent5`
+- Process Manager: PM2
+
+**Common Commands:**
+```bash
+# Pull latest code
+sshpass -p 'Sage2o15@' ssh -o StrictHostKeyChecking=no ubuntu@ai.acropaq.com "cd /home/ubuntu/Agent5 && git pull"
+
+# Restart the app
+sshpass -p 'Sage2o15@' ssh -o StrictHostKeyChecking=no ubuntu@ai.acropaq.com "cd /home/ubuntu/Agent5 && pm2 restart all"
+
+# Check logs
+sshpass -p 'Sage2o15@' ssh -o StrictHostKeyChecking=no ubuntu@ai.acropaq.com "cd /home/ubuntu/Agent5 && pm2 logs --lines 50"
+
+# Check status
+sshpass -p 'Sage2o15@' ssh -o StrictHostKeyChecking=no ubuntu@ai.acropaq.com "pm2 status"
+```
+
 ## Production URL
 **https://ai.acropaq.com** (no /v2 - that's TicketingSDT, not this project)
 

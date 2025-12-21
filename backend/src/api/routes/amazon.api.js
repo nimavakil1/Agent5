@@ -11,7 +11,15 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 const { getDb } = require('../../db');
+
+// Ensure uploads directory exists
+const UPLOADS_DIR = path.join(__dirname, '../../../uploads/vcs');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 const { ObjectId } = require('mongodb');
 const { skuResolver, euCountryConfig, OrderImporter, VcsInvoiceImporter, FbaInventoryReconciler, FbmStockSync, TrackingSync } = require('../../services/amazon');
 const { VcsTaxReportParser } = require('../../services/amazon/VcsTaxReportParser');
@@ -2652,20 +2660,124 @@ router.post('/vcs/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    const db = getDb();
+    const fileContent = req.file.buffer.toString('utf-8');
+
+    // Generate unique filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const safeOriginalName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storedFilename = `${timestamp}_${safeOriginalName}`;
+    const filePath = path.join(UPLOADS_DIR, storedFilename);
+
+    // Save file to disk
+    fs.writeFileSync(filePath, fileContent);
+
+    // Parse the report
     const parser = new VcsTaxReportParser();
-    const result = await parser.processReport(
-      req.file.buffer.toString('utf-8'),
-      req.file.originalname
-    );
+    const result = await parser.processReport(fileContent, req.file.originalname);
+
+    // Create upload record with full metadata
+    const uploadRecord = {
+      originalFilename: req.file.originalname,
+      storedFilename: storedFilename,
+      filePath: filePath,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype,
+      uploadedAt: new Date(),
+      uploadedBy: req.user?.email || 'anonymous',
+
+      // Processing results
+      status: 'processed',
+      transactionCount: result.transactionCount,
+      orderCount: result.orderCount,
+      totalRevenue: result.summary?.totalRevenue || 0,
+      currency: result.summary?.currencies?.[0] || 'EUR',
+
+      // Date range of data in file
+      dateRange: result.dateRange || null,
+
+      // Breakdown by VAT config
+      vatConfigBreakdown: result.summary?.byVatConfig || {},
+
+      // Breakdown by country
+      countryBreakdown: result.summary?.byCountry || {},
+
+      // Processing stats
+      pendingOrders: result.orderCount,
+      invoicedOrders: 0,
+      skippedOrders: 0,
+      errorOrders: 0,
+
+      // Link to parsed orders
+      reportId: result.reportId
+    };
+
+    const uploadResult = await db.collection('amazon_vcs_uploads').insertOne(uploadRecord);
+
+    // Update the VCS report record with upload ID
+    if (result.reportId) {
+      await db.collection('amazon_vcs_reports').updateOne(
+        { _id: new ObjectId(result.reportId) },
+        { $set: { uploadId: uploadResult.insertedId } }
+      );
+    }
 
     res.json({
       success: true,
       message: `Processed ${result.transactionCount} transactions from ${result.orderCount} orders`,
+      uploadId: uploadResult.insertedId.toString(),
       ...result
     });
 
   } catch (error) {
     console.error('[VCS Upload] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/uploads
+ * @desc Get list of all VCS uploads with metadata
+ */
+router.get('/vcs/uploads', async (req, res) => {
+  try {
+    const db = getDb();
+    const uploads = await db.collection('amazon_vcs_uploads')
+      .find({})
+      .sort({ uploadedAt: -1 })
+      .limit(100)
+      .toArray();
+
+    res.json({ uploads });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/uploads/:uploadId/download
+ * @desc Download the original uploaded file
+ */
+router.get('/vcs/uploads/:uploadId/download', async (req, res) => {
+  try {
+    const db = getDb();
+    const upload = await db.collection('amazon_vcs_uploads').findOne({
+      _id: new ObjectId(req.params.uploadId)
+    });
+
+    if (!upload) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    if (!fs.existsSync(upload.filePath)) {
+      return res.status(404).json({ error: 'File not found on disk' });
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${upload.originalFilename}"`);
+    res.sendFile(upload.filePath);
+
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
