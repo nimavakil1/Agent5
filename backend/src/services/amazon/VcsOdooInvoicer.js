@@ -4,6 +4,14 @@
  * Creates customer invoices in Odoo from Amazon VCS Tax Report data.
  * Handles VAT, OSS, and B2B scenarios for EU sales.
  *
+ * KEY PRINCIPLES:
+ * 1. For OSS orders: Use dedicated Amazon OSS partners (e.g., "Amazon | AMZ_OSS_DE")
+ *    which have the correct fiscal position already configured
+ * 2. Set the correct tax on each invoice line (e.g., DE*OSS | 19.0%)
+ * 3. Set fiscal position explicitly by ID
+ * 4. Set payment_reference and ref to the VCS invoice number
+ * 5. Include shipping from VCS data
+ *
  * IMPORTANT: Requires existing Odoo sales order (created by Make.com import).
  * Will NOT create invoices for orders that don't exist in Odoo.
  */
@@ -48,7 +56,110 @@ const EU_COUNTRIES = ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR'
 // Export fiscal position ID (BE*VAT | Régime Extra-Communautaire)
 const EXPORT_FISCAL_POSITION_ID = 3;
 
-// Country to fiscal position mapping
+// OSS Fiscal Position IDs by country (from Odoo query)
+const OSS_FISCAL_POSITIONS = {
+  'AT': 6,   // AT*OSS | B2C Austria
+  'BG': 7,   // BG*OSS | B2C Bulgaria
+  'HR': 8,   // HR*OSS | B2C Croatia
+  'CY': 9,   // CY*OSS | B2C Cyprus
+  'CZ': 10,  // CZ*OSS | B2C Czech Republic
+  'DK': 11,  // DK*OSS | B2C Denmark
+  'EE': 12,  // EE*OSS | B2C Estonia
+  'FI': 13,  // FI*OSS | B2C Finland
+  'FR': 14,  // FR*OSS | B2C France
+  'DE': 15,  // DE*OSS | B2C Germany
+  'GR': 16,  // GR*OSS | B2C Greece
+  'HU': 17,  // HU*OSS | B2C Hungary
+  'IE': 18,  // IE*OSS | B2C Ireland
+  'IT': 19,  // IT*OSS | B2C Italy
+  'LV': 20,  // LV*OSS | B2C Latvia
+  'LT': 21,  // LT*OSS | B2C Lithuania
+  'LU': 22,  // LU*OSS | B2C Luxembourg
+  'MT': 23,  // MT*OSS | B2C Malta
+  'NL': 24,  // NL*OSS | B2C Netherlands
+  'PL': 25,  // PL*OSS | B2C Poland
+  'PT': 26,  // PT*OSS | B2C Portugal
+  'RO': 27,  // RO*OSS | B2C Romania
+  'SK': 28,  // SK*OSS | B2C Slovakia
+  'SI': 29,  // SI*OSS | B2C Slovenia
+  'ES': 30,  // ES*OSS | B2C Spain
+  'SE': 31,  // SE*OSS | B2C Sweden
+  'BE': 35,  // BE*OSS | B2C Belgium
+};
+
+// OSS Amazon Partner IDs by country (from Odoo query)
+const OSS_PARTNERS = {
+  'AT': 18,    // Amazon | AMZ_OSS_AT (Austria)
+  'BE': 3192,  // Amazon | AMZ_OSS_BE (Belgium)
+  'BG': 3169,  // Amazon | AMZ_OSS_BG (Bulgaria)
+  'CY': 21,    // Amazon | AMZ_OSS_CY (Cyprus)
+  'CZ': 3152,  // Amazon | AMZ_OSS_CZ (Czech Rep.)
+  'DE': 3157,  // Amazon | AMZ_OSS_DE (Germany)
+  'DK': 3153,  // Amazon | AMZ_OSS_DK (Denmark)
+  'EE': 3160,  // Amazon | AMZ_OSS_EE (Estonia)
+  'ES': 3165,  // Amazon | AMZ_OSS_ES (Spain)
+  'FI': 3155,  // Amazon | AMZ_OSS_FI (Finland)
+  'FR': 3156,  // Amazon | AMZ_OSS_FR (France)
+  'GR': 3170,  // Amazon | AMZ_OSS_GR (Greece)
+  'HR': 3162,  // Amazon | AMZ_OSS_HR (Croatia)
+  'HU': 3178,  // Amazon | AMZ_OSS_HU (Hungary)
+  'IE': 3171,  // Amazon | AMZ_OSS_IE (Ireland)
+  'IT': 3164,  // Amazon | AMZ_OSS_IT (Italy)
+  'LT': 3168,  // Amazon | AMZ_OSS_LT (Lithuania)
+  'LU': 3163,  // Amazon | AMZ_OSS_LU (Luxembourg)
+  'LV': 3166,  // Amazon | AMZ_OSS_LV (Latvia)
+  'MT': 3172,  // Amazon | AMZ_OSS_MT (Malta)
+  'NL': 3173,  // Amazon | AMZ_OSS_NL (The Netherlands)
+  'PL': 3174,  // Amazon | AMZ_OSS_PL (Poland)
+  'PT': 3167,  // Amazon | AMZ_OSS_PT (Portugal)
+  'RO': 3161,  // Amazon | AMZ_OSS_RO (Romania)
+  'SE': 3177,  // Amazon | AMZ_OSS_SE (Sweden)
+  'SI': 3176,  // Amazon | AMZ_OSS_SI (Slovenia)
+  'SK': 3175,  // Amazon | AMZ_OSS_SK (Slovakia)
+};
+
+// OSS Tax IDs by country and standard rate (from Odoo query)
+// Format: { country: { rate: taxId } }
+const OSS_TAXES = {
+  'AT': { 20: 72, 10: 73 },      // AT*OSS | 20.0%, 10.0%
+  'BE': { 21: 138, 6: 142 },     // BE*OSS | 21.0%, 6.0%
+  'BG': { 20: 74 },              // BG*OSS | 20.0%
+  'HR': { 25: 75, 5: 76 },       // HR*OSS | 25.0%, 5.0%
+  'CY': { 19: 77, 5: 78 },       // CY*OSS | 19.0%, 5.0%
+  'CZ': { 21: 79, 15: 80 },      // CZ*OSS | 21.0%, 15.0%
+  'DK': { 25: 81 },              // DK*OSS | 25.0%
+  'EE': { 20: 82, 9: 83 },       // EE*OSS | 20.0%, 9.0%
+  'FI': { 24: 84, 10: 85 },      // FI*OSS | 24.0%, 10.0%
+  'FR': { 20: 141, 5.5: 87 },    // FR*OSS | 20.0%, 5.5%
+  'DE': { 19: 140, 7: 89 },      // DE*OSS | 19.0%, 7.0%
+  'GR': { 24: 90, 13: 91 },      // GR*OSS | 24.0%, 13.0%
+  'HU': { 27: 92, 5: 93 },       // HU*OSS | 27.0%, 5.0%
+  'IE': { 23: 94, 13.5: 95 },    // IE*OSS | 23.0%, 13.5%
+  'IT': { 22: 96, 4: 97 },       // IT*OSS | 22.0%, 4.0%
+  'LV': { 21: 98, 12: 99 },      // LV*OSS | 21.0%, 12.0%
+  'LT': { 21: 100, 5: 101 },     // LT*OSS | 21.0%, 5.0%
+  'LU': { 17: 102, 7: 103 },     // LU*OSS | 17.0%, 7.0%
+  'MT': { 18: 104, 5: 105 },     // MT*OSS | 18.0%, 5.0%
+  'NL': { 21: 106, 9: 107 },     // NL*OSS | 21.0%, 9.0%
+  'PL': { 23: 108, 8: 109 },     // PL*OSS | 23.0%, 8.0%
+  'PT': { 23: 110, 6: 111 },     // PT*OSS | 23.0%, 6.0%
+  'RO': { 19: 112, 5: 113 },     // RO*OSS | 19.0%, 5.0%
+  'SK': { 20: 114, 10: 115 },    // SK*OSS | 20.0%, 10.0%
+  'SI': { 22: 116, 9.5: 117 },   // SI*OSS | 22.0%, 9.5%
+  'ES': { 21: 118, 10: 119 },    // ES*OSS | 21.0%, 10.0%
+  'SE': { 25: 120, 6: 121 },     // SE*OSS | 25.0%, 6.0%
+};
+
+// Standard VAT rates by country (for looking up taxes)
+const STANDARD_VAT_RATES = {
+  'AT': 20, 'BE': 21, 'BG': 20, 'HR': 25, 'CY': 19, 'CZ': 21,
+  'DK': 25, 'EE': 20, 'FI': 24, 'FR': 20, 'DE': 19, 'GR': 24,
+  'HU': 27, 'IE': 23, 'IT': 22, 'LV': 21, 'LT': 21, 'LU': 17,
+  'MT': 18, 'NL': 21, 'PL': 23, 'PT': 23, 'RO': 19, 'SK': 20,
+  'SI': 22, 'ES': 21, 'SE': 25,
+};
+
+// Country to fiscal position mapping (legacy, kept for reference)
 const FISCAL_POSITIONS = {
   // OSS (selling to EU consumers from Belgium)
   'OSS_DE': 'OSS Germany',
@@ -389,9 +500,60 @@ class VcsOdooInvoicer {
   }
 
   /**
+   * Determine the correct partner for the invoice
+   * ALWAYS inherit the partner from the sale order to ensure proper linking
+   * (so qty_invoiced updates correctly on the sale order)
+   * @param {object} order - VCS order data
+   * @param {object} saleOrder - Odoo sale.order
+   * @returns {number} Partner ID
+   */
+  determinePartner(order, saleOrder) {
+    // Always use the sale order's partner to maintain proper order-invoice linking
+    // This ensures qty_invoiced is updated on the sale order
+    return saleOrder.partner_id[0];
+  }
+
+  /**
+   * Get the OSS tax ID for a country based on the VCS tax rate
+   * @param {object} order - VCS order data
+   * @returns {number|null} Tax ID
+   */
+  getOssTaxId(order) {
+    const country = order.shipToCountry;
+    const countryTaxes = OSS_TAXES[country];
+    if (!countryTaxes) {
+      console.warn(`[VcsOdooInvoicer] No OSS taxes found for country ${country}`);
+      return null;
+    }
+
+    // Get tax rate from VCS (e.g., 0.19 for 19%)
+    const vcsRate = order.items?.[0]?.taxRate;
+    if (vcsRate) {
+      const ratePercent = Math.round(vcsRate * 100);
+      if (countryTaxes[ratePercent]) {
+        return countryTaxes[ratePercent];
+      }
+    }
+
+    // Fallback to standard rate for the country
+    const standardRate = STANDARD_VAT_RATES[country];
+    if (standardRate && countryTaxes[standardRate]) {
+      return countryTaxes[standardRate];
+    }
+
+    // Return the first available tax for this country
+    const rates = Object.keys(countryTaxes);
+    if (rates.length > 0) {
+      return countryTaxes[rates[0]];
+    }
+
+    return null;
+  }
+
+  /**
    * Build invoice data from VCS order
    * @param {object} order - VCS order data
-   * @param {number} partnerId - Odoo partner ID
+   * @param {number} partnerId - Odoo partner ID (may be overridden for OSS)
    * @param {object} saleOrder - Odoo sale.order
    * @param {object[]} orderLines - Odoo sale.order.line records
    * @returns {object}
@@ -401,13 +563,23 @@ class VcsOdooInvoicer {
     const fiscalPosition = this.determineFiscalPosition(order);
     const journalId = this.determineJournal(order);
 
+    // Determine the correct partner (OSS orders use Amazon OSS partners)
+    const invoicePartnerId = this.determinePartner(order, saleOrder);
+
+    // VCS Invoice Number for reference fields
+    const vcsInvoiceNumber = order.vatInvoiceNumber || null;
+
     return {
       move_type: 'out_invoice',
-      partner_id: partnerId,
+      partner_id: invoicePartnerId,
       invoice_date: this.formatDate(invoiceDate),
-      ref: order.orderId,
-      invoice_origin: saleOrder.name, // Link to sale order
-      narration: `Amazon Order: ${order.orderId}\nSale Order: ${saleOrder.name}\nVAT Invoice: ${order.vatInvoiceNumber || 'N/A'}`,
+      // ref: VCS invoice number (shown in "Customer Reference" in Odoo)
+      ref: vcsInvoiceNumber || order.orderId,
+      // payment_reference: Also set to VCS invoice number
+      payment_reference: vcsInvoiceNumber || null,
+      // invoice_origin: Amazon order ID (link to sale order)
+      invoice_origin: order.orderId,
+      narration: `Amazon Order: ${order.orderId}\nSale Order: ${saleOrder.name}\nVAT Invoice: ${vcsInvoiceNumber || 'N/A'}`,
       currency_id: this.getCurrencyId(order.currency),
       fiscal_position_id: fiscalPosition,
       journal_id: journalId,
@@ -424,6 +596,10 @@ class VcsOdooInvoicer {
   buildInvoiceLines(order, odooOrderLines) {
     const lines = [];
 
+    // Get the correct tax for OSS orders
+    const isOSS = order.taxReportingScheme === 'VCS_EU_OSS';
+    const ossTaxId = isOSS ? this.getOssTaxId(order) : null;
+
     for (const item of order.items) {
       // Find matching Odoo order line by SKU
       const transformedSku = this.transformSku(item.sku);
@@ -432,46 +608,72 @@ class VcsOdooInvoicer {
         return lineSku === transformedSku || lineSku === item.sku;
       });
 
+      const lineData = {
+        quantity: item.quantity,
+        price_unit: item.priceExclusive / item.quantity,
+      };
+
+      // Set the correct tax for OSS orders
+      if (isOSS && ossTaxId) {
+        lineData.tax_ids = [[6, 0, [ossTaxId]]]; // Replace taxes with OSS tax
+      }
+
       if (odooLine && odooLine.product_id) {
         // Use product from Odoo order - show VCS SKU → Odoo SKU
         const odooSku = odooLine.product_default_code || transformedSku;
         const skuDisplay = item.sku !== odooSku ? `${item.sku} → ${odooSku}` : odooSku;
-        lines.push([0, 0, {
-          product_id: odooLine.product_id[0],
-          name: `${skuDisplay} (ASIN: ${item.asin})`,
-          quantity: item.quantity,
-          price_unit: item.priceExclusive / item.quantity,
-          // Tax will be determined by fiscal position + product tax settings
-        }]);
+        lineData.product_id = odooLine.product_id[0];
+        lineData.name = `${skuDisplay} (ASIN: ${item.asin})`;
+        lines.push([0, 0, lineData]);
       } else {
         // Fallback: no matching product found, use text-only line
         console.warn(`[VcsOdooInvoicer] No matching product for SKU ${item.sku} (transformed: ${transformedSku})`);
         const skuDisplay = item.sku !== transformedSku ? `${item.sku} → ${transformedSku}` : transformedSku;
-        lines.push([0, 0, {
-          name: `${skuDisplay} (ASIN: ${item.asin}) - PRODUCT NOT FOUND`,
-          quantity: item.quantity,
-          price_unit: item.priceExclusive / item.quantity,
-        }]);
+        lineData.name = `${skuDisplay} (ASIN: ${item.asin}) - PRODUCT NOT FOUND`;
+        lines.push([0, 0, lineData]);
       }
 
-      // Promo discount if any
+      // Promo discount if any (from VCS - product promo)
       if (item.promoAmount && item.promoAmount !== 0) {
         const discountSku = odooLine?.product_default_code || transformedSku;
-        lines.push([0, 0, {
+        const promoLineData = {
           name: `Promotion discount - ${discountSku}`,
           quantity: 1,
           price_unit: -Math.abs(item.promoAmount),
-        }]);
+        };
+        if (isOSS && ossTaxId) {
+          promoLineData.tax_ids = [[6, 0, [ossTaxId]]];
+        }
+        lines.push([0, 0, promoLineData]);
       }
     }
 
-    // Shipping line if any
-    if (order.totalShipping > 0) {
-      lines.push([0, 0, {
+    // Shipping line if any (from VCS data, tax-exclusive amount)
+    // VCS provides: totalShipping (excl tax), totalShippingTax
+    if (order.totalShipping && order.totalShipping !== 0) {
+      const shippingLineData = {
         name: 'Shipping',
         quantity: 1,
-        price_unit: order.totalShipping,
-      }]);
+        price_unit: order.totalShipping, // Tax-exclusive amount
+      };
+      if (isOSS && ossTaxId) {
+        shippingLineData.tax_ids = [[6, 0, [ossTaxId]]];
+      }
+      lines.push([0, 0, shippingLineData]);
+    }
+
+    // Shipping discount if any (from VCS data - shipping promo)
+    // VCS provides negative promo amounts for shipping discounts
+    if (order.totalShippingPromo && order.totalShippingPromo !== 0) {
+      const shippingPromoLineData = {
+        name: 'Shipping Discount',
+        quantity: 1,
+        price_unit: -Math.abs(order.totalShippingPromo), // Negative for discount
+      };
+      if (isOSS && ossTaxId) {
+        shippingPromoLineData.tax_ids = [[6, 0, [ossTaxId]]];
+      }
+      lines.push([0, 0, shippingPromoLineData]);
     }
 
     return lines;
@@ -489,27 +691,27 @@ class VcsOdooInvoicer {
       return EXPORT_FISCAL_POSITION_ID; // BE*VAT | Régime Extra-Communautaire
     }
 
-    let positionName = null;
-
     // OSS scheme (selling from BE to other EU countries)
+    // Use the hardcoded OSS fiscal position IDs
     if (order.taxReportingScheme === 'VCS_EU_OSS') {
-      positionName = `OSS_${order.shipToCountry}`;
-    }
-    // B2B with buyer VAT number
-    else if (order.buyerTaxRegistration) {
-      positionName = 'B2B_EU';
-    }
-    // Domestic Belgian sale
-    else if (order.shipToCountry === 'BE' && order.sellerTaxJurisdiction === 'BE') {
-      positionName = 'DOMESTIC_BE';
+      const country = order.shipToCountry;
+      const ossFiscalPositionId = OSS_FISCAL_POSITIONS[country];
+      if (ossFiscalPositionId) {
+        return ossFiscalPositionId;
+      }
+      console.warn(`[VcsOdooInvoicer] No OSS fiscal position for country ${country}`);
     }
 
-    if (!positionName) {
-      return null;
+    // B2B with buyer VAT number - use Intra-Community B2B fiscal position
+    if (order.buyerTaxRegistration) {
+      // Look up from cache if available
+      return this.fiscalPositionCache?.['B2B_EU'] || null;
     }
 
-    // Look up fiscal position ID (would need to cache these)
-    return this.fiscalPositionCache?.[positionName] || null;
+    // Domestic Belgian sale - no special fiscal position needed
+    // The default Belgian VAT will apply
+
+    return null;
   }
 
   /**

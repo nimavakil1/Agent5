@@ -666,9 +666,9 @@
                         <div class="flex items-center justify-between mb-2">
                           <div>
                             <span class="text-white font-mono text-sm font-semibold">${inv.orderId}</span>
-                            ${inv.odooOrderName ? `<span class="text-slate-400 text-xs ml-2">→ ${inv.odooOrderName}</span>` : ''}
+                            ${inv.odooOrderName || inv.saleOrderName ? `<span class="text-slate-400 text-xs ml-2">→ ${inv.odooOrderName || inv.saleOrderName}</span>` : ''}
                           </div>
-                          ${!dryRun && inv.name ? `<span class="text-green-400 text-sm font-semibold">${inv.name}</span>` : ''}
+                          ${!dryRun && inv.name ? `<span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-sm font-semibold">${inv.name}</span>` : ''}
                         </div>
                         ${dryRun && preview ? `
                           <!-- Invoice metadata - compact 4 column layout -->

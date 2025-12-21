@@ -151,6 +151,8 @@ class VcsTaxReportParser {
       shippingInclusive: parseFloat(row[COLUMN_MAP.shippingInclusive]) || 0,
       shippingTax: parseFloat(row[COLUMN_MAP.shippingTax]) || 0,
       shippingExclusive: parseFloat(row[COLUMN_MAP.shippingExclusive]) || 0,
+      // Shipping promo (discount)
+      shippingPromoExclusive: parseFloat(row[COLUMN_MAP.shippingPromoExclusive]) || 0,
 
       // Tax registration
       sellerTaxRegistration: row[COLUMN_MAP.sellerTaxRegistration],
@@ -235,6 +237,7 @@ class VcsTaxReportParser {
           totalInclusive: 0,
           totalShipping: 0,
           totalShippingTax: 0,
+          totalShippingPromo: 0,
         });
       }
 
@@ -260,6 +263,7 @@ class VcsTaxReportParser {
       order.totalInclusive += tx.priceInclusive - (parseFloat(tx.promoInclusive) || 0);
       order.totalShipping += tx.shippingExclusive;
       order.totalShippingTax += tx.shippingTax;
+      order.totalShippingPromo += tx.shippingPromoExclusive;
     }
 
     return orders;
