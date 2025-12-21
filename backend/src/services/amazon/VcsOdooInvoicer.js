@@ -831,10 +831,13 @@ class VcsOdooInvoicer {
     await this.odoo.execute('account.move', 'write', [[invoiceId], headerUpdate]);
 
     // Get invoice lines with product info
+    // In Odoo 16+, product lines have display_type = 'product' or display_type = false
+    // Filter by product_id existing
     const invoiceLines = await this.odoo.searchRead('account.move.line',
-      [['move_id', '=', invoiceId], ['display_type', '=', false], ['product_id', '!=', false]],
+      [['move_id', '=', invoiceId], ['product_id', '!=', false], ['exclude_from_invoice_tab', '=', false]],
       ['id', 'product_id', 'name', 'quantity', 'price_unit']
     );
+    console.log(`[VcsOdooInvoicer] Found ${invoiceLines.length} invoice lines to update`);
 
     // Get product SKUs for all invoice lines
     const productIds = invoiceLines.map(l => l.product_id[0]).filter(Boolean);
