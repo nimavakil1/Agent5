@@ -202,15 +202,9 @@ class VcsOdooInvoicer {
    * @returns {boolean}
    */
   shouldSkipOrder(order) {
-    // Skip deemed reseller (Amazon handles VAT)
-    if (order.taxReportingScheme === 'DEEMED_RESELLER') {
-      return true;
-    }
-
-    // Skip Swiss low-value (Amazon handles)
-    if (order.taxReportingScheme === 'CH_VOEC') {
-      return true;
-    }
+    // NOTE: DEEMED_RESELLER and CH_VOEC orders are NOT skipped!
+    // Even though Amazon handles VAT for these, we still need to record the revenue.
+    // They will be processed with 0% VAT (Amazon handles VAT collection).
 
     // Skip if no items
     if (!order.items || order.items.length === 0) {
@@ -521,6 +515,13 @@ class VcsOdooInvoicer {
       return this.journalCache?.[journalCode] || this.defaultJournalId || null;
     }
 
+    // For Swiss exports (CH_VOEC), use Belgian journal (seller's country)
+    // Amazon handles Swiss VAT, but we still need to record revenue
+    if (order.taxReportingScheme === 'CH_VOEC' || order.shipToCountry === 'CH') {
+      const journalCode = MARKETPLACE_JOURNALS['BE']; // Use Belgian journal for Swiss exports
+      return this.journalCache?.[journalCode] || this.defaultJournalId || null;
+    }
+
     // Use shipToCountry (destination) to determine the VAT jurisdiction journal
     const country = order.shipToCountry || order.sellerTaxJurisdiction || 'BE';
     const journalCode = MARKETPLACE_JOURNALS[country] || MARKETPLACE_JOURNALS['DEFAULT'];
@@ -655,6 +656,10 @@ class VcsOdooInvoicer {
     // For OSS orders, use the OSS journal
     if (order.taxReportingScheme === 'VCS_EU_OSS') {
       return MARKETPLACE_JOURNALS['OSS'];
+    }
+    // For Swiss exports (CH_VOEC), use Belgian journal
+    if (order.taxReportingScheme === 'CH_VOEC' || order.shipToCountry === 'CH') {
+      return MARKETPLACE_JOURNALS['BE'];
     }
     // Use shipToCountry (destination) to determine journal
     const country = order.shipToCountry || order.sellerTaxJurisdiction || 'BE';
