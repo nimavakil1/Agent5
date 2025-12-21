@@ -247,7 +247,16 @@
             </tbody>
           </table>
         </div>
-        <div id="returns-count" class="text-slate-400 text-sm mt-4"></div>
+        <div class="flex justify-between items-center mt-4">
+          <div id="returns-count" class="text-slate-400 text-sm"></div>
+          <div class="flex items-center gap-4">
+            <span id="returns-pagination-info" class="text-slate-400 text-sm"></span>
+            <div class="flex gap-2">
+              <button id="returns-prev-page" class="px-3 py-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 disabled:opacity-50" disabled>Previous</button>
+              <button id="returns-next-page" class="px-3 py-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 disabled:opacity-50" disabled>Next</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Upload History -->
@@ -269,6 +278,8 @@
       let selectedOrderIds = new Set(); // Track selected order IDs across pages
       let allFilteredSelected = false; // Whether all filtered orders are selected
       let selectedReturnIds = new Set(); // Track selected return IDs
+      let returnsPage = 1;
+      const returnsPageSize = 50;
 
       // DOM Elements
       const dropZone = document.getElementById('drop-zone');
@@ -394,6 +405,22 @@
             }
           });
           document.querySelectorAll('.return-checkbox').forEach(cb => cb.checked = e.target.checked);
+          renderReturns();
+        });
+
+        // Returns pagination
+        document.getElementById('returns-prev-page')?.addEventListener('click', () => {
+          if (returnsPage > 1) {
+            returnsPage--;
+            renderReturns();
+          }
+        });
+        document.getElementById('returns-next-page')?.addEventListener('click', () => {
+          const maxPage = Math.ceil(pendingReturns.length / returnsPageSize);
+          if (returnsPage < maxPage) {
+            returnsPage++;
+            renderReturns();
+          }
         });
       }
 
@@ -546,10 +573,16 @@
       function renderReturns() {
         const tbody = document.getElementById('returns-table-body');
         const countDiv = document.getElementById('returns-count');
+        const paginationInfo = document.getElementById('returns-pagination-info');
+        const prevBtn = document.getElementById('returns-prev-page');
+        const nextBtn = document.getElementById('returns-next-page');
 
         if (pendingReturns.length === 0) {
           tbody.innerHTML = `<tr><td colspan="8" class="py-4 text-center text-slate-500">No pending returns</td></tr>`;
           countDiv.textContent = '';
+          paginationInfo.textContent = '';
+          prevBtn.disabled = true;
+          nextBtn.disabled = true;
           return;
         }
 
@@ -572,7 +605,14 @@
           return 'Standard';
         };
 
-        tbody.innerHTML = pendingReturns.map(ret => `
+        // Pagination logic
+        const totalReturns = pendingReturns.length;
+        const totalPages = Math.ceil(totalReturns / returnsPageSize);
+        const startIndex = (returnsPage - 1) * returnsPageSize;
+        const endIndex = Math.min(startIndex + returnsPageSize, totalReturns);
+        const pageReturns = pendingReturns.slice(startIndex, endIndex);
+
+        tbody.innerHTML = pageReturns.map(ret => `
           <tr class="border-b border-slate-700/50 hover:bg-slate-700/30">
             <td class="py-2 px-3">
               <input type="checkbox" class="return-checkbox rounded" data-id="${ret._id}"
@@ -593,7 +633,10 @@
           </tr>
         `).join('');
 
-        countDiv.textContent = `${pendingReturns.length} pending return${pendingReturns.length !== 1 ? 's' : ''} (${selectedReturnIds.size} selected)`;
+        countDiv.textContent = `${totalReturns} pending return${totalReturns !== 1 ? 's' : ''} (${selectedReturnIds.size} selected)`;
+        paginationInfo.textContent = `Page ${returnsPage} of ${totalPages} (${startIndex + 1}-${endIndex} of ${totalReturns})`;
+        prevBtn.disabled = returnsPage <= 1;
+        nextBtn.disabled = returnsPage >= totalPages;
       }
 
       function toggleReturn(returnId, checked) {
@@ -769,11 +812,12 @@
               <div class="flex items-center gap-4">
                 <!-- Stats -->
                 <div class="text-right">
-                  <div class="text-slate-300 text-sm">${upload.orderCount || 0} orders</div>
+                  <div class="text-slate-300 text-sm">${(upload.pendingOrders || 0) + (upload.invoicedOrders || 0)} shipments${(upload.pendingReturns || 0) + (upload.creditedReturns || 0) > 0 ? ` · ${(upload.pendingReturns || 0) + (upload.creditedReturns || 0)} returns` : ''}</div>
                   <div class="text-xs">
                     <span class="text-yellow-400">${upload.pendingOrders || 0} pending</span>
                     <span class="text-slate-500 mx-1">·</span>
                     <span class="text-green-400">${upload.invoicedOrders || 0} invoiced</span>
+                    ${(upload.pendingReturns || 0) > 0 ? `<span class="text-slate-500 mx-1">·</span><span class="text-orange-400">${upload.pendingReturns || 0} returns</span>` : ''}
                   </div>
                 </div>
                 <!-- Download button -->

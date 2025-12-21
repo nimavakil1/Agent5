@@ -2821,20 +2821,32 @@ router.get('/vcs/uploads', async (req, res) => {
         // Orders store reportId as ObjectId, upload stores it as string - convert to ObjectId for matching
         const statusCounts = await db.collection('amazon_vcs_orders').aggregate([
           { $match: { reportId: new ObjectId(reportId) } },
-          { $group: { _id: '$status', count: { $sum: 1 } } }
+          { $group: {
+            _id: { status: '$status', transactionType: '$transactionType' },
+            count: { $sum: 1 }
+          } }
         ]).toArray();
 
         let pending = 0, invoiced = 0, skipped = 0;
+        let pendingReturns = 0, creditedReturns = 0;
         for (const s of statusCounts) {
-          if (s._id === 'pending') pending = s.count;
-          if (s._id === 'invoiced') invoiced = s.count;
-          if (s._id === 'skipped') skipped = s.count;
+          const isReturn = s._id.transactionType === 'RETURN';
+          if (isReturn) {
+            if (s._id.status === 'pending') pendingReturns = s.count;
+            if (s._id.status === 'credited') creditedReturns = s.count;
+          } else {
+            if (s._id.status === 'pending') pending = s.count;
+            if (s._id.status === 'invoiced') invoiced = s.count;
+            if (s._id.status === 'skipped') skipped = s.count;
+          }
         }
 
         // Override static counts with real-time counts
         upload.pendingOrders = pending;
         upload.invoicedOrders = invoiced;
         upload.skippedOrders = skipped;
+        upload.pendingReturns = pendingReturns;
+        upload.creditedReturns = creditedReturns;
       }
       return upload;
     }));
