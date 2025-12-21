@@ -667,6 +667,7 @@
                 <div class="space-y-4 max-h-96 overflow-y-auto">
                   ${result.invoices.slice(0, 20).map(inv => {
                     const data = inv.wouldCreate || inv;
+                    const preview = inv.preview || {};
                     const lines = data.invoice_line_ids || [];
                     return `
                       <div class="bg-slate-700/30 rounded-lg p-4">
@@ -677,6 +678,35 @@
                           </div>
                           ${!dryRun && inv.name ? `<span class="text-green-400 font-semibold">${inv.name}</span>` : ''}
                         </div>
+                        ${dryRun && preview ? `
+                          <!-- Invoice metadata -->
+                          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-xs">
+                            <div class="bg-slate-800/50 rounded p-2">
+                              <div class="text-slate-500">Journal</div>
+                              <div class="text-slate-200 font-medium">${preview.journalName || '-'}</div>
+                            </div>
+                            <div class="bg-slate-800/50 rounded p-2">
+                              <div class="text-slate-500">Fiscal Position</div>
+                              <div class="text-slate-200 font-medium">${preview.fiscalPositionName || '-'}</div>
+                            </div>
+                            <div class="bg-slate-800/50 rounded p-2">
+                              <div class="text-slate-500">Ship From → To</div>
+                              <div class="text-slate-200 font-medium">${preview.shipFrom || '-'} → ${preview.shipTo || '-'}</div>
+                            </div>
+                            <div class="bg-slate-800/50 rounded p-2">
+                              <div class="text-slate-500">Tax Scheme</div>
+                              <div class="text-slate-200 font-medium">${preview.taxScheme || '-'}</div>
+                            </div>
+                          </div>
+                          <!-- Totals -->
+                          <div class="flex items-center justify-between bg-slate-800/50 rounded p-2 mb-3 text-sm">
+                            <div class="flex gap-4">
+                              <span class="text-slate-400">Net: <span class="text-white">${(preview.totalExclVat || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                              <span class="text-slate-400">VAT: <span class="text-amber-400">${(preview.vatAmount || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                            </div>
+                            <span class="text-slate-400">Total: <span class="text-green-400 font-semibold">${(preview.totalInclVat || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                          </div>
+                        ` : ''}
                         ${dryRun && lines.length > 0 ? `
                           <div class="bg-slate-800/50 rounded p-3 text-sm">
                             <table class="w-full">

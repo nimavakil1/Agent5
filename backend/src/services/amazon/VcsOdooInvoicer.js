@@ -128,12 +128,28 @@ class VcsOdooInvoicer {
         const { saleOrder, orderLines } = odooOrderData;
 
         if (dryRun) {
+          const invoiceData = this.buildInvoiceData(order, saleOrder.partner_id[0], saleOrder, orderLines);
           result.invoices.push({
             orderId: order.orderId,
             dryRun: true,
             odooOrderName: saleOrder.name,
             odooOrderId: saleOrder.id,
-            wouldCreate: this.buildInvoiceData(order, saleOrder.partner_id[0], saleOrder, orderLines),
+            // Human-readable preview fields
+            preview: {
+              invoiceDate: invoiceData.invoice_date,
+              journalName: this.getJournalName(invoiceData.journal_id),
+              fiscalPositionName: this.getFiscalPositionName(invoiceData.fiscal_position_id),
+              currency: order.currency || 'EUR',
+              shipFrom: order.shipFromCountry || 'BE',
+              shipTo: order.shipToCountry,
+              taxScheme: order.taxReportingScheme,
+              buyerVatId: order.buyerTaxRegistration || null,
+              vatAmount: order.totalVat || 0,
+              totalExclVat: order.totalExclusive || 0,
+              totalInclVat: order.totalInclusive || 0,
+              vatInvoiceNumber: order.vatInvoiceNumber,
+            },
+            wouldCreate: invoiceData,
           });
           continue;
         }
@@ -526,7 +542,9 @@ class VcsOdooInvoicer {
     );
 
     this.fiscalPositionCache = {};
+    this.fiscalPositionNameCache = {}; // id -> name
     for (const fp of fiscalPositions) {
+      this.fiscalPositionNameCache[fp.id] = fp.name;
       // Map by name pattern
       for (const [key, name] of Object.entries(FISCAL_POSITIONS)) {
         if (fp.name.toLowerCase().includes(name.toLowerCase())) {
@@ -542,8 +560,10 @@ class VcsOdooInvoicer {
     );
 
     this.journalCache = {};
+    this.journalNameCache = {}; // id -> name
     for (const j of journals) {
       this.journalCache[j.code] = j.id;
+      this.journalNameCache[j.id] = j.name || j.code;
     }
 
     // Load currencies
@@ -575,6 +595,26 @@ class VcsOdooInvoicer {
     }
     // Fallback for dry run mode
     return null;
+  }
+
+  /**
+   * Get journal name by ID
+   * @param {number} journalId
+   * @returns {string|null}
+   */
+  getJournalName(journalId) {
+    if (!journalId) return null;
+    return this.journalNameCache?.[journalId] || null;
+  }
+
+  /**
+   * Get fiscal position name by ID
+   * @param {number} fiscalPositionId
+   * @returns {string|null}
+   */
+  getFiscalPositionName(fiscalPositionId) {
+    if (!fiscalPositionId) return null;
+    return this.fiscalPositionNameCache?.[fiscalPositionId] || null;
   }
 
   /**
