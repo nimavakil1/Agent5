@@ -257,6 +257,26 @@
         // Filters
         document.getElementById('filter-country').addEventListener('change', applyFilters);
         document.getElementById('filter-scheme').addEventListener('change', applyFilters);
+
+        // Pagination
+        document.getElementById('prev-page').addEventListener('click', () => {
+          if (currentPage > 1) {
+            currentPage--;
+            renderOrders();
+          }
+        });
+        document.getElementById('next-page').addEventListener('click', () => {
+          const country = document.getElementById('filter-country').value;
+          const scheme = document.getElementById('filter-scheme').value;
+          let filtered = pendingOrders;
+          if (country) filtered = filtered.filter(o => o.shipToCountry === country);
+          if (scheme) filtered = filtered.filter(o => o.taxReportingScheme?.includes(scheme) || (scheme === 'B2B' && o.buyerTaxRegistration));
+          const maxPage = Math.ceil(filtered.length / pageSize);
+          if (currentPage < maxPage) {
+            currentPage++;
+            renderOrders();
+          }
+        });
       }
 
       async function uploadFile(file) {
