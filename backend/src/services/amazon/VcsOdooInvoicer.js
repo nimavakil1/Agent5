@@ -35,11 +35,18 @@ const MARKETPLACE_JOURNALS = {
   'BE': 'VBE',   // INV*BE/ Invoices
   'PL': 'VPL',   // INV*PL/ Invoices
   'CZ': 'VCZ',   // INV*CZ/ Invoices
-  'GB': 'VGB',   // INV*GB/ Invoices
+  'GB': 'VGB',   // INV*GB/ Invoices (for UK domestic FBA sales)
   'OSS': 'VOS',  // INV*OSS/ Invoices (for EU cross-border OSS)
+  'EXPORT': 'VEX', // INV*EX/ Export Invoices (for non-EU exports: CH, UK cross-border, etc.)
   // Default fallback
   'DEFAULT': 'VBE',
 };
+
+// EU member countries (for determining if destination is EU or export)
+const EU_COUNTRIES = ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'];
+
+// Export fiscal position ID (BE*VAT | Régime Extra-Communautaire)
+const EXPORT_FISCAL_POSITION_ID = 3;
 
 // Country to fiscal position mapping
 const FISCAL_POSITIONS = {
@@ -476,6 +483,12 @@ class VcsOdooInvoicer {
    * @returns {number|null} Fiscal position ID
    */
   determineFiscalPosition(order) {
+    // Export orders use the export fiscal position directly (ID 3)
+    // This ensures proper VAT grid mapping (Grid 47) for exports
+    if (this.isExportOrder(order)) {
+      return EXPORT_FISCAL_POSITION_ID; // BE*VAT | Régime Extra-Communautaire
+    }
+
     let positionName = null;
 
     // OSS scheme (selling from BE to other EU countries)
@@ -485,10 +498,6 @@ class VcsOdooInvoicer {
     // B2B with buyer VAT number
     else if (order.buyerTaxRegistration) {
       positionName = 'B2B_EU';
-    }
-    // Export outside EU
-    else if (order.exportOutsideEu) {
-      positionName = 'EXPORT';
     }
     // Domestic Belgian sale
     else if (order.shipToCountry === 'BE' && order.sellerTaxJurisdiction === 'BE') {
@@ -515,10 +524,10 @@ class VcsOdooInvoicer {
       return this.journalCache?.[journalCode] || this.defaultJournalId || null;
     }
 
-    // For Swiss exports (CH_VOEC), use Belgian journal (seller's country)
-    // Amazon handles Swiss VAT, but we still need to record revenue
-    if (order.taxReportingScheme === 'CH_VOEC' || order.shipToCountry === 'CH') {
-      const journalCode = MARKETPLACE_JOURNALS['BE']; // Use Belgian journal for Swiss exports
+    // Check if this is an export (destination outside EU)
+    const isExport = this.isExportOrder(order);
+    if (isExport) {
+      const journalCode = MARKETPLACE_JOURNALS['EXPORT']; // VEX
       return this.journalCache?.[journalCode] || this.defaultJournalId || null;
     }
 
@@ -528,6 +537,36 @@ class VcsOdooInvoicer {
 
     // Look up journal ID from cache
     return this.journalCache?.[journalCode] || this.defaultJournalId || null;
+  }
+
+  /**
+   * Check if order is an export (outside EU)
+   * @param {object} order
+   * @returns {boolean}
+   */
+  isExportOrder(order) {
+    // DEEMED_RESELLER means Amazon handles VAT (typically UK post-Brexit from EU)
+    if (order.taxReportingScheme === 'DEEMED_RESELLER') {
+      return true;
+    }
+
+    // CH_VOEC is Swiss export
+    if (order.taxReportingScheme === 'CH_VOEC') {
+      return true;
+    }
+
+    // Check if destination is outside EU
+    const destination = order.shipToCountry;
+    if (destination && !EU_COUNTRIES.includes(destination)) {
+      // GB shipped FROM GB is domestic UK, not export
+      // GB shipped FROM EU is export
+      if (destination === 'GB' && order.shipFromCountry === 'GB') {
+        return false; // UK domestic sale
+      }
+      return true; // Non-EU destination = export
+    }
+
+    return false;
   }
 
   /**
@@ -657,9 +696,9 @@ class VcsOdooInvoicer {
     if (order.taxReportingScheme === 'VCS_EU_OSS') {
       return MARKETPLACE_JOURNALS['OSS'];
     }
-    // For Swiss exports (CH_VOEC), use Belgian journal
-    if (order.taxReportingScheme === 'CH_VOEC' || order.shipToCountry === 'CH') {
-      return MARKETPLACE_JOURNALS['BE'];
+    // For export orders, use the export journal
+    if (this.isExportOrder(order)) {
+      return MARKETPLACE_JOURNALS['EXPORT'];
     }
     // Use shipToCountry (destination) to determine journal
     const country = order.shipToCountry || order.sellerTaxJurisdiction || 'BE';
@@ -672,6 +711,10 @@ class VcsOdooInvoicer {
    * @returns {string|null}
    */
   getExpectedFiscalPositionKey(order) {
+    // Export orders (non-EU destinations)
+    if (this.isExportOrder(order)) {
+      return 'Extra-Communautaire (Export)';
+    }
     // OSS scheme
     if (order.taxReportingScheme === 'VCS_EU_OSS') {
       return `OSS ${order.shipToCountry}`;
@@ -679,10 +722,6 @@ class VcsOdooInvoicer {
     // B2B with buyer VAT number
     if (order.buyerTaxRegistration) {
       return 'Intra-Community B2B';
-    }
-    // Export outside EU
-    if (order.exportOutsideEu) {
-      return 'Export Outside EU';
     }
     // Domestic Belgian sale
     if (order.shipToCountry === 'BE' && (order.sellerTaxJurisdiction === 'BE' || order.shipFromCountry === 'BE')) {
