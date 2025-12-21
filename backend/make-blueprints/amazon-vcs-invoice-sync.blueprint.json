@@ -1,0 +1,233 @@
+{
+    "name": "Amazon VCS Invoice Sync",
+    "description": "Fetches VAT transaction data from Amazon VCS and sends to Agent5 webhook for Odoo invoice creation",
+    "flow": [
+        {
+            "id": 1,
+            "module": "util:SetVariables",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "variables": [
+                    {
+                        "name": "startDate",
+                        "value": "{{formatDate(addDays(now; -7); \"YYYY-MM-DDTHH:mm:ss\")}}"
+                    },
+                    {
+                        "name": "endDate",
+                        "value": "{{formatDate(now; \"YYYY-MM-DDTHH:mm:ss\")}}"
+                    }
+                ],
+                "scope": "roundtrip"
+            },
+            "metadata": {
+                "designer": { "x": 0, "y": 0 },
+                "restore": {},
+                "expect": [
+                    {
+                        "name": "variables",
+                        "type": "array",
+                        "label": "Variables",
+                        "spec": {
+                            "type": "collection",
+                            "spec": [
+                                { "name": "name", "type": "text", "label": "Variable name", "required": true },
+                                { "name": "value", "type": "any", "label": "Variable value" }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "scope",
+                        "type": "select",
+                        "label": "Variable lifetime",
+                        "validate": { "enum": ["roundtrip", "execution"] }
+                    }
+                ]
+            }
+        },
+        {
+            "id": 2,
+            "module": "amazon-seller-central:makeApiCall",
+            "version": 1,
+            "parameters": {
+                "__IMTCONN__": "{{connection.amazon-seller-central}}"
+            },
+            "mapper": {
+                "url": "/reports/2021-06-30/reports",
+                "method": "post",
+                "body": {
+                    "reportType": "GET_VAT_TRANSACTION_DATA",
+                    "dataStartTime": "{{1.startDate}}",
+                    "dataEndTime": "{{1.endDate}}",
+                    "marketplaceIds": ["A13V1IB3VIYZER", "A1PA6795UKMFR9", "A1RKKUPIHCS9HS", "A1805IZSGTT6HS", "A1C3SOZRARQ6R3", "AMEN7PMS3EDWL", "A1F83G8C2ARO7P"]
+                }
+            },
+            "metadata": {
+                "designer": { "x": 300, "y": 0 },
+                "restore": {
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "data": { "scoped": "true", "connection": "amazon-seller-central" },
+                            "label": "Amazon Seller Central connection"
+                        }
+                    }
+                },
+                "notes": "Request VAT Transaction Data report for EU marketplaces"
+            }
+        },
+        {
+            "id": 3,
+            "module": "builtin:Sleep",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "timeout": 60
+            },
+            "metadata": {
+                "designer": { "x": 600, "y": 0 },
+                "notes": "Wait 60 seconds for report generation"
+            }
+        },
+        {
+            "id": 4,
+            "module": "amazon-seller-central:makeApiCall",
+            "version": 1,
+            "parameters": {
+                "__IMTCONN__": "{{connection.amazon-seller-central}}"
+            },
+            "mapper": {
+                "url": "/reports/2021-06-30/reports/{{2.body.reportId}}",
+                "method": "get"
+            },
+            "metadata": {
+                "designer": { "x": 900, "y": 0 },
+                "notes": "Check report status"
+            }
+        },
+        {
+            "id": 5,
+            "module": "builtin:BasicRouter",
+            "version": 1,
+            "parameters": {},
+            "mapper": null,
+            "routes": [
+                {
+                    "flow": [
+                        {
+                            "id": 6,
+                            "module": "amazon-seller-central:makeApiCall",
+                            "version": 1,
+                            "parameters": {
+                                "__IMTCONN__": "{{connection.amazon-seller-central}}"
+                            },
+                            "mapper": {
+                                "url": "/reports/2021-06-30/documents/{{4.body.reportDocumentId}}",
+                                "method": "get"
+                            },
+                            "metadata": {
+                                "designer": { "x": 1200, "y": -100 },
+                                "notes": "Get report document URL"
+                            }
+                        },
+                        {
+                            "id": 7,
+                            "module": "http:MakeRequest",
+                            "version": 4,
+                            "parameters": {
+                                "authenticationType": "noAuth"
+                            },
+                            "mapper": {
+                                "url": "{{6.body.url}}",
+                                "method": "get",
+                                "parseResponse": false
+                            },
+                            "metadata": {
+                                "designer": { "x": 1500, "y": -100 },
+                                "notes": "Download report content"
+                            }
+                        },
+                        {
+                            "id": 8,
+                            "module": "http:MakeRequest",
+                            "version": 4,
+                            "parameters": {
+                                "authenticationType": "noAuth"
+                            },
+                            "mapper": {
+                                "url": "https://ai.acropaq.com/api/amazon/webhook/vcs-transactions",
+                                "method": "post",
+                                "headers": [
+                                    { "name": "Content-Type", "value": "application/json" }
+                                ],
+                                "contentType": "json",
+                                "inputMethod": "jsonString",
+                                "jsonStringBodyContent": "{\"reportId\": \"{{2.body.reportId}}\", \"reportType\": \"GET_VAT_TRANSACTION_DATA\", \"startDate\": \"{{1.startDate}}\", \"endDate\": \"{{1.endDate}}\", \"content\": {{7.data}}}",
+                                "parseResponse": true
+                            },
+                            "metadata": {
+                                "designer": { "x": 1800, "y": -100 },
+                                "notes": "Send VCS data to Agent5 webhook"
+                            }
+                        }
+                    ],
+                    "filter": {
+                        "name": "Report Ready",
+                        "conditions": [
+                            [ { "a": "{{4.body.processingStatus}}", "b": "DONE", "o": "text:equal" } ]
+                        ]
+                    }
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 9,
+                            "module": "builtin:Sleep",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": { "timeout": 30 },
+                            "metadata": {
+                                "designer": { "x": 1200, "y": 100 },
+                                "notes": "Wait more if still processing"
+                            }
+                        }
+                    ],
+                    "filter": {
+                        "name": "Still Processing",
+                        "conditions": [
+                            [ { "a": "{{4.body.processingStatus}}", "b": "IN_PROGRESS", "o": "text:equal" } ]
+                        ]
+                    }
+                }
+            ],
+            "metadata": {
+                "designer": { "x": 1050, "y": 0 }
+            }
+        }
+    ],
+    "metadata": {
+        "instant": false,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false
+        },
+        "designer": { "orphans": [] },
+        "zone": "eu1.make.com",
+        "notes": [
+            "This scenario fetches VAT transaction data from Amazon VCS (VAT Calculation Service)",
+            "Schedule: Run daily or weekly",
+            "The report contains VAT invoice data for all EU sales",
+            "Data is sent to Agent5 webhook for Odoo invoice creation"
+        ]
+    },
+    "scheduling": {
+        "type": "interval",
+        "interval": 86400
+    }
+}

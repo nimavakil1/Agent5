@@ -1,0 +1,183 @@
+{
+    "name": "Amazon Tracking Push",
+    "description": "Receives shipment tracking from Agent5 and pushes to Amazon via Orders API",
+    "flow": [
+        {
+            "id": 1,
+            "module": "gateway:CustomWebHook",
+            "version": 1,
+            "parameters": {
+                "hook": "{{webhook.agent5-tracking}}",
+                "maxResults": 1
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": { "x": 0, "y": 0 },
+                "notes": "Receives tracking data from Agent5: { feedType, shipments: [{ amazonOrderId, trackingNumber, carrierCode, shipDate, items }] }"
+            }
+        },
+        {
+            "id": 2,
+            "module": "builtin:BasicFeeder",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "array": "{{1.shipments}}"
+            },
+            "metadata": {
+                "designer": { "x": 300, "y": 0 },
+                "notes": "Iterate through shipments"
+            }
+        },
+        {
+            "id": 3,
+            "module": "amazon-seller-central:makeApiCall",
+            "version": 1,
+            "parameters": {
+                "__IMTCONN__": "{{connection.amazon-seller-central}}"
+            },
+            "mapper": {
+                "url": "/orders/v0/orders/{{2.amazonOrderId}}/shipment",
+                "method": "post",
+                "body": {
+                    "marketplaceId": "A13V1IB3VIYZER",
+                    "shipmentStatus": "Shipped",
+                    "shipDate": "{{2.shipDate}}",
+                    "trackingNumber": "{{2.trackingNumber}}",
+                    "carrierCode": "{{2.carrierCode}}"
+                }
+            },
+            "metadata": {
+                "designer": { "x": 600, "y": 0 },
+                "restore": {
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "data": { "scoped": "true", "connection": "amazon-seller-central" },
+                            "label": "Amazon Seller Central connection"
+                        }
+                    }
+                },
+                "notes": "Confirm shipment via Orders API"
+            }
+        },
+        {
+            "id": 4,
+            "module": "builtin:BasicRouter",
+            "version": 1,
+            "parameters": {},
+            "mapper": null,
+            "routes": [
+                {
+                    "flow": [
+                        {
+                            "id": 5,
+                            "module": "builtin:BasicAggregator",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "targetStructure": [
+                                    { "name": "amazonOrderId", "type": "text" },
+                                    { "name": "status", "type": "text" },
+                                    { "name": "trackingNumber", "type": "text" }
+                                ]
+                            },
+                            "metadata": {
+                                "designer": { "x": 900, "y": -50 },
+                                "notes": "Collect successful results"
+                            }
+                        }
+                    ],
+                    "filter": {
+                        "name": "Success",
+                        "conditions": [
+                            [ { "a": "{{3.statusCode}}", "b": "200", "o": "number:equal" } ]
+                        ]
+                    }
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 6,
+                            "module": "builtin:BasicAggregator",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "targetStructure": [
+                                    { "name": "amazonOrderId", "type": "text" },
+                                    { "name": "error", "type": "text" }
+                                ]
+                            },
+                            "metadata": {
+                                "designer": { "x": 900, "y": 50 },
+                                "notes": "Collect errors"
+                            }
+                        }
+                    ],
+                    "filter": {
+                        "name": "Error",
+                        "conditions": [
+                            [ { "a": "{{3.statusCode}}", "b": "200", "o": "number:notequal" } ]
+                        ]
+                    }
+                }
+            ],
+            "metadata": {
+                "designer": { "x": 750, "y": 0 }
+            }
+        },
+        {
+            "id": 7,
+            "module": "http:MakeRequest",
+            "version": 4,
+            "parameters": {
+                "authenticationType": "noAuth"
+            },
+            "mapper": {
+                "url": "https://ai.acropaq.com/api/amazon/webhook/tracking-push-result",
+                "method": "post",
+                "headers": [
+                    { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "json",
+                "body": {
+                    "success": true,
+                    "successCount": "{{length(5.array)}}",
+                    "errorCount": "{{length(6.array)}}",
+                    "results": "{{5.array}}",
+                    "errors": "{{6.array}}"
+                },
+                "parseResponse": true
+            },
+            "metadata": {
+                "designer": { "x": 1200, "y": 0 },
+                "notes": "Report results back to Agent5"
+            }
+        }
+    ],
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": true
+        },
+        "designer": { "orphans": [] },
+        "zone": "eu1.make.com",
+        "notes": [
+            "This scenario receives tracking info from Agent5 and confirms shipments in Amazon",
+            "Trigger: Webhook from Agent5 POST /api/amazon/sync/tracking",
+            "Uses Orders API shipmentConfirmation endpoint",
+            "Reports results back to Agent5 webhook",
+            "",
+            "Carrier codes supported: B Post, DHL, DPD, GLS, FedEx, UPS, TNT, PostNL, Chronopost, Colissimo, Royal Mail"
+        ]
+    },
+    "webhook": {
+        "name": "agent5-tracking",
+        "type": "custom",
+        "url": "https://hook.eu1.make.com/YOUR_WEBHOOK_ID"
+    }
+}

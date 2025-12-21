@@ -1,0 +1,29 @@
+{
+  "description": "Custom SKU mappings that cannot be auto-resolved by SkuResolver patterns",
+  "generatedAt": "2025-12-20",
+  "note": "Import via POST /api/amazon/config/sku-mappings/import",
+  "mappings": [
+    { "amazonSku": "09019.A", "odooSku": "09019", "comment": "Dot separator instead of hyphen" },
+    { "amazonSku": "18011A", "odooSku": "18010", "comment": "Maps to different base SKU (data entry error?)" },
+    { "amazonSku": "42035-stickerles", "odooSku": "42035", "comment": "Typo: missing 's' in 'stickerless'" },
+    { "amazonSku": "B42032A", "odooSku": "B42032", "comment": "Letter A on alphanumeric SKU" },
+    { "amazonSku": "B42030.B40", "odooSku": "P0181", "comment": "Product variant mapping" },
+    { "amazonSku": "B42030.B40.BLACK", "odooSku": "P0182", "comment": "Product variant mapping" },
+    { "amazonSku": "B42030.BLACK", "odooSku": "P0183", "comment": "Product variant mapping" }
+  ],
+  "returnPatterns": [
+    {
+      "pattern": "amzn\\.gr\\.([A-Z0-9.]+)-",
+      "extractGroup": 1,
+      "flags": "i",
+      "comment": "Amazon return SKUs - extracts base SKU from pattern like 'amzn.gr.P0213-xxxxx'"
+    }
+  ],
+  "problematicEntries": [
+    {
+      "amazonSku": "krachttraining thuis, op kantoor, in het hotel of onderweg\"",
+      "odooSku": "P0011",
+      "comment": "Dutch product description used as SKU - needs manual fix in Amazon Seller Central"
+    }
+  ]
+}

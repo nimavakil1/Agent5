@@ -1,6 +1,8 @@
 const ScheduledJob = require('../models/ScheduledJob');
 const CampaignDefinition = require('../models/CampaignDefinition');
+const { getDb } = require('../db');
 let shopifyTimer = null;
+let amazonSettlementTimer = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -80,6 +82,78 @@ function start() {
       runSync();
     }
   } catch (e) { console.error('[scheduler] Shopify sync init error', e); }
+
+  // Amazon Settlement Report reminder check (runs daily)
+  try {
+    const settlementCheckInterval = 24 * 60 * 60 * 1000; // Once per day
+    amazonSettlementTimer = setInterval(checkAmazonSettlementReminders, settlementCheckInterval);
+    // Run immediately on start
+    setTimeout(checkAmazonSettlementReminders, 5000); // Wait 5s for DB connection
+    console.log('[scheduler] Amazon settlement reminder check initialized (daily)');
+  } catch (e) { console.error('[scheduler] Amazon settlement check init error', e); }
 }
 
-module.exports = { start };
+/**
+ * Check for overdue Amazon settlement reports
+ * Amazon releases settlements bi-weekly, so we check daily and warn if > 16 days since last one
+ */
+async function checkAmazonSettlementReminders() {
+  try {
+    const db = getDb();
+    if (!db) {
+      console.log('[scheduler] MongoDB not connected, skipping settlement check');
+      return;
+    }
+
+    // Get the most recent settlement
+    const lastSettlement = await db.collection('amazon_settlements')
+      .findOne({}, { sort: { settlementEndDate: -1 } });
+
+    const now = new Date();
+    const daysSinceLastSettlement = lastSettlement?.settlementEndDate
+      ? Math.floor((now - new Date(lastSettlement.settlementEndDate)) / (1000 * 60 * 60 * 24))
+      : 999;
+
+    if (daysSinceLastSettlement > 16) {
+      console.log(`[scheduler] ⚠️ AMAZON SETTLEMENT OVERDUE! Last settlement was ${daysSinceLastSettlement} days ago.`);
+      console.log('[scheduler] Please download the latest settlement report from Amazon Seller Central and upload it.');
+
+      // Store reminder in database for UI display
+      await db.collection('system_reminders').updateOne(
+        { type: 'amazon_settlement' },
+        {
+          $set: {
+            type: 'amazon_settlement',
+            isOverdue: true,
+            daysSince: daysSinceLastSettlement,
+            lastSettlementDate: lastSettlement?.settlementEndDate,
+            message: `Settlement report overdue! Last one was ${daysSinceLastSettlement} days ago.`,
+            updatedAt: new Date()
+          },
+          $setOnInsert: { createdAt: new Date() }
+        },
+        { upsert: true }
+      );
+    } else if (daysSinceLastSettlement > 12) {
+      console.log(`[scheduler] Amazon settlement report should be available soon (${daysSinceLastSettlement} days since last).`);
+    } else {
+      // Clear any overdue reminder
+      await db.collection('system_reminders').updateOne(
+        { type: 'amazon_settlement' },
+        {
+          $set: {
+            isOverdue: false,
+            daysSince: daysSinceLastSettlement,
+            lastSettlementDate: lastSettlement?.settlementEndDate,
+            message: 'Settlement reports are up to date.',
+            updatedAt: new Date()
+          }
+        }
+      );
+    }
+  } catch (e) {
+    console.error('[scheduler] Amazon settlement check error:', e?.message || e);
+  }
+}
+
+module.exports = { start, checkAmazonSettlementReminders };

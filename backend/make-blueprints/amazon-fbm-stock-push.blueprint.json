@@ -1,0 +1,141 @@
+{
+    "name": "Amazon FBM Stock Push",
+    "description": "Receives stock updates from Agent5 and pushes to Amazon via Feeds API",
+    "flow": [
+        {
+            "id": 1,
+            "module": "gateway:CustomWebHook",
+            "version": 1,
+            "parameters": {
+                "hook": "{{webhook.agent5-fbm-stock}}",
+                "maxResults": 1
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": { "x": 0, "y": 0 },
+                "notes": "Receives stock data from Agent5: { feedType, items: [{ sku, quantity, fulfillmentLatency }] }"
+            }
+        },
+        {
+            "id": 2,
+            "module": "builtin:BasicFeeder",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "array": "{{1.items}}"
+            },
+            "metadata": {
+                "designer": { "x": 300, "y": 0 },
+                "notes": "Iterate through stock items"
+            }
+        },
+        {
+            "id": 3,
+            "module": "amazon-seller-central:makeApiCall",
+            "version": 1,
+            "parameters": {
+                "__IMTCONN__": "{{connection.amazon-seller-central}}"
+            },
+            "mapper": {
+                "url": "/listings/2021-08-01/items/{{env.sellerId}}/{{2.sku}}",
+                "method": "patch",
+                "body": {
+                    "productType": "PRODUCT",
+                    "patches": [
+                        {
+                            "op": "replace",
+                            "path": "/attributes/fulfillment_availability",
+                            "value": [
+                                {
+                                    "fulfillment_channel_code": "DEFAULT",
+                                    "quantity": "{{2.quantity}}"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "qs": [
+                    { "key": "marketplaceIds", "value": "A13V1IB3VIYZER,A1PA6795UKMFR9,A1805IZSGTT6HS,A1C3SOZRARQ6R3,AMEN7PMS3EDWL,A1F83G8C2ARO7P" }
+                ]
+            },
+            "metadata": {
+                "designer": { "x": 600, "y": 0 },
+                "restore": {
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "data": { "scoped": "true", "connection": "amazon-seller-central" },
+                            "label": "Amazon Seller Central connection"
+                        }
+                    }
+                },
+                "notes": "Update inventory via Listings API (Listings Items Patch)"
+            }
+        },
+        {
+            "id": 4,
+            "module": "builtin:BasicAggregator",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "targetStructure": [
+                    { "name": "sku", "type": "text" },
+                    { "name": "status", "type": "text" }
+                ]
+            },
+            "metadata": {
+                "designer": { "x": 900, "y": 0 },
+                "notes": "Collect results"
+            }
+        },
+        {
+            "id": 5,
+            "module": "http:MakeRequest",
+            "version": 4,
+            "parameters": {
+                "authenticationType": "noAuth"
+            },
+            "mapper": {
+                "url": "https://ai.acropaq.com/api/amazon/webhook/stock-push-result",
+                "method": "post",
+                "headers": [
+                    { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "json",
+                "body": {
+                    "success": true,
+                    "processedCount": "{{length(4.array)}}",
+                    "results": "{{4.array}}"
+                },
+                "parseResponse": true
+            },
+            "metadata": {
+                "designer": { "x": 1200, "y": 0 },
+                "notes": "Report results back to Agent5"
+            }
+        }
+    ],
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": true
+        },
+        "designer": { "orphans": [] },
+        "zone": "eu1.make.com",
+        "notes": [
+            "This scenario receives stock updates from Agent5 and pushes to Amazon",
+            "Trigger: Webhook from Agent5 POST /api/amazon/sync/fbm-stock",
+            "Uses Listings API to update inventory (newer than Feeds API)",
+            "Reports results back to Agent5 webhook"
+        ]
+    },
+    "webhook": {
+        "name": "agent5-fbm-stock",
+        "type": "custom",
+        "url": "https://hook.eu1.make.com/YOUR_WEBHOOK_ID"
+    }
+}

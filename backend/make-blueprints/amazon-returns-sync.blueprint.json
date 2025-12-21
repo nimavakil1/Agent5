@@ -1,0 +1,151 @@
+{
+    "name": "Amazon Returns Sync",
+    "flow": [
+        {
+            "id": 1,
+            "module": "util:SetVariables",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "variables": [
+                    {
+                        "name": "startDate",
+                        "value": "{{formatDate(addDays(now; -7); \"YYYY-MM-DDTHH:mm:ss\")}}"
+                    }
+                ],
+                "scope": "roundtrip"
+            },
+            "metadata": {
+                "designer": { "x": 0, "y": 0 },
+                "restore": {},
+                "expect": [
+                    {
+                        "name": "variables",
+                        "type": "array",
+                        "label": "Variables",
+                        "spec": {
+                            "type": "collection",
+                            "spec": [
+                                { "name": "name", "type": "text", "label": "Variable name", "required": true },
+                                { "name": "value", "type": "any", "label": "Variable value" }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "scope",
+                        "type": "select",
+                        "label": "Variable lifetime",
+                        "validate": { "enum": ["roundtrip", "execution"] }
+                    }
+                ],
+                "notes": "Get returns from last 7 days"
+            }
+        },
+        {
+            "id": 2,
+            "module": "amazon-seller-central:makeApiCall",
+            "version": 1,
+            "parameters": {
+                "__IMTCONN__": 2974694
+            },
+            "mapper": {
+                "url": "/fba/outbound/2020-07-01/fulfillmentOrders",
+                "qs": [
+                    { "key": "queryStartDate", "value": "{{1.startDate}}" }
+                ],
+                "method": "get"
+            },
+            "metadata": {
+                "designer": { "x": 300, "y": 0 },
+                "restore": {
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "data": {
+                                "scoped": "true",
+                                "connection": "amazon-seller-central"
+                            },
+                            "label": "My Amazon Seller Central connection (A1GJ5ZORIRYSYA)"
+                        }
+                    },
+                    "expect": {
+                        "method": { "mode": "chose", "label": "GET" },
+                        "qs": { "mode": "chose" }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "__IMTCONN__",
+                        "type": "account:amazon-seller-central",
+                        "label": "Connection",
+                        "required": true
+                    }
+                ],
+                "expect": [
+                    { "name": "url", "type": "text", "label": "URL", "required": true },
+                    { "name": "method", "type": "select", "label": "Method", "required": true },
+                    { "name": "qs", "type": "array", "label": "Query String" },
+                    { "name": "body", "type": "any", "label": "Body" }
+                ],
+                "notes": "Alternative: Use Reports API for GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA"
+            }
+        },
+        {
+            "id": 3,
+            "module": "http:MakeRequest",
+            "version": 4,
+            "parameters": {
+                "tlsType": "",
+                "proxyKeychain": "",
+                "authenticationType": "noAuth"
+            },
+            "mapper": {
+                "url": "https://ai.acropaq.com/api/amazon/webhook/returns",
+                "method": "post",
+                "headers": [
+                    { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "json",
+                "inputMethod": "jsonString",
+                "shareCookies": false,
+                "parseResponse": true,
+                "allowRedirects": true,
+                "stopOnHttpError": true,
+                "jsonStringBodyContent": "{{2.body}}",
+                "requestCompressedContent": true
+            },
+            "metadata": {
+                "designer": { "x": 600, "y": 0 },
+                "restore": {
+                    "expect": {
+                        "method": { "mode": "chose", "label": "POST" },
+                        "headers": { "mode": "chose", "items": [null] },
+                        "contentType": { "label": "application/json" },
+                        "inputMethod": { "label": "JSON string" }
+                    },
+                    "parameters": {
+                        "authenticationType": { "label": "No authentication" }
+                    }
+                }
+            }
+        }
+    ],
+    "metadata": {
+        "instant": false,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false
+        },
+        "designer": { "orphans": [] },
+        "zone": "eu1.make.com",
+        "notes": [
+            "Syncs FBA returns data from Amazon to Agent5.",
+            "Schedule: Every 2 hours",
+            "Webhook: POST /api/amazon/webhook/returns",
+            "Note: Returns data may also come from Financial Events (refunds)"
+        ]
+    }
+}

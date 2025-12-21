@@ -1,0 +1,150 @@
+{
+    "name": "Amazon FBA Inventory Sync",
+    "flow": [
+        {
+            "id": 1,
+            "module": "util:SetVariables",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "variables": [
+                    {
+                        "name": "marketplaceId",
+                        "value": "A13V1IB3VIYBER"
+                    }
+                ],
+                "scope": "roundtrip"
+            },
+            "metadata": {
+                "designer": { "x": 0, "y": 0 },
+                "restore": {},
+                "expect": [
+                    {
+                        "name": "variables",
+                        "type": "array",
+                        "label": "Variables",
+                        "spec": {
+                            "type": "collection",
+                            "spec": [
+                                { "name": "name", "type": "text", "label": "Variable name", "required": true },
+                                { "name": "value", "type": "any", "label": "Variable value" }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "scope",
+                        "type": "select",
+                        "label": "Variable lifetime",
+                        "validate": { "enum": ["roundtrip", "execution"] }
+                    }
+                ]
+            }
+        },
+        {
+            "id": 2,
+            "module": "amazon-seller-central:makeApiCall",
+            "version": 1,
+            "parameters": {
+                "__IMTCONN__": 2974694
+            },
+            "mapper": {
+                "url": "/fba/inventory/v1/summaries",
+                "qs": [
+                    { "key": "granularityType", "value": "Marketplace" },
+                    { "key": "granularityId", "value": "{{1.marketplaceId}}" },
+                    { "key": "marketplaceIds", "value": "{{1.marketplaceId}}" }
+                ],
+                "method": "get"
+            },
+            "metadata": {
+                "designer": { "x": 300, "y": 0 },
+                "restore": {
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "data": {
+                                "scoped": "true",
+                                "connection": "amazon-seller-central"
+                            },
+                            "label": "My Amazon Seller Central connection (A1GJ5ZORIRYSYA)"
+                        }
+                    },
+                    "expect": {
+                        "method": { "mode": "chose", "label": "GET" },
+                        "qs": { "mode": "chose" }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "__IMTCONN__",
+                        "type": "account:amazon-seller-central",
+                        "label": "Connection",
+                        "required": true
+                    }
+                ],
+                "expect": [
+                    { "name": "url", "type": "text", "label": "URL", "required": true },
+                    { "name": "method", "type": "select", "label": "Method", "required": true },
+                    { "name": "qs", "type": "array", "label": "Query String" },
+                    { "name": "body", "type": "any", "label": "Body" }
+                ]
+            }
+        },
+        {
+            "id": 3,
+            "module": "http:MakeRequest",
+            "version": 4,
+            "parameters": {
+                "tlsType": "",
+                "proxyKeychain": "",
+                "authenticationType": "noAuth"
+            },
+            "mapper": {
+                "url": "https://ai.acropaq.com/api/amazon/webhook/inventory",
+                "method": "post",
+                "headers": [
+                    { "name": "Content-Type", "value": "application/json" }
+                ],
+                "contentType": "json",
+                "inputMethod": "jsonString",
+                "shareCookies": false,
+                "parseResponse": true,
+                "allowRedirects": true,
+                "stopOnHttpError": true,
+                "jsonStringBodyContent": "{{2.body}}",
+                "requestCompressedContent": true
+            },
+            "metadata": {
+                "designer": { "x": 600, "y": 0 },
+                "restore": {
+                    "expect": {
+                        "method": { "mode": "chose", "label": "POST" },
+                        "headers": { "mode": "chose", "items": [null] },
+                        "contentType": { "label": "application/json" },
+                        "inputMethod": { "label": "JSON string" }
+                    },
+                    "parameters": {
+                        "authenticationType": { "label": "No authentication" }
+                    }
+                }
+            }
+        }
+    ],
+    "metadata": {
+        "instant": false,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false
+        },
+        "designer": { "orphans": [] },
+        "zone": "eu1.make.com",
+        "notes": [
+            "Syncs FBA inventory levels from Amazon to Agent5.",
+            "Schedule: Every 30 minutes",
+            "Webhook: POST /api/amazon/webhook/inventory"
+        ]
+    }
+}

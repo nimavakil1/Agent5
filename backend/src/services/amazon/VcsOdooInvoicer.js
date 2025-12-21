@@ -129,6 +129,13 @@ class VcsOdooInvoicer {
 
         if (dryRun) {
           const invoiceData = this.buildInvoiceData(order, saleOrder.partner_id[0], saleOrder, orderLines);
+
+          // Get human-readable names, with fallbacks showing expected values
+          const journalName = this.getJournalName(invoiceData.journal_id);
+          const fiscalPositionName = this.getFiscalPositionName(invoiceData.fiscal_position_id);
+          const expectedJournal = this.getExpectedJournalCode(order);
+          const expectedFiscalPosition = this.getExpectedFiscalPositionKey(order);
+
           result.invoices.push({
             orderId: order.orderId,
             dryRun: true,
@@ -137,12 +144,12 @@ class VcsOdooInvoicer {
             // Human-readable preview fields
             preview: {
               invoiceDate: invoiceData.invoice_date,
-              journalName: this.getJournalName(invoiceData.journal_id),
-              fiscalPositionName: this.getFiscalPositionName(invoiceData.fiscal_position_id),
+              journalName: journalName || `Not found (expected: ${expectedJournal})`,
+              fiscalPositionName: fiscalPositionName || (expectedFiscalPosition ? `Not found (expected: ${expectedFiscalPosition})` : 'Default'),
               currency: order.currency || 'EUR',
               shipFrom: order.shipFromCountry || 'BE',
               shipTo: order.shipToCountry,
-              taxScheme: order.taxReportingScheme,
+              taxScheme: order.taxReportingScheme || 'Standard',
               buyerVatId: order.buyerTaxRegistration || null,
               vatAmount: order.totalVat || 0,
               totalExclVat: order.totalExclusive || 0,
@@ -615,6 +622,41 @@ class VcsOdooInvoicer {
   getFiscalPositionName(fiscalPositionId) {
     if (!fiscalPositionId) return null;
     return this.fiscalPositionNameCache?.[fiscalPositionId] || null;
+  }
+
+  /**
+   * Get expected journal code for an order (for display when not found)
+   * @param {object} order
+   * @returns {string}
+   */
+  getExpectedJournalCode(order) {
+    const country = order.sellerTaxJurisdiction || order.shipFromCountry || 'BE';
+    return MARKETPLACE_JOURNALS[country] || MARKETPLACE_JOURNALS['DEFAULT'] || 'AMZN';
+  }
+
+  /**
+   * Get expected fiscal position key for an order (for display when not found)
+   * @param {object} order
+   * @returns {string|null}
+   */
+  getExpectedFiscalPositionKey(order) {
+    // OSS scheme
+    if (order.taxReportingScheme === 'VCS_EU_OSS') {
+      return `OSS ${order.shipToCountry}`;
+    }
+    // B2B with buyer VAT number
+    if (order.buyerTaxRegistration) {
+      return 'Intra-Community B2B';
+    }
+    // Export outside EU
+    if (order.exportOutsideEu) {
+      return 'Export Outside EU';
+    }
+    // Domestic Belgian sale
+    if (order.shipToCountry === 'BE' && (order.sellerTaxJurisdiction === 'BE' || order.shipFromCountry === 'BE')) {
+      return 'Belgium Domestic';
+    }
+    return null; // Will use default
   }
 
   /**

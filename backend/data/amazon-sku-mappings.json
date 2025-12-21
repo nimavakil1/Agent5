@@ -1,0 +1,938 @@
+[
+  {
+    "amazonSku": "1006",
+    "odooSku": "01006"
+  },
+  {
+    "amazonSku": "1007",
+    "odooSku": "01007"
+  },
+  {
+    "amazonSku": "1008",
+    "odooSku": "01008"
+  },
+  {
+    "amazonSku": "01017A",
+    "odooSku": "01017"
+  },
+  {
+    "amazonSku": "01023A",
+    "odooSku": "01023"
+  },
+  {
+    "amazonSku": "09001A",
+    "odooSku": "09001"
+  },
+  {
+    "amazonSku": "9002",
+    "odooSku": "09002"
+  },
+  {
+    "amazonSku": "09002A",
+    "odooSku": "09002"
+  },
+  {
+    "amazonSku": "9003",
+    "odooSku": "09003"
+  },
+  {
+    "amazonSku": "09003A",
+    "odooSku": "09003"
+  },
+  {
+    "amazonSku": "09004A",
+    "odooSku": "09004"
+  },
+  {
+    "amazonSku": "09005A",
+    "odooSku": "09005"
+  },
+  {
+    "amazonSku": "09006A",
+    "odooSku": "09006"
+  },
+  {
+    "amazonSku": "9007",
+    "odooSku": "09007"
+  },
+  {
+    "amazonSku": "09007-FBM",
+    "odooSku": "09007"
+  },
+  {
+    "amazonSku": "9013",
+    "odooSku": "09013"
+  },
+  {
+    "amazonSku": "09013A",
+    "odooSku": "09013"
+  },
+  {
+    "amazonSku": "9015",
+    "odooSku": "09015"
+  },
+  {
+    "amazonSku": "9016",
+    "odooSku": "09016"
+  },
+  {
+    "amazonSku": "9018",
+    "odooSku": "09018"
+  },
+  {
+    "amazonSku": "9019",
+    "odooSku": "09019"
+  },
+  {
+    "amazonSku": "09019.A",
+    "odooSku": "09019"
+  },
+  {
+    "amazonSku": "09019A",
+    "odooSku": "09019"
+  },
+  {
+    "amazonSku": "9022",
+    "odooSku": "09022"
+  },
+  {
+    "amazonSku": "09022A",
+    "odooSku": "09022"
+  },
+  {
+    "amazonSku": "9024",
+    "odooSku": "09024"
+  },
+  {
+    "amazonSku": "09024-FBM",
+    "odooSku": "09024"
+  },
+  {
+    "amazonSku": "9041",
+    "odooSku": "09041"
+  },
+  {
+    "amazonSku": "09041-FBM",
+    "odooSku": "09041"
+  },
+  {
+    "amazonSku": "9042",
+    "odooSku": "09042"
+  },
+  {
+    "amazonSku": "09042-FBM",
+    "odooSku": "09042"
+  },
+  {
+    "amazonSku": "9112",
+    "odooSku": "09112"
+  },
+  {
+    "amazonSku": "10001S-FBM",
+    "odooSku": "10001S"
+  },
+  {
+    "amazonSku": "10005B-FBM",
+    "odooSku": "10005B"
+  },
+  {
+    "amazonSku": "10005K-FBM",
+    "odooSku": "10005K"
+  },
+  {
+    "amazonSku": "10005S-FBM",
+    "odooSku": "10005S"
+  },
+  {
+    "amazonSku": "10041-FBM",
+    "odooSku": "10041"
+  },
+  {
+    "amazonSku": "10050B-FBM",
+    "odooSku": "10050B"
+  },
+  {
+    "amazonSku": "10050K-FBM",
+    "odooSku": "10050K"
+  },
+  {
+    "amazonSku": "10050S-FBM",
+    "odooSku": "10050S"
+  },
+  {
+    "amazonSku": "10050W-FBM",
+    "odooSku": "10050W"
+  },
+  {
+    "amazonSku": "10060B-FBM",
+    "odooSku": "10060B"
+  },
+  {
+    "amazonSku": "10060K-FBM",
+    "odooSku": "10060K"
+  },
+  {
+    "amazonSku": "10060S-FBM",
+    "odooSku": "10060S"
+  },
+  {
+    "amazonSku": "17001A",
+    "odooSku": "17001"
+  },
+  {
+    "amazonSku": "17002A",
+    "odooSku": "17002"
+  },
+  {
+    "amazonSku": "17003A",
+    "odooSku": "17003"
+  },
+  {
+    "amazonSku": "17007-FBM",
+    "odooSku": "17007"
+  },
+  {
+    "amazonSku": "17038-FBM",
+    "odooSku": "17038"
+  },
+  {
+    "amazonSku": "17039-FBM",
+    "odooSku": "17039"
+  },
+  {
+    "amazonSku": "17040-FBM",
+    "odooSku": "17040"
+  },
+  {
+    "amazonSku": "17041-FBM",
+    "odooSku": "17041"
+  },
+  {
+    "amazonSku": "17044-FBM",
+    "odooSku": "17044"
+  },
+  {
+    "amazonSku": "18002A",
+    "odooSku": "18002"
+  },
+  {
+    "amazonSku": "18003A",
+    "odooSku": "18003"
+  },
+  {
+    "amazonSku": "18004A",
+    "odooSku": "18004"
+  },
+  {
+    "amazonSku": "18005A",
+    "odooSku": "18005"
+  },
+  {
+    "amazonSku": "18006-FBM",
+    "odooSku": "18006"
+  },
+  {
+    "amazonSku": "18009A",
+    "odooSku": "18009"
+  },
+  {
+    "amazonSku": "18010A",
+    "odooSku": "18010"
+  },
+  {
+    "amazonSku": "18011A",
+    "odooSku": "18010"
+  },
+  {
+    "amazonSku": "18015A",
+    "odooSku": "18015"
+  },
+  {
+    "amazonSku": "18016A",
+    "odooSku": "18016"
+  },
+  {
+    "amazonSku": "18017A",
+    "odooSku": "18017"
+  },
+  {
+    "amazonSku": "18020-FBM",
+    "odooSku": "18020"
+  },
+  {
+    "amazonSku": "18023A",
+    "odooSku": "18023"
+  },
+  {
+    "amazonSku": "18026-FBM",
+    "odooSku": "18026"
+  },
+  {
+    "amazonSku": "18027-FBM",
+    "odooSku": "18027"
+  },
+  {
+    "amazonSku": "28001A",
+    "odooSku": "28001"
+  },
+  {
+    "amazonSku": "41007-stickerless",
+    "odooSku": "41007"
+  },
+  {
+    "amazonSku": "41010-stickerless",
+    "odooSku": "41010"
+  },
+  {
+    "amazonSku": "42035-stickerles",
+    "odooSku": "42035"
+  },
+  {
+    "amazonSku": "47001-FBM",
+    "odooSku": "47001"
+  },
+  {
+    "amazonSku": "47002-FBM",
+    "odooSku": "47002"
+  },
+  {
+    "amazonSku": "47005-FBM",
+    "odooSku": "47005"
+  },
+  {
+    "amazonSku": "47006-FBM",
+    "odooSku": "47006"
+  },
+  {
+    "amazonSku": "47007-FBM",
+    "odooSku": "47007"
+  },
+  {
+    "amazonSku": "47014-FBM",
+    "odooSku": "47014"
+  },
+  {
+    "amazonSku": "47015-FBM",
+    "odooSku": "47015"
+  },
+  {
+    "amazonSku": "47022-FBM",
+    "odooSku": "47022"
+  },
+  {
+    "amazonSku": "80002-FBM",
+    "odooSku": "80002"
+  },
+  {
+    "amazonSku": "80004-FBM",
+    "odooSku": "80004"
+  },
+  {
+    "amazonSku": "80102-FBM",
+    "odooSku": "80102"
+  },
+  {
+    "amazonSku": "80104-FBM",
+    "odooSku": "80104"
+  },
+  {
+    "amazonSku": "81002-FBM",
+    "odooSku": "81002"
+  },
+  {
+    "amazonSku": "81003-FBM",
+    "odooSku": "81003"
+  },
+  {
+    "amazonSku": "82002-FBM",
+    "odooSku": "82002"
+  },
+  {
+    "amazonSku": "82004-FBM",
+    "odooSku": "82004"
+  },
+  {
+    "amazonSku": "82005-FBM",
+    "odooSku": "82005"
+  },
+  {
+    "amazonSku": "83001-FBM",
+    "odooSku": "83001"
+  },
+  {
+    "amazonSku": "83001W-FBM",
+    "odooSku": "83001W"
+  },
+  {
+    "amazonSku": "83002-FBM",
+    "odooSku": "83002"
+  },
+  {
+    "amazonSku": "83002W-FBM",
+    "odooSku": "83002W"
+  },
+  {
+    "amazonSku": "83003-FBM",
+    "odooSku": "83003"
+  },
+  {
+    "amazonSku": "83004-FBM",
+    "odooSku": "83004"
+  },
+  {
+    "amazonSku": "83005-FBM",
+    "odooSku": "83005"
+  },
+  {
+    "amazonSku": "83005W-FBM",
+    "odooSku": "83005W"
+  },
+  {
+    "amazonSku": "83008W-FBM",
+    "odooSku": "83008W"
+  },
+  {
+    "amazonSku": "86001-FBM",
+    "odooSku": "86001"
+  },
+  {
+    "amazonSku": "87001-FBM",
+    "odooSku": "87001"
+  },
+  {
+    "amazonSku": "87002-FBM",
+    "odooSku": "87002"
+  },
+  {
+    "amazonSku": "9025K-FBM",
+    "odooSku": "9025K"
+  },
+  {
+    "amazonSku": "9026K-FBM",
+    "odooSku": "9026K"
+  },
+  {
+    "amazonSku": "9028K-FBM",
+    "odooSku": "9028K"
+  },
+  {
+    "amazonSku": "9029K-FBM",
+    "odooSku": "9029K"
+  },
+  {
+    "amazonSku": "9030K-FBM",
+    "odooSku": "9030K"
+  },
+  {
+    "amazonSku": "9031K-FBM",
+    "odooSku": "9031K"
+  },
+  {
+    "amazonSku": "9032K-FBM",
+    "odooSku": "9032K"
+  },
+  {
+    "amazonSku": "A153692-FBM",
+    "odooSku": "A153692"
+  },
+  {
+    "amazonSku": "A156124-FBM",
+    "odooSku": "A156124"
+  },
+  {
+    "amazonSku": "AGA38-FBM",
+    "odooSku": "AGA38"
+  },
+  {
+    "amazonSku": "AGA4400-FBM",
+    "odooSku": "AGA4400"
+  },
+  {
+    "amazonSku": "AGA48-FBM",
+    "odooSku": "AGA48"
+  },
+  {
+    "amazonSku": "AGA48K-FBM",
+    "odooSku": "AGA48K"
+  },
+  {
+    "amazonSku": "ATR16-FBM",
+    "odooSku": "ATR16"
+  },
+  {
+    "amazonSku": "B42000-FBM",
+    "odooSku": "B42000"
+  },
+  {
+    "amazonSku": "B42010-FBM",
+    "odooSku": "B42010"
+  },
+  {
+    "amazonSku": "B42012B-stickerless",
+    "odooSku": "B42012B"
+  },
+  {
+    "amazonSku": "B42012B-FBM",
+    "odooSku": "B42012B"
+  },
+  {
+    "amazonSku": "B42012R-stickerless",
+    "odooSku": "B42012R"
+  },
+  {
+    "amazonSku": "B42012V-stickerless",
+    "odooSku": "B42012V"
+  },
+  {
+    "amazonSku": "B42030.A-FBM",
+    "odooSku": "B42030.A"
+  },
+  {
+    "amazonSku": "amzn.gr.B42030.A-CU4GOcZsZ4mdVWesmjLo-LN",
+    "odooSku": "B42030.A"
+  },
+  {
+    "amazonSku": "B42030R4-FBM",
+    "odooSku": "B42030R4"
+  },
+  {
+    "amazonSku": "B42032A",
+    "odooSku": "B42032"
+  },
+  {
+    "amazonSku": "B42032-FBM",
+    "odooSku": "B42032"
+  },
+  {
+    "amazonSku": "B42049-FBM",
+    "odooSku": "B42049"
+  },
+  {
+    "amazonSku": "B42051-stickerless",
+    "odooSku": "B42051"
+  },
+  {
+    "amazonSku": "B42053-FBM",
+    "odooSku": "B42053"
+  },
+  {
+    "amazonSku": "B42056-FBM",
+    "odooSku": "B42056"
+  },
+  {
+    "amazonSku": "B42056R4-FBM",
+    "odooSku": "B42056R4"
+  },
+  {
+    "amazonSku": "B42057-FBM",
+    "odooSku": "B42057"
+  },
+  {
+    "amazonSku": "B42058-FBM",
+    "odooSku": "B42058"
+  },
+  {
+    "amazonSku": "B42060-FBM",
+    "odooSku": "B42060"
+  },
+  {
+    "amazonSku": "B42061-FBM",
+    "odooSku": "B42061"
+  },
+  {
+    "amazonSku": "B42062-FBM",
+    "odooSku": "B42062"
+  },
+  {
+    "amazonSku": "P0001-FBM",
+    "odooSku": "P0001"
+  },
+  {
+    "amazonSku": "P0002-FBM",
+    "odooSku": "P0002"
+  },
+  {
+    "amazonSku": "P0004-FBM",
+    "odooSku": "P0004"
+  },
+  {
+    "amazonSku": "krachttraining thuis, op kantoor, in het hotel of onderweg\"",
+    "odooSku": "P0011"
+  },
+  {
+    "amazonSku": "P0016-FBM",
+    "odooSku": "P0016"
+  },
+  {
+    "amazonSku": "P0029-FBM",
+    "odooSku": "P0029"
+  },
+  {
+    "amazonSku": "P0029K-FBM",
+    "odooSku": "P0029K"
+  },
+  {
+    "amazonSku": "P0041-FBM",
+    "odooSku": "P0041"
+  },
+  {
+    "amazonSku": "P0042-FBM",
+    "odooSku": "P0042"
+  },
+  {
+    "amazonSku": "P0043-FBM",
+    "odooSku": "P0043"
+  },
+  {
+    "amazonSku": "P0044-FBM",
+    "odooSku": "P0044"
+  },
+  {
+    "amazonSku": "P0044K.A-FBM",
+    "odooSku": "P0044K.A"
+  },
+  {
+    "amazonSku": "P0045-FBM",
+    "odooSku": "P0045"
+  },
+  {
+    "amazonSku": "P0045K-FBM",
+    "odooSku": "P0045K"
+  },
+  {
+    "amazonSku": "P0049-FBM",
+    "odooSku": "P0049"
+  },
+  {
+    "amazonSku": "P0063-FBM",
+    "odooSku": "P0063"
+  },
+  {
+    "amazonSku": "P0063R4-FBM",
+    "odooSku": "P0063R4"
+  },
+  {
+    "amazonSku": "P0064-FBM",
+    "odooSku": "P0064"
+  },
+  {
+    "amazonSku": "P0078-FBM",
+    "odooSku": "P0078"
+  },
+  {
+    "amazonSku": "P0079-FBM",
+    "odooSku": "P0079"
+  },
+  {
+    "amazonSku": "P0080-FBM",
+    "odooSku": "P0080"
+  },
+  {
+    "amazonSku": "P0081-FBM",
+    "odooSku": "P0081"
+  },
+  {
+    "amazonSku": "P0108-FBM",
+    "odooSku": "P0108"
+  },
+  {
+    "amazonSku": "P0139-FBM",
+    "odooSku": "P0139"
+  },
+  {
+    "amazonSku": "P0140-FBM",
+    "odooSku": "P0140"
+  },
+  {
+    "amazonSku": "P0141-FBM",
+    "odooSku": "P0141"
+  },
+  {
+    "amazonSku": "P0142-FBM",
+    "odooSku": "P0142"
+  },
+  {
+    "amazonSku": "P0143-FBM",
+    "odooSku": "P0143"
+  },
+  {
+    "amazonSku": "P0144-FBM",
+    "odooSku": "P0144"
+  },
+  {
+    "amazonSku": "P0145-FBM",
+    "odooSku": "P0145"
+  },
+  {
+    "amazonSku": "P0146-FBM",
+    "odooSku": "P0146"
+  },
+  {
+    "amazonSku": "P0147-FBM",
+    "odooSku": "P0147"
+  },
+  {
+    "amazonSku": "P0148-FBM",
+    "odooSku": "P0148"
+  },
+  {
+    "amazonSku": "P0155-FBM",
+    "odooSku": "P0155"
+  },
+  {
+    "amazonSku": "P0160-FBM",
+    "odooSku": "P0160"
+  },
+  {
+    "amazonSku": "P0164-FBM",
+    "odooSku": "P0164"
+  },
+  {
+    "amazonSku": "P0172-FBM",
+    "odooSku": "P0172"
+  },
+  {
+    "amazonSku": "P0173-FBM",
+    "odooSku": "P0173"
+  },
+  {
+    "amazonSku": "P0174-FBM",
+    "odooSku": "P0174"
+  },
+  {
+    "amazonSku": "P0175-FBM",
+    "odooSku": "P0175"
+  },
+  {
+    "amazonSku": "P0176-FBM",
+    "odooSku": "P0176"
+  },
+  {
+    "amazonSku": "P0177-FBM",
+    "odooSku": "P0177"
+  },
+  {
+    "amazonSku": "B42030.B40",
+    "odooSku": "P0181"
+  },
+  {
+    "amazonSku": "P0181-FBM",
+    "odooSku": "P0181"
+  },
+  {
+    "amazonSku": "B42030.B40.BLACK",
+    "odooSku": "P0182"
+  },
+  {
+    "amazonSku": "P0182-FBM",
+    "odooSku": "P0182"
+  },
+  {
+    "amazonSku": "B42030.BLACK",
+    "odooSku": "P0183"
+  },
+  {
+    "amazonSku": "P0183-FBM",
+    "odooSku": "P0183"
+  },
+  {
+    "amazonSku": "P0184-FBM",
+    "odooSku": "P0184"
+  },
+  {
+    "amazonSku": "P0196-FBM",
+    "odooSku": "P0196"
+  },
+  {
+    "amazonSku": "P0197-FBM",
+    "odooSku": "P0197"
+  },
+  {
+    "amazonSku": "P0204-FBM",
+    "odooSku": "P0204"
+  },
+  {
+    "amazonSku": "P0205-FBM",
+    "odooSku": "P0205"
+  },
+  {
+    "amazonSku": "P0206-FBM",
+    "odooSku": "P0206"
+  },
+  {
+    "amazonSku": "P0207-FBM",
+    "odooSku": "P0207"
+  },
+  {
+    "amazonSku": "P0211-FBM",
+    "odooSku": "P0211"
+  },
+  {
+    "amazonSku": "P0211R4-FBM",
+    "odooSku": "P0211R4"
+  },
+  {
+    "amazonSku": "P0212-FBM",
+    "odooSku": "P0212"
+  },
+  {
+    "amazonSku": "P0213-FBM",
+    "odooSku": "P0213"
+  },
+  {
+    "amazonSku": "P0214-FBM",
+    "odooSku": "P0214"
+  },
+  {
+    "amazonSku": "P0215-FBM",
+    "odooSku": "P0215"
+  },
+  {
+    "amazonSku": "P0216-FBM",
+    "odooSku": "P0216"
+  },
+  {
+    "amazonSku": "P0217-FBM",
+    "odooSku": "P0217"
+  },
+  {
+    "amazonSku": "P0218-FBM",
+    "odooSku": "P0218"
+  },
+  {
+    "amazonSku": "P0219-FBM",
+    "odooSku": "P0219"
+  },
+  {
+    "amazonSku": "P0220-FBM",
+    "odooSku": "P0220"
+  },
+  {
+    "amazonSku": "P0226-FBM",
+    "odooSku": "P0226"
+  },
+  {
+    "amazonSku": "P0227-FBM",
+    "odooSku": "P0227"
+  },
+  {
+    "amazonSku": "P0228-FBM",
+    "odooSku": "P0228"
+  },
+  {
+    "amazonSku": "P0229-FBM",
+    "odooSku": "P0229"
+  },
+  {
+    "amazonSku": "P0230-FBM",
+    "odooSku": "P0230"
+  },
+  {
+    "amazonSku": "P0231-FBM",
+    "odooSku": "P0231"
+  },
+  {
+    "amazonSku": "P0232-FBM",
+    "odooSku": "P0232"
+  },
+  {
+    "amazonSku": "P0233-FBM",
+    "odooSku": "P0233"
+  },
+  {
+    "amazonSku": "P0240-FBM",
+    "odooSku": "P0240"
+  },
+  {
+    "amazonSku": "P0241-FBM",
+    "odooSku": "P0241"
+  },
+  {
+    "amazonSku": "P0243K-FBM",
+    "odooSku": "P0243K"
+  },
+  {
+    "amazonSku": "P0243W-FBM",
+    "odooSku": "P0243W"
+  },
+  {
+    "amazonSku": "P0245BE-FBM",
+    "odooSku": "P0245BE"
+  },
+  {
+    "amazonSku": "P0245DB-FBM",
+    "odooSku": "P0245DB"
+  },
+  {
+    "amazonSku": "P0246-FBM",
+    "odooSku": "P0246"
+  },
+  {
+    "amazonSku": "P0247-FBM",
+    "odooSku": "P0247"
+  },
+  {
+    "amazonSku": "P0248-FBM",
+    "odooSku": "P0248"
+  },
+  {
+    "amazonSku": "P0249-FBM",
+    "odooSku": "P0249"
+  },
+  {
+    "amazonSku": "P0250-FBM",
+    "odooSku": "P0250"
+  },
+  {
+    "amazonSku": "P0251-FBM",
+    "odooSku": "P0251"
+  },
+  {
+    "amazonSku": "P0252-FBM",
+    "odooSku": "P0252"
+  },
+  {
+    "amazonSku": "P0253-FBM",
+    "odooSku": "P0253"
+  },
+  {
+    "amazonSku": "P0255-FBM",
+    "odooSku": "P0255"
+  },
+  {
+    "amazonSku": "P0256-FBMA",
+    "odooSku": "P0256"
+  },
+  {
+    "amazonSku": "P0256-FBM",
+    "odooSku": "P0256"
+  },
+  {
+    "amazonSku": "P0258-FBM",
+    "odooSku": "P0258"
+  },
+  {
+    "amazonSku": "P0259-FBM",
+    "odooSku": "P0259"
+  },
+  {
+    "amazonSku": "P0260-FBM",
+    "odooSku": "P0260"
+  },
+  {
+    "amazonSku": "P0262-FBM",
+    "odooSku": "P0262"
+  },
+  {
+    "amazonSku": "S14001-FBM",
+    "odooSku": "S14001"
+  },
+  {
+    "amazonSku": "S14022-FBM",
+    "odooSku": "S14022"
+  },
+  {
+    "amazonSku": "S14026-FBM",
+    "odooSku": "S14026"
+  }
+]
