@@ -857,9 +857,25 @@ class VcsOdooInvoicer {
       const transformedSku = this.transformSku(vcsItem.sku);
 
       // Find matching invoice line by product SKU
+      // Try multiple matching strategies
       const matchingLine = invoiceLines.find(line => {
         const lineSku = productSkuMap[line.product_id[0]] || '';
-        return lineSku === transformedSku || lineSku === vcsItem.sku;
+        const lineProduct = products.find(p => p.id === line.product_id[0]);
+        const lineName = line.name || '';
+        const productName = lineProduct?.name || '';
+
+        // Exact match
+        if (lineSku === transformedSku || lineSku === vcsItem.sku) return true;
+
+        // SKU contained in product default_code or line name
+        if (lineSku.includes(transformedSku) || transformedSku.includes(lineSku)) return true;
+        if (lineName.includes(transformedSku) || lineName.includes(vcsItem.sku)) return true;
+
+        // SKU with brackets [82004] style
+        if (lineName.includes(`[${transformedSku}]`) || lineName.includes(`[${vcsItem.sku}]`)) return true;
+        if (productName.includes(`[${transformedSku}]`) || productName.includes(`[${vcsItem.sku}]`)) return true;
+
+        return false;
       });
 
       if (matchingLine) {
@@ -877,6 +893,7 @@ class VcsOdooInvoicer {
         console.log(`[VcsOdooInvoicer] Updated line ${matchingLine.id}: qty=${vcsItem.quantity}, price=${lineUpdate.price_unit}`);
       } else {
         console.warn(`[VcsOdooInvoicer] No matching invoice line for VCS SKU ${vcsItem.sku} (transformed: ${transformedSku})`);
+        console.warn(`[VcsOdooInvoicer] Available invoice lines:`, invoiceLines.map(l => ({ id: l.id, name: l.name, sku: productSkuMap[l.product_id[0]] })));
       }
     }
 
@@ -918,8 +935,8 @@ class VcsOdooInvoicer {
       }
     }
 
-    // Recompute the invoice totals after all changes
-    await this.odoo.execute('account.move', '_compute_amount', [[invoiceId]]);
+    // Note: Odoo will automatically recompute totals when lines are modified
+    // No need to call _compute_amount explicitly
   }
 
   /**
