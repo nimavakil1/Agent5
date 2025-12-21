@@ -3,10 +3,25 @@
  *
  * Creates customer invoices in Odoo from Amazon VCS Tax Report data.
  * Handles VAT, OSS, and B2B scenarios for EU sales.
+ *
+ * IMPORTANT: Requires existing Odoo sales order (created by Make.com import).
+ * Will NOT create invoices for orders that don't exist in Odoo.
  */
 
 const { getDb } = require('../../db');
 const { ObjectId } = require('mongodb');
+
+// SKU transformation patterns - used to match VCS SKU to Odoo order line
+const SKU_TRANSFORMATIONS = [
+  // Strip -FBM suffix (Fulfilled by Merchant)
+  { pattern: /-FBM$/, replacement: '' },
+  // Strip R4 suffix (Returns)
+  { pattern: /R4$/, replacement: '' },
+  // Strip -stickerless suffix
+  { pattern: /-stickerless$/, replacement: '' },
+  // Strip -stickerles suffix (typo variant)
+  { pattern: /-stickerles$/, replacement: '' },
+];
 
 // Marketplace to journal mapping
 const MARKETPLACE_JOURNALS = {
@@ -96,17 +111,33 @@ class VcsOdooInvoicer {
           continue;
         }
 
-        if (dryRun) {
-          result.invoices.push({
+        // REQUIRED: Find existing Odoo order
+        const odooOrderData = await this.findOdooOrder(order);
+        if (!odooOrderData) {
+          result.skipped++;
+          await this.markOrderSkipped(order._id, 'No matching Odoo order found');
+          result.errors.push({
             orderId: order.orderId,
-            dryRun: true,
-            wouldCreate: this.buildInvoiceData(order, partnerId),
+            error: 'No matching Odoo order found - order must exist in Odoo first',
           });
           continue;
         }
 
-        // Create invoice
-        const invoice = await this.createInvoice(order, partnerId);
+        const { saleOrder, orderLines } = odooOrderData;
+
+        if (dryRun) {
+          result.invoices.push({
+            orderId: order.orderId,
+            dryRun: true,
+            odooOrderName: saleOrder.name,
+            odooOrderId: saleOrder.id,
+            wouldCreate: this.buildInvoiceData(order, saleOrder.partner_id[0], saleOrder, orderLines),
+          });
+          continue;
+        }
+
+        // Create invoice linked to sale order
+        const invoice = await this.createInvoice(order, saleOrder.partner_id[0], saleOrder, orderLines);
         result.created++;
         result.invoices.push(invoice);
 
@@ -118,6 +149,8 @@ class VcsOdooInvoicer {
               status: 'invoiced',
               odooInvoiceId: invoice.id,
               odooInvoiceName: invoice.name,
+              odooSaleOrderId: saleOrder.id,
+              odooSaleOrderName: saleOrder.name,
               invoicedAt: new Date(),
             }
           }
@@ -162,6 +195,107 @@ class VcsOdooInvoicer {
     }
 
     return false;
+  }
+
+  /**
+   * Transform Amazon SKU to base Odoo SKU
+   * @param {string} amazonSku - The SKU from Amazon VCS
+   * @returns {string} The transformed SKU
+   */
+  transformSku(amazonSku) {
+    let sku = amazonSku;
+    for (const transform of SKU_TRANSFORMATIONS) {
+      sku = sku.replace(transform.pattern, transform.replacement);
+    }
+    return sku;
+  }
+
+  /**
+   * Find the Odoo sales order for a VCS order
+   * @param {object} vcsOrder - The VCS order data
+   * @returns {object|null} { saleOrder, orderLines } or null if not found
+   */
+  async findOdooOrder(vcsOrder) {
+    const amazonOrderId = vcsOrder.orderId;
+
+    // Search for sale.order by client_order_ref (Amazon order ID)
+    const orders = await this.odoo.searchRead('sale.order',
+      [['client_order_ref', '=', amazonOrderId]],
+      ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state']
+    );
+
+    if (orders.length === 0) {
+      return null;
+    }
+
+    // If only one order found, use it
+    if (orders.length === 1) {
+      const order = orders[0];
+      const orderLines = await this.getOrderLines(order.order_line);
+      return { saleOrder: order, orderLines };
+    }
+
+    // Multiple orders found (FBA/FBM split) - need to match by SKU
+    const vcsSku = vcsOrder.items?.[0]?.sku;
+    if (!vcsSku) {
+      // No SKU in VCS, just use first order
+      const order = orders[0];
+      const orderLines = await this.getOrderLines(order.order_line);
+      return { saleOrder: order, orderLines };
+    }
+
+    const transformedSku = this.transformSku(vcsSku);
+
+    // Check each order's lines for matching SKU
+    for (const order of orders) {
+      const orderLines = await this.getOrderLines(order.order_line);
+
+      for (const line of orderLines) {
+        const productSku = line.product_default_code || '';
+        if (productSku === transformedSku || productSku === vcsSku) {
+          return { saleOrder: order, orderLines };
+        }
+      }
+    }
+
+    // No exact match, but we have orders - use the first one and log warning
+    console.warn(`[VcsOdooInvoicer] Multiple orders found for ${amazonOrderId}, using first match`);
+    const order = orders[0];
+    const orderLines = await this.getOrderLines(order.order_line);
+    return { saleOrder: order, orderLines };
+  }
+
+  /**
+   * Get order line details including product info
+   * @param {number[]} lineIds - Order line IDs
+   * @returns {object[]} Order lines with product details
+   */
+  async getOrderLines(lineIds) {
+    if (!lineIds || lineIds.length === 0) {
+      return [];
+    }
+
+    const lines = await this.odoo.searchRead('sale.order.line',
+      [['id', 'in', lineIds]],
+      ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'price_total']
+    );
+
+    // Get product default_code (SKU) for each line
+    for (const line of lines) {
+      if (line.product_id) {
+        const productId = line.product_id[0];
+        const products = await this.odoo.searchRead('product.product',
+          [['id', '=', productId]],
+          ['default_code', 'name']
+        );
+        if (products.length > 0) {
+          line.product_default_code = products[0].default_code;
+          line.product_name = products[0].name;
+        }
+      }
+    }
+
+    return lines;
   }
 
   /**
@@ -218,11 +352,13 @@ class VcsOdooInvoicer {
 
   /**
    * Build invoice data from VCS order
-   * @param {object} order
-   * @param {number} partnerId
+   * @param {object} order - VCS order data
+   * @param {number} partnerId - Odoo partner ID
+   * @param {object} saleOrder - Odoo sale.order
+   * @param {object[]} orderLines - Odoo sale.order.line records
    * @returns {object}
    */
-  buildInvoiceData(order, partnerId) {
+  buildInvoiceData(order, partnerId, saleOrder, orderLines) {
     const invoiceDate = order.shipmentDate || order.orderDate;
     const fiscalPosition = this.determineFiscalPosition(order);
     const journalId = this.determineJournal(order);
@@ -232,30 +368,50 @@ class VcsOdooInvoicer {
       partner_id: partnerId,
       invoice_date: this.formatDate(invoiceDate),
       ref: order.orderId,
-      narration: `Amazon Order: ${order.orderId}\nVAT Invoice: ${order.vatInvoiceNumber || 'N/A'}`,
+      invoice_origin: saleOrder.name, // Link to sale order
+      narration: `Amazon Order: ${order.orderId}\nSale Order: ${saleOrder.name}\nVAT Invoice: ${order.vatInvoiceNumber || 'N/A'}`,
       currency_id: this.getCurrencyId(order.currency),
       fiscal_position_id: fiscalPosition,
       journal_id: journalId,
-      invoice_line_ids: this.buildInvoiceLines(order),
+      invoice_line_ids: this.buildInvoiceLines(order, orderLines),
     };
   }
 
   /**
-   * Build invoice lines from order items
-   * @param {object} order
+   * Build invoice lines from VCS order, using products from Odoo order
+   * @param {object} order - VCS order data
+   * @param {object[]} odooOrderLines - Odoo sale.order.line records
    * @returns {Array}
    */
-  buildInvoiceLines(order) {
+  buildInvoiceLines(order, odooOrderLines) {
     const lines = [];
 
     for (const item of order.items) {
-      // Product line
-      lines.push([0, 0, {
-        name: `${item.sku} (ASIN: ${item.asin})`,
-        quantity: item.quantity,
-        price_unit: item.priceExclusive / item.quantity,
-        // Tax will be determined by fiscal position
-      }]);
+      // Find matching Odoo order line by SKU
+      const transformedSku = this.transformSku(item.sku);
+      const odooLine = odooOrderLines.find(line => {
+        const lineSku = line.product_default_code || '';
+        return lineSku === transformedSku || lineSku === item.sku;
+      });
+
+      if (odooLine && odooLine.product_id) {
+        // Use product from Odoo order
+        lines.push([0, 0, {
+          product_id: odooLine.product_id[0],
+          name: `${item.sku} (ASIN: ${item.asin})`,
+          quantity: item.quantity,
+          price_unit: item.priceExclusive / item.quantity,
+          // Tax will be determined by fiscal position + product tax settings
+        }]);
+      } else {
+        // Fallback: no matching product found, use text-only line
+        console.warn(`[VcsOdooInvoicer] No matching product for SKU ${item.sku} (transformed: ${transformedSku})`);
+        lines.push([0, 0, {
+          name: `${item.sku} (ASIN: ${item.asin}) - PRODUCT NOT FOUND`,
+          quantity: item.quantity,
+          price_unit: item.priceExclusive / item.quantity,
+        }]);
+      }
 
       // Promo discount if any
       if (item.promoAmount && item.promoAmount !== 0) {
@@ -328,12 +484,14 @@ class VcsOdooInvoicer {
 
   /**
    * Create invoice in Odoo
-   * @param {object} order
-   * @param {number} partnerId
+   * @param {object} order - VCS order data
+   * @param {number} partnerId - Odoo partner ID
+   * @param {object} saleOrder - Odoo sale.order
+   * @param {object[]} orderLines - Odoo sale.order.line records
    * @returns {object}
    */
-  async createInvoice(order, partnerId) {
-    const invoiceData = this.buildInvoiceData(order, partnerId);
+  async createInvoice(order, partnerId, saleOrder, orderLines) {
+    const invoiceData = this.buildInvoiceData(order, partnerId, saleOrder, orderLines);
 
     // Create invoice
     const invoiceId = await this.odoo.create('account.move', invoiceData);
@@ -350,6 +508,8 @@ class VcsOdooInvoicer {
       amountTotal: invoice[0]?.amount_total,
       amountTax: invoice[0]?.amount_tax,
       orderId: order.orderId,
+      saleOrderName: saleOrder.name,
+      saleOrderId: saleOrder.id,
     };
   }
 
@@ -455,4 +615,4 @@ class VcsOdooInvoicer {
   }
 }
 
-module.exports = { VcsOdooInvoicer, MARKETPLACE_JOURNALS, FISCAL_POSITIONS };
+module.exports = { VcsOdooInvoicer, MARKETPLACE_JOURNALS, FISCAL_POSITIONS, SKU_TRANSFORMATIONS };
