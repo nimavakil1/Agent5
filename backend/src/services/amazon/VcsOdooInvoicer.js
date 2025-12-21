@@ -370,7 +370,7 @@ class VcsOdooInvoicer {
     // Search for sale.order by client_order_ref (Amazon order ID)
     const orders = await this.odoo.searchRead('sale.order',
       [['client_order_ref', '=', amazonOrderId]],
-      ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state']
+      ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id']
     );
 
     if (orders.length === 0) {
@@ -569,6 +569,9 @@ class VcsOdooInvoicer {
     // VCS Invoice Number for reference fields
     const vcsInvoiceNumber = order.vatInvoiceNumber || null;
 
+    // Get team_id from sale order (e.g., "Amazon Seller")
+    const teamId = saleOrder.team_id ? saleOrder.team_id[0] : null;
+
     return {
       move_type: 'out_invoice',
       partner_id: invoicePartnerId,
@@ -583,6 +586,8 @@ class VcsOdooInvoicer {
       currency_id: this.getCurrencyId(order.currency),
       fiscal_position_id: fiscalPosition,
       journal_id: journalId,
+      // Inherit sales team from sale order
+      team_id: teamId,
       invoice_line_ids: this.buildInvoiceLines(order, orderLines),
     };
   }
