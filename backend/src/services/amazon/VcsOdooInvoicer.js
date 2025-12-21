@@ -25,19 +25,20 @@ const SKU_TRANSFORMATIONS = [
 // Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM → 10050K
 const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
 
-// Marketplace to journal mapping
+// Marketplace to journal mapping (Odoo journal codes)
+// Based on shipToCountry - the destination determines the VAT jurisdiction
 const MARKETPLACE_JOURNALS = {
-  'DE': 'AMZN-DE',
-  'FR': 'AMZN-FR',
-  'IT': 'AMZN-IT',
-  'ES': 'AMZN-ES',
-  'NL': 'AMZN-NL',
-  'BE': 'AMZN-BE',
-  'PL': 'AMZN-PL',
-  'SE': 'AMZN-SE',
-  'GB': 'AMZN-UK',
-  // Default
-  'DEFAULT': 'AMZN',
+  'DE': 'VDE',   // INV*DE/ Invoices
+  'FR': 'VFR',   // INV*FR/ Invoices
+  'IT': 'VIT',   // INV*IT/ Invoices
+  'NL': 'VNL',   // INV*NL/ Invoices
+  'BE': 'VBE',   // INV*BE/ Invoices
+  'PL': 'VPL',   // INV*PL/ Invoices
+  'CZ': 'VCZ',   // INV*CZ/ Invoices
+  'GB': 'VGB',   // INV*GB/ Invoices
+  'OSS': 'VOS',  // INV*OSS/ Invoices (for EU cross-border OSS)
+  // Default fallback
+  'DEFAULT': 'VBE',
 };
 
 // Country to fiscal position mapping
@@ -514,11 +515,17 @@ class VcsOdooInvoicer {
    * @returns {number|null}
    */
   determineJournal(order) {
-    // Extract country from marketplace ID or seller jurisdiction
-    const country = order.sellerTaxJurisdiction || order.marketplaceId?.substring(0, 2);
+    // For OSS orders (EU cross-border B2C), use the OSS journal
+    if (order.taxReportingScheme === 'VCS_EU_OSS') {
+      const journalCode = MARKETPLACE_JOURNALS['OSS'];
+      return this.journalCache?.[journalCode] || this.defaultJournalId || null;
+    }
+
+    // Use shipToCountry (destination) to determine the VAT jurisdiction journal
+    const country = order.shipToCountry || order.sellerTaxJurisdiction || 'BE';
     const journalCode = MARKETPLACE_JOURNALS[country] || MARKETPLACE_JOURNALS['DEFAULT'];
 
-    // Look up journal ID (would need to cache these)
+    // Look up journal ID from cache
     return this.journalCache?.[journalCode] || this.defaultJournalId || null;
   }
 
@@ -645,8 +652,13 @@ class VcsOdooInvoicer {
    * @returns {string}
    */
   getExpectedJournalCode(order) {
-    const country = order.sellerTaxJurisdiction || order.shipFromCountry || 'BE';
-    return MARKETPLACE_JOURNALS[country] || MARKETPLACE_JOURNALS['DEFAULT'] || 'AMZN';
+    // For OSS orders, use the OSS journal
+    if (order.taxReportingScheme === 'VCS_EU_OSS') {
+      return MARKETPLACE_JOURNALS['OSS'];
+    }
+    // Use shipToCountry (destination) to determine journal
+    const country = order.shipToCountry || order.sellerTaxJurisdiction || 'BE';
+    return MARKETPLACE_JOURNALS[country] || MARKETPLACE_JOURNALS['DEFAULT'];
   }
 
   /**
