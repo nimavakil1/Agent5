@@ -2737,7 +2737,7 @@ router.post('/vcs/upload', upload.single('file'), async (req, res) => {
 
 /**
  * @route POST /api/amazon/vcs/check-odoo
- * @desc Check Odoo for existing invoices matching order IDs
+ * @desc Check Odoo for existing sales orders matching Amazon order IDs
  * @body { orderIds: string[] } - Array of Amazon order IDs to check
  */
 router.post('/vcs/check-odoo', async (req, res) => {
@@ -2751,9 +2751,9 @@ router.post('/vcs/check-odoo', async (req, res) => {
     const odooClient = new OdooDirectClient();
     await odooClient.authenticate();
 
-    // Search for invoices with matching refs
-    // Odoo stores Amazon order IDs in the 'ref' field
-    const matchedInvoices = {};
+    // Search for sales orders with matching client_order_ref
+    // Odoo stores Amazon order IDs in the 'client_order_ref' field
+    const matchedOrders = {};
 
     // Search in batches of 50 to avoid timeout
     const batchSize = 50;
@@ -2761,41 +2761,37 @@ router.post('/vcs/check-odoo', async (req, res) => {
       const batch = orderIds.slice(i, i + batchSize);
 
       // Build OR domain for this batch
-      const domain = [
-        ['move_type', '=', 'out_invoice'],
-        '|',
-        ...batch.flatMap((orderId, idx) => {
-          if (idx === batch.length - 1) {
-            return [['ref', 'ilike', orderId]];
-          }
-          return ['|', ['ref', 'ilike', orderId]];
-        })
-      ];
+      const orConditions = batch.length > 1
+        ? ['|'.repeat(batch.length - 1).split('').filter(c => c === '|').map(() => '|'), batch.map(id => ['client_order_ref', '=', id])].flat()
+        : [['client_order_ref', '=', batch[0]]];
 
-      const invoices = await odooClient.searchRead('account.move', domain, ['name', 'ref', 'state', 'amount_total']);
+      // Flatten the domain properly
+      let domain = [];
+      for (let j = 0; j < batch.length - 1; j++) {
+        domain.push('|');
+      }
+      for (const id of batch) {
+        domain.push(['client_order_ref', '=', id]);
+      }
 
-      // Map invoices back to order IDs
-      for (const inv of invoices) {
-        const ref = inv.ref || '';
-        // Find which order ID this matches
-        for (const orderId of batch) {
-          if (ref.includes(orderId)) {
-            matchedInvoices[orderId] = {
-              invoiceNumber: inv.name,
-              state: inv.state,
-              amount: inv.amount_total
-            };
-            break;
-          }
-        }
+      const orders = await odooClient.searchRead('sale.order', domain, ['name', 'client_order_ref', 'state', 'amount_total']);
+
+      // Map orders back to Amazon order IDs
+      for (const order of orders) {
+        const ref = order.client_order_ref || '';
+        matchedOrders[ref] = {
+          orderNumber: order.name,
+          state: order.state,
+          amount: order.amount_total
+        };
       }
     }
 
     res.json({
       success: true,
-      matchedCount: Object.keys(matchedInvoices).length,
+      matchedCount: Object.keys(matchedOrders).length,
       totalChecked: orderIds.length,
-      invoices: matchedInvoices
+      orders: matchedOrders
     });
 
   } catch (error) {

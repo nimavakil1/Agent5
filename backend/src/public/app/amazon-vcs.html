@@ -170,7 +170,7 @@
                 <th class="pb-3 pr-4 text-right">Net</th>
                 <th class="pb-3 pr-4 text-right">VAT</th>
                 <th class="pb-3 pr-4 text-right">Total</th>
-                <th class="pb-3 pr-4">Odoo Invoice</th>
+                <th class="pb-3 pr-4">Odoo Order</th>
               </tr>
             </thead>
             <tbody id="orders-table-body" class="text-slate-300">
@@ -206,7 +206,7 @@
     <script>
       // State
       let pendingOrders = [];
-      let odooInvoices = {}; // Map of orderId -> invoice info
+      let odooOrders = {}; // Map of orderId -> Odoo order info
       let currentPage = 1;
       const pageSize = 50;
 
@@ -380,9 +380,9 @@
           pendingOrders = data.orders || [];
           renderOrders();
 
-          // Check Odoo for existing invoices (async, updates UI when done)
+          // Check Odoo for existing orders (async, updates UI when done)
           if (pendingOrders.length > 0) {
-            checkOdooInvoices();
+            checkOdooOrders();
           }
         } catch (error) {
           console.error('Error loading orders:', error);
@@ -396,7 +396,7 @@
         }
       }
 
-      async function checkOdooInvoices() {
+      async function checkOdooOrders() {
         try {
           const orderIds = pendingOrders.map(o => o.orderId);
           const response = await fetch('/api/amazon/vcs/check-odoo', {
@@ -405,9 +405,9 @@
             body: JSON.stringify({ orderIds })
           });
           const data = await response.json();
-          if (data.success && data.invoices) {
-            odooInvoices = data.invoices;
-            renderOrders(); // Re-render with invoice data
+          if (data.success && data.orders) {
+            odooOrders = data.orders;
+            renderOrders(); // Re-render with order data
           }
         } catch (error) {
           console.error('Error checking Odoo:', error);
@@ -434,9 +434,9 @@
         const pageOrders = filtered.slice(start, start + pageSize);
 
         ordersTableBody.innerHTML = pageOrders.map(order => {
-          const invoice = odooInvoices[order.orderId];
-          const invoiceCell = invoice
-            ? `<span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-xs">${invoice.invoiceNumber}</span>`
+          const odooOrder = odooOrders[order.orderId];
+          const odooOrderCell = odooOrder
+            ? `<span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-xs">${odooOrder.orderNumber}</span>`
             : '<span class="text-slate-500 text-xs">-</span>';
 
           return `
@@ -456,7 +456,7 @@
               <td class="py-3 pr-4 text-right font-mono">${formatCurrency(order.totalExclusive, order.currency)}</td>
               <td class="py-3 pr-4 text-right font-mono">${formatCurrency(order.totalTax, order.currency)}</td>
               <td class="py-3 pr-4 text-right font-mono font-semibold">${formatCurrency(order.totalInclusive, order.currency)}</td>
-              <td class="py-3 pr-4">${invoiceCell}</td>
+              <td class="py-3 pr-4">${odooOrderCell}</td>
             </tr>
           `;
         }).join('');
