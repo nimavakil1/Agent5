@@ -2736,6 +2736,75 @@ router.post('/vcs/upload', upload.single('file'), async (req, res) => {
 });
 
 /**
+ * @route POST /api/amazon/vcs/check-odoo
+ * @desc Check Odoo for existing invoices matching order IDs
+ * @body { orderIds: string[] } - Array of Amazon order IDs to check
+ */
+router.post('/vcs/check-odoo', async (req, res) => {
+  try {
+    const { orderIds } = req.body;
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: 'orderIds array required' });
+    }
+
+    // Initialize Odoo client
+    const odooClient = new OdooDirectClient();
+    await odooClient.authenticate();
+
+    // Search for invoices with matching refs
+    // Odoo stores Amazon order IDs in the 'ref' field
+    const matchedInvoices = {};
+
+    // Search in batches of 50 to avoid timeout
+    const batchSize = 50;
+    for (let i = 0; i < orderIds.length; i += batchSize) {
+      const batch = orderIds.slice(i, i + batchSize);
+
+      // Build OR domain for this batch
+      const domain = [
+        ['move_type', '=', 'out_invoice'],
+        '|',
+        ...batch.flatMap((orderId, idx) => {
+          if (idx === batch.length - 1) {
+            return [['ref', 'ilike', orderId]];
+          }
+          return ['|', ['ref', 'ilike', orderId]];
+        })
+      ];
+
+      const invoices = await odooClient.searchRead('account.move', domain, ['name', 'ref', 'state', 'amount_total']);
+
+      // Map invoices back to order IDs
+      for (const inv of invoices) {
+        const ref = inv.ref || '';
+        // Find which order ID this matches
+        for (const orderId of batch) {
+          if (ref.includes(orderId)) {
+            matchedInvoices[orderId] = {
+              invoiceNumber: inv.name,
+              state: inv.state,
+              amount: inv.amount_total
+            };
+            break;
+          }
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      matchedCount: Object.keys(matchedInvoices).length,
+      totalChecked: orderIds.length,
+      invoices: matchedInvoices
+    });
+
+  } catch (error) {
+    console.error('[VCS Check Odoo] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * @route GET /api/amazon/vcs/uploads
  * @desc Get list of all VCS uploads with metadata
  */

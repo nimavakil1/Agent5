@@ -10,7 +10,7 @@
   <body class="min-h-screen bg-slate-900">
     <!-- Header -->
     <header class="bg-slate-800 border-b border-slate-700 px-6 py-4">
-      <div class="flex items-center justify-between max-w-6xl mx-auto">
+      <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <a href="/app/amazon-config.html" class="text-slate-400 hover:text-white">
             <span class="material-symbols-outlined">arrow_back</span>
@@ -25,7 +25,7 @@
       </div>
     </header>
 
-    <main class="max-w-6xl mx-auto px-6 py-8">
+    <main class="px-6 py-8">
       <!-- Upload Section -->
       <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
         <h2 class="text-white font-semibold text-lg mb-4">Upload VCS Tax Report</h2>
@@ -169,12 +169,13 @@
                 <th class="pb-3 pr-4">Items</th>
                 <th class="pb-3 pr-4 text-right">Net</th>
                 <th class="pb-3 pr-4 text-right">VAT</th>
-                <th class="pb-3 text-right">Total</th>
+                <th class="pb-3 pr-4 text-right">Total</th>
+                <th class="pb-3 pr-4">Odoo Invoice</th>
               </tr>
             </thead>
             <tbody id="orders-table-body" class="text-slate-300">
               <tr>
-                <td colspan="9" class="py-8 text-center text-slate-500">
+                <td colspan="10" class="py-8 text-center text-slate-500">
                   <span class="material-symbols-outlined text-3xl mb-2 block">inbox</span>
                   Loading orders...
                 </td>
@@ -205,6 +206,7 @@
     <script>
       // State
       let pendingOrders = [];
+      let odooInvoices = {}; // Map of orderId -> invoice info
       let currentPage = 1;
       const pageSize = 50;
 
@@ -377,15 +379,38 @@
           const data = await response.json();
           pendingOrders = data.orders || [];
           renderOrders();
+
+          // Check Odoo for existing invoices (async, updates UI when done)
+          if (pendingOrders.length > 0) {
+            checkOdooInvoices();
+          }
         } catch (error) {
           console.error('Error loading orders:', error);
           ordersTableBody.innerHTML = `
             <tr>
-              <td colspan="9" class="py-8 text-center text-red-400">
+              <td colspan="10" class="py-8 text-center text-red-400">
                 Error loading orders: ${error.message}
               </td>
             </tr>
           `;
+        }
+      }
+
+      async function checkOdooInvoices() {
+        try {
+          const orderIds = pendingOrders.map(o => o.orderId);
+          const response = await fetch('/api/amazon/vcs/check-odoo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderIds })
+          });
+          const data = await response.json();
+          if (data.success && data.invoices) {
+            odooInvoices = data.invoices;
+            renderOrders(); // Re-render with invoice data
+          }
+        } catch (error) {
+          console.error('Error checking Odoo:', error);
         }
       }
 
@@ -395,7 +420,7 @@
         if (filtered.length === 0) {
           ordersTableBody.innerHTML = `
             <tr>
-              <td colspan="9" class="py-8 text-center text-slate-500">
+              <td colspan="10" class="py-8 text-center text-slate-500">
                 <span class="material-symbols-outlined text-3xl mb-2 block">inbox</span>
                 No pending orders
               </td>
@@ -408,25 +433,33 @@
         const start = (currentPage - 1) * pageSize;
         const pageOrders = filtered.slice(start, start + pageSize);
 
-        ordersTableBody.innerHTML = pageOrders.map(order => `
-          <tr class="border-b border-slate-700/50 hover:bg-slate-700/30">
-            <td class="py-3 pr-4">
-              <input type="checkbox" class="order-checkbox rounded bg-slate-700 border-slate-600" data-id="${order._id}">
-            </td>
-            <td class="py-3 pr-4 font-mono text-xs">${order.orderId}</td>
-            <td class="py-3 pr-4">${formatDate(order.orderDate)}</td>
-            <td class="py-3 pr-4">
-              <span class="px-2 py-1 bg-slate-700 rounded text-xs">${order.shipToCountry || '-'}</span>
-            </td>
-            <td class="py-3 pr-4">
-              <span class="px-2 py-1 ${getSchemeColor(order)} rounded text-xs">${getSchemeLabel(order)}</span>
-            </td>
-            <td class="py-3 pr-4">${order.items?.length || 0}</td>
-            <td class="py-3 pr-4 text-right font-mono">${formatCurrency(order.totalExclusive, order.currency)}</td>
-            <td class="py-3 pr-4 text-right font-mono">${formatCurrency(order.totalTax, order.currency)}</td>
-            <td class="py-3 text-right font-mono font-semibold">${formatCurrency(order.totalInclusive, order.currency)}</td>
-          </tr>
-        `).join('');
+        ordersTableBody.innerHTML = pageOrders.map(order => {
+          const invoice = odooInvoices[order.orderId];
+          const invoiceCell = invoice
+            ? `<span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-xs">${invoice.invoiceNumber}</span>`
+            : '<span class="text-slate-500 text-xs">-</span>';
+
+          return `
+            <tr class="border-b border-slate-700/50 hover:bg-slate-700/30">
+              <td class="py-3 pr-4">
+                <input type="checkbox" class="order-checkbox rounded bg-slate-700 border-slate-600" data-id="${order._id}">
+              </td>
+              <td class="py-3 pr-4 font-mono text-xs">${order.orderId}</td>
+              <td class="py-3 pr-4">${formatDate(order.orderDate)}</td>
+              <td class="py-3 pr-4">
+                <span class="px-2 py-1 bg-slate-700 rounded text-xs">${order.shipToCountry || '-'}</span>
+              </td>
+              <td class="py-3 pr-4">
+                <span class="px-2 py-1 ${getSchemeColor(order)} rounded text-xs">${getSchemeLabel(order)}</span>
+              </td>
+              <td class="py-3 pr-4">${order.items?.length || 0}</td>
+              <td class="py-3 pr-4 text-right font-mono">${formatCurrency(order.totalExclusive, order.currency)}</td>
+              <td class="py-3 pr-4 text-right font-mono">${formatCurrency(order.totalTax, order.currency)}</td>
+              <td class="py-3 pr-4 text-right font-mono font-semibold">${formatCurrency(order.totalInclusive, order.currency)}</td>
+              <td class="py-3 pr-4">${invoiceCell}</td>
+            </tr>
+          `;
+        }).join('');
 
         document.getElementById('pagination-info').textContent = `Showing ${start + 1}-${Math.min(start + pageSize, filtered.length)} of ${filtered.length} orders`;
         document.getElementById('prev-page').disabled = currentPage === 1;
