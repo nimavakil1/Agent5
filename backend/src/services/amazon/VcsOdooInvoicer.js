@@ -33,6 +33,21 @@ const SKU_TRANSFORMATIONS = [
 // Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM → 10050K
 const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
 
+// Marketplace to Sales Team ID mapping (Odoo crm.team IDs)
+// Based on marketplaceId - the Amazon marketplace where the order was placed
+const MARKETPLACE_SALES_TEAMS = {
+  'DE': 17,  // Amazon DE (Marketplace)
+  'FR': 19,  // Amazon FR (Marketplace)
+  'IT': 20,  // Amazon IT (Marketplace)
+  'ES': 18,  // Amazon ES (Marketplace)
+  'NL': 21,  // Amazon NL (Marketplace)
+  'PL': 22,  // Amazon PL (Marketplace)
+  'BE': 16,  // Amazon BE (Marketplace)
+  'SE': 24,  // Amazon SE (Marketplace)
+  'GB': 25,  // Amazon UK (Marketplace)
+  'UK': 25,  // Alias for GB
+};
+
 // Marketplace to journal mapping (Odoo journal codes)
 // Based on shipToCountry - the destination determines the VAT jurisdiction
 const MARKETPLACE_JOURNALS = {
@@ -514,6 +529,21 @@ class VcsOdooInvoicer {
   }
 
   /**
+   * Determine the sales team based on the Amazon marketplace
+   * @param {object} order - VCS order data
+   * @returns {number|null} Sales team ID
+   */
+  determineSalesTeam(order) {
+    const marketplace = order.marketplaceId;
+    if (marketplace && MARKETPLACE_SALES_TEAMS[marketplace]) {
+      return MARKETPLACE_SALES_TEAMS[marketplace];
+    }
+    // Fallback: no sales team (will use Odoo default)
+    console.warn(`[VcsOdooInvoicer] No sales team mapping for marketplace: ${marketplace}`);
+    return null;
+  }
+
+  /**
    * Get the OSS tax ID for a country based on the VCS tax rate
    * @param {object} order - VCS order data
    * @returns {number|null} Tax ID
@@ -569,8 +599,8 @@ class VcsOdooInvoicer {
     // VCS Invoice Number for reference fields
     const vcsInvoiceNumber = order.vatInvoiceNumber || null;
 
-    // Get team_id from sale order (e.g., "Amazon Seller")
-    const teamId = saleOrder.team_id ? saleOrder.team_id[0] : null;
+    // Determine sales team based on marketplace (NOT inherited from order)
+    const teamId = this.determineSalesTeam(order);
 
     return {
       move_type: 'out_invoice',
@@ -586,7 +616,7 @@ class VcsOdooInvoicer {
       currency_id: this.getCurrencyId(order.currency),
       fiscal_position_id: fiscalPosition,
       journal_id: journalId,
-      // Inherit sales team from sale order
+      // Sales team based on Amazon marketplace
       team_id: teamId,
       invoice_line_ids: this.buildInvoiceLines(order, orderLines),
     };
