@@ -275,17 +275,41 @@
           }
         });
         document.getElementById('next-page').addEventListener('click', () => {
-          const country = document.getElementById('filter-country').value;
-          const scheme = document.getElementById('filter-scheme').value;
-          let filtered = pendingOrders;
-          if (country) filtered = filtered.filter(o => o.shipToCountry === country);
-          if (scheme) filtered = filtered.filter(o => o.taxReportingScheme?.includes(scheme) || (scheme === 'B2B' && o.buyerTaxRegistration));
+          const filtered = getFilteredOrders();
           const maxPage = Math.ceil(filtered.length / pageSize);
           if (currentPage < maxPage) {
             currentPage++;
             renderOrders();
           }
         });
+      }
+
+      // Shared filter logic
+      function getFilteredOrders() {
+        const country = document.getElementById('filter-country').value;
+        const scheme = document.getElementById('filter-scheme').value;
+
+        let filtered = pendingOrders;
+        if (country) filtered = filtered.filter(o => o.shipToCountry === country);
+        if (scheme) {
+          filtered = filtered.filter(o => {
+            const isOSS = o.taxReportingScheme === 'VCS_EU_OSS';
+            const isB2B = !!o.buyerTaxRegistration;
+            const isExport = o.exportOutsideEu === 'true' || o.exportOutsideEu === true;
+            const isDomestic = o.shipFromCountry && o.shipFromCountry === o.shipToCountry && !isOSS && !isB2B && !isExport;
+
+            if (scheme === 'OSS') return isOSS;
+            if (scheme === 'B2B') return isB2B;
+            if (scheme === 'EXPORT') return isExport;
+            if (scheme === 'DOMESTIC') return isDomestic;
+            if (scheme.startsWith('DOMESTIC_')) {
+              const domesticCountry = scheme.replace('DOMESTIC_', '');
+              return isDomestic && o.shipFromCountry === domesticCountry;
+            }
+            return true;
+          });
+        }
+        return filtered;
       }
 
       async function uploadFile(file) {
@@ -366,29 +390,7 @@
       }
 
       function renderOrders() {
-        const country = document.getElementById('filter-country').value;
-        const scheme = document.getElementById('filter-scheme').value;
-
-        let filtered = pendingOrders;
-        if (country) filtered = filtered.filter(o => o.shipToCountry === country);
-        if (scheme) {
-          filtered = filtered.filter(o => {
-            const isOSS = o.taxReportingScheme === 'VCS_EU_OSS';
-            const isB2B = !!o.buyerTaxRegistration;
-            const isExport = o.exportOutsideEu === 'true' || o.exportOutsideEu === true;
-            const isDomestic = o.shipFromCountry && o.shipFromCountry === o.shipToCountry && !isOSS && !isB2B && !isExport;
-
-            if (scheme === 'OSS') return isOSS;
-            if (scheme === 'B2B') return isB2B;
-            if (scheme === 'EXPORT') return isExport;
-            if (scheme === 'DOMESTIC') return isDomestic;
-            if (scheme.startsWith('DOMESTIC_')) {
-              const domesticCountry = scheme.replace('DOMESTIC_', '');
-              return isDomestic && o.shipFromCountry === domesticCountry;
-            }
-            return true;
-          });
-        }
+        const filtered = getFilteredOrders();
 
         if (filtered.length === 0) {
           ordersTableBody.innerHTML = `
