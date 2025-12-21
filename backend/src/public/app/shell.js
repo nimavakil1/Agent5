@@ -420,6 +420,12 @@
             ${navItem('/app/analytics.html', 'analytics', 'Analytics', isActive('/app/analytics.html') || isActive('/dashboard.html'))}
           `)}
 
+          ${navSection('Amazon', `
+            ${navItem('/app/amazon-config.html', 'storefront', 'Overview', isActive('/app/amazon-config.html'))}
+            ${navItem('/app/amazon-vcs.html', 'receipt_long', 'VCS Tax Reports', isActive('/app/amazon-vcs.html'))}
+            ${navItem('/app/amazon-reports.html', 'upload_file', 'Upload Reports', isActive('/app/amazon-reports.html'))}
+          `)}
+
           ${navSection('Settings', `
             ${navItem('/app/integrations.html', 'hub', 'Integrations', isActive('/app/integrations.html'))}
             ${navItem('/app/mcp.html', 'settings_input_component', 'MCP Tools', isActive('/app/mcp.html'))}
