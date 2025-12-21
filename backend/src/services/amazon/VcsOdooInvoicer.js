@@ -263,6 +263,15 @@ class VcsOdooInvoicer {
 
         const { saleOrder, orderLines } = odooOrderData;
 
+        // Check if invoice already exists in Odoo for this sale order
+        const existingInvoice = await this.findExistingInvoice(saleOrder.name);
+        if (existingInvoice) {
+          result.skipped++;
+          await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
+          console.log(`[VcsOdooInvoicer] Invoice already exists for ${order.orderId}: ${existingInvoice.name}`);
+          continue;
+        }
+
         if (dryRun) {
           const invoiceData = this.buildInvoiceData(order, saleOrder.partner_id[0], saleOrder, orderLines);
 
@@ -427,6 +436,28 @@ class VcsOdooInvoicer {
     const order = orders[0];
     const orderLines = await this.getOrderLines(order.order_line);
     return { saleOrder: order, orderLines };
+  }
+
+  /**
+   * Check if an invoice already exists for a sale order
+   * @param {string} saleOrderName - The Odoo sale order name (e.g., "FBA305-1901951-5970703")
+   * @returns {object|null} Existing invoice or null
+   */
+  async findExistingInvoice(saleOrderName) {
+    // Search for invoices with invoice_origin matching the sale order name
+    const invoices = await this.odoo.searchRead('account.move',
+      [
+        ['invoice_origin', '=', saleOrderName],
+        ['move_type', '=', 'out_invoice'],
+      ],
+      ['id', 'name', 'state', 'amount_total']
+    );
+
+    if (invoices.length > 0) {
+      return invoices[0];
+    }
+
+    return null;
   }
 
   /**
