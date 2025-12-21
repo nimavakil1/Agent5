@@ -2929,7 +2929,6 @@ router.get('/vcs/orders/pending', async (req, res) => {
     const orders = await db.collection('amazon_vcs_orders')
       .find({ status: 'pending' })
       .sort({ orderDate: -1 })
-      .limit(200)
       .toArray();
 
     // Add VAT config to each order
