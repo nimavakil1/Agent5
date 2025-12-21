@@ -335,8 +335,7 @@
           if (response.ok && result.success) {
             uploadResult.classList.remove('hidden');
             document.getElementById('result-summary').innerHTML = `
-              <p>Processed <strong>${result.transactionCount}</strong> transactions from <strong>${result.orderCount}</strong> orders</p>
-              <p class="mt-1">${result.invoiceableOrders} orders ready for invoicing</p>
+              <p>Imported <strong>${result.orderCount}</strong> orders</p>
             `;
             loadSummary();
             loadPendingOrders();
