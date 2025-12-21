@@ -2813,7 +2813,32 @@ router.get('/vcs/uploads', async (req, res) => {
       .limit(100)
       .toArray();
 
-    res.json({ uploads });
+    // For each upload, compute real-time order counts from amazon_vcs_orders
+    const enrichedUploads = await Promise.all(uploads.map(async (upload) => {
+      // Get orders linked to this upload's report
+      const reportId = upload.reportId;
+      if (reportId) {
+        const statusCounts = await db.collection('amazon_vcs_orders').aggregate([
+          { $match: { reportId: reportId.toString() } },
+          { $group: { _id: '$status', count: { $sum: 1 } } }
+        ]).toArray();
+
+        let pending = 0, invoiced = 0, skipped = 0;
+        for (const s of statusCounts) {
+          if (s._id === 'pending') pending = s.count;
+          if (s._id === 'invoiced') invoiced = s.count;
+          if (s._id === 'skipped') skipped = s.count;
+        }
+
+        // Override static counts with real-time counts
+        upload.pendingOrders = pending;
+        upload.invoicedOrders = invoiced;
+        upload.skippedOrders = skipped;
+      }
+      return upload;
+    }));
+
+    res.json({ uploads: enrichedUploads });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
