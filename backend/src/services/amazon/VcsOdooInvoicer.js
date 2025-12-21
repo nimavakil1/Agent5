@@ -731,33 +731,45 @@ class VcsOdooInvoicer {
     // This properly links the invoice to the order and updates qty_invoiced
     console.log(`[VcsOdooInvoicer] Creating invoice from order ${saleOrder.name}...`);
 
-    // Use the sale.advance.payment.inv wizard to create invoice
-    // This is the proper XML-RPC way to create invoices from orders
-    const wizardId = await this.odoo.create('sale.advance.payment.inv', {
-      advance_payment_method: 'delivered', // Invoice delivered quantities
-    });
+    // Create invoice directly by copying from sale order lines
+    // This links the invoice to the order via sale_line_ids
+    console.log(`[VcsOdooInvoicer] Building invoice from order lines...`);
 
-    // Call the create_invoices action on the wizard with the sale order context
-    // Context is passed via kwargs with key 'context'
-    await this.odoo.execute('sale.advance.payment.inv', 'create_invoices', [wizardId], {
-      context: {
-        active_model: 'sale.order',
-        active_ids: [saleOrder.id],
-        active_id: saleOrder.id,
-      }
-    });
-
-    // Find the created invoice by looking for drafts linked to this order
-    const invoices = await this.odoo.searchRead('account.move',
-      [['invoice_origin', 'ilike', saleOrder.name], ['state', '=', 'draft']],
-      ['id', 'name']
+    // Get order lines with product info
+    const orderLineDetails = await this.odoo.searchRead('sale.order.line',
+      [['order_id', '=', saleOrder.id]],
+      ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'tax_id', 'qty_delivered']
     );
 
-    if (invoices.length === 0) {
-      throw new Error(`Failed to find created invoice for order ${saleOrder.name}`);
+    // Build invoice line data from order lines
+    const invoiceLines = [];
+    for (const line of orderLineDetails) {
+      if (!line.product_id) continue;
+
+      // Use qty_delivered if set, otherwise use product_uom_qty
+      const qty = line.qty_delivered > 0 ? line.qty_delivered : line.product_uom_qty;
+
+      invoiceLines.push([0, 0, {
+        product_id: line.product_id[0],
+        name: line.name,
+        quantity: qty,
+        price_unit: line.price_unit,
+        tax_ids: line.tax_id ? [[6, 0, line.tax_id]] : false,
+        sale_line_ids: [[4, line.id]], // Link to sale order line
+      }]);
     }
 
-    const invoiceId = invoices[0].id;
+    // Create the invoice linked to the sale order
+    const invoiceId = await this.odoo.create('account.move', {
+      move_type: 'out_invoice',
+      partner_id: saleOrder.partner_id[0],
+      invoice_origin: saleOrder.name,
+      invoice_line_ids: invoiceLines,
+    });
+
+    if (!invoiceId) {
+      throw new Error(`Failed to create invoice for order ${saleOrder.name}`);
+    }
 
     console.log(`[VcsOdooInvoicer] Invoice created with ID ${invoiceId}, updating with VCS data...`);
 
