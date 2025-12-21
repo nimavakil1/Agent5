@@ -141,6 +141,7 @@
             <option value="">All Schemes</option>
             <option value="VCS_EU_OSS">OSS</option>
             <option value="B2B">B2B (Reverse Charge)</option>
+            <option value="EXPORT">Export</option>
             <option value="DOMESTIC">Domestic</option>
           </select>
         </div>
@@ -362,7 +363,15 @@
 
         let filtered = pendingOrders;
         if (country) filtered = filtered.filter(o => o.shipToCountry === country);
-        if (scheme) filtered = filtered.filter(o => o.taxReportingScheme?.includes(scheme) || (scheme === 'B2B' && o.buyerTaxRegistration));
+        if (scheme) {
+          filtered = filtered.filter(o => {
+            if (scheme === 'VCS_EU_OSS') return o.taxReportingScheme === 'VCS_EU_OSS';
+            if (scheme === 'B2B') return o.buyerTaxRegistration;
+            if (scheme === 'EXPORT') return o.exportOutsideEu;
+            if (scheme === 'DOMESTIC') return !o.taxReportingScheme && !o.buyerTaxRegistration && !o.exportOutsideEu;
+            return true;
+          });
+        }
 
         if (filtered.length === 0) {
           ordersTableBody.innerHTML = `
