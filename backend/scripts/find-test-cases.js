@@ -49,9 +49,9 @@ async function run() {
       addCase('2. FBA Order (from Amazon warehouse)', order);
     }
 
-    // 3. Return SKU (long strange SKUs or R4 suffix)
-    if (sku.includes('R4') || sku.length > 15) {
-      addCase('3. Return/Strange SKU (R4 or long)', order);
+    // 3. Return SKU (amzn.gr. pattern - Amazon return refund SKU)
+    if (sku.startsWith('amzn.gr.')) {
+      addCase('3. Return SKU (amzn.gr. pattern)', order);
     }
 
     // 4. Stickerless SKU
@@ -92,7 +92,7 @@ async function run() {
   const priority = [
     '1. FBM Order (-FBM suffix)',
     '2. FBA Order (from Amazon warehouse)',
-    '3. Return/Strange SKU (R4 or long)',
+    '3. Return SKU (amzn.gr. pattern)',
     '4. Stickerless SKU',
     '5. OSS Order (VCS_EU_OSS)',
     '6. Intra-Community B2B (reverse charge)',

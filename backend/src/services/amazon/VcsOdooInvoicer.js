@@ -15,13 +15,15 @@ const { ObjectId } = require('mongodb');
 const SKU_TRANSFORMATIONS = [
   // Strip -FBM suffix (Fulfilled by Merchant)
   { pattern: /-FBM$/, replacement: '' },
-  // Strip R4 suffix (Returns)
-  { pattern: /R4$/, replacement: '' },
   // Strip -stickerless suffix
   { pattern: /-stickerless$/, replacement: '' },
   // Strip -stickerles suffix (typo variant)
   { pattern: /-stickerles$/, replacement: '' },
 ];
+
+// Return SKU pattern: amzn.gr.[base-sku]-[random-string]
+// Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM → 10050K
+const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
 
 // Marketplace to journal mapping
 const MARKETPLACE_JOURNALS = {
@@ -229,6 +231,15 @@ class VcsOdooInvoicer {
    */
   transformSku(amazonSku) {
     let sku = amazonSku;
+
+    // First, check for return SKU pattern: amzn.gr.[base-sku]-[random-string]
+    // Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM
+    const returnMatch = sku.match(RETURN_SKU_PATTERN);
+    if (returnMatch) {
+      sku = returnMatch[1]; // Extract base SKU from return pattern
+    }
+
+    // Then apply regular transformations (-FBM, -stickerless, etc.)
     for (const transform of SKU_TRANSFORMATIONS) {
       sku = sku.replace(transform.pattern, transform.replacement);
     }
