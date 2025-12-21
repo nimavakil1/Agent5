@@ -421,9 +421,12 @@
           `)}
 
           ${navSection('Amazon', `
-            ${navItem('/app/amazon-config.html', 'storefront', 'Overview', isActive('/app/amazon-config.html'))}
             ${navItem('/app/amazon-vcs.html', 'receipt_long', 'VCS Tax Reports', isActive('/app/amazon-vcs.html'))}
             ${navItem('/app/amazon-reports.html', 'upload_file', 'Upload Reports', isActive('/app/amazon-reports.html'))}
+          `)}
+
+          ${navSection('Accounting', `
+            ${navItem('/app/amazon-vcs.html', 'receipt_long', 'VCS Invoicing', isActive('/app/amazon-vcs.html'))}
           `)}
 
           ${navSection('Settings', `
