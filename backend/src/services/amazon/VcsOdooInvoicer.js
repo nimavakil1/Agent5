@@ -68,14 +68,14 @@ class VcsOdooInvoicer {
   }
 
   /**
-   * Create invoices in Odoo for pending VCS orders
+   * Create invoices in Odoo for selected VCS orders
    * @param {object} options
-   * @param {number} options.limit - Max orders to process
+   * @param {string[]} options.orderIds - MongoDB IDs of orders to process
    * @param {boolean} options.dryRun - If true, don't create invoices
    * @returns {object} Results
    */
   async createInvoices(options = {}) {
-    const { limit = 50, dryRun = false } = options;
+    const { orderIds = [], dryRun = false } = options;
     const db = getDb();
 
     const result = {
@@ -86,15 +86,17 @@ class VcsOdooInvoicer {
       invoices: [],
     };
 
-    // Get pending orders
+    if (orderIds.length === 0) {
+      return { ...result, message: 'No orders selected' };
+    }
+
+    // Get selected orders by their MongoDB IDs
     const orders = await db.collection('amazon_vcs_orders')
-      .find({ status: 'pending' })
-      .sort({ orderDate: 1 })
-      .limit(limit)
+      .find({ _id: { $in: orderIds.map(id => new ObjectId(id)) } })
       .toArray();
 
     if (orders.length === 0) {
-      return { ...result, message: 'No pending orders' };
+      return { ...result, message: 'No orders found for the given IDs' };
     }
 
     // Get or create Amazon customer partner

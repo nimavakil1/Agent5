@@ -562,10 +562,18 @@
         const btn = dryRun ? document.getElementById('preview-invoices-btn') : document.getElementById('create-invoices-btn');
         const originalText = btn.innerHTML;
 
+        // Get selected order IDs
+        const selectedIds = Array.from(document.querySelectorAll('.order-checkbox:checked'))
+          .map(cb => cb.dataset.id);
+
+        if (selectedIds.length === 0) {
+          alert('Please select at least one order to process.');
+          return;
+        }
+
         // Confirmation for actual creation
         if (!dryRun) {
-          const pendingCount = document.getElementById('stat-pending').textContent;
-          if (!confirm(`Are you sure you want to create invoices in Odoo for ${pendingCount} pending orders?\n\nThis action cannot be undone.`)) {
+          if (!confirm(`Are you sure you want to create invoices in Odoo for ${selectedIds.length} selected order(s)?\n\nThis action cannot be undone.`)) {
             return;
           }
         }
@@ -581,7 +589,7 @@
           const response = await fetch('/api/amazon/vcs/create-invoices', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ limit: 100, dryRun })
+            body: JSON.stringify({ orderIds: selectedIds, dryRun })
           });
 
           const result = await response.json();

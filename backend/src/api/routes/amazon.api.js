@@ -3234,12 +3234,16 @@ router.get('/returns/reports', async (req, res) => {
 
 /**
  * @route POST /api/amazon/vcs/create-invoices
- * @desc Create Odoo invoices from pending VCS orders
- * @body { limit, dryRun }
+ * @desc Create Odoo invoices from selected VCS orders
+ * @body { orderIds, dryRun }
  */
 router.post('/vcs/create-invoices', async (req, res) => {
   try {
-    const { limit = 50, dryRun = true } = req.body;
+    const { orderIds = [], dryRun = true } = req.body;
+
+    if (!orderIds || orderIds.length === 0) {
+      return res.status(400).json({ error: 'No orders selected' });
+    }
 
     // Check Odoo credentials - ALWAYS needed (even for preview, to find existing orders)
     if (!process.env.ODOO_URL || !process.env.ODOO_DB || !process.env.ODOO_USERNAME || !process.env.ODOO_PASSWORD) {
@@ -3257,7 +3261,7 @@ router.post('/vcs/create-invoices', async (req, res) => {
     const invoicer = new VcsOdooInvoicer(odooClient);
     await invoicer.loadCache();
 
-    const result = await invoicer.createInvoices({ limit, dryRun });
+    const result = await invoicer.createInvoices({ orderIds, dryRun });
 
     res.json({
       success: true,
