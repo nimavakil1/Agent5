@@ -420,10 +420,12 @@ class VcsOdooInvoicer {
       });
 
       if (odooLine && odooLine.product_id) {
-        // Use product from Odoo order - display transformed SKU
+        // Use product from Odoo order - show VCS SKU → Odoo SKU
+        const odooSku = odooLine.product_default_code || transformedSku;
+        const skuDisplay = item.sku !== odooSku ? `${item.sku} → ${odooSku}` : odooSku;
         lines.push([0, 0, {
           product_id: odooLine.product_id[0],
-          name: `${transformedSku} (ASIN: ${item.asin})`,
+          name: `${skuDisplay} (ASIN: ${item.asin})`,
           quantity: item.quantity,
           price_unit: item.priceExclusive / item.quantity,
           // Tax will be determined by fiscal position + product tax settings
@@ -431,8 +433,9 @@ class VcsOdooInvoicer {
       } else {
         // Fallback: no matching product found, use text-only line
         console.warn(`[VcsOdooInvoicer] No matching product for SKU ${item.sku} (transformed: ${transformedSku})`);
+        const skuDisplay = item.sku !== transformedSku ? `${item.sku} → ${transformedSku}` : transformedSku;
         lines.push([0, 0, {
-          name: `${transformedSku} (ASIN: ${item.asin}) - PRODUCT NOT FOUND`,
+          name: `${skuDisplay} (ASIN: ${item.asin}) - PRODUCT NOT FOUND`,
           quantity: item.quantity,
           price_unit: item.priceExclusive / item.quantity,
         }]);
@@ -440,8 +443,9 @@ class VcsOdooInvoicer {
 
       // Promo discount if any
       if (item.promoAmount && item.promoAmount !== 0) {
+        const discountSku = odooLine?.product_default_code || transformedSku;
         lines.push([0, 0, {
-          name: `Promotion discount - ${transformedSku}`,
+          name: `Promotion discount - ${discountSku}`,
           quantity: 1,
           price_unit: -Math.abs(item.promoAmount),
         }]);
