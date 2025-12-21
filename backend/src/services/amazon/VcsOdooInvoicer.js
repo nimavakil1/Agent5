@@ -151,7 +151,7 @@ class VcsOdooInvoicer {
               shipTo: order.shipToCountry,
               taxScheme: order.taxReportingScheme || 'Standard',
               buyerVatId: order.buyerTaxRegistration || null,
-              vatAmount: order.totalVat || 0,
+              vatAmount: order.totalTax || 0,
               totalExclVat: order.totalExclusive || 0,
               totalInclVat: order.totalInclusive || 0,
               vatInvoiceNumber: order.vatInvoiceNumber,
