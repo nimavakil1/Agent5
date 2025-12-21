@@ -139,10 +139,18 @@
           </select>
           <select id="filter-scheme" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
             <option value="">All Schemes</option>
-            <option value="VCS_EU_OSS">OSS</option>
+            <option value="OSS">OSS</option>
             <option value="B2B">B2B (Reverse Charge)</option>
             <option value="EXPORT">Export</option>
-            <option value="DOMESTIC">Domestic</option>
+            <option value="DOMESTIC">All Domestic</option>
+            <option value="DOMESTIC_DE">Domestic DE</option>
+            <option value="DOMESTIC_FR">Domestic FR</option>
+            <option value="DOMESTIC_IT">Domestic IT</option>
+            <option value="DOMESTIC_NL">Domestic NL</option>
+            <option value="DOMESTIC_PL">Domestic PL</option>
+            <option value="DOMESTIC_CZ">Domestic CZ</option>
+            <option value="DOMESTIC_BE">Domestic BE</option>
+            <option value="DOMESTIC_GB">Domestic GB</option>
           </select>
         </div>
 
@@ -365,10 +373,19 @@
         if (country) filtered = filtered.filter(o => o.shipToCountry === country);
         if (scheme) {
           filtered = filtered.filter(o => {
-            if (scheme === 'VCS_EU_OSS') return o.taxReportingScheme === 'VCS_EU_OSS';
-            if (scheme === 'B2B') return o.buyerTaxRegistration;
-            if (scheme === 'EXPORT') return o.exportOutsideEu;
-            if (scheme === 'DOMESTIC') return !o.taxReportingScheme && !o.buyerTaxRegistration && !o.exportOutsideEu;
+            const isOSS = o.taxReportingScheme === 'VCS_EU_OSS';
+            const isB2B = !!o.buyerTaxRegistration;
+            const isExport = o.exportOutsideEu === 'true' || o.exportOutsideEu === true;
+            const isDomestic = o.shipFromCountry && o.shipFromCountry === o.shipToCountry && !isOSS && !isB2B && !isExport;
+
+            if (scheme === 'OSS') return isOSS;
+            if (scheme === 'B2B') return isB2B;
+            if (scheme === 'EXPORT') return isExport;
+            if (scheme === 'DOMESTIC') return isDomestic;
+            if (scheme.startsWith('DOMESTIC_')) {
+              const domesticCountry = scheme.replace('DOMESTIC_', '');
+              return isDomestic && o.shipFromCountry === domesticCountry;
+            }
             return true;
           });
         }
@@ -660,14 +677,22 @@
       function getSchemeLabel(order) {
         if (order.taxReportingScheme === 'VCS_EU_OSS') return 'OSS';
         if (order.buyerTaxRegistration) return 'B2B';
-        if (order.exportOutsideEu) return 'Export';
-        return 'Standard';
+        if (order.exportOutsideEu === 'true' || order.exportOutsideEu === true) return 'Export';
+        // Domestic = shipFrom === shipTo (same country, B2C)
+        if (order.shipFromCountry && order.shipFromCountry === order.shipToCountry) {
+          return `Domestic ${order.shipFromCountry}`;
+        }
+        return 'Unknown';
       }
 
       function getSchemeColor(order) {
         if (order.taxReportingScheme === 'VCS_EU_OSS') return 'bg-blue-900/50 text-blue-300';
         if (order.buyerTaxRegistration) return 'bg-purple-900/50 text-purple-300';
-        if (order.exportOutsideEu) return 'bg-orange-900/50 text-orange-300';
+        if (order.exportOutsideEu === 'true' || order.exportOutsideEu === true) return 'bg-orange-900/50 text-orange-300';
+        // Domestic - green
+        if (order.shipFromCountry && order.shipFromCountry === order.shipToCountry) {
+          return 'bg-green-900/50 text-green-300';
+        }
         return 'bg-slate-600';
       }
     </script>
