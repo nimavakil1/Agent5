@@ -3241,28 +3241,21 @@ router.post('/vcs/create-invoices', async (req, res) => {
   try {
     const { limit = 50, dryRun = true } = req.body;
 
-    let odooClient = null;
-
-    // Initialize Odoo client if not dry run
-    if (!dryRun) {
-      // Check Odoo credentials
-      if (!process.env.ODOO_URL || !process.env.ODOO_DB || !process.env.ODOO_USERNAME || !process.env.ODOO_PASSWORD) {
-        return res.status(400).json({
-          error: 'Odoo not configured. Set ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD environment variables.',
-          missingEnvVars: ['ODOO_URL', 'ODOO_DB', 'ODOO_USERNAME', 'ODOO_PASSWORD'].filter(key => !process.env[key])
-        });
-      }
-
-      odooClient = new OdooDirectClient();
-      await odooClient.authenticate();
-      console.log('[VCS Invoices] Connected to Odoo');
+    // Check Odoo credentials - ALWAYS needed (even for preview, to find existing orders)
+    if (!process.env.ODOO_URL || !process.env.ODOO_DB || !process.env.ODOO_USERNAME || !process.env.ODOO_PASSWORD) {
+      return res.status(400).json({
+        error: 'Odoo not configured. Set ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD environment variables.',
+        missingEnvVars: ['ODOO_URL', 'ODOO_DB', 'ODOO_USERNAME', 'ODOO_PASSWORD'].filter(key => !process.env[key])
+      });
     }
+
+    // Initialize Odoo client - always needed to find existing orders
+    const odooClient = new OdooDirectClient();
+    await odooClient.authenticate();
+    console.log('[VCS Invoices] Connected to Odoo');
 
     const invoicer = new VcsOdooInvoicer(odooClient);
-
-    if (odooClient) {
-      await invoicer.loadCache();
-    }
+    await invoicer.loadCache();
 
     const result = await invoicer.createInvoices({ limit, dryRun });
 
