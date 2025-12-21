@@ -10,8 +10,31 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const multer = require('multer');
 const { getDb } = require('../../db');
 const { ObjectId } = require('mongodb');
+const { skuResolver, euCountryConfig, OrderImporter, VcsInvoiceImporter, FbaInventoryReconciler, FbmStockSync, TrackingSync } = require('../../services/amazon');
+const { VcsTaxReportParser } = require('../../services/amazon/VcsTaxReportParser');
+const { FbaInventoryReportParser } = require('../../services/amazon/FbaInventoryReportParser');
+const { ReturnsReportParser } = require('../../services/amazon/ReturnsReportParser');
+const { VcsOdooInvoicer } = require('../../services/amazon/VcsOdooInvoicer');
+const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+
+// Configure multer for settlement report uploads
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    // Accept CSV, TSV, TXT files
+    const allowedMimes = ['text/csv', 'text/tab-separated-values', 'text/plain', 'application/vnd.ms-excel'];
+    if (allowedMimes.includes(file.mimetype) || file.originalname.match(/\.(csv|tsv|txt)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV/TSV files are allowed'), false);
+    }
+  }
+});
 
 // Webhook secret for validating requests from Make.com
 const WEBHOOK_SECRET = process.env.AMAZON_WEBHOOK_SECRET || 'change-me-in-production';
@@ -159,6 +182,287 @@ router.post('/webhook/order-items', validateWebhook, async (req, res) => {
   }
 });
 
+// ==================== ORDER IMPORT TO ODOO ====================
+
+/**
+ * @route POST /api/amazon/import/orders
+ * @desc Import orders from MongoDB to Odoo
+ * @body { orderIds: string[] } OR { since: ISO date string } OR { amazonOrderId: string }
+ *
+ * This endpoint takes orders already stored in MongoDB (from webhooks)
+ * and creates corresponding Sale Orders in Odoo.
+ */
+router.post('/import/orders', async (req, res) => {
+  try {
+    const db = getDb();
+    const { orderIds, since, amazonOrderId, limit = 50 } = req.body;
+
+    // Get Odoo client from app
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    // Initialize order importer
+    const importer = new OrderImporter(odooClient);
+    await importer.init();
+
+    // Build query based on input
+    let query = {};
+    if (amazonOrderId) {
+      query.amazonOrderId = amazonOrderId;
+    } else if (orderIds && orderIds.length > 0) {
+      query.amazonOrderId = { $in: orderIds };
+    } else if (since) {
+      query.purchaseDate = { $gte: new Date(since) };
+    } else {
+      // Default: orders not yet imported
+      query['odooImport.success'] = { $ne: true };
+    }
+
+    // Add filter for orders with items
+    query['orderItems.0'] = { $exists: true };
+
+    // Fetch orders
+    const orders = await db.collection('amazon_orders')
+      .find(query)
+      .limit(parseInt(limit))
+      .toArray();
+
+    if (orders.length === 0) {
+      return res.json({ success: true, message: 'No orders to import', imported: 0, failed: 0 });
+    }
+
+    // Import orders to Odoo
+    const results = await importer.importOrders(orders);
+
+    // Update MongoDB with import status
+    for (const result of results.results) {
+      await db.collection('amazon_orders').updateOne(
+        { amazonOrderId: result.amazonOrderId },
+        {
+          $set: {
+            odooImport: {
+              success: result.success,
+              odooOrderId: result.odooOrderId,
+              odooOrderName: result.odooOrderName,
+              errors: result.errors,
+              warnings: result.warnings,
+              importedAt: new Date()
+            }
+          }
+        }
+      );
+    }
+
+    res.json({
+      success: true,
+      imported: results.imported,
+      failed: results.failed,
+      total: results.total,
+      results: results.results
+    });
+  } catch (error) {
+    console.error('Amazon order import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/import/order/:amazonOrderId
+ * @desc Import a single order to Odoo
+ */
+router.post('/import/order/:amazonOrderId', async (req, res) => {
+  try {
+    const db = getDb();
+    const { amazonOrderId } = req.params;
+
+    // Get order from MongoDB
+    const order = await db.collection('amazon_orders').findOne({ amazonOrderId });
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found in MongoDB' });
+    }
+
+    // Get Odoo client
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    // Initialize and import
+    const importer = new OrderImporter(odooClient);
+    await importer.init();
+
+    const result = await importer.importOrder(order);
+
+    // Update MongoDB
+    await db.collection('amazon_orders').updateOne(
+      { amazonOrderId },
+      {
+        $set: {
+          odooImport: {
+            success: result.success,
+            odooOrderId: result.odooOrderId,
+            odooOrderName: result.odooOrderName,
+            errors: result.errors,
+            warnings: result.warnings,
+            importedAt: new Date()
+          }
+        }
+      }
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error('Amazon single order import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/import/status
+ * @desc Get order import statistics
+ */
+router.get('/import/status', async (req, res) => {
+  try {
+    const db = getDb();
+
+    const stats = await db.collection('amazon_orders').aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          imported: { $sum: { $cond: ['$odooImport.success', 1, 0] } },
+          failed: { $sum: { $cond: [{ $eq: ['$odooImport.success', false] }, 1, 0] } },
+          pending: { $sum: { $cond: [{ $not: '$odooImport' }, 1, 0] } },
+          withItems: { $sum: { $cond: [{ $gt: [{ $size: { $ifNull: ['$orderItems', []] } }, 0] }, 1, 0] } }
+        }
+      }
+    ]).toArray();
+
+    const result = stats[0] || { total: 0, imported: 0, failed: 0, pending: 0, withItems: 0 };
+
+    // Get recent import errors
+    const recentErrors = await db.collection('amazon_orders')
+      .find({ 'odooImport.success': false })
+      .project({ amazonOrderId: 1, 'odooImport.errors': 1, 'odooImport.importedAt': 1 })
+      .sort({ 'odooImport.importedAt': -1 })
+      .limit(10)
+      .toArray();
+
+    res.json({
+      ...result,
+      recentErrors
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/webhook/orders/import
+ * @desc Webhook that receives and immediately imports orders to Odoo
+ * Use this for real-time order sync from Make.com
+ */
+router.post('/webhook/orders/import', validateWebhook, async (req, res) => {
+  try {
+    const orders = Array.isArray(req.body) ? req.body : [req.body];
+    const db = getDb();
+
+    // First, store orders in MongoDB
+    for (const order of orders) {
+      if (!order.AmazonOrderId) continue;
+
+      const doc = {
+        amazonOrderId: order.AmazonOrderId,
+        sellerOrderId: order.SellerOrderId,
+        purchaseDate: order.PurchaseDate ? new Date(order.PurchaseDate) : null,
+        lastUpdateDate: order.LastUpdateDate ? new Date(order.LastUpdateDate) : null,
+        orderStatus: order.OrderStatus,
+        fulfillmentChannel: order.FulfillmentChannel,
+        salesChannel: order.SalesChannel,
+        shipServiceLevel: order.ShipServiceLevel,
+        orderTotal: order.OrderTotal,
+        numberOfItemsShipped: order.NumberOfItemsShipped,
+        numberOfItemsUnshipped: order.NumberOfItemsUnshipped,
+        paymentMethod: order.PaymentMethod,
+        marketplaceId: order.MarketplaceId,
+        buyerEmail: order.BuyerEmail,
+        buyerName: order.BuyerName,
+        shippingAddress: order.ShippingAddress,
+        orderItems: order.OrderItems || [],
+        rawData: order,
+        source: 'make.com',
+        updatedAt: new Date(),
+      };
+
+      await db.collection('amazon_orders').updateOne(
+        { amazonOrderId: order.AmazonOrderId },
+        { $set: doc, $setOnInsert: { createdAt: new Date() } },
+        { upsert: true }
+      );
+    }
+
+    // Try to import to Odoo if client available
+    const odooClient = req.app.get('odooClient');
+    const results = { stored: orders.length, imported: 0, failed: 0, odooResults: [] };
+
+    if (odooClient) {
+      const importer = new OrderImporter(odooClient);
+      await importer.init();
+
+      for (const order of orders) {
+        if (!order.AmazonOrderId || !order.OrderItems || order.OrderItems.length === 0) continue;
+
+        try {
+          const result = await importer.importOrder(order);
+          results.odooResults.push(result);
+
+          // Update MongoDB with import status
+          await db.collection('amazon_orders').updateOne(
+            { amazonOrderId: order.AmazonOrderId },
+            {
+              $set: {
+                odooImport: {
+                  success: result.success,
+                  odooOrderId: result.odooOrderId,
+                  odooOrderName: result.odooOrderName,
+                  errors: result.errors,
+                  warnings: result.warnings,
+                  importedAt: new Date()
+                }
+              }
+            }
+          );
+
+          if (result.success) {
+            results.imported++;
+          } else {
+            results.failed++;
+          }
+        } catch (err) {
+          results.failed++;
+          results.odooResults.push({
+            amazonOrderId: order.AmazonOrderId,
+            success: false,
+            errors: [err.message]
+          });
+        }
+      }
+    }
+
+    // Emit event for real-time updates
+    if (req.app.get('platform')) {
+      req.app.get('platform').emit('amazon:orders:imported', results);
+    }
+
+    res.json({ success: true, ...results });
+  } catch (error) {
+    console.error('Amazon orders webhook+import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== INVENTORY WEBHOOKS ====================
 
 /**
@@ -209,6 +513,607 @@ router.post('/webhook/inventory', validateWebhook, async (req, res) => {
     res.json({ success: true, processed: results.length, results });
   } catch (error) {
     console.error('Amazon inventory webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/webhook/fba-inventory
+ * @desc Receive FBA inventory report from Make.com and optionally reconcile to Odoo
+ * @body { reportId, reportType, content: string|array, autoReconcile?: boolean }
+ */
+router.post('/webhook/fba-inventory', validateWebhook, async (req, res) => {
+  try {
+    const { reportId, reportType, content, autoReconcile = false } = req.body;
+    const db = getDb();
+
+    // Store the raw report
+    const reportDoc = {
+      reportId,
+      reportType: reportType || 'GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA',
+      rawContent: content,
+      source: 'make.com',
+      createdAt: new Date(),
+      reconcileStatus: 'pending'
+    };
+
+    await db.collection('amazon_fba_reports').insertOne(reportDoc);
+
+    let reconcileResult = null;
+
+    // Auto-reconcile to Odoo if requested
+    if (autoReconcile) {
+      const odooClient = req.app.get('odooClient');
+      if (odooClient) {
+        try {
+          const reconciler = new FbaInventoryReconciler(odooClient);
+          reconcileResult = await reconciler.importInventoryReport({
+            reportType,
+            content,
+            reportId
+          });
+
+          await db.collection('amazon_fba_reports').updateOne(
+            { reportId },
+            { $set: { reconcileStatus: 'completed', reconcileResult, reconciledAt: new Date() } }
+          );
+        } catch (reconcileError) {
+          await db.collection('amazon_fba_reports').updateOne(
+            { reportId },
+            { $set: { reconcileStatus: 'failed', reconcileError: reconcileError.message } }
+          );
+          reconcileResult = { error: reconcileError.message };
+        }
+      }
+    }
+
+    if (req.app.get('platform')) {
+      req.app.get('platform').emit('amazon:fba-inventory:received', { reportId, reconcileResult });
+    }
+
+    res.json({
+      success: true,
+      reportId,
+      stored: true,
+      reconciled: reconcileResult ? !reconcileResult.error : false,
+      reconcileResult
+    });
+  } catch (error) {
+    console.error('Amazon FBA inventory webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/import/fba-inventory
+ * @desc Reconcile FBA inventory from MongoDB to Odoo
+ * @body { reportId?: string, since?: ISO date }
+ */
+router.post('/import/fba-inventory', async (req, res) => {
+  try {
+    const db = getDb();
+    const { reportId, since } = req.body;
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    // Build query
+    let query = { reconcileStatus: { $ne: 'completed' } };
+    if (reportId) {
+      query.reportId = reportId;
+    } else if (since) {
+      query.createdAt = { $gte: new Date(since) };
+    }
+
+    // Fetch pending reports
+    const reports = await db.collection('amazon_fba_reports')
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .toArray();
+
+    if (reports.length === 0) {
+      return res.json({ success: true, message: 'No pending FBA reports to reconcile', processed: 0 });
+    }
+
+    const reconciler = new FbaInventoryReconciler(odooClient);
+    const allResults = [];
+
+    for (const report of reports) {
+      try {
+        const result = await reconciler.importInventoryReport({
+          reportType: report.reportType,
+          content: report.rawContent,
+          reportId: report.reportId
+        });
+
+        allResults.push({ reportId: report.reportId, ...result });
+
+        await db.collection('amazon_fba_reports').updateOne(
+          { _id: report._id },
+          { $set: { reconcileStatus: 'completed', reconcileResult: result, reconciledAt: new Date() } }
+        );
+      } catch (err) {
+        allResults.push({ reportId: report.reportId, error: err.message });
+
+        await db.collection('amazon_fba_reports').updateOne(
+          { _id: report._id },
+          { $set: { reconcileStatus: 'failed', reconcileError: err.message } }
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      reportsProcessed: reports.length,
+      results: allResults
+    });
+  } catch (error) {
+    console.error('FBA inventory reconcile error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/fba/inventory-status
+ * @desc Get FBA inventory reconciliation status
+ */
+router.get('/fba/inventory-status', async (req, res) => {
+  try {
+    const db = getDb();
+
+    const [reportStats, inventoryCount] = await Promise.all([
+      db.collection('amazon_fba_reports').aggregate([
+        {
+          $group: {
+            _id: '$reconcileStatus',
+            count: { $sum: 1 }
+          }
+        }
+      ]).toArray(),
+      db.collection('amazon_inventory').countDocuments()
+    ]);
+
+    const statusCounts = {};
+    for (const stat of reportStats) {
+      statusCounts[stat._id || 'unknown'] = stat.count;
+    }
+
+    // Get last reconciliation
+    const lastReconciled = await db.collection('amazon_fba_reports')
+      .findOne({ reconcileStatus: 'completed' }, { sort: { reconciledAt: -1 } });
+
+    res.json({
+      reports: {
+        pending: statusCounts.pending || 0,
+        completed: statusCounts.completed || 0,
+        failed: statusCounts.failed || 0,
+        total: Object.values(statusCounts).reduce((a, b) => a + b, 0)
+      },
+      inventoryItems: inventoryCount,
+      lastReconciled: lastReconciled?.reconciledAt || null,
+      lastReportId: lastReconciled?.reportId || null
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/fba/discrepancies
+ * @desc Get inventory discrepancies from last reconciliation
+ */
+router.get('/fba/discrepancies', async (req, res) => {
+  try {
+    const db = getDb();
+    const { limit = 50 } = req.query;
+
+    // Get reports with discrepancies
+    const reports = await db.collection('amazon_fba_reports')
+      .find({
+        reconcileStatus: 'completed',
+        'reconcileResult.discrepancies.0': { $exists: true }
+      })
+      .sort({ reconciledAt: -1 })
+      .limit(5)
+      .toArray();
+
+    const allDiscrepancies = [];
+    for (const report of reports) {
+      if (report.reconcileResult?.discrepancies) {
+        for (const d of report.reconcileResult.discrepancies) {
+          allDiscrepancies.push({
+            ...d,
+            reportId: report.reportId,
+            reconciledAt: report.reconciledAt
+          });
+        }
+      }
+    }
+
+    // Sort by absolute difference
+    allDiscrepancies.sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference));
+
+    res.json({
+      discrepancies: allDiscrepancies.slice(0, parseInt(limit)),
+      total: allDiscrepancies.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== FBM STOCK SYNC ENDPOINTS ====================
+
+/**
+ * @route POST /api/amazon/sync/fbm-stock
+ * @desc Sync FBM stock from Odoo to Amazon via webhook
+ * @body { webhookUrl?: string, skus?: string[] }
+ */
+router.post('/sync/fbm-stock', async (req, res) => {
+  try {
+    const { webhookUrl, skus } = req.body;
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const syncer = new FbmStockSync(odooClient);
+
+    if (webhookUrl) {
+      // Direct sync to webhook
+      const result = await syncer.syncToWebhook({ webhookUrl, skus });
+      res.json(result);
+    } else {
+      // Queue for later processing
+      const result = await syncer.queueSync({ skus });
+      res.json(result);
+    }
+  } catch (error) {
+    console.error('FBM stock sync error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/sync/fbm-stock/comparison
+ * @desc Get stock comparison between Odoo and Amazon
+ */
+router.get('/sync/fbm-stock/comparison', async (req, res) => {
+  try {
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const syncer = new FbmStockSync(odooClient);
+    const comparison = await syncer.getStockComparison();
+    res.json(comparison);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/sync/fbm-stock/queue
+ * @desc Get pending FBM stock sync queue
+ */
+router.get('/sync/fbm-stock/queue', async (req, res) => {
+  try {
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const syncer = new FbmStockSync(odooClient);
+    const queue = await syncer.getPendingQueue();
+    res.json({ queue, count: queue.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/sync/fbm-stock/process-queue
+ * @desc Process pending FBM stock sync queue
+ * @body { webhookUrl: string }
+ */
+router.post('/sync/fbm-stock/process-queue', async (req, res) => {
+  try {
+    const { webhookUrl } = req.body;
+    if (!webhookUrl) {
+      return res.status(400).json({ error: 'webhookUrl is required' });
+    }
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const syncer = new FbmStockSync(odooClient);
+    const queue = await syncer.getPendingQueue();
+
+    if (queue.length === 0) {
+      return res.json({ success: true, message: 'No pending items in queue', processed: 0 });
+    }
+
+    const results = [];
+    for (const item of queue) {
+      // Send each queued item to webhook
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            feedType: 'POST_INVENTORY_AVAILABILITY_DATA',
+            items: item.items
+          })
+        });
+
+        const result = {
+          queueId: item._id.toString(),
+          success: response.ok,
+          status: response.status
+        };
+
+        await syncer.markQueueProcessed(item._id.toString(), result);
+        results.push(result);
+      } catch (err) {
+        const result = { queueId: item._id.toString(), success: false, error: err.message };
+        await syncer.markQueueProcessed(item._id.toString(), result);
+        results.push(result);
+      }
+    }
+
+    res.json({
+      success: true,
+      processed: results.length,
+      results
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/sync/fbm-stock/history
+ * @desc Get FBM stock sync history
+ */
+router.get('/sync/fbm-stock/history', async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const syncer = new FbmStockSync(odooClient);
+    const history = await syncer.getSyncHistory(parseInt(limit));
+    res.json({ history, count: history.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/sync/fbm-stock/feed/:queueId
+ * @desc Get feed XML for a queued sync item
+ */
+router.get('/sync/fbm-stock/feed/:queueId', async (req, res) => {
+  try {
+    const db = getDb();
+    const item = await db.collection('amazon_stock_sync_queue').findOne({
+      _id: new ObjectId(req.params.queueId)
+    });
+
+    if (!item) {
+      return res.status(404).json({ error: 'Queue item not found' });
+    }
+
+    if (req.query.format === 'xml') {
+      res.set('Content-Type', 'application/xml');
+      res.send(item.feedXml);
+    } else {
+      res.json({
+        queueId: item._id,
+        status: item.status,
+        itemCount: item.itemCount,
+        feedXml: item.feedXml,
+        createdAt: item.createdAt
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== TRACKING SYNC ENDPOINTS ====================
+
+/**
+ * @route POST /api/amazon/sync/tracking
+ * @desc Sync shipment tracking from Odoo to Amazon
+ * @body { webhookUrl?: string, since?: ISO date, amazonOrderIds?: string[] }
+ */
+router.post('/sync/tracking', async (req, res) => {
+  try {
+    const { webhookUrl, since, amazonOrderIds } = req.body;
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const syncer = new TrackingSync(odooClient);
+
+    if (webhookUrl) {
+      // Direct sync to webhook
+      const result = await syncer.syncToWebhook({ webhookUrl, since, amazonOrderIds });
+      res.json(result);
+    } else {
+      // Queue for later processing
+      const result = await syncer.queueSync({ since, amazonOrderIds });
+      res.json(result);
+    }
+  } catch (error) {
+    console.error('Tracking sync error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/sync/tracking/pending
+ * @desc Get shipments that need tracking sync
+ */
+router.get('/sync/tracking/pending', async (req, res) => {
+  try {
+    const { since, limit = 50 } = req.query;
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const syncer = new TrackingSync(odooClient);
+    const shipments = await syncer.getShipmentsToSync({ since, limit: parseInt(limit) });
+    res.json({ shipments, count: shipments.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/sync/tracking/queue
+ * @desc Get pending tracking sync queue
+ */
+router.get('/sync/tracking/queue', async (req, res) => {
+  try {
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const syncer = new TrackingSync(odooClient);
+    const queue = await syncer.getPendingQueue();
+    res.json({ queue, count: queue.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/sync/tracking/process-queue
+ * @desc Process pending tracking sync queue
+ * @body { webhookUrl: string }
+ */
+router.post('/sync/tracking/process-queue', async (req, res) => {
+  try {
+    const { webhookUrl } = req.body;
+    if (!webhookUrl) {
+      return res.status(400).json({ error: 'webhookUrl is required' });
+    }
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const syncer = new TrackingSync(odooClient);
+    const queue = await syncer.getPendingQueue();
+
+    if (queue.length === 0) {
+      return res.json({ success: true, message: 'No pending items in queue', processed: 0 });
+    }
+
+    const results = [];
+    for (const item of queue) {
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            feedType: 'POST_ORDER_FULFILLMENT_DATA',
+            shipments: item.shipments
+          })
+        });
+
+        const result = {
+          queueId: item._id.toString(),
+          success: response.ok,
+          status: response.status
+        };
+
+        await syncer.markQueueProcessed(item._id.toString(), result);
+        results.push(result);
+      } catch (err) {
+        const result = { queueId: item._id.toString(), success: false, error: err.message };
+        await syncer.markQueueProcessed(item._id.toString(), result);
+        results.push(result);
+      }
+    }
+
+    res.json({
+      success: true,
+      processed: results.length,
+      results
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/sync/tracking/history
+ * @desc Get tracking sync history
+ */
+router.get('/sync/tracking/history', async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const syncer = new TrackingSync(odooClient);
+    const history = await syncer.getSyncHistory(parseInt(limit));
+    res.json({ history, count: history.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/sync/tracking/feed/:queueId
+ * @desc Get feed XML for a queued tracking sync item
+ */
+router.get('/sync/tracking/feed/:queueId', async (req, res) => {
+  try {
+    const db = getDb();
+    const item = await db.collection('amazon_tracking_sync_queue').findOne({
+      _id: new ObjectId(req.params.queueId)
+    });
+
+    if (!item) {
+      return res.status(404).json({ error: 'Queue item not found' });
+    }
+
+    if (req.query.format === 'xml') {
+      res.set('Content-Type', 'application/xml');
+      res.send(item.feedXml);
+    } else {
+      res.json({
+        queueId: item._id,
+        status: item.status,
+        shipmentCount: item.shipmentCount,
+        feedXml: item.feedXml,
+        createdAt: item.createdAt
+      });
+    }
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -616,6 +1521,293 @@ router.post('/webhook/vat-invoices', validateWebhook, async (req, res) => {
   }
 });
 
+/**
+ * @route POST /api/amazon/webhook/vcs-transactions
+ * @desc Receive VCS transaction data from Make.com and optionally import to Odoo
+ * @body { reportId, reportType, startDate, endDate, content: string|object }
+ */
+router.post('/webhook/vcs-transactions', validateWebhook, async (req, res) => {
+  try {
+    const { reportId, reportType, startDate, endDate, content, autoImport = false } = req.body;
+    const db = getDb();
+
+    // Store the raw report
+    const reportDoc = {
+      reportId,
+      reportType: reportType || 'GET_VAT_TRANSACTION_DATA',
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      rawContent: content,
+      source: 'make.com',
+      createdAt: new Date(),
+      importStatus: 'pending'
+    };
+
+    await db.collection('amazon_vcs_reports').insertOne(reportDoc);
+
+    let importResult = null;
+
+    // Auto-import to Odoo if requested and client available
+    if (autoImport) {
+      const odooClient = req.app.get('odooClient');
+      if (odooClient) {
+        try {
+          const importer = new VcsInvoiceImporter(odooClient);
+          await importer.init();
+          importResult = await importer.importFromReport(content);
+
+          // Update report status
+          await db.collection('amazon_vcs_reports').updateOne(
+            { reportId },
+            { $set: { importStatus: 'completed', importResult, importedAt: new Date() } }
+          );
+        } catch (importError) {
+          await db.collection('amazon_vcs_reports').updateOne(
+            { reportId },
+            { $set: { importStatus: 'failed', importError: importError.message } }
+          );
+          importResult = { error: importError.message };
+        }
+      }
+    }
+
+    // Emit event for real-time updates
+    if (req.app.get('platform')) {
+      req.app.get('platform').emit('amazon:vcs:received', { reportId, importResult });
+    }
+
+    res.json({
+      success: true,
+      reportId,
+      stored: true,
+      imported: importResult ? !importResult.error : false,
+      importResult
+    });
+  } catch (error) {
+    console.error('Amazon vcs-transactions webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== VCS INVOICE IMPORT ENDPOINTS ====================
+
+/**
+ * @route POST /api/amazon/import/vcs-invoices
+ * @desc Import VCS transactions from MongoDB to Odoo as invoices
+ * @body { reportId?: string, since?: ISO date, limit?: number }
+ */
+router.post('/import/vcs-invoices', async (req, res) => {
+  try {
+    const db = getDb();
+    const { reportId, since, limit = 100 } = req.body;
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    const importer = new VcsInvoiceImporter(odooClient);
+    await importer.init();
+
+    // Build query
+    let query = { importStatus: { $ne: 'completed' } };
+    if (reportId) {
+      query.reportId = reportId;
+    } else if (since) {
+      query.createdAt = { $gte: new Date(since) };
+    }
+
+    // Fetch reports
+    const reports = await db.collection('amazon_vcs_reports')
+      .find(query)
+      .limit(parseInt(limit))
+      .toArray();
+
+    if (reports.length === 0) {
+      return res.json({ success: true, message: 'No pending VCS reports to import', imported: 0 });
+    }
+
+    const allResults = [];
+    let totalImported = 0;
+    let totalFailed = 0;
+
+    for (const report of reports) {
+      try {
+        const result = await importer.importFromReport(report.rawContent);
+        allResults.push({ reportId: report.reportId, ...result });
+        totalImported += result.imported;
+        totalFailed += result.failed;
+
+        // Update report status
+        await db.collection('amazon_vcs_reports').updateOne(
+          { _id: report._id },
+          { $set: { importStatus: 'completed', importResult: result, importedAt: new Date() } }
+        );
+      } catch (err) {
+        allResults.push({ reportId: report.reportId, error: err.message });
+        totalFailed++;
+
+        await db.collection('amazon_vcs_reports').updateOne(
+          { _id: report._id },
+          { $set: { importStatus: 'failed', importError: err.message } }
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      reportsProcessed: reports.length,
+      totalImported,
+      totalFailed,
+      results: allResults
+    });
+  } catch (error) {
+    console.error('VCS invoice import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/import/vcs-invoice/:amazonOrderId
+ * @desc Import a single VCS transaction by Amazon Order ID
+ */
+router.post('/import/vcs-invoice/:amazonOrderId', async (req, res) => {
+  try {
+    const db = getDb();
+    const { amazonOrderId } = req.params;
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(503).json({ error: 'Odoo client not available' });
+    }
+
+    // Find the transaction in stored invoices
+    const invoice = await db.collection('amazon_vat_invoices').findOne({
+      amazonOrderId
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ error: 'VCS invoice not found for this order' });
+    }
+
+    const importer = new VcsInvoiceImporter(odooClient);
+    await importer.init();
+
+    const result = await importer.importTransaction(invoice.rawData || invoice);
+
+    // Update invoice record with import status
+    await db.collection('amazon_vat_invoices').updateOne(
+      { amazonOrderId },
+      {
+        $set: {
+          odooImport: {
+            success: result.success,
+            odooInvoiceId: result.odooInvoiceId,
+            odooInvoiceName: result.odooInvoiceName,
+            errors: result.errors,
+            warnings: result.warnings,
+            importedAt: new Date()
+          }
+        }
+      }
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error('Single VCS invoice import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/reports
+ * @desc Get list of VCS reports
+ */
+router.get('/vcs/reports', async (req, res) => {
+  try {
+    const db = getDb();
+    const { status, limit = 20, skip = 0 } = req.query;
+
+    const query = {};
+    if (status) {
+      query.importStatus = status;
+    }
+
+    const reports = await db.collection('amazon_vcs_reports')
+      .find(query, {
+        projection: {
+          reportId: 1,
+          reportType: 1,
+          startDate: 1,
+          endDate: 1,
+          importStatus: 1,
+          importedAt: 1,
+          createdAt: 1,
+          'importResult.imported': 1,
+          'importResult.failed': 1
+        }
+      })
+      .sort({ createdAt: -1 })
+      .skip(parseInt(skip))
+      .limit(parseInt(limit))
+      .toArray();
+
+    const total = await db.collection('amazon_vcs_reports').countDocuments(query);
+
+    res.json({ reports, total, limit: parseInt(limit), skip: parseInt(skip) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/import-status
+ * @desc Get VCS import statistics
+ */
+router.get('/vcs/import-status', async (req, res) => {
+  try {
+    const db = getDb();
+
+    const [reportStats, invoiceStats] = await Promise.all([
+      db.collection('amazon_vcs_reports').aggregate([
+        {
+          $group: {
+            _id: '$importStatus',
+            count: { $sum: 1 }
+          }
+        }
+      ]).toArray(),
+      db.collection('amazon_vcs_imports').aggregate([
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            success: { $sum: { $cond: ['$success', 1, 0] } },
+            failed: { $sum: { $cond: ['$success', 0, 1] } }
+          }
+        }
+      ]).toArray()
+    ]);
+
+    const statusCounts = {};
+    for (const stat of reportStats) {
+      statusCounts[stat._id || 'unknown'] = stat.count;
+    }
+
+    res.json({
+      reports: {
+        pending: statusCounts.pending || 0,
+        completed: statusCounts.completed || 0,
+        failed: statusCounts.failed || 0,
+        total: Object.values(statusCounts).reduce((a, b) => a + b, 0)
+      },
+      invoices: invoiceStats[0] || { total: 0, success: 0, failed: 0 }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== REPORTS WEBHOOK ====================
 
 /**
@@ -946,6 +2138,980 @@ router.get('/stats', async (req, res) => {
         ads: lastAds?.createdAt,
       },
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== SETTLEMENT REPORT UPLOAD ====================
+
+/**
+ * Parse Amazon Settlement Report TSV/CSV
+ * Amazon uses tab-separated values with specific column headers
+ */
+function parseSettlementReport(content) {
+  // Detect delimiter (tab or comma)
+  const firstLine = content.split('\n')[0];
+  const delimiter = firstLine.includes('\t') ? '\t' : ',';
+
+  const lines = content.split('\n').filter(line => line.trim());
+  if (lines.length < 2) {
+    throw new Error('File appears to be empty or invalid');
+  }
+
+  // Parse headers (convert to camelCase for consistency)
+  const headers = lines[0].split(delimiter).map(h => {
+    return h.trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+(.)/g, (m, chr) => chr.toUpperCase())
+      .replace(/[^a-z0-9]/g, '');
+  });
+
+  const transactions = [];
+  let settlementId = null;
+  let startDate = null;
+  let endDate = null;
+  let depositDate = null;
+  let totalAmount = 0;
+  let currency = null;
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(delimiter);
+    const row = {};
+
+    headers.forEach((header, index) => {
+      let value = values[index]?.trim() || '';
+      // Remove quotes if present
+      if (value.startsWith('"') && value.endsWith('"')) {
+        value = value.slice(1, -1);
+      }
+      row[header] = value;
+    });
+
+    // Extract settlement metadata from first data row
+    if (!settlementId && row.settlementId) {
+      settlementId = row.settlementId;
+    }
+    if (!startDate && row.settlementStartDate) {
+      startDate = row.settlementStartDate;
+    }
+    if (!endDate && row.settlementEndDate) {
+      endDate = row.settlementEndDate;
+    }
+    if (!depositDate && row.depositDate) {
+      depositDate = row.depositDate;
+    }
+    if (!currency && row.currency) {
+      currency = row.currency;
+    }
+
+    // Parse numeric fields
+    const numericFields = [
+      'quantity', 'productSales', 'productSalesTax', 'shippingCredits',
+      'shippingCreditsTax', 'giftWrapCredits', 'giftWrapCreditsTax',
+      'promotionalRebates', 'promotionalRebatesTax', 'salesTaxCollected',
+      'marketplaceWithheldTax', 'sellingFees', 'fbaFees', 'otherTransactionFees',
+      'other', 'total', 'totalAmount'
+    ];
+
+    numericFields.forEach(field => {
+      if (row[field]) {
+        row[field] = parseFloat(row[field]) || 0;
+      }
+    });
+
+    // Track total from each row
+    if (row.total) {
+      totalAmount += row.total;
+    }
+
+    transactions.push(row);
+  }
+
+  return {
+    settlementId: settlementId || `manual-${Date.now()}`,
+    startDate: startDate ? new Date(startDate) : null,
+    endDate: endDate ? new Date(endDate) : null,
+    depositDate: depositDate ? new Date(depositDate) : null,
+    totalAmount,
+    currency: currency || 'EUR',
+    transactionCount: transactions.length,
+    transactions
+  };
+}
+
+/**
+ * @route POST /api/amazon/upload/settlement
+ * @desc Upload and parse Amazon settlement report (CSV/TSV)
+ */
+router.post('/upload/settlement', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const content = req.file.buffer.toString('utf-8');
+    const parsed = parseSettlementReport(content);
+
+    const db = getDb();
+
+    // Store the settlement
+    const doc = {
+      settlementId: parsed.settlementId,
+      settlementStartDate: parsed.startDate,
+      settlementEndDate: parsed.endDate,
+      depositDate: parsed.depositDate,
+      totalAmount: parsed.totalAmount,
+      currency: parsed.currency,
+      transactionCount: parsed.transactionCount,
+      transactions: parsed.transactions,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      source: 'manual-upload',
+      uploadedAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const result = await db.collection('amazon_settlements').updateOne(
+      { settlementId: parsed.settlementId },
+      { $set: doc, $setOnInsert: { createdAt: new Date() } },
+      { upsert: true }
+    );
+
+    // Create summary of fees by type
+    const feesSummary = {
+      productSales: 0,
+      shippingCredits: 0,
+      sellingFees: 0,
+      fbaFees: 0,
+      otherFees: 0,
+      promotionalRebates: 0,
+      refunds: 0
+    };
+
+    parsed.transactions.forEach(tx => {
+      feesSummary.productSales += tx.productSales || 0;
+      feesSummary.shippingCredits += tx.shippingCredits || 0;
+      feesSummary.sellingFees += tx.sellingFees || 0;
+      feesSummary.fbaFees += tx.fbaFees || 0;
+      feesSummary.otherFees += (tx.otherTransactionFees || 0) + (tx.other || 0);
+      feesSummary.promotionalRebates += tx.promotionalRebates || 0;
+      if (tx.transactionType?.toLowerCase().includes('refund')) {
+        feesSummary.refunds += tx.total || 0;
+      }
+    });
+
+    res.json({
+      success: true,
+      settlementId: parsed.settlementId,
+      period: {
+        start: parsed.startDate,
+        end: parsed.endDate
+      },
+      depositDate: parsed.depositDate,
+      totalAmount: parsed.totalAmount,
+      currency: parsed.currency,
+      transactionCount: parsed.transactionCount,
+      feesSummary,
+      isNew: result.upsertedCount > 0
+    });
+
+  } catch (error) {
+    console.error('Settlement upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/settlements
+ * @desc Get list of uploaded settlements
+ */
+router.get('/settlements', async (req, res) => {
+  try {
+    const db = getDb();
+    const { limit = 20, skip = 0 } = req.query;
+
+    const settlements = await db.collection('amazon_settlements')
+      .find({}, {
+        projection: {
+          settlementId: 1,
+          settlementStartDate: 1,
+          settlementEndDate: 1,
+          depositDate: 1,
+          totalAmount: 1,
+          currency: 1,
+          transactionCount: 1,
+          source: 1,
+          uploadedAt: 1,
+          createdAt: 1
+        }
+      })
+      .sort({ settlementEndDate: -1 })
+      .skip(parseInt(skip))
+      .limit(parseInt(limit))
+      .toArray();
+
+    const total = await db.collection('amazon_settlements').countDocuments();
+
+    res.json({ settlements, total, limit: parseInt(limit), skip: parseInt(skip) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/settlements/:id
+ * @desc Get settlement details by ID
+ */
+router.get('/settlements/:id', async (req, res) => {
+  try {
+    const db = getDb();
+    const settlement = await db.collection('amazon_settlements').findOne({
+      $or: [
+        { settlementId: req.params.id },
+        { _id: ObjectId.isValid(req.params.id) ? new ObjectId(req.params.id) : null }
+      ]
+    });
+
+    if (!settlement) {
+      return res.status(404).json({ error: 'Settlement not found' });
+    }
+
+    res.json(settlement);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/settlement-reminders
+ * @desc Get settlement upload reminders/status
+ */
+router.get('/settlement-reminders', async (req, res) => {
+  try {
+    const db = getDb();
+
+    // Get the most recent settlement
+    const lastSettlement = await db.collection('amazon_settlements')
+      .findOne({}, { sort: { settlementEndDate: -1 } });
+
+    // Amazon releases settlements bi-weekly
+    // Calculate if we're due for a new one
+    const now = new Date();
+    const daysSinceLastSettlement = lastSettlement?.settlementEndDate
+      ? Math.floor((now - new Date(lastSettlement.settlementEndDate)) / (1000 * 60 * 60 * 24))
+      : 999;
+
+    // Get count of settlements in the last 90 days
+    const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const recentCount = await db.collection('amazon_settlements').countDocuments({
+      settlementEndDate: { $gte: threeMonthsAgo }
+    });
+
+    // Expected: ~6 settlements in 90 days (bi-weekly)
+    const expectedCount = 6;
+    const missingEstimate = Math.max(0, expectedCount - recentCount);
+
+    res.json({
+      lastSettlement: lastSettlement ? {
+        settlementId: lastSettlement.settlementId,
+        endDate: lastSettlement.settlementEndDate,
+        depositDate: lastSettlement.depositDate,
+        totalAmount: lastSettlement.totalAmount
+      } : null,
+      daysSinceLastSettlement,
+      isOverdue: daysSinceLastSettlement > 16, // More than ~2 weeks
+      recentCount,
+      expectedCount,
+      missingEstimate,
+      message: daysSinceLastSettlement > 16
+        ? `Settlement report overdue! Last one was ${daysSinceLastSettlement} days ago.`
+        : daysSinceLastSettlement > 12
+        ? `New settlement report should be available soon.`
+        : `Settlement reports are up to date.`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/system-reminders
+ * @desc Get all Amazon-related system reminders for UI display
+ */
+router.get('/system-reminders', async (req, res) => {
+  try {
+    const db = getDb();
+
+    const reminders = await db.collection('system_reminders')
+      .find({ type: { $regex: /^amazon/ } })
+      .toArray();
+
+    // Also include real-time settlement status
+    const lastSettlement = await db.collection('amazon_settlements')
+      .findOne({}, { sort: { settlementEndDate: -1 } });
+
+    const now = new Date();
+    const daysSinceLastSettlement = lastSettlement?.settlementEndDate
+      ? Math.floor((now - new Date(lastSettlement.settlementEndDate)) / (1000 * 60 * 60 * 24))
+      : 999;
+
+    res.json({
+      reminders,
+      settlementStatus: {
+        isOverdue: daysSinceLastSettlement > 16,
+        daysSince: daysSinceLastSettlement,
+        lastDate: lastSettlement?.settlementEndDate,
+        nextExpected: lastSettlement?.settlementEndDate
+          ? new Date(new Date(lastSettlement.settlementEndDate).getTime() + 14 * 24 * 60 * 60 * 1000)
+          : null
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== SKU MAPPING ENDPOINTS ====================
+
+/**
+ * @route GET /api/amazon/config/sku-mappings
+ * @desc Get all custom SKU mappings
+ */
+router.get('/config/sku-mappings', async (req, res) => {
+  try {
+    await skuResolver.load();
+    res.json({
+      mappings: skuResolver.getMappings(),
+      returnPatterns: skuResolver.getReturnPatterns()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/config/sku-mappings
+ * @desc Add or update a SKU mapping
+ * @body { amazonSku: string, odooSku: string }
+ */
+router.post('/config/sku-mappings', async (req, res) => {
+  try {
+    const { amazonSku, odooSku } = req.body;
+    if (!amazonSku || !odooSku) {
+      return res.status(400).json({ error: 'amazonSku and odooSku are required' });
+    }
+
+    await skuResolver.addMapping(amazonSku, odooSku);
+    res.json({ success: true, amazonSku, odooSku });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/config/sku-mappings/import
+ * @desc Import multiple SKU mappings from CSV
+ * @body { mappings: [{ amazonSku, odooSku }] } OR file upload
+ */
+router.post('/config/sku-mappings/import', upload.single('file'), async (req, res) => {
+  try {
+    let mappings = [];
+
+    if (req.file) {
+      // Parse CSV file
+      const content = req.file.buffer.toString('utf-8');
+      const lines = content.split('\n').filter(l => l.trim());
+
+      // Skip header if present
+      const startIdx = lines[0].toLowerCase().includes('amazon') ? 1 : 0;
+
+      for (let i = startIdx; i < lines.length; i++) {
+        const parts = lines[i].split(/[,\t;]/);
+        if (parts.length >= 2) {
+          mappings.push({
+            amazonSku: parts[0].trim().replace(/"/g, ''),
+            odooSku: parts[1].trim().replace(/"/g, '')
+          });
+        }
+      }
+    } else if (req.body.mappings) {
+      mappings = req.body.mappings;
+    } else {
+      return res.status(400).json({ error: 'No mappings provided' });
+    }
+
+    const result = await skuResolver.importMappings(mappings);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route DELETE /api/amazon/config/sku-mappings/:amazonSku
+ * @desc Delete a SKU mapping
+ */
+router.delete('/config/sku-mappings/:amazonSku', async (req, res) => {
+  try {
+    await skuResolver.deleteMapping(req.params.amazonSku);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/config/return-patterns
+ * @desc Add a return SKU pattern (regex)
+ * @body { pattern: string, extractGroup: number, flags: string }
+ */
+router.post('/config/return-patterns', async (req, res) => {
+  try {
+    const { pattern, extractGroup = 1, flags = 'i' } = req.body;
+    if (!pattern) {
+      return res.status(400).json({ error: 'pattern is required' });
+    }
+
+    // Test if regex is valid
+    try {
+      new RegExp(pattern, flags);
+    } catch (e) {
+      return res.status(400).json({ error: `Invalid regex: ${e.message}` });
+    }
+
+    await skuResolver.addReturnPattern(pattern, extractGroup, flags);
+    res.json({ success: true, pattern, extractGroup, flags });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/config/resolve-sku
+ * @desc Test SKU resolution
+ * @body { amazonSku: string } OR { amazonSkus: string[] }
+ */
+router.post('/config/resolve-sku', async (req, res) => {
+  try {
+    await skuResolver.load();
+
+    if (req.body.amazonSkus) {
+      const results = skuResolver.resolveMany(req.body.amazonSkus);
+      res.json({ results: Object.fromEntries(results) });
+    } else if (req.body.amazonSku) {
+      const result = skuResolver.resolve(req.body.amazonSku);
+      res.json(result);
+    } else {
+      return res.status(400).json({ error: 'amazonSku or amazonSkus required' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== EU COUNTRY CONFIG ENDPOINTS ====================
+
+/**
+ * @route GET /api/amazon/config/countries
+ * @desc Get all EU country configurations
+ */
+router.get('/config/countries', (req, res) => {
+  res.json({
+    countries: euCountryConfig.getAllCountries(),
+    vatRegisteredCountries: euCountryConfig.getVatRegisteredCountries()
+  });
+});
+
+/**
+ * @route POST /api/amazon/config/invoice-config
+ * @desc Get invoice configuration for an order
+ * @body { marketplaceId, fulfillmentCenter, buyerCountry, buyerVat }
+ */
+router.post('/config/invoice-config', (req, res) => {
+  const { marketplaceId, fulfillmentCenter, buyerCountry, buyerVat } = req.body;
+  const config = euCountryConfig.getInvoiceConfig({
+    marketplaceId,
+    fulfillmentCenter,
+    buyerCountry,
+    buyerVat
+  });
+  res.json(config);
+});
+
+// ==================== VCS TAX REPORT UPLOAD ====================
+
+/**
+ * @route POST /api/amazon/vcs/upload
+ * @desc Upload and parse a VCS Tax Report CSV file
+ * @file CSV file from Amazon Tax Document Library
+ */
+router.post('/vcs/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const parser = new VcsTaxReportParser();
+    const result = await parser.processReport(
+      req.file.buffer.toString('utf-8'),
+      req.file.originalname
+    );
+
+    res.json({
+      success: true,
+      message: `Processed ${result.transactionCount} transactions from ${result.orderCount} orders`,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('[VCS Upload] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/reports
+ * @desc Get list of uploaded VCS reports
+ */
+router.get('/vcs/reports', async (req, res) => {
+  try {
+    const db = getDb();
+    const reports = await db.collection('amazon_vcs_reports')
+      .find({})
+      .sort({ uploadedAt: -1 })
+      .limit(50)
+      .toArray();
+
+    res.json({ reports });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/reports/:reportId/orders
+ * @desc Get orders from a specific VCS report
+ */
+router.get('/vcs/reports/:reportId/orders', async (req, res) => {
+  try {
+    const db = getDb();
+    const reportId = new ObjectId(req.params.reportId);
+
+    const orders = await db.collection('amazon_vcs_orders')
+      .find({ reportId })
+      .sort({ orderDate: -1 })
+      .toArray();
+
+    res.json({
+      reportId: req.params.reportId,
+      orderCount: orders.length,
+      orders
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/orders/pending
+ * @desc Get VCS orders pending invoice creation in Odoo
+ */
+router.get('/vcs/orders/pending', async (req, res) => {
+  try {
+    const db = getDb();
+
+    const orders = await db.collection('amazon_vcs_orders')
+      .find({ status: 'pending' })
+      .sort({ orderDate: -1 })
+      .limit(200)
+      .toArray();
+
+    // Add VAT config to each order
+    const parser = new VcsTaxReportParser();
+    const ordersWithConfig = orders.map(order => ({
+      ...order,
+      vatConfig: parser.determineVatConfig(order)
+    }));
+
+    res.json({
+      pendingCount: orders.length,
+      orders: ordersWithConfig
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/vcs/orders/:orderId/mark-invoiced
+ * @desc Mark a VCS order as invoiced in Odoo
+ * @body { odooInvoiceId, odooInvoiceName }
+ */
+router.post('/vcs/orders/:orderId/mark-invoiced', async (req, res) => {
+  try {
+    const db = getDb();
+    const { odooInvoiceId, odooInvoiceName } = req.body;
+
+    const result = await db.collection('amazon_vcs_orders').updateOne(
+      { _id: new ObjectId(req.params.orderId) },
+      {
+        $set: {
+          status: 'invoiced',
+          odooInvoiceId,
+          odooInvoiceName,
+          invoicedAt: new Date()
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.json({ success: true, message: 'Order marked as invoiced' });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/vcs/orders/batch-mark-invoiced
+ * @desc Mark multiple VCS orders as invoiced
+ * @body { orderIds: string[], odooInvoicePrefix: string }
+ */
+router.post('/vcs/orders/batch-mark-invoiced', async (req, res) => {
+  try {
+    const db = getDb();
+    const { orderIds, odooInvoicePrefix } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds)) {
+      return res.status(400).json({ error: 'orderIds array required' });
+    }
+
+    const objectIds = orderIds.map(id => new ObjectId(id));
+
+    const result = await db.collection('amazon_vcs_orders').updateMany(
+      { _id: { $in: objectIds } },
+      {
+        $set: {
+          status: 'invoiced',
+          odooInvoicePrefix,
+          invoicedAt: new Date()
+        }
+      }
+    );
+
+    res.json({
+      success: true,
+      updatedCount: result.modifiedCount
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/summary
+ * @desc Get summary of VCS data for a date range
+ * @query from, to (ISO dates)
+ */
+router.get('/vcs/summary', async (req, res) => {
+  try {
+    const db = getDb();
+    const { from, to } = req.query;
+
+    const match = {};
+    if (from || to) {
+      match.orderDate = {};
+      if (from) match.orderDate.$gte = new Date(from);
+      if (to) match.orderDate.$lte = new Date(to);
+    }
+
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            currency: '$currency',
+            country: '$shipToCountry',
+            status: '$status'
+          },
+          count: { $sum: 1 },
+          totalExclusive: { $sum: '$totalExclusive' },
+          totalTax: { $sum: '$totalTax' },
+          totalInclusive: { $sum: '$totalInclusive' }
+        }
+      },
+      { $sort: { '_id.currency': 1, '_id.country': 1 } }
+    ];
+
+    const summary = await db.collection('amazon_vcs_orders')
+      .aggregate(pipeline)
+      .toArray();
+
+    // Also get overall totals
+    const totals = await db.collection('amazon_vcs_orders')
+      .aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+            totalExclusive: { $sum: '$totalExclusive' },
+            totalTax: { $sum: '$totalTax' }
+          }
+        }
+      ])
+      .toArray();
+
+    res.json({
+      dateRange: { from, to },
+      byCountryAndCurrency: summary,
+      byStatus: totals
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== FBA INVENTORY UPLOAD ====================
+
+/**
+ * @route POST /api/amazon/fba/upload
+ * @desc Upload and parse FBA Inventory report
+ */
+router.post('/fba/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const parser = new FbaInventoryReportParser();
+    const result = await parser.processReport(
+      req.file.buffer.toString('utf-8'),
+      req.file.originalname
+    );
+
+    res.json({
+      success: true,
+      message: `Processed ${result.skuCount} SKUs from ${result.itemCount} inventory records`,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('[FBA Upload] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/fba/inventory
+ * @desc Get current FBA inventory
+ */
+router.get('/fba/inventory', async (req, res) => {
+  try {
+    const parser = new FbaInventoryReportParser();
+    const inventory = await parser.getCurrentInventory();
+
+    res.json({
+      skuCount: inventory.length,
+      inventory,
+      totalFulfillable: inventory.reduce((sum, i) => sum + i.fulfillable, 0),
+      totalInbound: inventory.reduce((sum, i) => sum + i.inbound, 0),
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/fba/reports
+ * @desc Get list of FBA inventory reports
+ */
+router.get('/fba/reports', async (req, res) => {
+  try {
+    const db = getDb();
+    const reports = await db.collection('amazon_fba_inventory_reports')
+      .find({})
+      .sort({ uploadedAt: -1 })
+      .limit(20)
+      .toArray();
+
+    res.json({ reports });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== RETURNS UPLOAD ====================
+
+/**
+ * @route POST /api/amazon/returns/upload
+ * @desc Upload and parse FBA Returns report
+ */
+router.post('/returns/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const parser = new ReturnsReportParser();
+    const result = await parser.processReport(
+      req.file.buffer.toString('utf-8'),
+      req.file.originalname
+    );
+
+    res.json({
+      success: true,
+      message: `Processed ${result.returnCount} returns from ${result.orderCount} orders`,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('[Returns Upload] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/returns/summary
+ * @desc Get returns summary
+ */
+router.get('/returns/summary', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days || '30', 10);
+    const parser = new ReturnsReportParser();
+    const summary = await parser.getReturnSummary(days);
+
+    res.json(summary);
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/returns
+ * @desc Get returns list
+ */
+router.get('/returns', async (req, res) => {
+  try {
+    const { from, to, sku, orderId } = req.query;
+    const db = getDb();
+
+    const query = {};
+    if (from || to) {
+      query.returnDate = {};
+      if (from) query.returnDate.$gte = new Date(from);
+      if (to) query.returnDate.$lte = new Date(to);
+    }
+    if (sku) query.sku = sku;
+    if (orderId) query.orderId = orderId;
+
+    const returns = await db.collection('amazon_returns')
+      .find(query)
+      .sort({ returnDate: -1 })
+      .limit(500)
+      .toArray();
+
+    res.json({
+      count: returns.length,
+      returns
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/returns/reports
+ * @desc Get list of returns reports
+ */
+router.get('/returns/reports', async (req, res) => {
+  try {
+    const db = getDb();
+    const reports = await db.collection('amazon_returns_reports')
+      .find({})
+      .sort({ uploadedAt: -1 })
+      .limit(20)
+      .toArray();
+
+    res.json({ reports });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== VCS ODOO INVOICE CREATION ====================
+
+/**
+ * @route POST /api/amazon/vcs/create-invoices
+ * @desc Create Odoo invoices from pending VCS orders
+ * @body { limit, dryRun }
+ */
+router.post('/vcs/create-invoices', async (req, res) => {
+  try {
+    const { limit = 50, dryRun = true } = req.body;
+
+    let odooClient = null;
+
+    // Initialize Odoo client if not dry run
+    if (!dryRun) {
+      // Check Odoo credentials
+      if (!process.env.ODOO_URL || !process.env.ODOO_DB || !process.env.ODOO_USERNAME || !process.env.ODOO_PASSWORD) {
+        return res.status(400).json({
+          error: 'Odoo not configured. Set ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD environment variables.',
+          missingEnvVars: ['ODOO_URL', 'ODOO_DB', 'ODOO_USERNAME', 'ODOO_PASSWORD'].filter(key => !process.env[key])
+        });
+      }
+
+      odooClient = new OdooDirectClient();
+      await odooClient.authenticate();
+      console.log('[VCS Invoices] Connected to Odoo');
+    }
+
+    const invoicer = new VcsOdooInvoicer(odooClient);
+
+    if (odooClient) {
+      await invoicer.loadCache();
+    }
+
+    const result = await invoicer.createInvoices({ limit, dryRun });
+
+    res.json({
+      success: true,
+      dryRun,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('[VCS Invoices] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/invoice-status
+ * @desc Get VCS invoice creation status
+ */
+router.get('/vcs/invoice-status', async (req, res) => {
+  try {
+    const invoicer = new VcsOdooInvoicer(null);
+    const status = await invoicer.getStatus();
+
+    res.json(status);
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

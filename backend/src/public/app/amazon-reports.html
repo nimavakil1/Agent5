@@ -1,0 +1,495 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Amazon Reports Upload · ACROPAQ AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+  </head>
+  <body class="min-h-screen bg-slate-900">
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4">
+      <div class="flex items-center justify-between max-w-6xl mx-auto">
+        <div class="flex items-center gap-3">
+          <a href="/app/amazon-config.html" class="text-slate-400 hover:text-white">
+            <span class="material-symbols-outlined">arrow_back</span>
+          </a>
+          <span class="material-symbols-outlined text-orange-400 text-2xl">upload_file</span>
+          <h1 class="text-white text-xl font-semibold">Amazon Reports Upload</h1>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-6 py-8">
+      <!-- Report Type Selector -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">Select Report Type</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <button onclick="selectReportType('vcs')" id="btn-vcs" class="report-type-btn bg-slate-700 hover:bg-purple-600 text-white p-4 rounded-lg flex flex-col items-center gap-2 transition-colors">
+            <span class="material-symbols-outlined text-3xl">receipt_long</span>
+            <span class="font-medium">VCS Tax Report</span>
+            <span class="text-xs text-slate-400">VAT Transactions</span>
+          </button>
+          <button onclick="selectReportType('fba')" id="btn-fba" class="report-type-btn bg-slate-700 hover:bg-green-600 text-white p-4 rounded-lg flex flex-col items-center gap-2 transition-colors">
+            <span class="material-symbols-outlined text-3xl">inventory_2</span>
+            <span class="font-medium">FBA Inventory</span>
+            <span class="text-xs text-slate-400">Stock Levels</span>
+          </button>
+          <button onclick="selectReportType('returns')" id="btn-returns" class="report-type-btn bg-slate-700 hover:bg-red-600 text-white p-4 rounded-lg flex flex-col items-center gap-2 transition-colors">
+            <span class="material-symbols-outlined text-3xl">assignment_return</span>
+            <span class="font-medium">Returns</span>
+            <span class="text-xs text-slate-400">FBA Returns</span>
+          </button>
+          <button onclick="selectReportType('settlement')" id="btn-settlement" class="report-type-btn bg-slate-700 hover:bg-blue-600 text-white p-4 rounded-lg flex flex-col items-center gap-2 transition-colors">
+            <span class="material-symbols-outlined text-3xl">payments</span>
+            <span class="font-medium">Settlement</span>
+            <span class="text-xs text-slate-400">Financial Report</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Upload Section -->
+      <div id="upload-section" class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8 hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h2 id="upload-title" class="text-white font-semibold text-lg">Upload Report</h2>
+          <span id="upload-help" class="text-slate-500 text-sm"></span>
+        </div>
+
+        <div class="bg-slate-900 rounded-lg p-6 mb-4">
+          <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center hover:border-orange-500 transition-colors cursor-pointer">
+            <span class="material-symbols-outlined text-4xl text-slate-500 mb-2">upload_file</span>
+            <p class="text-slate-400 mb-2">Drag & drop your CSV/TSV file here</p>
+            <p class="text-slate-500 text-sm">or click to browse</p>
+            <input type="file" id="file-input" accept=".csv,.tsv,.txt" class="hidden" />
+          </div>
+        </div>
+
+        <!-- Progress -->
+        <div id="upload-progress" class="hidden">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="animate-spin">
+              <span class="material-symbols-outlined text-orange-400">progress_activity</span>
+            </div>
+            <span class="text-slate-300">Processing report...</span>
+          </div>
+          <div class="w-full bg-slate-700 rounded-full h-2">
+            <div id="progress-bar" class="bg-orange-500 h-2 rounded-full transition-all" style="width: 50%"></div>
+          </div>
+        </div>
+
+        <!-- Success -->
+        <div id="upload-result" class="hidden">
+          <div class="bg-green-900/30 border border-green-700 rounded-lg p-4">
+            <div class="flex items-center gap-2 text-green-400 mb-2">
+              <span class="material-symbols-outlined">check_circle</span>
+              <span class="font-semibold">Report Processed Successfully</span>
+            </div>
+            <div id="result-summary" class="text-slate-300 text-sm"></div>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div id="upload-error" class="hidden">
+          <div class="bg-red-900/30 border border-red-700 rounded-lg p-4">
+            <div class="flex items-center gap-2 text-red-400 mb-2">
+              <span class="material-symbols-outlined">error</span>
+              <span class="font-semibold">Upload Failed</span>
+            </div>
+            <div id="error-message" class="text-slate-300 text-sm"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <!-- VCS Summary -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-purple-400">receipt_long</span>
+            <h3 class="text-white font-semibold">VCS Tax Reports</h3>
+          </div>
+          <div id="vcs-stats" class="space-y-2 text-sm mb-4">
+            <div class="flex justify-between text-slate-400">
+              <span>Pending Orders</span>
+              <span id="vcs-pending" class="text-yellow-400 font-semibold">-</span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span>Invoiced</span>
+              <span id="vcs-invoiced" class="text-green-400 font-semibold">-</span>
+            </div>
+          </div>
+          <a href="/app/amazon-vcs.html" class="block w-full text-center bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg transition-colors">
+            View VCS Orders
+          </a>
+        </div>
+
+        <!-- FBA Inventory Summary -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-green-400">inventory_2</span>
+            <h3 class="text-white font-semibold">FBA Inventory</h3>
+          </div>
+          <div id="fba-stats" class="space-y-2 text-sm mb-4">
+            <div class="flex justify-between text-slate-400">
+              <span>Total SKUs</span>
+              <span id="fba-skus" class="text-white font-semibold">-</span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span>Fulfillable</span>
+              <span id="fba-fulfillable" class="text-green-400 font-semibold">-</span>
+            </div>
+          </div>
+          <button onclick="viewFbaInventory()" class="block w-full text-center bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-colors">
+            View Inventory
+          </button>
+        </div>
+
+        <!-- Returns Summary -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-red-400">assignment_return</span>
+            <h3 class="text-white font-semibold">Returns (30 days)</h3>
+          </div>
+          <div id="returns-stats" class="space-y-2 text-sm mb-4">
+            <div class="flex justify-between text-slate-400">
+              <span>Total Returns</span>
+              <span id="returns-total" class="text-red-400 font-semibold">-</span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span>Sellable</span>
+              <span id="returns-sellable" class="text-green-400 font-semibold">-</span>
+            </div>
+          </div>
+          <button onclick="viewReturns()" class="block w-full text-center bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition-colors">
+            View Returns
+          </button>
+        </div>
+      </div>
+
+      <!-- Recent Uploads -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+        <h2 class="text-white font-semibold text-lg mb-4">Recent Uploads</h2>
+        <div id="recent-uploads" class="space-y-3">
+          <div class="text-slate-500 text-sm">Loading...</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- FBA Inventory Modal -->
+    <div id="fba-modal" class="fixed inset-0 bg-black/50 hidden z-50">
+      <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-slate-700">
+            <h3 class="text-white font-semibold">FBA Inventory</h3>
+            <button onclick="closeModal('fba-modal')" class="text-slate-400 hover:text-white">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="p-4 overflow-auto max-h-[60vh]">
+            <table class="w-full text-sm">
+              <thead class="text-slate-400 border-b border-slate-700">
+                <tr>
+                  <th class="text-left py-2">SKU</th>
+                  <th class="text-right py-2">Fulfillable</th>
+                  <th class="text-right py-2">Inbound</th>
+                  <th class="text-right py-2">Reserved</th>
+                  <th class="text-right py-2">Total</th>
+                </tr>
+              </thead>
+              <tbody id="fba-table-body" class="text-slate-300"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Returns Modal -->
+    <div id="returns-modal" class="fixed inset-0 bg-black/50 hidden z-50">
+      <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-slate-700">
+            <h3 class="text-white font-semibold">Returns (Last 30 Days)</h3>
+            <button onclick="closeModal('returns-modal')" class="text-slate-400 hover:text-white">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="p-4 overflow-auto max-h-[60vh]">
+            <table class="w-full text-sm">
+              <thead class="text-slate-400 border-b border-slate-700">
+                <tr>
+                  <th class="text-left py-2">SKU</th>
+                  <th class="text-left py-2">Product</th>
+                  <th class="text-right py-2">Returns</th>
+                  <th class="text-right py-2">Sellable</th>
+                  <th class="text-left py-2">Top Reason</th>
+                </tr>
+              </thead>
+              <tbody id="returns-table-body" class="text-slate-300"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // State
+      let selectedType = null;
+      const reportConfigs = {
+        vcs: {
+          title: 'VCS Tax Report',
+          help: 'Reports → Tax Document Library → VAT Transaction Report',
+          endpoint: '/api/amazon/vcs/upload',
+          color: 'purple'
+        },
+        fba: {
+          title: 'FBA Inventory Report',
+          help: 'Inventory → Manage FBA Inventory → Download',
+          endpoint: '/api/amazon/fba/upload',
+          color: 'green'
+        },
+        returns: {
+          title: 'FBA Returns Report',
+          help: 'Reports → Fulfillment → FBA Customer Returns',
+          endpoint: '/api/amazon/returns/upload',
+          color: 'red'
+        },
+        settlement: {
+          title: 'Settlement Report',
+          help: 'Reports → Payments → Settlement Reports',
+          endpoint: '/api/amazon/settlement/upload',
+          color: 'blue'
+        }
+      };
+
+      // Initialize
+      document.addEventListener('DOMContentLoaded', () => {
+        loadStats();
+        loadRecentUploads();
+        setupEventListeners();
+      });
+
+      function setupEventListeners() {
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZone.classList.add('border-orange-500');
+        });
+        dropZone.addEventListener('dragleave', () => {
+          dropZone.classList.remove('border-orange-500');
+        });
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('border-orange-500');
+          const file = e.dataTransfer.files[0];
+          if (file) uploadFile(file);
+        });
+        fileInput.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (file) uploadFile(file);
+        });
+      }
+
+      function selectReportType(type) {
+        selectedType = type;
+        const config = reportConfigs[type];
+
+        // Update buttons
+        document.querySelectorAll('.report-type-btn').forEach(btn => {
+          btn.classList.remove('bg-purple-600', 'bg-green-600', 'bg-red-600', 'bg-blue-600');
+          btn.classList.add('bg-slate-700');
+        });
+        document.getElementById(`btn-${type}`).classList.remove('bg-slate-700');
+        document.getElementById(`btn-${type}`).classList.add(`bg-${config.color}-600`);
+
+        // Show upload section
+        document.getElementById('upload-section').classList.remove('hidden');
+        document.getElementById('upload-title').textContent = `Upload ${config.title}`;
+        document.getElementById('upload-help').textContent = config.help;
+
+        // Reset upload state
+        document.getElementById('upload-progress').classList.add('hidden');
+        document.getElementById('upload-result').classList.add('hidden');
+        document.getElementById('upload-error').classList.add('hidden');
+      }
+
+      async function uploadFile(file) {
+        if (!selectedType) {
+          alert('Please select a report type first');
+          return;
+        }
+
+        const config = reportConfigs[selectedType];
+
+        document.getElementById('upload-progress').classList.remove('hidden');
+        document.getElementById('upload-result').classList.add('hidden');
+        document.getElementById('upload-error').classList.add('hidden');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+          const response = await fetch(config.endpoint, {
+            method: 'POST',
+            body: formData
+          });
+
+          const result = await response.json();
+          document.getElementById('upload-progress').classList.add('hidden');
+
+          if (response.ok && result.success) {
+            document.getElementById('upload-result').classList.remove('hidden');
+            document.getElementById('result-summary').innerHTML = result.message || 'Report processed successfully';
+            loadStats();
+            loadRecentUploads();
+          } else {
+            document.getElementById('upload-error').classList.remove('hidden');
+            document.getElementById('error-message').textContent = result.error || 'Unknown error';
+          }
+        } catch (error) {
+          document.getElementById('upload-progress').classList.add('hidden');
+          document.getElementById('upload-error').classList.remove('hidden');
+          document.getElementById('error-message').textContent = error.message;
+        }
+      }
+
+      async function loadStats() {
+        // VCS Stats
+        try {
+          const vcsRes = await fetch('/api/amazon/vcs/summary');
+          const vcsData = await vcsRes.json();
+          const pending = vcsData.byStatus?.find(s => s._id === 'pending')?.count || 0;
+          const invoiced = vcsData.byStatus?.find(s => s._id === 'invoiced')?.count || 0;
+          document.getElementById('vcs-pending').textContent = pending;
+          document.getElementById('vcs-invoiced').textContent = invoiced;
+        } catch (e) { console.error('VCS stats error:', e); }
+
+        // FBA Stats
+        try {
+          const fbaRes = await fetch('/api/amazon/fba/inventory');
+          const fbaData = await fbaRes.json();
+          document.getElementById('fba-skus').textContent = fbaData.skuCount || 0;
+          document.getElementById('fba-fulfillable').textContent = (fbaData.totalFulfillable || 0).toLocaleString();
+        } catch (e) { console.error('FBA stats error:', e); }
+
+        // Returns Stats
+        try {
+          const retRes = await fetch('/api/amazon/returns/summary?days=30');
+          const retData = await retRes.json();
+          document.getElementById('returns-total').textContent = retData.totalReturns || 0;
+          document.getElementById('returns-sellable').textContent = retData.sellableReturns || 0;
+        } catch (e) { console.error('Returns stats error:', e); }
+      }
+
+      async function loadRecentUploads() {
+        const container = document.getElementById('recent-uploads');
+
+        try {
+          const [vcsRes, fbaRes, retRes] = await Promise.all([
+            fetch('/api/amazon/vcs/reports').then(r => r.json()).catch(() => ({ reports: [] })),
+            fetch('/api/amazon/fba/reports').then(r => r.json()).catch(() => ({ reports: [] })),
+            fetch('/api/amazon/returns/reports').then(r => r.json()).catch(() => ({ reports: [] }))
+          ]);
+
+          const allReports = [
+            ...vcsRes.reports.map(r => ({ ...r, type: 'VCS Tax', color: 'purple' })),
+            ...fbaRes.reports.map(r => ({ ...r, type: 'FBA Inventory', color: 'green' })),
+            ...retRes.reports.map(r => ({ ...r, type: 'Returns', color: 'red' }))
+          ].sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)).slice(0, 10);
+
+          if (allReports.length === 0) {
+            container.innerHTML = '<div class="text-slate-500 text-sm">No reports uploaded yet</div>';
+            return;
+          }
+
+          container.innerHTML = allReports.map(report => `
+            <div class="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
+              <div class="flex items-center gap-3">
+                <span class="px-2 py-1 bg-${report.color}-900/50 text-${report.color}-300 rounded text-xs">${report.type}</span>
+                <div>
+                  <div class="text-slate-300 text-sm">${report.filename || 'Report'}</div>
+                  <div class="text-slate-500 text-xs">${formatDate(report.uploadedAt)}</div>
+                </div>
+              </div>
+              <div class="text-slate-400 text-sm">
+                ${report.orderCount || report.skuCount || report.returnCount || 0} items
+              </div>
+            </div>
+          `).join('');
+        } catch (error) {
+          container.innerHTML = '<div class="text-red-400 text-sm">Error loading reports</div>';
+        }
+      }
+
+      async function viewFbaInventory() {
+        const modal = document.getElementById('fba-modal');
+        const tbody = document.getElementById('fba-table-body');
+        modal.classList.remove('hidden');
+        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">Loading...</td></tr>';
+
+        try {
+          const res = await fetch('/api/amazon/fba/inventory');
+          const data = await res.json();
+
+          if (!data.inventory || data.inventory.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">No inventory data. Upload an FBA Inventory report first.</td></tr>';
+            return;
+          }
+
+          tbody.innerHTML = data.inventory.slice(0, 100).map(item => `
+            <tr class="border-b border-slate-700/50">
+              <td class="py-2 font-mono text-xs">${item.sku}</td>
+              <td class="py-2 text-right text-green-400">${item.fulfillable}</td>
+              <td class="py-2 text-right text-yellow-400">${item.inbound}</td>
+              <td class="py-2 text-right text-orange-400">${item.reserved}</td>
+              <td class="py-2 text-right font-semibold">${item.totalQuantity}</td>
+            </tr>
+          `).join('');
+        } catch (error) {
+          tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-red-400">Error: ${error.message}</td></tr>`;
+        }
+      }
+
+      async function viewReturns() {
+        const modal = document.getElementById('returns-modal');
+        const tbody = document.getElementById('returns-table-body');
+        modal.classList.remove('hidden');
+        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">Loading...</td></tr>';
+
+        try {
+          const res = await fetch('/api/amazon/returns/summary?days=30');
+          const data = await res.json();
+
+          if (!data.topReturnedSkus || data.topReturnedSkus.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">No returns data. Upload a Returns report first.</td></tr>';
+            return;
+          }
+
+          tbody.innerHTML = data.topReturnedSkus.map(item => `
+            <tr class="border-b border-slate-700/50">
+              <td class="py-2 font-mono text-xs">${item.sku}</td>
+              <td class="py-2 text-slate-400 truncate max-w-[200px]">${item.productName || '-'}</td>
+              <td class="py-2 text-right text-red-400">${item.totalReturns}</td>
+              <td class="py-2 text-right text-green-400">${item.sellableReturns || 0}</td>
+              <td class="py-2 text-slate-400 text-xs">-</td>
+            </tr>
+          `).join('');
+        } catch (error) {
+          tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-red-400">Error: ${error.message}</td></tr>`;
+        }
+      }
+
+      function closeModal(id) {
+        document.getElementById(id).classList.add('hidden');
+      }
+
+      function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+    </script>
+  </body>
+</html>
