@@ -4,6 +4,7 @@ const Product = require('../models/Product');
 const ScheduledJob = require('../models/ScheduledJob');
 const { createPrefilledCartLink, getVariantIdBySku, adminFetch, createCheckoutWebUrl } = require('../api/services/shopifyService');
 const { sendEmail, sendWhatsAppTemplate } = require('../api/services/brevoService');
+const { OdooDirectClient } = require('../core/agents/integrations/OdooMCP');
 
 function getToolsSpec() {
   return [
@@ -112,6 +113,114 @@ function getToolsSpec() {
       description: 'Send a WhatsApp template message via Brevo',
       input_schema: { type: 'object', required: ['recipient','template','language'], properties: { recipient: { type: 'string' }, template: { type: 'string' }, language: { type: 'string' }, components: { type: 'array' } } }
     },
+    // Odoo Tools
+    {
+      name: 'odoo_search_read',
+      description: 'Search and read records from any Odoo model',
+      input_schema: {
+        type: 'object',
+        required: ['model'],
+        properties: {
+          model: { type: 'string', description: 'Odoo model name (e.g., res.partner, sale.order)' },
+          domain: { type: 'array', description: 'Search domain (e.g., [["state", "=", "sale"]])' },
+          fields: { type: 'array', items: { type: 'string' }, description: 'Fields to return' },
+          limit: { type: 'number', description: 'Max records (default 100)' },
+          offset: { type: 'number', description: 'Records to skip' },
+          order: { type: 'string', description: 'Sort order (e.g., "date desc")' }
+        }
+      }
+    },
+    {
+      name: 'odoo_get_invoices',
+      description: 'Get invoices from Odoo',
+      input_schema: {
+        type: 'object',
+        properties: {
+          domain: { type: 'array', description: 'Additional filters' },
+          limit: { type: 'number' }
+        }
+      }
+    },
+    {
+      name: 'odoo_get_sales_orders',
+      description: 'Get sales orders from Odoo',
+      input_schema: {
+        type: 'object',
+        properties: {
+          domain: { type: 'array', description: 'Additional filters' },
+          limit: { type: 'number' }
+        }
+      }
+    },
+    {
+      name: 'odoo_get_products',
+      description: 'Get products from Odoo',
+      input_schema: {
+        type: 'object',
+        properties: {
+          domain: { type: 'array', description: 'Search filters' },
+          limit: { type: 'number' }
+        }
+      }
+    },
+    {
+      name: 'odoo_get_partners',
+      description: 'Get customers/suppliers from Odoo',
+      input_schema: {
+        type: 'object',
+        properties: {
+          domain: { type: 'array', description: 'Search filters' },
+          limit: { type: 'number' }
+        }
+      }
+    },
+    {
+      name: 'odoo_get_leads',
+      description: 'Get CRM leads from Odoo',
+      input_schema: {
+        type: 'object',
+        properties: {
+          domain: { type: 'array' },
+          limit: { type: 'number' }
+        }
+      }
+    },
+    {
+      name: 'odoo_get_opportunities',
+      description: 'Get CRM opportunities from Odoo',
+      input_schema: {
+        type: 'object',
+        properties: {
+          domain: { type: 'array' },
+          limit: { type: 'number' }
+        }
+      }
+    },
+    {
+      name: 'odoo_create_record',
+      description: 'Create a record in any Odoo model',
+      input_schema: {
+        type: 'object',
+        required: ['model', 'values'],
+        properties: {
+          model: { type: 'string', description: 'Odoo model name' },
+          values: { type: 'object', description: 'Field values for the new record' }
+        }
+      }
+    },
+    {
+      name: 'odoo_update_record',
+      description: 'Update records in any Odoo model',
+      input_schema: {
+        type: 'object',
+        required: ['model', 'ids', 'values'],
+        properties: {
+          model: { type: 'string' },
+          ids: { type: 'array', items: { type: 'number' }, description: 'Record IDs to update' },
+          values: { type: 'object', description: 'Field values to update' }
+        }
+      }
+    },
   ];
 }
 
@@ -219,6 +328,84 @@ async function callTool(name, params = {}, { user = { id: 'system', email: 'syst
     if (!recipient || !template) throw new Error('recipient and template required');
     const r = await sendWhatsAppTemplate(recipient, template, language, components);
     return { ok: true, result: r };
+  }
+
+  // Odoo Tools
+  if (name === 'odoo_search_read') {
+    const model = String(params?.model || '');
+    if (!model) throw new Error('model is required');
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+    const results = await odoo.searchRead(
+      model,
+      params?.domain || [],
+      params?.fields || [],
+      { limit: params?.limit || 100, offset: params?.offset || 0, order: params?.order || '' }
+    );
+    return { ok: true, count: results.length, records: results };
+  }
+
+  if (name === 'odoo_get_invoices') {
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+    const results = await odoo.getInvoices(params?.domain || [], { limit: params?.limit || 100 });
+    return { ok: true, count: results.length, invoices: results };
+  }
+
+  if (name === 'odoo_get_sales_orders') {
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+    const results = await odoo.getSalesOrders(params?.domain || [], { limit: params?.limit || 100 });
+    return { ok: true, count: results.length, orders: results };
+  }
+
+  if (name === 'odoo_get_products') {
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+    const results = await odoo.getProducts(params?.domain || [], { limit: params?.limit || 100 });
+    return { ok: true, count: results.length, products: results };
+  }
+
+  if (name === 'odoo_get_partners') {
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+    const results = await odoo.getPartners(params?.domain || [], { limit: params?.limit || 100 });
+    return { ok: true, count: results.length, partners: results };
+  }
+
+  if (name === 'odoo_get_leads') {
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+    const results = await odoo.getLeads(params?.domain || [], { limit: params?.limit || 100 });
+    return { ok: true, count: results.length, leads: results };
+  }
+
+  if (name === 'odoo_get_opportunities') {
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+    const results = await odoo.getOpportunities(params?.domain || [], { limit: params?.limit || 100 });
+    return { ok: true, count: results.length, opportunities: results };
+  }
+
+  if (name === 'odoo_create_record') {
+    const model = String(params?.model || '');
+    if (!model) throw new Error('model is required');
+    if (!params?.values || typeof params.values !== 'object') throw new Error('values is required');
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+    const id = await odoo.create(model, params.values);
+    return { ok: true, id };
+  }
+
+  if (name === 'odoo_update_record') {
+    const model = String(params?.model || '');
+    if (!model) throw new Error('model is required');
+    if (!Array.isArray(params?.ids) || params.ids.length === 0) throw new Error('ids is required');
+    if (!params?.values || typeof params.values !== 'object') throw new Error('values is required');
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+    await odoo.write(model, params.ids, params.values);
+    return { ok: true, updated: params.ids.length };
   }
 
   throw new Error('tool_not_found');
