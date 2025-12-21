@@ -727,20 +727,37 @@ class VcsOdooInvoicer {
    * @returns {object}
    */
   async createInvoice(order, partnerId, saleOrder, orderLines) {
-    // Step 1: Create invoice from sale order using Odoo's native method
+    // Step 1: Create invoice from sale order using the wizard approach
     // This properly links the invoice to the order and updates qty_invoiced
     console.log(`[VcsOdooInvoicer] Creating invoice from order ${saleOrder.name}...`);
 
-    // Use _create_invoices method on sale.order
-    // Returns a dict with 'id' key containing the invoice ID
-    const result = await this.odoo.execute('sale.order', '_create_invoices', [[saleOrder.id]]);
+    // Use the sale.advance.payment.inv wizard to create invoice
+    // This is the proper XML-RPC way to create invoices from orders
+    const wizardId = await this.odoo.create('sale.advance.payment.inv', {
+      advance_payment_method: 'delivered', // Invoice delivered quantities
+    });
 
-    // The result can be a single ID or an array of IDs
-    const invoiceId = Array.isArray(result) ? result[0] : result;
+    // Call the create_invoices action on the wizard with the sale order context
+    // Context is passed via kwargs with key 'context'
+    await this.odoo.execute('sale.advance.payment.inv', 'create_invoices', [wizardId], {
+      context: {
+        active_model: 'sale.order',
+        active_ids: [saleOrder.id],
+        active_id: saleOrder.id,
+      }
+    });
 
-    if (!invoiceId) {
-      throw new Error(`Failed to create invoice from order ${saleOrder.name}`);
+    // Find the created invoice by looking for drafts linked to this order
+    const invoices = await this.odoo.searchRead('account.move',
+      [['invoice_origin', 'ilike', saleOrder.name], ['state', '=', 'draft']],
+      ['id', 'name']
+    );
+
+    if (invoices.length === 0) {
+      throw new Error(`Failed to find created invoice for order ${saleOrder.name}`);
     }
+
+    const invoiceId = invoices[0].id;
 
     console.log(`[VcsOdooInvoicer] Invoice created with ID ${invoiceId}, updating with VCS data...`);
 
