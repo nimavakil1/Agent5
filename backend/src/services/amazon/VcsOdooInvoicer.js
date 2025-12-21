@@ -33,6 +33,15 @@ const SKU_TRANSFORMATIONS = [
 // Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM → 10050K
 const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
 
+// Amazon EPT Product IDs (same as used by the Amazon EPT connector)
+// These products are used for shipping, discounts, and gift wrap on invoices
+const AMAZON_EPT_PRODUCTS = {
+  SHIPPING: 16401,           // [SHIP AMAZON] Amazon Shipping costs
+  SHIPMENT_DISCOUNT: 16405,  // [SHIPMENT DISCOUNT] FBA Shipment Discount
+  PROMOTION_DISCOUNT: 16404, // [PROMOTION DISCOUNT] FBA Promotion Discount
+  GIFT_WRAP: 16403,          // [GIFT WRAPPER FEE] FBA Gift Wrapper Fee
+};
+
 // Marketplace to Sales Team ID mapping (Odoo crm.team IDs)
 // Based on marketplaceId - the Amazon marketplace where the order was placed
 const MARKETPLACE_SALES_TEAMS = {
@@ -669,10 +678,12 @@ class VcsOdooInvoicer {
       }
 
       // Promo discount if any (from VCS - product promo)
+      // Use PROMOTION DISCOUNT product (same as Amazon EPT connector)
       if (item.promoAmount && item.promoAmount !== 0) {
         const discountSku = odooLine?.product_default_code || transformedSku;
         const promoLineData = {
-          name: `Promotion discount - ${discountSku}`,
+          product_id: AMAZON_EPT_PRODUCTS.PROMOTION_DISCOUNT, // [PROMOTION DISCOUNT]
+          name: `FBA Promotion Discount - ${discountSku}`,
           quantity: 1,
           price_unit: -Math.abs(item.promoAmount),
         };
@@ -685,9 +696,11 @@ class VcsOdooInvoicer {
 
     // Shipping line if any (from VCS data, tax-exclusive amount)
     // VCS provides: totalShipping (excl tax), totalShippingTax
+    // Use SHIP AMAZON product (same as Amazon EPT connector)
     if (order.totalShipping && order.totalShipping !== 0) {
       const shippingLineData = {
-        name: 'Shipping',
+        product_id: AMAZON_EPT_PRODUCTS.SHIPPING, // [SHIP AMAZON]
+        name: 'Amazon Shipping',
         quantity: 1,
         price_unit: order.totalShipping, // Tax-exclusive amount
       };
@@ -699,9 +712,11 @@ class VcsOdooInvoicer {
 
     // Shipping discount if any (from VCS data - shipping promo)
     // VCS provides negative promo amounts for shipping discounts
+    // Use SHIPMENT DISCOUNT product (same as Amazon EPT connector)
     if (order.totalShippingPromo && order.totalShippingPromo !== 0) {
       const shippingPromoLineData = {
-        name: 'Shipping Discount',
+        product_id: AMAZON_EPT_PRODUCTS.SHIPMENT_DISCOUNT, // [SHIPMENT DISCOUNT]
+        name: 'FBA Shipment Discount',
         quantity: 1,
         price_unit: -Math.abs(order.totalShippingPromo), // Negative for discount
       };
