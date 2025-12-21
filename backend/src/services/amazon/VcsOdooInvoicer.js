@@ -33,15 +33,6 @@ const SKU_TRANSFORMATIONS = [
 // Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM → 10050K
 const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
 
-// Amazon EPT Product IDs (same as used by the Amazon EPT connector)
-// These products are used for shipping, discounts, and gift wrap on invoices
-const AMAZON_EPT_PRODUCTS = {
-  SHIPPING: 16401,           // [SHIP AMAZON] Amazon Shipping costs
-  SHIPMENT_DISCOUNT: 16405,  // [SHIPMENT DISCOUNT] FBA Shipment Discount
-  PROMOTION_DISCOUNT: 16404, // [PROMOTION DISCOUNT] FBA Promotion Discount
-  GIFT_WRAP: 16403,          // [GIFT WRAPPER FEE] FBA Gift Wrapper Fee
-};
-
 // Marketplace to Sales Team ID mapping (Odoo crm.team IDs)
 // Based on marketplaceId - the Amazon marketplace where the order was placed
 const MARKETPLACE_SALES_TEAMS = {
@@ -627,106 +618,9 @@ class VcsOdooInvoicer {
       journal_id: journalId,
       // Sales team based on Amazon marketplace
       team_id: teamId,
-      invoice_line_ids: this.buildInvoiceLines(order, orderLines),
+      // Note: invoice_line_ids not included here - lines come from sale order
+      // via Odoo's _create_invoices, then updated with VCS data
     };
-  }
-
-  /**
-   * Build invoice lines from VCS order, using products from Odoo order
-   * @param {object} order - VCS order data
-   * @param {object[]} odooOrderLines - Odoo sale.order.line records
-   * @returns {Array}
-   */
-  buildInvoiceLines(order, odooOrderLines) {
-    const lines = [];
-
-    // Get the correct tax for OSS orders
-    const isOSS = order.taxReportingScheme === 'VCS_EU_OSS';
-    const ossTaxId = isOSS ? this.getOssTaxId(order) : null;
-
-    for (const item of order.items) {
-      // Find matching Odoo order line by SKU
-      const transformedSku = this.transformSku(item.sku);
-      const odooLine = odooOrderLines.find(line => {
-        const lineSku = line.product_default_code || '';
-        return lineSku === transformedSku || lineSku === item.sku;
-      });
-
-      const lineData = {
-        quantity: item.quantity,
-        price_unit: item.priceExclusive / item.quantity,
-      };
-
-      // Set the correct tax for OSS orders
-      if (isOSS && ossTaxId) {
-        lineData.tax_ids = [[6, 0, [ossTaxId]]]; // Replace taxes with OSS tax
-      }
-
-      if (odooLine && odooLine.product_id) {
-        // Use product from Odoo order - show VCS SKU → Odoo SKU
-        const odooSku = odooLine.product_default_code || transformedSku;
-        const skuDisplay = item.sku !== odooSku ? `${item.sku} → ${odooSku}` : odooSku;
-        lineData.product_id = odooLine.product_id[0];
-        lineData.name = `${skuDisplay} (ASIN: ${item.asin})`;
-        lines.push([0, 0, lineData]);
-      } else {
-        // Fallback: no matching product found, use text-only line
-        console.warn(`[VcsOdooInvoicer] No matching product for SKU ${item.sku} (transformed: ${transformedSku})`);
-        const skuDisplay = item.sku !== transformedSku ? `${item.sku} → ${transformedSku}` : transformedSku;
-        lineData.name = `${skuDisplay} (ASIN: ${item.asin}) - PRODUCT NOT FOUND`;
-        lines.push([0, 0, lineData]);
-      }
-
-      // Promo discount if any (from VCS - product promo)
-      // Use PROMOTION DISCOUNT product (same as Amazon EPT connector)
-      if (item.promoAmount && item.promoAmount !== 0) {
-        const discountSku = odooLine?.product_default_code || transformedSku;
-        const promoLineData = {
-          product_id: AMAZON_EPT_PRODUCTS.PROMOTION_DISCOUNT, // [PROMOTION DISCOUNT]
-          name: `FBA Promotion Discount - ${discountSku}`,
-          quantity: 1,
-          price_unit: -Math.abs(item.promoAmount),
-        };
-        if (isOSS && ossTaxId) {
-          promoLineData.tax_ids = [[6, 0, [ossTaxId]]];
-        }
-        lines.push([0, 0, promoLineData]);
-      }
-    }
-
-    // Shipping line if any (from VCS data, tax-exclusive amount)
-    // VCS provides: totalShipping (excl tax), totalShippingTax
-    // Use SHIP AMAZON product (same as Amazon EPT connector)
-    if (order.totalShipping && order.totalShipping !== 0) {
-      const shippingLineData = {
-        product_id: AMAZON_EPT_PRODUCTS.SHIPPING, // [SHIP AMAZON]
-        name: 'Amazon Shipping',
-        quantity: 1,
-        price_unit: order.totalShipping, // Tax-exclusive amount
-      };
-      if (isOSS && ossTaxId) {
-        shippingLineData.tax_ids = [[6, 0, [ossTaxId]]];
-      }
-      lines.push([0, 0, shippingLineData]);
-    }
-
-    // Shipping discount if any (from VCS data - shipping promo)
-    // VCS provides negative promo amounts for shipping discounts
-    // Use SHIPMENT DISCOUNT product (same as Amazon EPT connector)
-    if (order.totalShippingPromo && order.totalShippingPromo !== 0) {
-      const shippingPromoLineData = {
-        product_id: AMAZON_EPT_PRODUCTS.SHIPMENT_DISCOUNT, // [SHIPMENT DISCOUNT]
-        name: 'FBA Shipment Discount',
-        quantity: 1,
-        price_unit: -Math.abs(order.totalShippingPromo), // Negative for discount
-      };
-      if (isOSS && ossTaxId) {
-        shippingPromoLineData.tax_ids = [[6, 0, [ossTaxId]]];
-      }
-      lines.push([0, 0, shippingPromoLineData]);
-    }
-
-    return lines;
   }
 
   /**
@@ -822,7 +716,10 @@ class VcsOdooInvoicer {
   }
 
   /**
-   * Create invoice in Odoo
+   * Create invoice in Odoo using the sale order's native _create_invoices
+   * This ensures proper linking (qty_invoiced updates, correct products)
+   * Then update the draft invoice with VCS data (quantities, prices, taxes)
+   *
    * @param {object} order - VCS order data
    * @param {number} partnerId - Odoo partner ID
    * @param {object} saleOrder - Odoo sale.order
@@ -830,16 +727,33 @@ class VcsOdooInvoicer {
    * @returns {object}
    */
   async createInvoice(order, partnerId, saleOrder, orderLines) {
-    const invoiceData = this.buildInvoiceData(order, partnerId, saleOrder, orderLines);
+    // Step 1: Create invoice from sale order using Odoo's native method
+    // This properly links the invoice to the order and updates qty_invoiced
+    console.log(`[VcsOdooInvoicer] Creating invoice from order ${saleOrder.name}...`);
 
-    // Create invoice
-    const invoiceId = await this.odoo.create('account.move', invoiceData);
+    // Use _create_invoices method on sale.order
+    // Returns a dict with 'id' key containing the invoice ID
+    const result = await this.odoo.execute('sale.order', '_create_invoices', [[saleOrder.id]]);
 
-    // Get invoice name
+    // The result can be a single ID or an array of IDs
+    const invoiceId = Array.isArray(result) ? result[0] : result;
+
+    if (!invoiceId) {
+      throw new Error(`Failed to create invoice from order ${saleOrder.name}`);
+    }
+
+    console.log(`[VcsOdooInvoicer] Invoice created with ID ${invoiceId}, updating with VCS data...`);
+
+    // Step 2: Update the draft invoice with VCS data
+    await this.updateInvoiceFromVCS(invoiceId, order, orderLines);
+
+    // Get final invoice details
     const invoice = await this.odoo.searchRead('account.move',
       [['id', '=', invoiceId]],
-      ['name', 'amount_total', 'amount_tax']
+      ['name', 'amount_total', 'amount_tax', 'state']
     );
+
+    console.log(`[VcsOdooInvoicer] Invoice ${invoice[0]?.name} updated. Total: ${invoice[0]?.amount_total}, Tax: ${invoice[0]?.amount_tax}`);
 
     return {
       id: invoiceId,
@@ -850,6 +764,133 @@ class VcsOdooInvoicer {
       saleOrderName: saleOrder.name,
       saleOrderId: saleOrder.id,
     };
+  }
+
+  /**
+   * Update a draft invoice with VCS data
+   * VCS is the authoritative source for quantities, prices, and taxes
+   *
+   * @param {number} invoiceId - The Odoo invoice ID
+   * @param {object} order - VCS order data
+   * @param {object[]} orderLines - Odoo sale.order.line records (for SKU matching)
+   */
+  async updateInvoiceFromVCS(invoiceId, order, orderLines) {
+    // Determine VCS-based settings
+    const fiscalPositionId = this.determineFiscalPosition(order);
+    const journalId = this.determineJournal(order);
+    const teamId = this.determineSalesTeam(order);
+    const vcsInvoiceNumber = order.vatInvoiceNumber || null;
+    const invoiceDate = order.shipmentDate || order.orderDate;
+
+    // Update invoice header
+    const headerUpdate = {
+      invoice_date: this.formatDate(invoiceDate),
+      ref: vcsInvoiceNumber || order.orderId,
+      payment_reference: vcsInvoiceNumber || null,
+    };
+
+    if (fiscalPositionId) {
+      headerUpdate.fiscal_position_id = fiscalPositionId;
+    }
+    if (journalId) {
+      headerUpdate.journal_id = journalId;
+    }
+    if (teamId) {
+      headerUpdate.team_id = teamId;
+    }
+
+    await this.odoo.execute('account.move', 'write', [[invoiceId], headerUpdate]);
+
+    // Get invoice lines with product info
+    const invoiceLines = await this.odoo.searchRead('account.move.line',
+      [['move_id', '=', invoiceId], ['display_type', '=', false], ['product_id', '!=', false]],
+      ['id', 'product_id', 'name', 'quantity', 'price_unit']
+    );
+
+    // Get product SKUs for all invoice lines
+    const productIds = invoiceLines.map(l => l.product_id[0]).filter(Boolean);
+    const products = await this.odoo.searchRead('product.product',
+      [['id', 'in', productIds]],
+      ['id', 'default_code', 'name']
+    );
+
+    const productSkuMap = {};
+    for (const p of products) {
+      productSkuMap[p.id] = p.default_code || '';
+    }
+
+    // Get the correct tax for OSS orders
+    const isOSS = order.taxReportingScheme === 'VCS_EU_OSS';
+    const ossTaxId = isOSS ? this.getOssTaxId(order) : null;
+
+    // Match VCS items to invoice lines and update
+    for (const vcsItem of order.items) {
+      const transformedSku = this.transformSku(vcsItem.sku);
+
+      // Find matching invoice line by product SKU
+      const matchingLine = invoiceLines.find(line => {
+        const lineSku = productSkuMap[line.product_id[0]] || '';
+        return lineSku === transformedSku || lineSku === vcsItem.sku;
+      });
+
+      if (matchingLine) {
+        const lineUpdate = {
+          quantity: vcsItem.quantity,
+          price_unit: vcsItem.priceExclusive / vcsItem.quantity,
+        };
+
+        // Set correct OSS tax
+        if (isOSS && ossTaxId) {
+          lineUpdate.tax_ids = [[6, 0, [ossTaxId]]];
+        }
+
+        await this.odoo.execute('account.move.line', 'write', [[matchingLine.id], lineUpdate]);
+        console.log(`[VcsOdooInvoicer] Updated line ${matchingLine.id}: qty=${vcsItem.quantity}, price=${lineUpdate.price_unit}`);
+      } else {
+        console.warn(`[VcsOdooInvoicer] No matching invoice line for VCS SKU ${vcsItem.sku} (transformed: ${transformedSku})`);
+      }
+    }
+
+    // Update shipping line if present
+    if (order.totalShipping && order.totalShipping !== 0) {
+      // Find shipping line by looking for product with SHIP or shipping in name
+      const shippingLine = invoiceLines.find(line => {
+        const productName = (line.name || '').toLowerCase();
+        const productSku = (productSkuMap[line.product_id[0]] || '').toLowerCase();
+        return productName.includes('shipping') || productName.includes('ship') ||
+               productSku.includes('ship');
+      });
+
+      if (shippingLine) {
+        const shippingUpdate = { price_unit: order.totalShipping };
+        if (isOSS && ossTaxId) {
+          shippingUpdate.tax_ids = [[6, 0, [ossTaxId]]];
+        }
+        await this.odoo.execute('account.move.line', 'write', [[shippingLine.id], shippingUpdate]);
+        console.log(`[VcsOdooInvoicer] Updated shipping line: price=${order.totalShipping}`);
+      }
+    }
+
+    // Update shipping discount line if present
+    if (order.totalShippingPromo && order.totalShippingPromo !== 0) {
+      // Find shipping discount line
+      const shippingDiscountLine = invoiceLines.find(line => {
+        const productName = (line.name || '').toLowerCase();
+        return productName.includes('shipment discount') || productName.includes('shipping discount');
+      });
+
+      if (shippingDiscountLine) {
+        const discountUpdate = { price_unit: -Math.abs(order.totalShippingPromo) };
+        if (isOSS && ossTaxId) {
+          discountUpdate.tax_ids = [[6, 0, [ossTaxId]]];
+        }
+        await this.odoo.execute('account.move.line', 'write', [[shippingDiscountLine.id], discountUpdate]);
+        console.log(`[VcsOdooInvoicer] Updated shipping discount line: price=-${Math.abs(order.totalShippingPromo)}`);
+      }
+    }
+
+    // Recompute the invoice totals after all changes
+    await this.odoo.execute('account.move', '_compute_amount', [[invoiceId]]);
   }
 
   /**
