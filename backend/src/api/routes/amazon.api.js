@@ -2817,9 +2817,10 @@ router.get('/vcs/uploads', async (req, res) => {
     const enrichedUploads = await Promise.all(uploads.map(async (upload) => {
       // Get orders linked to this upload's report
       const reportId = upload.reportId;
-      if (reportId) {
+      if (reportId && ObjectId.isValid(reportId)) {
+        // Orders store reportId as ObjectId, upload stores it as string - convert to ObjectId for matching
         const statusCounts = await db.collection('amazon_vcs_orders').aggregate([
-          { $match: { reportId: reportId.toString() } },
+          { $match: { reportId: new ObjectId(reportId) } },
           { $group: { _id: '$status', count: { $sum: 1 } } }
         ]).toArray();
 
