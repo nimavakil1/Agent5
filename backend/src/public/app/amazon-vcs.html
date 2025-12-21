@@ -204,6 +204,52 @@
         </div>
       </div>
 
+      <!-- Pending Returns (Credit Notes) -->
+      <div id="returns-section" class="bg-slate-800 border border-orange-700/50 rounded-xl p-6 mb-8 hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-white font-semibold text-lg flex items-center gap-2">
+            <span class="material-symbols-outlined text-orange-400">undo</span>
+            Pending Returns (Credit Notes)
+          </h2>
+          <div class="flex gap-2">
+            <button id="refresh-returns-btn" class="flex items-center gap-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
+              <span class="material-symbols-outlined text-sm">refresh</span>
+              Refresh
+            </button>
+            <button id="preview-credit-notes-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">preview</span>
+              Preview Credit Notes
+            </button>
+            <button id="create-credit-notes-btn" class="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">receipt_long</span>
+              Create Credit Notes in Odoo
+            </button>
+          </div>
+        </div>
+
+        <!-- Returns Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="text-slate-400 border-b border-slate-700">
+              <tr>
+                <th class="text-left py-2 px-3"><input type="checkbox" id="select-all-returns" class="rounded"></th>
+                <th class="text-left py-2 px-3">Order ID</th>
+                <th class="text-left py-2 px-3">Return Date</th>
+                <th class="text-left py-2 px-3">Country</th>
+                <th class="text-left py-2 px-3">Items</th>
+                <th class="text-right py-2 px-3">Total (excl)</th>
+                <th class="text-right py-2 px-3">VAT</th>
+                <th class="text-left py-2 px-3">Scheme</th>
+              </tr>
+            </thead>
+            <tbody id="returns-table-body" class="text-slate-300">
+              <!-- Returns loaded dynamically -->
+            </tbody>
+          </table>
+        </div>
+        <div id="returns-count" class="text-slate-400 text-sm mt-4"></div>
+      </div>
+
       <!-- Upload History -->
       <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
         <h2 class="text-white font-semibold text-lg mb-4">Upload History</h2>
@@ -216,11 +262,13 @@
     <script>
       // State
       let pendingOrders = [];
+      let pendingReturns = [];
       let odooOrders = {}; // Map of orderId -> Odoo order info
       let currentPage = 1;
       const pageSize = 50;
       let selectedOrderIds = new Set(); // Track selected order IDs across pages
       let allFilteredSelected = false; // Whether all filtered orders are selected
+      let selectedReturnIds = new Set(); // Track selected return IDs
 
       // DOM Elements
       const dropZone = document.getElementById('drop-zone');
@@ -234,6 +282,7 @@
       document.addEventListener('DOMContentLoaded', () => {
         loadSummary();
         loadPendingOrders();
+        loadPendingReturns();
         loadUploadHistory();
         setupEventListeners();
       });
@@ -328,6 +377,23 @@
             currentPage++;
             renderOrders();
           }
+        });
+
+        // Returns section event listeners
+        document.getElementById('refresh-returns-btn')?.addEventListener('click', loadPendingReturns);
+        document.getElementById('preview-credit-notes-btn')?.addEventListener('click', () => createCreditNotes(true));
+        document.getElementById('create-credit-notes-btn')?.addEventListener('click', () => createCreditNotes(false));
+
+        // Select all returns checkbox
+        document.getElementById('select-all-returns')?.addEventListener('change', (e) => {
+          pendingReturns.forEach(ret => {
+            if (e.target.checked) {
+              selectedReturnIds.add(ret._id);
+            } else {
+              selectedReturnIds.delete(ret._id);
+            }
+          });
+          document.querySelectorAll('.return-checkbox').forEach(cb => cb.checked = e.target.checked);
         });
       }
 
@@ -455,6 +521,130 @@
           }
         } catch (error) {
           console.error('Error checking Odoo:', error);
+        }
+      }
+
+      async function loadPendingReturns() {
+        try {
+          const response = await fetch('/api/amazon/vcs/returns/pending');
+          const data = await response.json();
+          pendingReturns = data.orders || [];
+
+          // Show/hide returns section based on whether we have returns
+          const returnsSection = document.getElementById('returns-section');
+          if (pendingReturns.length > 0) {
+            returnsSection.classList.remove('hidden');
+            renderReturns();
+          } else {
+            returnsSection.classList.add('hidden');
+          }
+        } catch (error) {
+          console.error('Error loading returns:', error);
+        }
+      }
+
+      function renderReturns() {
+        const tbody = document.getElementById('returns-table-body');
+        const countDiv = document.getElementById('returns-count');
+
+        if (pendingReturns.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" class="py-4 text-center text-slate-500">No pending returns</td></tr>`;
+          countDiv.textContent = '';
+          return;
+        }
+
+        const formatCurrency = (val) => {
+          const num = Math.abs(parseFloat(val) || 0);
+          return num.toFixed(2);
+        };
+
+        const formatDate = (dateStr) => {
+          if (!dateStr) return '-';
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('en-GB');
+        };
+
+        const getSchemeLabel = (order) => {
+          if (order.taxReportingScheme === 'VCS_EU_OSS') return 'OSS';
+          if (order.taxReportingScheme === 'DEEMED_RESELLER') return 'Deemed';
+          if (order.buyerTaxRegistration) return 'B2B';
+          if (order.exportOutsideEu) return 'Export';
+          return 'Standard';
+        };
+
+        tbody.innerHTML = pendingReturns.map(ret => `
+          <tr class="border-b border-slate-700/50 hover:bg-slate-700/30">
+            <td class="py-2 px-3">
+              <input type="checkbox" class="return-checkbox rounded" data-id="${ret._id}"
+                     ${selectedReturnIds.has(ret._id) ? 'checked' : ''}
+                     onchange="toggleReturn('${ret._id}', this.checked)">
+            </td>
+            <td class="py-2 px-3 font-mono text-xs">${ret.orderId}</td>
+            <td class="py-2 px-3 text-slate-400 text-xs">${formatDate(ret.returnDate || ret.shipmentDate)}</td>
+            <td class="py-2 px-3">
+              <span class="px-2 py-0.5 bg-slate-700 rounded text-xs">${ret.shipToCountry || '-'}</span>
+            </td>
+            <td class="py-2 px-3 text-slate-400">${ret.items?.length || 0}</td>
+            <td class="py-2 px-3 text-right font-mono text-orange-400">-${formatCurrency(ret.totalExclusive)}</td>
+            <td class="py-2 px-3 text-right font-mono text-slate-400">-${formatCurrency(ret.totalTax)}</td>
+            <td class="py-2 px-3">
+              <span class="px-2 py-0.5 bg-orange-900/30 text-orange-400 rounded text-xs">${getSchemeLabel(ret)}</span>
+            </td>
+          </tr>
+        `).join('');
+
+        countDiv.textContent = `${pendingReturns.length} pending return${pendingReturns.length !== 1 ? 's' : ''} (${selectedReturnIds.size} selected)`;
+      }
+
+      function toggleReturn(returnId, checked) {
+        if (checked) {
+          selectedReturnIds.add(returnId);
+        } else {
+          selectedReturnIds.delete(returnId);
+        }
+        document.getElementById('returns-count').textContent =
+          `${pendingReturns.length} pending return${pendingReturns.length !== 1 ? 's' : ''} (${selectedReturnIds.size} selected)`;
+      }
+
+      async function createCreditNotes(dryRun = true) {
+        const orderIds = Array.from(selectedReturnIds);
+        if (orderIds.length === 0) {
+          alert('Please select at least one return order');
+          return;
+        }
+
+        const btn = dryRun ? document.getElementById('preview-credit-notes-btn') : document.getElementById('create-credit-notes-btn');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="animate-spin material-symbols-outlined text-sm">progress_activity</span> ${dryRun ? 'Previewing...' : 'Creating...'}`;
+
+        try {
+          const response = await fetch('/api/amazon/vcs/create-credit-notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderIds, dryRun })
+          });
+
+          const result = await response.json();
+
+          if (dryRun) {
+            console.log('Preview result:', result);
+            let message = `Preview Result:\n\nProcessed: ${result.processed}\nWould create: ${result.created}\nSkipped: ${result.skipped}`;
+            if (result.errors?.length > 0) {
+              message += `\n\nErrors:\n${result.errors.map(e => `${e.orderId}: ${e.error}`).join('\n')}`;
+            }
+            alert(message);
+          } else {
+            alert(`Credit Notes Created!\n\nCreated: ${result.created}\nSkipped: ${result.skipped}\nErrors: ${result.errors?.length || 0}`);
+            selectedReturnIds.clear();
+            loadPendingReturns();
+          }
+        } catch (error) {
+          console.error('Error creating credit notes:', error);
+          alert('Error creating credit notes: ' + error.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
         }
       }
 

@@ -201,22 +201,33 @@ class VcsTaxReportParser {
   }
 
   /**
-   * Group transactions by order ID for invoice creation
+   * Group transactions by order ID for invoice/credit note creation
    * @param {Array} transactions
-   * @returns {Map} Orders grouped by order ID
+   * @returns {Object} { shipments: Map, returns: Map } - Orders grouped by order ID
    */
   groupByOrder(transactions) {
-    const orders = new Map();
+    const shipments = new Map();
+    const returns = new Map();
 
     for (const tx of transactions) {
-      // Skip non-shipment transactions (like returns)
-      if (tx.transactionType !== 'SHIPMENT') continue;
+      // Only process SHIPMENT and RETURN transactions
+      if (tx.transactionType !== 'SHIPMENT' && tx.transactionType !== 'RETURN') continue;
 
-      if (!orders.has(tx.orderId)) {
-        orders.set(tx.orderId, {
+      const isReturn = tx.transactionType === 'RETURN';
+      const ordersMap = isReturn ? returns : shipments;
+
+      // For returns, create a unique key combining orderId and return date
+      // (same order can have multiple returns on different dates)
+      const orderKey = isReturn ? `${tx.orderId}_${tx.shipmentDate || tx.orderDate}` : tx.orderId;
+
+      if (!ordersMap.has(orderKey)) {
+        ordersMap.set(orderKey, {
           orderId: tx.orderId,
+          orderKey: orderKey,
+          transactionType: tx.transactionType,
           orderDate: tx.orderDate,
           shipmentDate: tx.shipmentDate,
+          returnDate: isReturn ? tx.shipmentDate : null,
           currency: tx.currency,
           marketplaceId: tx.marketplaceId,
           vatInvoiceNumber: tx.vatInvoiceNumber,
@@ -241,9 +252,9 @@ class VcsTaxReportParser {
         });
       }
 
-      const order = orders.get(tx.orderId);
+      const order = ordersMap.get(orderKey);
 
-      // Add item
+      // Add item (for returns, amounts are typically negative in VCS)
       order.items.push({
         sku: tx.sku,
         asin: tx.asin,
@@ -266,7 +277,8 @@ class VcsTaxReportParser {
       order.totalShippingPromo += tx.shippingPromoExclusive;
     }
 
-    return orders;
+    // For backwards compatibility, also return combined result
+    return { shipments, returns };
   }
 
   /**
@@ -342,17 +354,19 @@ class VcsTaxReportParser {
    * Store parsed report in database
    * @param {string} filename - Original filename
    * @param {Array} transactions - Parsed transactions
-   * @param {Map} orders - Grouped orders
+   * @param {Object} groupedOrders - { shipments: Map, returns: Map }
    * @returns {object} Storage result
    */
-  async storeReport(filename, transactions, orders) {
+  async storeReport(filename, transactions, groupedOrders) {
     const db = getDb();
+    const { shipments, returns } = groupedOrders;
 
     const doc = {
       filename,
       uploadedAt: new Date(),
       transactionCount: transactions.length,
-      orderCount: orders.size,
+      shipmentCount: shipments.size,
+      returnCount: returns.size,
       dateRange: {
         from: this.getMinDate(transactions),
         to: this.getMaxDate(transactions),
@@ -361,17 +375,27 @@ class VcsTaxReportParser {
         totalExclusive: 0,
         totalTax: 0,
         totalInclusive: 0,
+        returnExclusive: 0,
+        returnTax: 0,
         currencies: new Set(),
         countries: new Set(),
       },
       status: 'pending',
     };
 
-    // Calculate summary
-    for (const order of orders.values()) {
+    // Calculate summary for shipments
+    for (const order of shipments.values()) {
       doc.summary.totalExclusive += order.totalExclusive;
       doc.summary.totalTax += order.totalTax;
       doc.summary.totalInclusive += order.totalInclusive;
+      doc.summary.currencies.add(order.currency);
+      doc.summary.countries.add(order.shipToCountry);
+    }
+
+    // Calculate summary for returns (amounts are negative)
+    for (const order of returns.values()) {
+      doc.summary.returnExclusive += order.totalExclusive;
+      doc.summary.returnTax += order.totalTax;
       doc.summary.currencies.add(order.currency);
       doc.summary.countries.add(order.shipToCountry);
     }
@@ -381,22 +405,35 @@ class VcsTaxReportParser {
 
     const result = await db.collection('amazon_vcs_reports').insertOne(doc);
 
-    // Store individual orders for processing
-    const orderDocs = Array.from(orders.values()).map(order => ({
+    // Store shipments as pending invoices
+    const shipmentDocs = Array.from(shipments.values()).map(order => ({
       reportId: result.insertedId,
       ...order,
       status: 'pending',
       createdAt: new Date(),
     }));
 
-    if (orderDocs.length > 0) {
-      await db.collection('amazon_vcs_orders').insertMany(orderDocs);
+    if (shipmentDocs.length > 0) {
+      await db.collection('amazon_vcs_orders').insertMany(shipmentDocs);
+    }
+
+    // Store returns as pending credit notes
+    const returnDocs = Array.from(returns.values()).map(order => ({
+      reportId: result.insertedId,
+      ...order,
+      status: 'pending',
+      createdAt: new Date(),
+    }));
+
+    if (returnDocs.length > 0) {
+      await db.collection('amazon_vcs_orders').insertMany(returnDocs);
     }
 
     return {
       reportId: result.insertedId.toString(),
       transactionCount: transactions.length,
-      orderCount: orders.size,
+      shipmentCount: shipments.size,
+      returnCount: returns.size,
       summary: doc.summary,
     };
   }
@@ -427,19 +464,23 @@ class VcsTaxReportParser {
     // Parse CSV
     const transactions = this.parseCSV(content);
 
-    // Group by order
-    const orders = this.groupByOrder(transactions);
+    // Group by order - now returns { shipments, returns }
+    const groupedOrders = this.groupByOrder(transactions);
 
     // Store in database
-    const result = await this.storeReport(filename, transactions, orders);
+    const result = await this.storeReport(filename, transactions, groupedOrders);
 
-    // Get invoiceable orders
-    const invoiceable = this.filterInvoiceableOrders(orders);
+    // Get invoiceable shipments
+    const invoiceable = this.filterInvoiceableOrders(groupedOrders.shipments);
+
+    // Get returnable orders (for credit notes)
+    const returnable = this.filterInvoiceableOrders(groupedOrders.returns);
 
     return {
       ...result,
       invoiceableOrders: invoiceable.length,
-      readyForImport: invoiceable.length > 0,
+      returnableOrders: returnable.length,
+      readyForImport: invoiceable.length > 0 || returnable.length > 0,
     };
   }
 }

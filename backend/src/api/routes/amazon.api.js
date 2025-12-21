@@ -2920,15 +2920,56 @@ router.get('/vcs/reports/:reportId/orders', async (req, res) => {
 
 /**
  * @route GET /api/amazon/vcs/orders/pending
- * @desc Get VCS orders pending invoice creation in Odoo
+ * @desc Get VCS shipment orders pending invoice creation in Odoo
  */
 router.get('/vcs/orders/pending', async (req, res) => {
   try {
     const db = getDb();
 
+    // Only return SHIPMENT orders (not RETURN)
     const orders = await db.collection('amazon_vcs_orders')
-      .find({ status: 'pending' })
+      .find({
+        status: 'pending',
+        $or: [
+          { transactionType: 'SHIPMENT' },
+          { transactionType: { $exists: false } } // Legacy orders without transactionType
+        ]
+      })
       .sort({ orderDate: -1 })
+      .toArray();
+
+    // Add VAT config to each order
+    const parser = new VcsTaxReportParser();
+    const ordersWithConfig = orders.map(order => ({
+      ...order,
+      vatConfig: parser.determineVatConfig(order)
+    }));
+
+    res.json({
+      pendingCount: orders.length,
+      orders: ordersWithConfig
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/returns/pending
+ * @desc Get VCS return orders pending credit note creation in Odoo
+ */
+router.get('/vcs/returns/pending', async (req, res) => {
+  try {
+    const db = getDb();
+
+    // Only return RETURN orders
+    const orders = await db.collection('amazon_vcs_orders')
+      .find({
+        status: 'pending',
+        transactionType: 'RETURN'
+      })
+      .sort({ returnDate: -1, orderDate: -1 })
       .toArray();
 
     // Add VAT config to each order
@@ -3312,6 +3353,49 @@ router.get('/vcs/invoice-status', async (req, res) => {
     res.json(status);
 
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/vcs/create-credit-notes
+ * @desc Create Odoo credit notes from selected VCS return orders
+ * @body { orderIds, dryRun }
+ */
+router.post('/vcs/create-credit-notes', async (req, res) => {
+  try {
+    const { orderIds = [], dryRun = true } = req.body;
+
+    if (!orderIds || orderIds.length === 0) {
+      return res.status(400).json({ error: 'No return orders selected' });
+    }
+
+    // Check Odoo credentials
+    if (!process.env.ODOO_URL || !process.env.ODOO_DB || !process.env.ODOO_USERNAME || !process.env.ODOO_PASSWORD) {
+      return res.status(400).json({
+        error: 'Odoo not configured. Set ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD environment variables.',
+        missingEnvVars: ['ODOO_URL', 'ODOO_DB', 'ODOO_USERNAME', 'ODOO_PASSWORD'].filter(key => !process.env[key])
+      });
+    }
+
+    // Initialize Odoo client
+    const odooClient = new OdooDirectClient();
+    await odooClient.authenticate();
+    console.log('[VCS Credit Notes] Connected to Odoo');
+
+    const invoicer = new VcsOdooInvoicer(odooClient);
+    await invoicer.loadCache();
+
+    const result = await invoicer.createCreditNotes({ orderIds, dryRun });
+
+    res.json({
+      success: true,
+      dryRun,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('[VCS Credit Notes] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });

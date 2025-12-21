@@ -1114,6 +1114,254 @@ class VcsOdooInvoicer {
   }
 
   /**
+   * Create credit notes in Odoo for selected VCS return orders
+   * @param {object} options
+   * @param {string[]} options.orderIds - MongoDB IDs of return orders to process
+   * @param {boolean} options.dryRun - If true, don't create credit notes
+   * @returns {object} Results
+   */
+  async createCreditNotes(options = {}) {
+    const { orderIds = [], dryRun = false } = options;
+    const db = getDb();
+
+    const result = {
+      processed: 0,
+      created: 0,
+      skipped: 0,
+      errors: [],
+      creditNotes: [],
+    };
+
+    if (orderIds.length === 0) {
+      return { ...result, message: 'No return orders selected' };
+    }
+
+    // Get selected return orders by their MongoDB IDs
+    const orders = await db.collection('amazon_vcs_orders')
+      .find({
+        _id: { $in: orderIds.map(id => new ObjectId(id)) },
+        transactionType: 'RETURN'
+      })
+      .toArray();
+
+    if (orders.length === 0) {
+      return { ...result, message: 'No return orders found for the given IDs' };
+    }
+
+    for (const order of orders) {
+      result.processed++;
+
+      try {
+        // Skip orders that shouldn't create credit notes
+        if (this.shouldSkipOrder(order)) {
+          result.skipped++;
+          await this.markOrderSkipped(order._id, 'Not refundable');
+          continue;
+        }
+
+        // Find existing Odoo order (required for proper linking)
+        const odooOrderData = await this.findOdooOrder(order);
+        if (!odooOrderData) {
+          result.skipped++;
+          await this.markOrderSkipped(order._id, 'No matching Odoo order found for return');
+          result.errors.push({
+            orderId: order.orderId,
+            error: 'No matching Odoo order found - order must exist in Odoo first',
+          });
+          continue;
+        }
+
+        const { saleOrder, orderLines } = odooOrderData;
+
+        // Check if credit note already exists
+        const existingCreditNote = await this.findExistingCreditNote(saleOrder.name, order.returnDate);
+        if (existingCreditNote) {
+          result.skipped++;
+          await this.markOrderSkipped(order._id, `Credit note already exists: ${existingCreditNote.name}`);
+          console.log(`[VcsOdooInvoicer] Credit note already exists for return ${order.orderId}: ${existingCreditNote.name}`);
+          continue;
+        }
+
+        if (dryRun) {
+          result.creditNotes.push({
+            orderId: order.orderId,
+            orderKey: order.orderKey,
+            dryRun: true,
+            odooOrderName: saleOrder.name,
+            preview: {
+              returnDate: order.returnDate,
+              shipTo: order.shipToCountry,
+              taxScheme: order.taxReportingScheme || 'Standard',
+              totalExclVat: order.totalExclusive || 0,
+              vatAmount: order.totalTax || 0,
+            },
+          });
+          continue;
+        }
+
+        // Create credit note
+        const creditNote = await this.createCreditNote(order, saleOrder, orderLines);
+        result.created++;
+        result.creditNotes.push(creditNote);
+
+        // Mark order as credit-noted
+        await db.collection('amazon_vcs_orders').updateOne(
+          { _id: order._id },
+          {
+            $set: {
+              status: 'credit_noted',
+              odooCreditNoteId: creditNote.id,
+              odooCreditNoteName: creditNote.name,
+              odooSaleOrderId: saleOrder.id,
+              odooSaleOrderName: saleOrder.name,
+              creditNotedAt: new Date(),
+            }
+          }
+        );
+
+      } catch (error) {
+        result.errors.push({
+          orderId: order.orderId,
+          error: error.message,
+        });
+        console.error(`[VcsOdooInvoicer] Error processing return ${order.orderId}:`, error);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Check if a credit note already exists for a return
+   * @param {string} saleOrderName - The Odoo sale order name
+   * @param {Date} returnDate - The return date (to distinguish multiple returns)
+   * @returns {object|null} Existing credit note or null
+   */
+  async findExistingCreditNote(saleOrderName, returnDate) {
+    const filters = [
+      ['invoice_origin', '=', saleOrderName],
+      ['move_type', '=', 'out_refund'],
+    ];
+
+    // If we have a return date, also filter by invoice_date to distinguish multiple returns
+    if (returnDate) {
+      filters.push(['invoice_date', '=', this.formatDate(returnDate)]);
+    }
+
+    const creditNotes = await this.odoo.searchRead('account.move',
+      filters,
+      ['id', 'name', 'state', 'amount_total']
+    );
+
+    if (creditNotes.length > 0) {
+      return creditNotes[0];
+    }
+
+    return null;
+  }
+
+  /**
+   * Create a credit note in Odoo for a return
+   * @param {object} order - VCS return order data
+   * @param {object} saleOrder - Odoo sale.order
+   * @param {object[]} orderLines - Odoo sale.order.line records
+   * @returns {object}
+   */
+  async createCreditNote(order, saleOrder, orderLines) {
+    console.log(`[VcsOdooInvoicer] Creating credit note for return ${order.orderId}...`);
+
+    // Get order lines with product info
+    const orderLineDetails = await this.odoo.searchRead('sale.order.line',
+      [['order_id', '=', saleOrder.id]],
+      ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'tax_id']
+    );
+
+    // Build credit note lines - amounts should be positive in Odoo credit notes
+    // VCS returns have negative amounts, so we take absolute value
+    const creditNoteLines = [];
+    for (const vcsItem of order.items) {
+      const transformedSku = this.transformSku(vcsItem.sku);
+
+      // Find matching order line
+      let matchingOrderLine = null;
+      for (const line of orderLineDetails) {
+        if (!line.product_id) continue;
+        const productId = line.product_id[0];
+        const products = await this.odoo.searchRead('product.product',
+          [['id', '=', productId]],
+          ['default_code', 'name']
+        );
+        if (products.length > 0) {
+          const productSku = products[0].default_code || '';
+          if (productSku === transformedSku || productSku === vcsItem.sku ||
+              productSku.includes(transformedSku) || transformedSku.includes(productSku)) {
+            matchingOrderLine = { ...line, product_default_code: productSku };
+            break;
+          }
+        }
+      }
+
+      if (matchingOrderLine) {
+        // Calculate positive price for credit note (VCS has negative amounts for returns)
+        const unitPrice = Math.abs(vcsItem.priceExclusive) / Math.abs(vcsItem.quantity);
+
+        creditNoteLines.push([0, 0, {
+          product_id: matchingOrderLine.product_id[0],
+          name: matchingOrderLine.name,
+          quantity: Math.abs(vcsItem.quantity),
+          price_unit: unitPrice,
+          tax_ids: matchingOrderLine.tax_id ? [[6, 0, matchingOrderLine.tax_id]] : false,
+        }]);
+      } else {
+        console.warn(`[VcsOdooInvoicer] No matching product for return SKU ${vcsItem.sku}`);
+      }
+    }
+
+    // Determine settings
+    const fiscalPositionId = this.determineFiscalPosition(order);
+    const journalId = this.determineJournal(order);
+    const teamId = this.determineSalesTeam(order);
+    const returnDate = order.returnDate || order.shipmentDate || new Date();
+
+    // Create the credit note
+    const creditNoteId = await this.odoo.create('account.move', {
+      move_type: 'out_refund',
+      partner_id: saleOrder.partner_id[0],
+      invoice_origin: saleOrder.name,
+      invoice_date: this.formatDate(returnDate),
+      ref: order.vatInvoiceNumber || `RETURN-${order.orderId}`,
+      payment_reference: order.vatInvoiceNumber || null,
+      fiscal_position_id: fiscalPositionId,
+      journal_id: journalId,
+      team_id: teamId,
+      narration: `Amazon Return for Order: ${order.orderId}\nSale Order: ${saleOrder.name}`,
+      invoice_line_ids: creditNoteLines,
+    });
+
+    if (!creditNoteId) {
+      throw new Error(`Failed to create credit note for return ${order.orderId}`);
+    }
+
+    // Get final credit note details
+    const creditNote = await this.odoo.searchRead('account.move',
+      [['id', '=', creditNoteId]],
+      ['name', 'amount_total', 'amount_tax', 'state']
+    );
+
+    console.log(`[VcsOdooInvoicer] Credit note ${creditNote[0]?.name} created. Total: ${creditNote[0]?.amount_total}`);
+
+    return {
+      id: creditNoteId,
+      name: creditNote[0]?.name || `RINV-${creditNoteId}`,
+      amountTotal: creditNote[0]?.amount_total,
+      amountTax: creditNote[0]?.amount_tax,
+      orderId: order.orderId,
+      saleOrderName: saleOrder.name,
+      saleOrderId: saleOrder.id,
+    };
+  }
+
+  /**
    * Get invoice creation status/summary
    * @returns {object}
    */
