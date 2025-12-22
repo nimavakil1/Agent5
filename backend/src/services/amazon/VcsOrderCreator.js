@@ -777,6 +777,11 @@ class VcsOrderCreator {
       orderData.team_id = config.teamId;
     }
 
+    // Add journal if set (for invoice generation)
+    if (config.journalId) {
+      orderData.journal_id = config.journalId;
+    }
+
     // Create the order
     const orderId = await this.odoo.create('sale.order', orderData);
 
