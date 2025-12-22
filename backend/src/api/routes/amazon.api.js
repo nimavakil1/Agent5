@@ -34,7 +34,7 @@ const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
   fileFilter: (req, file, cb) => {
     // Accept CSV, TSV, TXT files
     const allowedMimes = ['text/csv', 'text/tab-separated-values', 'text/plain', 'application/vnd.ms-excel'];

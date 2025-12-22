@@ -970,6 +970,22 @@ class VcsOdooInvoicer {
       ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'tax_id', 'qty_delivered']
     );
 
+    // For SHIPMENT transactions, update qty_delivered on order lines
+    // This ensures Odoo calculates invoice_status correctly as "invoiced" instead of "to invoice"
+    // VCS SHIPMENT means the order was shipped by Amazon, so qty_delivered should match qty ordered
+    if (order.transactionType === 'SHIPMENT') {
+      console.log(`[VcsOdooInvoicer] Updating qty_delivered for SHIPMENT order ${saleOrder.name}...`);
+      for (const line of orderLineDetails) {
+        if (line.qty_delivered < line.product_uom_qty) {
+          await this.odoo.execute('sale.order.line', 'write', [[line.id], {
+            qty_delivered: line.product_uom_qty
+          }]);
+          // Update local copy too for invoice creation
+          line.qty_delivered = line.product_uom_qty;
+        }
+      }
+    }
+
     // Build invoice line data from order lines
     const invoiceLines = [];
     for (const line of orderLineDetails) {
