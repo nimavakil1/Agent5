@@ -642,6 +642,22 @@ class VcsOrderCreator {
       return products[0].id;
     }
 
+    // Try stripping variant suffixes (e.g., P0182-Z -> P0182)
+    // Common suffixes: -Z, -A, -B, -FR, -DE, -UK, etc.
+    const strippedSku = transformedSku.replace(/-[A-Z]{1,2}$/i, '');
+    if (strippedSku !== transformedSku) {
+      products = await this.odoo.searchRead('product.product',
+        [['default_code', '=', strippedSku]],
+        ['id']
+      );
+
+      if (products.length > 0) {
+        console.log(`[VcsOrderCreator] Found product by stripping suffix: ${transformedSku} -> ${strippedSku}`);
+        this.productCache[cacheKey] = products[0].id;
+        return products[0].id;
+      }
+    }
+
     // Try partial match with ilike
     products = await this.odoo.searchRead('product.product',
       [['default_code', 'ilike', transformedSku]],
