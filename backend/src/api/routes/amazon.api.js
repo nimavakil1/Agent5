@@ -3073,6 +3073,87 @@ router.post('/vcs/orders/batch-mark-invoiced', async (req, res) => {
 });
 
 /**
+ * @route POST /api/amazon/vcs/update-invoice-urls
+ * @desc Update invoice_url field in Odoo for invoiced VCS orders
+ * @body { dryRun?: boolean } - If true, just return what would be updated
+ */
+router.post('/vcs/update-invoice-urls', async (req, res) => {
+  try {
+    const db = getDb();
+    const { dryRun = false } = req.body;
+
+    // Get all invoiced orders that have an invoiceUrl and an odooInvoiceId
+    const orders = await db.collection('amazon_vcs_orders')
+      .find({
+        status: 'invoiced',
+        invoiceUrl: { $exists: true, $ne: null, $ne: '' },
+        odooInvoiceId: { $exists: true, $ne: null }
+      })
+      .toArray();
+
+    if (orders.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No invoiced orders with invoice URLs found',
+        updated: 0
+      });
+    }
+
+    if (dryRun) {
+      return res.json({
+        success: true,
+        dryRun: true,
+        message: `Would update ${orders.length} invoices with invoice URLs`,
+        orders: orders.map(o => ({
+          orderId: o.orderId,
+          odooInvoiceId: o.odooInvoiceId,
+          odooInvoiceName: o.odooInvoiceName,
+          invoiceUrl: o.invoiceUrl
+        }))
+      });
+    }
+
+    // Create Odoo client
+    const odoo = new OdooClient();
+    await odoo.connect();
+
+    let updated = 0;
+    let errors = [];
+
+    for (const order of orders) {
+      try {
+        // Update the invoice_url field in Odoo
+        await odoo.execute('account.move', 'write', [
+          [order.odooInvoiceId],
+          { invoice_url: order.invoiceUrl }
+        ]);
+        updated++;
+
+        // Add small delay to prevent Odoo overload
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        errors.push({
+          orderId: order.orderId,
+          odooInvoiceId: order.odooInvoiceId,
+          error: error.message
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Updated ${updated} invoices with invoice URLs`,
+      updated,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error) {
+    console.error('[VCS] Error updating invoice URLs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * @route GET /api/amazon/vcs/summary
  * @desc Get summary of VCS data for a date range
  * @query from, to (ISO dates)

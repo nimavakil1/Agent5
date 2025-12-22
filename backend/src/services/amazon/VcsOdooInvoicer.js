@@ -861,6 +861,11 @@ class VcsOdooInvoicer {
       payment_reference: vcsInvoiceNumber || null,
     };
 
+    // Set the invoice_url field if available (Amazon EPT field)
+    if (order.invoiceUrl) {
+      headerUpdate.invoice_url = order.invoiceUrl;
+    }
+
     if (fiscalPositionId) {
       headerUpdate.fiscal_position_id = fiscalPositionId;
     }
