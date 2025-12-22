@@ -447,13 +447,22 @@ class VcsOdooInvoicer {
    * @returns {object|null} Existing invoice or null
    */
   async findExistingInvoice(saleOrderName) {
-    // Search for invoices with invoice_origin matching the sale order name
+    // Build list of possible order name variants to check
+    // e.g., "FBA305-1901951-5970703" should also check "305-1901951-5970703"
+    const namesToCheck = [saleOrderName];
+
+    // If name starts with FBA or FBM, also check without the prefix
+    if (saleOrderName.startsWith('FBA') || saleOrderName.startsWith('FBM')) {
+      namesToCheck.push(saleOrderName.substring(3)); // Remove FBA/FBM prefix
+    }
+
+    // Search for invoices with invoice_origin matching any of the name variants
     const invoices = await this.odoo.searchRead('account.move',
       [
-        ['invoice_origin', '=', saleOrderName],
+        ['invoice_origin', 'in', namesToCheck],
         ['move_type', '=', 'out_invoice'],
       ],
-      ['id', 'name', 'state', 'amount_total']
+      ['id', 'name', 'state', 'amount_total', 'invoice_origin']
     );
 
     if (invoices.length > 0) {
