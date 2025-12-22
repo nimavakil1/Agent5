@@ -80,7 +80,7 @@ const JOURNALS = {
 };
 
 // Export fiscal position ID
-const EXPORT_FISCAL_POSITION = 4;  // Export | Export
+const EXPORT_FISCAL_POSITION = 71;  // GB*VAT | Régime Export
 
 // Tax IDs for 0% exports
 const EXPORT_TAX_IDS = {
@@ -836,20 +836,33 @@ class VcsOrderCreator {
           await this.odoo.execute('stock.picking', 'action_set_quantities_to_reservation', [[picking.id]]);
           console.log(`[VcsOrderCreator] Set quantities for picking ${picking.id} (${picking.name})`);
 
-          // Validate the picking
+          // Use immediate transfer wizard to validate
           try {
-            await this.odoo.execute('stock.picking', 'button_validate', [[picking.id]]);
-            console.log(`[VcsOrderCreator] Validated picking ${picking.id} (${picking.name})`);
+            // Create the immediate transfer wizard
+            const wizardId = await this.odoo.create('stock.immediate.transfer', {
+              pick_ids: [[4, picking.id]],
+            });
+            // Process the wizard
+            await this.odoo.execute('stock.immediate.transfer', 'process', [[wizardId]]);
+            console.log(`[VcsOrderCreator] Validated picking ${picking.id} (${picking.name}) via immediate transfer`);
             result.pickingsValidated++;
-          } catch (validateError) {
-            // Some pickings might require a backorder wizard - try to process it
-            if (validateError.message && validateError.message.includes('ir.actions.act_window')) {
-              // This means Odoo wants to show a wizard, try action_done instead
-              await this.odoo.execute('stock.picking', 'action_done', [[picking.id]]);
-              console.log(`[VcsOrderCreator] Force-validated picking ${picking.id} with action_done`);
+          } catch (wizardError) {
+            console.warn(`[VcsOrderCreator] Wizard failed for picking ${picking.id}: ${wizardError.message}`);
+
+            // Fallback: try button_validate
+            try {
+              await this.odoo.execute('stock.picking', 'button_validate', [[picking.id]]);
+              console.log(`[VcsOrderCreator] Validated picking ${picking.id} via button_validate`);
               result.pickingsValidated++;
-            } else {
-              throw validateError;
+            } catch (validateError) {
+              // Last resort: try action_done
+              try {
+                await this.odoo.execute('stock.picking', 'action_done', [[picking.id]]);
+                console.log(`[VcsOrderCreator] Force-validated picking ${picking.id} with action_done`);
+                result.pickingsValidated++;
+              } catch (actionError) {
+                throw actionError;
+              }
             }
           }
 
