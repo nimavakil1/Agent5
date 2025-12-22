@@ -2805,24 +2805,16 @@ router.post('/vcs/check-odoo', async (req, res) => {
     // Odoo stores Amazon order IDs in the 'client_order_ref' field
     const matchedOrders = {};
 
-    // Search in batches of 50 to avoid timeout
-    const batchSize = 50;
+    // Use 'in' operator with larger batches for much better performance
+    // The 'in' operator is far more efficient than building OR domains
+    const batchSize = 500;
+    console.log(`[VCS Check Odoo] Checking ${orderIds.length} order IDs in batches of ${batchSize}...`);
+
     for (let i = 0; i < orderIds.length; i += batchSize) {
       const batch = orderIds.slice(i, i + batchSize);
 
-      // Build OR domain for this batch
-      const orConditions = batch.length > 1
-        ? ['|'.repeat(batch.length - 1).split('').filter(c => c === '|').map(() => '|'), batch.map(id => ['client_order_ref', '=', id])].flat()
-        : [['client_order_ref', '=', batch[0]]];
-
-      // Flatten the domain properly
-      let domain = [];
-      for (let j = 0; j < batch.length - 1; j++) {
-        domain.push('|');
-      }
-      for (const id of batch) {
-        domain.push(['client_order_ref', '=', id]);
-      }
+      // Use 'in' operator - much simpler and faster than OR domain
+      const domain = [['client_order_ref', 'in', batch]];
 
       const orders = await odooClient.searchRead('sale.order', domain, ['name', 'client_order_ref', 'state', 'amount_total']);
 
@@ -2835,7 +2827,14 @@ router.post('/vcs/check-odoo', async (req, res) => {
           amount: order.amount_total
         };
       }
+
+      // Log progress for large batches
+      if (orderIds.length > 1000 && (i + batchSize) % 2000 === 0) {
+        console.log(`[VCS Check Odoo] Processed ${Math.min(i + batchSize, orderIds.length)}/${orderIds.length} order IDs...`);
+      }
     }
+
+    console.log(`[VCS Check Odoo] Found ${Object.keys(matchedOrders).length} matching orders out of ${orderIds.length} checked`);
 
     res.json({
       success: true,
