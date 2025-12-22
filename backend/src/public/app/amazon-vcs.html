@@ -186,7 +186,9 @@
                 <th class="pb-2 pr-4 text-right cursor-pointer hover:text-white" onclick="sortOrdersBy('totalInclusive')">
                   Total <span id="sort-totalInclusive" class="text-xs"></span>
                 </th>
-                <th class="pb-2 pr-4">Odoo Order</th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('odooOrder')">
+                  Odoo Order <span id="sort-odooOrder" class="text-xs"></span>
+                </th>
               </tr>
               <tr class="text-slate-500 border-b border-slate-700/50">
                 <th class="pb-2 pr-4 pl-4"></th>
@@ -198,7 +200,7 @@
                 <th class="pb-2 pr-4"></th>
                 <th class="pb-2 pr-4"></th>
                 <th class="pb-2 pr-4"></th>
-                <th class="pb-2 pr-4"></th>
+                <th class="pb-2 pr-4"><input type="text" placeholder="Search..." class="orders-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="odooOrder"></th>
               </tr>
             </thead>
             <tbody id="orders-table-body" class="text-slate-300">
@@ -577,7 +579,7 @@
       function updateSortIndicators(tableType) {
         if (tableType === 'orders') {
           // Clear all order sort indicators
-          ['orderId', 'orderDate', 'shipToCountry', 'scheme', 'items', 'totalExclusive', 'totalTax', 'totalInclusive'].forEach(col => {
+          ['orderId', 'orderDate', 'shipToCountry', 'scheme', 'items', 'totalExclusive', 'totalTax', 'totalInclusive', 'odooOrder'].forEach(col => {
             const el = document.getElementById(`sort-${col}`);
             if (el) el.textContent = '';
           });
@@ -695,6 +697,7 @@
             else if (column === 'orderDate') fieldValue = formatDate(order.orderDate) || '';
             else if (column === 'shipToCountry') fieldValue = order.shipToCountry || '';
             else if (column === 'scheme') fieldValue = getSchemeLabel(order) || '';
+            else if (column === 'odooOrder') fieldValue = odooOrders[order.orderId]?.orderNumber || '';
             return fieldValue.toLowerCase().includes(searchValue);
           });
         });
@@ -732,6 +735,9 @@
               valA = parseFloat(a.totalInclusive) || 0;
               valB = parseFloat(b.totalInclusive) || 0;
               return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (ordersSortColumn === 'odooOrder') {
+              valA = odooOrders[a.orderId]?.orderNumber || '';
+              valB = odooOrders[b.orderId]?.orderNumber || '';
             } else {
               return 0;
             }
