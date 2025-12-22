@@ -16,16 +16,6 @@ const { ObjectId } = require('mongodb');
 const { euCountryConfig } = require('./EuCountryConfig');
 const { skuResolver } = require('./SkuResolver');
 
-// SKU transformation patterns (same as VcsOdooInvoicer)
-const SKU_TRANSFORMATIONS = [
-  { pattern: /-FBM$/, replacement: '' },
-  { pattern: /-stickerless$/, replacement: '' },
-  { pattern: /-stickerles$/, replacement: '' },
-];
-
-// Return SKU pattern: amzn.gr.[base-sku]-[random-string]
-const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
-
 // Marketplace to Sales Team ID mapping (Odoo crm.team IDs)
 const MARKETPLACE_SALES_TEAMS = {
   'DE': 17,  // Amazon DE
@@ -93,25 +83,6 @@ class VcsOrderCreator {
     this.warehouseCache = {};
     this.countryCache = {};
     this.productCache = {};
-  }
-
-  /**
-   * Transform Amazon SKU to base Odoo SKU
-   */
-  transformSku(amazonSku) {
-    let sku = amazonSku;
-
-    // Handle return SKU pattern
-    const returnMatch = sku.match(RETURN_SKU_PATTERN);
-    if (returnMatch) {
-      sku = returnMatch[1];
-    }
-
-    // Apply standard transformations
-    for (const transform of SKU_TRANSFORMATIONS) {
-      sku = sku.replace(transform.pattern, transform.replacement);
-    }
-    return sku;
   }
 
   /**
@@ -482,10 +453,20 @@ class VcsOrderCreator {
       return { lines, errors };
     }
 
+    // Ensure skuResolver is loaded
+    if (!skuResolver.loaded) {
+      await skuResolver.load();
+    }
+
     for (const item of vcsOrder.items) {
       try {
         const amazonSku = item.sku;
-        const transformedSku = this.transformSku(amazonSku);
+
+        // Use SkuResolver to transform the SKU
+        const resolved = skuResolver.resolve(amazonSku);
+        const transformedSku = resolved.odooSku;
+
+        console.log(`[VcsOrderCreator] SKU: ${amazonSku} -> ${transformedSku} (${resolved.matchType})`);
 
         // Find product in Odoo
         const productId = await this.findProduct(transformedSku, amazonSku);
