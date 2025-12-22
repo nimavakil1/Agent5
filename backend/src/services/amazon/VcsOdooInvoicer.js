@@ -200,6 +200,26 @@ const DOMESTIC_FISCAL_POSITIONS = {
   'GB': 67,  // GB*VAT | Régime National
 };
 
+// Marketplace-specific receivable account IDs
+// These are used for B2C Amazon marketplace sales, where Amazon collects payment
+// Format: { marketplaceCountry: accountId }
+const MARKETPLACE_RECEIVABLE_ACCOUNTS = {
+  'DE': 820,  // 400102DE Trade debtors - Amazon Seller Germany
+  'FR': 821,  // 400102FR Trade debtors - Amazon Seller France
+  'NL': 822,  // 400102NL Trade debtors - Amazon Seller Netherlands
+  'ES': 823,  // 400102ES Trade debtors - Amazon Seller Spain
+  'IT': 824,  // 400102IT Trade debtors - Amazon Seller Italy
+  'SE': 825,  // 400102SE Trade debtors - Amazon Seller Sweden
+  'PL': 826,  // 400102PL Trade debtors - Amazon Seller Poland
+  'GB': 827,  // 400102UK Trade debtors - Amazon Seller United Kingdom
+  'UK': 827,  // Alias for GB
+  'BE': 828,  // 400102BE Trade debtors - Amazon Seller Belgium
+  'TR': 829,  // 400102TR Trade debtors - Amazon Seller Turkey
+};
+
+// Default Amazon Customer partner ID (for B2C sales)
+const AMAZON_CUSTOMER_PARTNER_ID = 232128;
+
 // Country to fiscal position mapping (legacy, kept for reference)
 const FISCAL_POSITIONS = {
   // OSS (selling to EU consumers from Belgium)
@@ -610,6 +630,26 @@ class VcsOdooInvoicer {
     // Fallback: no sales team (will use Odoo default)
     console.warn(`[VcsOdooInvoicer] No sales team mapping for marketplace: ${marketplace}`);
     return null;
+  }
+
+  /**
+   * Determine the receivable account based on the Amazon marketplace
+   * ALL Amazon Seller invoices (B2C and B2B) use marketplace-specific receivable accounts
+   * because Amazon collects payment from all customers (including B2B)
+   *
+   * @param {object} order - VCS order data
+   * @returns {number|null} Account ID for the marketplace receivable
+   */
+  determineReceivableAccount(order) {
+    const marketplace = order.marketplaceId;
+    if (marketplace && MARKETPLACE_RECEIVABLE_ACCOUNTS[marketplace]) {
+      const accountId = MARKETPLACE_RECEIVABLE_ACCOUNTS[marketplace];
+      console.log(`[VcsOdooInvoicer] Using receivable account for marketplace ${marketplace}: ${accountId}`);
+      return accountId;
+    }
+    // Fallback: use BE account as default
+    console.warn(`[VcsOdooInvoicer] No receivable account for marketplace ${marketplace}, using BE default`);
+    return MARKETPLACE_RECEIVABLE_ACCOUNTS['BE'] || null;
   }
 
   /**
@@ -1132,6 +1172,33 @@ class VcsOdooInvoicer {
       }
     }
 
+    // Update the receivable line with the correct marketplace-specific account
+    // The receivable line is auto-created by Odoo and uses the partner's default account
+    // We need to override it with the marketplace-specific account (400102XX)
+    const receivableAccountId = this.determineReceivableAccount(order);
+    if (receivableAccountId) {
+      // Find the receivable line (account_type = 'asset_receivable' or name contains 'Trade debtors')
+      const allLines = await this.odoo.searchRead('account.move.line',
+        [['move_id', '=', invoiceId]],
+        ['id', 'name', 'account_id', 'account_type', 'balance']
+      );
+
+      // Find the receivable line (it's the one with positive balance and receivable type)
+      const receivableLine = allLines.find(line =>
+        line.account_type === 'asset_receivable' ||
+        (line.account_id && line.account_id[1] && line.account_id[1].includes('400'))
+      );
+
+      if (receivableLine) {
+        await this.odoo.execute('account.move.line', 'write', [[receivableLine.id], {
+          account_id: receivableAccountId
+        }]);
+        console.log(`[VcsOdooInvoicer] Updated receivable line ${receivableLine.id} to account ${receivableAccountId}`);
+      } else {
+        console.warn(`[VcsOdooInvoicer] Could not find receivable line to update`);
+      }
+    }
+
     // Note: Odoo will automatically recompute totals when lines are modified
     // No need to call _compute_amount explicitly
   }
@@ -1510,6 +1577,28 @@ class VcsOdooInvoicer {
       throw new Error(`Failed to create credit note for return ${order.orderId}`);
     }
 
+    // Update the receivable line with the correct marketplace-specific account
+    const receivableAccountId = this.determineReceivableAccount(order);
+    if (receivableAccountId) {
+      const allLines = await this.odoo.searchRead('account.move.line',
+        [['move_id', '=', creditNoteId]],
+        ['id', 'name', 'account_id', 'account_type', 'balance']
+      );
+
+      // Find the receivable line (for credit notes, it has negative balance)
+      const receivableLine = allLines.find(line =>
+        line.account_type === 'asset_receivable' ||
+        (line.account_id && line.account_id[1] && line.account_id[1].includes('400'))
+      );
+
+      if (receivableLine) {
+        await this.odoo.execute('account.move.line', 'write', [[receivableLine.id], {
+          account_id: receivableAccountId
+        }]);
+        console.log(`[VcsOdooInvoicer] Updated credit note receivable line ${receivableLine.id} to account ${receivableAccountId}`);
+      }
+    }
+
     // Get final credit note details
     const creditNote = await this.odoo.searchRead('account.move',
       [['id', '=', creditNoteId]],
@@ -1558,4 +1647,4 @@ class VcsOdooInvoicer {
   }
 }
 
-module.exports = { VcsOdooInvoicer, MARKETPLACE_JOURNALS, FISCAL_POSITIONS, SKU_TRANSFORMATIONS };
+module.exports = { VcsOdooInvoicer, MARKETPLACE_JOURNALS, FISCAL_POSITIONS, SKU_TRANSFORMATIONS, MARKETPLACE_RECEIVABLE_ACCOUNTS };

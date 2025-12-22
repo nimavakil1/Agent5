@@ -27,6 +27,7 @@ const { FbaInventoryReportParser } = require('../../services/amazon/FbaInventory
 const { ReturnsReportParser } = require('../../services/amazon/ReturnsReportParser');
 const { VcsOdooInvoicer } = require('../../services/amazon/VcsOdooInvoicer');
 const { VcsOrderCreator } = require('../../services/amazon/VcsOrderCreator');
+const { SettlementReportParser } = require('../../services/amazon/SettlementReportParser');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 
 // Configure multer for settlement report uploads
@@ -2323,6 +2324,54 @@ router.post('/upload/settlement', upload.single('file'), async (req, res) => {
       transactionCount: parsed.transactionCount,
       feesSummary,
       isNew: result.upsertedCount > 0
+    });
+
+  } catch (error) {
+    console.error('Settlement upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/settlement/upload
+ * @desc Upload and parse Amazon settlement report for RECONCILIATION
+ * NOTE: Vendor bills are NOT created here - they come from PEPPOL invoices
+ * @body file - CSV/TSV settlement report
+ * @query dryRun - Set to 'true' for dry run (no database storage)
+ */
+router.post('/settlement/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const dryRun = req.query.dryRun === 'true';
+
+    // Process the settlement report (for reconciliation only)
+    const parser = new SettlementReportParser();
+    const result = await parser.processSettlement(req.file.buffer, { dryRun });
+
+    // Build user-friendly message
+    const feesSummary = Object.entries(result.feesByMarketplace || {})
+      .filter(([_, fees]) => fees.total !== 0)
+      .map(([mp, fees]) => `${mp}: ${fees.total.toFixed(2)} EUR`)
+      .join(', ');
+
+    const ordersSummary = Object.entries(result.ordersByMarketplace || {})
+      .filter(([_, orders]) => orders.total !== 0)
+      .map(([mp, orders]) => `${mp}: ${orders.total.toFixed(2)} EUR`)
+      .join(', ');
+
+    const message = `Processed ${result.transactionCount} transactions. ` +
+      `Fees: ${feesSummary || 'none'}. ` +
+      `Order revenue: ${ordersSummary || 'none'}. ` +
+      `Net amount: ${result.totalAmount.toFixed(2)} ${result.currency}`;
+
+    res.json({
+      success: true,
+      message,
+      note: 'Vendor bills are created from PEPPOL invoices, not settlement reports. This data is for reconciliation only.',
+      ...result,
     });
 
   } catch (error) {

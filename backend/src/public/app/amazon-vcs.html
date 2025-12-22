@@ -1026,17 +1026,18 @@
 
           const result = await response.json();
 
-          if (dryRun) {
-            console.log('Preview result:', result);
-            let message = `Preview Result:\n\nProcessed: ${result.processed}\nWould create: ${result.created}\nSkipped: ${result.skipped}`;
-            if (result.errors?.length > 0) {
-              message += `\n\nErrors:\n${result.errors.map(e => `${e.orderId}: ${e.error}`).join('\n')}`;
+          if (response.ok && result.success) {
+            // Show result modal (same style as invoices)
+            showCreditNoteResult(result, dryRun);
+
+            // Refresh if real creation
+            if (!dryRun) {
+              selectedReturnIds.clear();
+              loadPendingReturns();
+              loadUploadHistory();
             }
-            alert(message);
           } else {
-            alert(`Credit Notes Created!\n\nCreated: ${result.created}\nSkipped: ${result.skipped}\nErrors: ${result.errors?.length || 0}`);
-            selectedReturnIds.clear();
-            loadPendingReturns();
+            alert(`Error: ${result.error || 'Unknown error'}`);
           }
         } catch (error) {
           console.error('Error creating credit notes:', error);
@@ -1045,6 +1046,153 @@
           btn.disabled = false;
           btn.innerHTML = originalText;
         }
+      }
+
+      function showCreditNoteResult(result, dryRun) {
+        const wouldCreateCount = dryRun ? (result.creditNotes?.length || result.created || 0) : (result.created || 0);
+
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+          <div class="bg-slate-800 rounded-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between shrink-0">
+              <div class="flex items-center gap-3">
+                <h3 class="text-white font-semibold text-lg">
+                  ${dryRun ? 'Credit Note Preview' : 'Credit Notes Created'}
+                </h3>
+                ${dryRun ? `<span class="text-slate-400 text-xs">Click "Create Credit Notes Now" to create them in Odoo</span>` : ''}
+              </div>
+              <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-1">
+              <!-- Compact Summary -->
+              <div class="flex gap-3 mb-4 text-xs">
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-white font-bold">${result.processed || 0}</span>
+                  <span class="text-slate-400">Processed</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-orange-400 font-bold">${wouldCreateCount}</span>
+                  <span class="text-slate-400">${dryRun ? 'Would Create' : 'Created'}</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-slate-400 font-bold">${result.skipped || 0}</span>
+                  <span class="text-slate-400">Skipped</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-red-400 font-bold">${result.errors?.length || 0}</span>
+                  <span class="text-slate-400">Errors</span>
+                </div>
+              </div>
+
+              <!-- Credit Notes list with details -->
+              ${result.creditNotes && result.creditNotes.length > 0 ? `
+                <div class="space-y-2">
+                  ${result.creditNotes.slice(0, 30).map(cn => {
+                    const data = cn.wouldCreate || cn;
+                    const preview = cn.preview || {};
+                    const lines = data.invoice_line_ids || [];
+                    return `
+                      <div class="bg-slate-700/30 rounded-lg p-3 border-l-4 border-orange-500">
+                        <div class="flex items-center justify-between mb-2">
+                          <div>
+                            <span class="text-white font-mono text-sm font-semibold">${cn.orderId}</span>
+                            ${cn.originalInvoice ? `<span class="text-slate-400 text-xs ml-2">reverses ${cn.originalInvoice}</span>` : ''}
+                          </div>
+                          ${!dryRun && cn.name ? `<span class="px-2 py-1 bg-orange-900/50 text-orange-300 rounded text-sm font-semibold">${cn.name}</span>` : ''}
+                        </div>
+                        ${dryRun && preview ? `
+                          <!-- Credit note metadata - compact 4 column layout -->
+                          <div class="grid grid-cols-4 gap-1.5 mb-2 text-xs">
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Journal:</span>
+                              <span class="text-slate-200 ml-1">${preview.journalName || '-'}</span>
+                            </div>
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Fiscal:</span>
+                              <span class="text-slate-200 ml-1">${preview.fiscalPositionName || '-'}</span>
+                            </div>
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Route:</span>
+                              <span class="text-slate-200 ml-1">${preview.shipFrom || '-'} → ${preview.shipTo || '-'}</span>
+                            </div>
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Scheme:</span>
+                              <span class="text-slate-200 ml-1">${preview.taxScheme || '-'}</span>
+                            </div>
+                          </div>
+                          <!-- Totals - inline -->
+                          <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded px-2 py-1.5 mb-2">
+                            <div class="flex gap-3">
+                              <span class="text-slate-400">Net: <span class="text-orange-300">-${Math.abs(preview.totalExclVat || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                              <span class="text-slate-400">VAT: <span class="text-slate-300">-${Math.abs(preview.vatAmount || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                            </div>
+                            <span class="text-slate-400">Total: <span class="text-orange-400 font-semibold">-${Math.abs(preview.totalInclVat || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                          </div>
+                        ` : ''}
+                        ${dryRun && lines.length > 0 ? `
+                          <div class="bg-slate-800/50 rounded px-2 py-1.5 text-xs">
+                            <table class="w-full">
+                              <thead>
+                                <tr class="text-slate-400 text-left">
+                                  <th class="pb-1">Product</th>
+                                  <th class="pb-1 text-right">Qty</th>
+                                  <th class="pb-1 text-right">Price</th>
+                                </tr>
+                              </thead>
+                              <tbody class="text-slate-300">
+                                ${lines.map(line => {
+                                  const lineData = line[2] || {};
+                                  return `
+                                    <tr>
+                                      <td class="py-0.5">${lineData.name || 'Product'}</td>
+                                      <td class="py-0.5 text-right">${lineData.quantity || 1}</td>
+                                      <td class="py-0.5 text-right text-orange-300">-${Math.abs(lineData.price_unit || 0).toFixed(2)} €</td>
+                                    </tr>
+                                  `;
+                                }).join('')}
+                              </tbody>
+                            </table>
+                          </div>
+                        ` : ''}
+                      </div>
+                    `;
+                  }).join('')}
+                  ${result.creditNotes.length > 30 ? `<div class="text-slate-500 text-xs text-center py-1">... and ${result.creditNotes.length - 30} more</div>` : ''}
+                </div>
+              ` : ''}
+
+              <!-- Errors -->
+              ${result.errors && result.errors.length > 0 ? `
+                <h4 class="text-red-400 font-semibold text-sm mt-3 mb-2">Errors:</h4>
+                <div class="space-y-1 max-h-32 overflow-y-auto">
+                  ${result.errors.map(err => `
+                    <div class="p-1.5 bg-red-900/30 border border-red-800 rounded text-xs">
+                      <span class="text-slate-300 font-mono">${err.orderId}</span>
+                      <span class="text-red-400 ml-2">${err.error}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+            <div class="px-4 py-2 border-t border-slate-700 flex justify-end gap-2 shrink-0">
+              <button onclick="this.closest('.fixed').remove()" class="px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-600">
+                Close
+              </button>
+              ${dryRun ? `
+                <button onclick="this.closest('.fixed').remove(); createCreditNotes(false);" class="px-3 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700">
+                  Create Credit Notes Now
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.remove();
+        });
       }
 
       function renderOrders() {
@@ -1181,7 +1329,7 @@
                     <span class="text-yellow-400">${upload.pendingOrders || 0} pending</span>
                     <span class="text-slate-500 mx-1">·</span>
                     <span class="text-green-400">${upload.invoicedOrders || 0} invoiced</span>
-                    ${(upload.pendingReturns || 0) > 0 ? `<span class="text-slate-500 mx-1">·</span><span class="text-orange-400">${upload.pendingReturns || 0} returns</span>` : ''}
+                    ${(upload.pendingReturns || 0) > 0 || (upload.creditedReturns || 0) > 0 ? `<span class="text-slate-500 mx-1">·</span><span class="text-orange-400">${upload.pendingReturns || 0} ret. pending</span><span class="text-slate-500 mx-1">·</span><span class="text-orange-300">${upload.creditedReturns || 0} credited</span>` : ''}
                   </div>
                 </div>
                 <!-- Download button -->
