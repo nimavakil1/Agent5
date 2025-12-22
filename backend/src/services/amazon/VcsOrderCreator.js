@@ -688,6 +688,8 @@ class VcsOrderCreator {
     const orderData = {
       name: orderName,
       partner_id: partnerId,
+      partner_invoice_id: partnerId,  // Invoice address (required by Odoo)
+      partner_shipping_id: partnerId, // Shipping address
       client_order_ref: vcsOrder.orderId,
       date_order: this.formatDate(vcsOrder.orderDate || vcsOrder.shipmentDate),
       warehouse_id: config.warehouseId,
