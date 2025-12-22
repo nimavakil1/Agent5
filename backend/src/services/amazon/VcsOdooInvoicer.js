@@ -1425,6 +1425,7 @@ class VcsOdooInvoicer {
               taxScheme: order.taxReportingScheme || 'Standard',
               totalExclVat: order.totalExclusive || 0,
               vatAmount: order.totalTax || 0,
+              totalInclVat: (order.totalExclusive || 0) + (order.totalTax || 0),
             },
           });
           continue;

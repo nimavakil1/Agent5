@@ -33,6 +33,7 @@
     "csv-parse": "^6.1.0",
     "csv-parser": "^3.0.0",
     "dotenv": "^17.2.2",
+    "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.1.0",
