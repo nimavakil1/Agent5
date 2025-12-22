@@ -54,8 +54,14 @@ When the user mentions testing or asks about what needs to be done, refer to thi
 ```
 ODOO_URL=https://acropaq.odoo.com
 ODOO_DB=ninicocolala-v16-fvl-fvl-7662670
-ODOO_USERNAME=nima@acropaq.com
+ODOO_USERNAME=info@acropaq.com  # IMPORTANT: Always use info@acropaq.com, NEVER nima@acropaq.com
 ```
+
+### Independent Fields Policy
+All Odoo fields and views created by Agent5 must be independent of third-party modules:
+- Custom fields use `x_` prefix (e.g., `x_vcs_invoice_url`)
+- Views are modified directly via Developer Mode / XML-RPC, not via custom modules
+- This ensures clean Odoo upgrades without third-party dependencies
 
 ## Purchasing Intelligence Agent
 

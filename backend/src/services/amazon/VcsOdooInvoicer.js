@@ -174,6 +174,19 @@ const STANDARD_VAT_RATES = {
   'SI': 22, 'ES': 21, 'SE': 25,
 };
 
+// Domestic VAT Tax IDs by country (for local/domestic sales within a country)
+// Format: { country: { rate: taxId } }
+const DOMESTIC_TAXES = {
+  'BE': { 21: 1, 12: 4, 6: 6, 0: 8 },           // BE*VAT | 21%, 12%, 6%, 0%
+  'DE': { 19: 135, 7: 134, 0: 163 },            // DE*VAT | 19%, 7%, 0% EU
+  'FR': { 20: 122, 5.5: 123, 0: 144 },          // FR*VAT | 20%, 5.5%, 0% EU
+  'NL': { 21: 136, 9: 137 },                    // NL*VAT | 21%, 9%
+  'IT': { 22: 180 },                            // IT*VAT | 22%
+  'CZ': { 21: 187, 15: 189, 10: 191, 0: 193 },  // CZ*VAT | 21%, 15%, 10%, 0%
+  'PL': { 23: 194, 8: 196, 5: 198, 0: 200 },    // PL*VAT | 23%, 8%, 5%, 0%
+  'GB': { 20: 182, 5: 184, 0: 186 },            // GB*VAT | 20%, 5%, 0%
+};
+
 // Country to fiscal position mapping (legacy, kept for reference)
 const FISCAL_POSITIONS = {
   // OSS (selling to EU consumers from Belgium)
@@ -624,6 +637,100 @@ class VcsOdooInvoicer {
   }
 
   /**
+   * Get tax ID from VCS data - derives the correct tax based on VCS totals
+   * This is the primary method for determining taxes - VCS data is authoritative!
+   *
+   * Logic:
+   * 1. Calculate the tax rate from VCS data (totalTax / totalExclusive)
+   * 2. Determine if this is OSS (cross-border EU) or domestic (same country)
+   * 3. Look up the correct tax ID from OSS_TAXES or DOMESTIC_TAXES
+   *
+   * @param {object} order - VCS order data
+   * @returns {number|null} Tax ID
+   */
+  getTaxIdFromVCS(order) {
+    const shipFrom = order.shipFromCountry;
+    const shipTo = order.shipToCountry;
+    const totalExcl = Math.abs(order.totalExclusive || 0);
+    const totalTax = Math.abs(order.totalTax || 0);
+
+    // Calculate actual tax rate from VCS data
+    let vcsRatePercent = 0;
+    if (totalExcl > 0 && totalTax > 0) {
+      vcsRatePercent = Math.round((totalTax / totalExcl) * 100);
+    }
+
+    console.log(`[VcsOdooInvoicer] getTaxIdFromVCS: shipFrom=${shipFrom}, shipTo=${shipTo}, rate=${vcsRatePercent}%`);
+
+    // Determine the VAT scenario
+    const isOSS = order.taxReportingScheme === 'VCS_EU_OSS';
+    const isExport = this.isExportOrder(order);
+    const isDomestic = shipFrom === shipTo && EU_COUNTRIES.includes(shipTo);
+    const isCrossBorderEU = shipFrom !== shipTo && EU_COUNTRIES.includes(shipFrom) && EU_COUNTRIES.includes(shipTo);
+
+    // 1. Export orders - use 0% export tax
+    if (isExport) {
+      console.log(`[VcsOdooInvoicer] Export order - using 0% tax`);
+      const countryTaxes = DOMESTIC_TAXES[shipFrom] || DOMESTIC_TAXES['BE'];
+      return countryTaxes?.[0] || null;
+    }
+
+    // 2. Explicit OSS scheme OR cross-border EU sale
+    if (isOSS || isCrossBorderEU) {
+      console.log(`[VcsOdooInvoicer] OSS/Cross-border EU - using OSS taxes for ${shipTo}`);
+      const countryTaxes = OSS_TAXES[shipTo];
+      if (countryTaxes) {
+        // Try exact rate match first
+        if (countryTaxes[vcsRatePercent]) {
+          return countryTaxes[vcsRatePercent];
+        }
+        // Fallback to standard rate for destination country
+        const standardRate = STANDARD_VAT_RATES[shipTo];
+        if (standardRate && countryTaxes[standardRate]) {
+          return countryTaxes[standardRate];
+        }
+        // Return first available
+        const rates = Object.keys(countryTaxes);
+        if (rates.length > 0) {
+          return countryTaxes[rates[0]];
+        }
+      }
+      // If no OSS taxes for this country, fall through to domestic
+      console.warn(`[VcsOdooInvoicer] No OSS taxes for ${shipTo}, falling back to domestic`);
+    }
+
+    // 3. Domestic sale (same country) - use domestic VAT
+    if (isDomestic) {
+      console.log(`[VcsOdooInvoicer] Domestic sale in ${shipTo} - using domestic VAT`);
+      const countryTaxes = DOMESTIC_TAXES[shipTo];
+      if (countryTaxes) {
+        // Try exact rate match first
+        if (countryTaxes[vcsRatePercent]) {
+          return countryTaxes[vcsRatePercent];
+        }
+        // Fallback to standard rate for this country
+        const standardRate = STANDARD_VAT_RATES[shipTo];
+        if (standardRate && countryTaxes[standardRate]) {
+          return countryTaxes[standardRate];
+        }
+        // Return first available
+        const rates = Object.keys(countryTaxes);
+        if (rates.length > 0) {
+          return countryTaxes[rates[0]];
+        }
+      }
+    }
+
+    // 4. Fallback - if we have a taxReportingScheme, use the existing OSS logic
+    if (order.taxReportingScheme === 'VCS_EU_OSS') {
+      return this.getOssTaxId(order);
+    }
+
+    console.warn(`[VcsOdooInvoicer] Could not determine tax for order ${order.orderId}`);
+    return null;
+  }
+
+  /**
    * Build invoice data from VCS order
    * @param {object} order - VCS order data
    * @param {number} partnerId - Odoo partner ID (may be overridden for OSS)
@@ -668,25 +775,32 @@ class VcsOdooInvoicer {
 
   /**
    * Determine fiscal position based on order data
+   * IMPORTANT: Derives fiscal position from VCS data (shipFrom/shipTo), NOT from order data
    * @param {object} order
    * @returns {number|null} Fiscal position ID
    */
   determineFiscalPosition(order) {
+    const shipFrom = order.shipFromCountry;
+    const shipTo = order.shipToCountry;
+
     // Export orders use the export fiscal position directly (ID 3)
     // This ensures proper VAT grid mapping (Grid 47) for exports
     if (this.isExportOrder(order)) {
       return EXPORT_FISCAL_POSITION_ID; // BE*VAT | Régime Extra-Communautaire
     }
 
-    // OSS scheme (selling from BE to other EU countries)
-    // Use the hardcoded OSS fiscal position IDs
-    if (order.taxReportingScheme === 'VCS_EU_OSS') {
-      const country = order.shipToCountry;
-      const ossFiscalPositionId = OSS_FISCAL_POSITIONS[country];
+    // Explicit OSS scheme OR cross-border EU (infer OSS when taxReportingScheme empty)
+    // OSS = selling from one EU country to consumer in another EU country
+    const isExplicitOSS = order.taxReportingScheme === 'VCS_EU_OSS';
+    const isCrossBorderEU = shipFrom !== shipTo && EU_COUNTRIES.includes(shipFrom) && EU_COUNTRIES.includes(shipTo);
+
+    if (isExplicitOSS || isCrossBorderEU) {
+      const ossFiscalPositionId = OSS_FISCAL_POSITIONS[shipTo];
       if (ossFiscalPositionId) {
+        console.log(`[VcsOdooInvoicer] Using OSS fiscal position for ${shipTo}: ${ossFiscalPositionId}`);
         return ossFiscalPositionId;
       }
-      console.warn(`[VcsOdooInvoicer] No OSS fiscal position for country ${country}`);
+      console.warn(`[VcsOdooInvoicer] No OSS fiscal position for country ${shipTo}`);
     }
 
     // B2B with buyer VAT number - use Intra-Community B2B fiscal position
@@ -695,23 +809,25 @@ class VcsOdooInvoicer {
       return this.fiscalPositionCache?.['B2B_EU'] || null;
     }
 
-    // Domestic Belgian sale - no special fiscal position needed
-    // The default Belgian VAT will apply
+    // Domestic sale (same country) - no fiscal position needed
+    // The local VAT of that country will be applied via getTaxIdFromVCS
+    if (shipFrom === shipTo && EU_COUNTRIES.includes(shipTo)) {
+      console.log(`[VcsOdooInvoicer] Domestic ${shipTo} sale - no fiscal position needed`);
+      return null;
+    }
 
     return null;
   }
 
   /**
    * Determine journal based on marketplace
+   * IMPORTANT: Derives journal from VCS data (shipFrom/shipTo), NOT from order data
    * @param {object} order
    * @returns {number|null}
    */
   determineJournal(order) {
-    // For OSS orders (EU cross-border B2C), use the OSS journal
-    if (order.taxReportingScheme === 'VCS_EU_OSS') {
-      const journalCode = MARKETPLACE_JOURNALS['OSS'];
-      return this.journalCache?.[journalCode] || this.defaultJournalId || null;
-    }
+    const shipFrom = order.shipFromCountry;
+    const shipTo = order.shipToCountry;
 
     // Check if this is an export (destination outside EU)
     const isExport = this.isExportOrder(order);
@@ -720,8 +836,18 @@ class VcsOdooInvoicer {
       return this.journalCache?.[journalCode] || this.defaultJournalId || null;
     }
 
-    // Use shipToCountry (destination) to determine the VAT jurisdiction journal
-    const country = order.shipToCountry || order.sellerTaxJurisdiction || 'BE';
+    // For OSS orders (EU cross-border B2C), use the OSS journal
+    // This includes both explicit VCS_EU_OSS and inferred cross-border EU
+    const isExplicitOSS = order.taxReportingScheme === 'VCS_EU_OSS';
+    const isCrossBorderEU = shipFrom !== shipTo && EU_COUNTRIES.includes(shipFrom) && EU_COUNTRIES.includes(shipTo);
+
+    if (isExplicitOSS || isCrossBorderEU) {
+      const journalCode = MARKETPLACE_JOURNALS['OSS'];
+      return this.journalCache?.[journalCode] || this.defaultJournalId || null;
+    }
+
+    // Domestic sale - use the destination country's journal
+    const country = shipTo || order.sellerTaxJurisdiction || 'BE';
     const journalCode = MARKETPLACE_JOURNALS[country] || MARKETPLACE_JOURNALS['DEFAULT'];
 
     // Look up journal ID from cache
@@ -861,8 +987,11 @@ class VcsOdooInvoicer {
       payment_reference: vcsInvoiceNumber || null,
     };
 
-    // Set the invoice_url field if available (Amazon EPT field)
+    // Set the VCS invoice URL field (our own Acropaq field)
+    // x_vcs_invoice_url is from the acropaq_amazon module (independent of Amazon EPT)
     if (order.invoiceUrl) {
+      headerUpdate.x_vcs_invoice_url = order.invoiceUrl;
+      // Also set the legacy Amazon EPT field for backward compatibility during transition
       headerUpdate.invoice_url = order.invoiceUrl;
     }
 
@@ -1322,12 +1451,16 @@ class VcsOdooInvoicer {
         // Calculate positive price for credit note (VCS has negative amounts for returns)
         const unitPrice = Math.abs(vcsItem.priceExclusive) / Math.abs(vcsItem.quantity);
 
+        // IMPORTANT: Derive tax from VCS data, NOT from order line (Emipro may have wrong data)
+        const vcsTaxId = this.getTaxIdFromVCS(order);
+
         creditNoteLines.push([0, 0, {
           product_id: matchingOrderLine.product_id[0],
           name: matchingOrderLine.name,
           quantity: Math.abs(vcsItem.quantity),
           price_unit: unitPrice,
-          tax_ids: matchingOrderLine.tax_id ? [[6, 0, matchingOrderLine.tax_id]] : false,
+          // Use VCS-derived tax, NOT the order line tax
+          tax_ids: vcsTaxId ? [[6, 0, [vcsTaxId]]] : false,
         }]);
       } else {
         console.warn(`[VcsOdooInvoicer] No matching product for return SKU ${vcsItem.sku}`);

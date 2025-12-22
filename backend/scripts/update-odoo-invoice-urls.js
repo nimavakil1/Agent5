@@ -50,7 +50,7 @@ async function main() {
       // Check if the invoice exists and already has the URL
       const invoice = await odoo.searchRead('account.move',
         [['id', '=', order.odooInvoiceId]],
-        ['id', 'name', 'invoice_url']
+        ['id', 'name', 'x_vcs_invoice_url', 'invoice_url']
       );
 
       if (invoice.length === 0) {
@@ -59,15 +59,16 @@ async function main() {
         continue;
       }
 
-      if (invoice[0].invoice_url === order.invoiceUrl) {
+      if (invoice[0].x_vcs_invoice_url === order.invoiceUrl) {
         console.log(`${progress} ${invoice[0].name} already has correct URL - skipping`);
         skipped++;
         continue;
       }
 
-      // Update the invoice with the URL
+      // Update the invoice with the URL (both our independent field and legacy field)
       await odoo.write('account.move', [order.odooInvoiceId], {
-        invoice_url: order.invoiceUrl
+        x_vcs_invoice_url: order.invoiceUrl,
+        invoice_url: order.invoiceUrl  // Legacy field for backward compatibility
       });
 
       console.log(`${progress} Updated ${invoice[0].name} with invoice URL`);

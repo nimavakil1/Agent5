@@ -3,22 +3,33 @@
 Activate Foreign Currencies in Odoo
 
 Usage:
-    export ODOO19_API_KEY="your_api_key"
+    Reads credentials from .env file via dotenv
     python3 scripts/activate-currencies.py
 """
 
 import xmlrpc.client
 import os
 import sys
+from pathlib import Path
 
-ODOO_URL = 'https://acropaq.odoo.com'
-ODOO_DB = 'ninicocolala-v16-fvl-fvl-7662670'
-ODOO_USERNAME = 'nima@acropaq.com'
-ODOO_PASSWORD = os.environ.get('ODOO_API_KEY', '9ca1030fd68f798adbab7a84e50e3ae40cba27fd')
+# Load .env file
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, value = line.split('=', 1)
+                os.environ.setdefault(key.strip(), value.strip())
 
-if not ODOO_PASSWORD:
-    print("ERROR: ODOO19_API_KEY environment variable not set")
-    print("Run: export ODOO19_API_KEY='your_api_key'")
+ODOO_URL = os.environ.get('ODOO_URL', 'https://acropaq.odoo.com')
+ODOO_DB = os.environ.get('ODOO_DB')
+ODOO_USERNAME = os.environ.get('ODOO_USERNAME')  # Should be info@acropaq.com
+ODOO_PASSWORD = os.environ.get('ODOO_PASSWORD') or os.environ.get('ODOO_API_KEY')
+
+if not ODOO_DB or not ODOO_USERNAME or not ODOO_PASSWORD:
+    print("ERROR: Missing Odoo credentials in .env file!")
+    print("Required: ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD")
     sys.exit(1)
 
 # Currencies to ensure are active
