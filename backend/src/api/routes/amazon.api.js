@@ -2883,7 +2883,7 @@ router.get('/vcs/uploads', async (req, res) => {
           const isReturn = s._id.transactionType === 'RETURN';
           if (isReturn) {
             if (s._id.status === 'pending') pendingReturns = s.count;
-            if (s._id.status === 'credited') creditedReturns = s.count;
+            if (s._id.status === 'credit_noted') creditedReturns = s.count;
           } else {
             if (s._id.status === 'pending') pending = s.count;
             if (s._id.status === 'invoiced') invoiced = s.count;
