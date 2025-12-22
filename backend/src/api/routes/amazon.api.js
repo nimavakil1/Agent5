@@ -3114,7 +3114,7 @@ router.post('/vcs/update-invoice-urls', async (req, res) => {
     }
 
     // Create Odoo client
-    const odoo = new OdooClient();
+    const odoo = new OdooDirectClient();
     await odoo.connect();
 
     let updated = 0;
