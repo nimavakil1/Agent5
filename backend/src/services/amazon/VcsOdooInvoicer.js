@@ -187,6 +187,19 @@ const DOMESTIC_TAXES = {
   'GB': { 20: 182, 5: 184, 0: 186 },            // GB*VAT | 20%, 5%, 0%
 };
 
+// Domestic Fiscal Position IDs by country (for same-country sales)
+// Format: { country: fiscalPositionId }
+const DOMESTIC_FISCAL_POSITIONS = {
+  'BE': 1,   // BE*VAT | Régime National
+  'DE': 32,  // DE*VAT | Régime National
+  'FR': 33,  // FR*VAT | Régime National
+  'NL': 34,  // NL*VAT | Régime National
+  'IT': 61,  // IT*VAT | Régime National
+  'PL': 65,  // PL*VAT | Régime National
+  'CZ': 63,  // CZ*VAT | Régime National
+  'GB': 67,  // GB*VAT | Régime National
+};
+
 // Country to fiscal position mapping (legacy, kept for reference)
 const FISCAL_POSITIONS = {
   // OSS (selling to EU consumers from Belgium)
@@ -809,10 +822,15 @@ class VcsOdooInvoicer {
       return this.fiscalPositionCache?.['B2B_EU'] || null;
     }
 
-    // Domestic sale (same country) - no fiscal position needed
+    // Domestic sale (same country) - use the domestic fiscal position
     // The local VAT of that country will be applied via getTaxIdFromVCS
     if (shipFrom === shipTo && EU_COUNTRIES.includes(shipTo)) {
-      console.log(`[VcsOdooInvoicer] Domestic ${shipTo} sale - no fiscal position needed`);
+      const domesticFiscalPositionId = DOMESTIC_FISCAL_POSITIONS[shipTo];
+      if (domesticFiscalPositionId) {
+        console.log(`[VcsOdooInvoicer] Domestic ${shipTo} sale - using fiscal position ${domesticFiscalPositionId}`);
+        return domesticFiscalPositionId;
+      }
+      console.warn(`[VcsOdooInvoicer] No domestic fiscal position for country ${shipTo}`);
       return null;
     }
 
