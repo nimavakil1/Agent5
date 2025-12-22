@@ -2935,6 +2935,60 @@ router.get('/vcs/uploads/:uploadId/download', async (req, res) => {
 });
 
 /**
+ * @route DELETE /api/amazon/vcs/uploads/:uploadId
+ * @desc Delete a VCS upload and all associated orders
+ */
+router.delete('/vcs/uploads/:uploadId', async (req, res) => {
+  try {
+    const db = getDb();
+    const uploadId = req.params.uploadId;
+
+    // Find the upload
+    const upload = await db.collection('amazon_vcs_uploads').findOne({
+      _id: new ObjectId(uploadId)
+    });
+
+    if (!upload) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    // Get the reportId to delete associated orders
+    const reportId = upload.reportId;
+
+    // Delete all orders associated with this upload
+    let deletedOrders = 0;
+    if (reportId && ObjectId.isValid(reportId)) {
+      const deleteResult = await db.collection('amazon_vcs_orders').deleteMany({
+        reportId: new ObjectId(reportId)
+      });
+      deletedOrders = deleteResult.deletedCount;
+    }
+
+    // Delete the upload record
+    await db.collection('amazon_vcs_uploads').deleteOne({
+      _id: new ObjectId(uploadId)
+    });
+
+    // Optionally delete the file from disk
+    if (upload.filePath && fs.existsSync(upload.filePath)) {
+      fs.unlinkSync(upload.filePath);
+    }
+
+    console.log(`[VCS Delete] Deleted upload ${uploadId}, ${deletedOrders} orders`);
+
+    res.json({
+      success: true,
+      message: `Deleted upload and ${deletedOrders} associated orders`,
+      deletedOrders
+    });
+
+  } catch (error) {
+    console.error('[VCS Delete] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * @route GET /api/amazon/vcs/reports
  * @desc Get list of uploaded VCS reports
  */
