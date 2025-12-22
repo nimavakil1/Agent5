@@ -120,6 +120,10 @@
               <span class="material-symbols-outlined text-sm">receipt</span>
               Create Invoices in Odoo
             </button>
+            <button id="create-orders-btn" class="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">add_shopping_cart</span>
+              Create Orders in Odoo
+            </button>
           </div>
         </div>
 
@@ -151,6 +155,11 @@
             <option value="DOMESTIC_CZ">Domestic CZ</option>
             <option value="DOMESTIC_BE">Domestic BE</option>
             <option value="DOMESTIC_GB">Domestic GB</option>
+          </select>
+          <select id="filter-odoo-status" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Odoo Status</option>
+            <option value="has-order">Has Odoo Order</option>
+            <option value="missing-order">Missing Odoo Order</option>
           </select>
         </div>
 
@@ -419,6 +428,9 @@
         document.getElementById('preview-invoices-btn').addEventListener('click', () => createInvoices(true));
         document.getElementById('create-invoices-btn').addEventListener('click', () => createInvoices(false));
 
+        // Create orders button
+        document.getElementById('create-orders-btn').addEventListener('click', () => createOdooOrders());
+
         // Select all checkbox (header checkbox - only affects current page)
         document.getElementById('select-all').addEventListener('change', (e) => {
           const filtered = getFilteredOrders();
@@ -460,6 +472,7 @@
         // Filters
         document.getElementById('filter-country').addEventListener('change', applyFilters);
         document.getElementById('filter-scheme').addEventListener('change', applyFilters);
+        document.getElementById('filter-odoo-status').addEventListener('change', applyFilters);
 
         // Pagination
         document.getElementById('prev-page').addEventListener('click', () => {
@@ -665,6 +678,7 @@
       function getFilteredOrders() {
         const country = document.getElementById('filter-country').value;
         const scheme = document.getElementById('filter-scheme').value;
+        const odooStatus = document.getElementById('filter-odoo-status').value;
 
         let filtered = [...pendingOrders];
 
@@ -687,6 +701,13 @@
             }
             return true;
           });
+        }
+
+        // Apply Odoo status filter
+        if (odooStatus === 'has-order') {
+          filtered = filtered.filter(o => odooOrders[o.orderId]);
+        } else if (odooStatus === 'missing-order') {
+          filtered = filtered.filter(o => !odooOrders[o.orderId]);
         }
 
         // Apply column search filters
@@ -1017,7 +1038,7 @@
           const odooOrder = odooOrders[order.orderId];
           const odooOrderCell = odooOrder
             ? `<span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-xs">${odooOrder.orderNumber}</span>`
-            : '<span class="text-slate-500 text-xs">-</span>';
+            : `<span class="flex items-center gap-1 text-amber-400 text-xs" title="No Odoo order found - needs to be created"><span class="material-symbols-outlined text-sm">warning</span> Missing</span>`;
           const isChecked = selectedOrderIds.has(order._id) ? 'checked' : '';
 
           return `
@@ -1426,6 +1447,165 @@
           return 'bg-cyan-900/50 text-cyan-300';
         }
         return 'bg-slate-600';
+      }
+
+      // Create Odoo orders from VCS data
+      async function createOdooOrders(dryRun = true) {
+        const btn = document.getElementById('create-orders-btn');
+        const originalText = btn.innerHTML;
+
+        // Get selected order IDs
+        const selectedIds = Array.from(selectedOrderIds);
+
+        // Filter to only orders that are missing from Odoo
+        const missingOrderIds = selectedIds.filter(id => {
+          const order = pendingOrders.find(o => o._id === id);
+          return order && !odooOrders[order.orderId];
+        });
+
+        if (missingOrderIds.length === 0) {
+          // Check if user selected orders that already have Odoo orders
+          if (selectedIds.length > 0) {
+            alert('All selected orders already have Odoo orders. Please select orders that are missing from Odoo (marked with warning icon).');
+          } else {
+            alert('Please select at least one order that is missing from Odoo.');
+          }
+          return;
+        }
+
+        // First do a dry run to preview
+        btn.disabled = true;
+        btn.innerHTML = `
+          <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+          ${dryRun ? 'Previewing...' : 'Creating...'}
+        `;
+
+        try {
+          const response = await fetch('/api/amazon/vcs/create-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderIds: missingOrderIds, dryRun })
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(result.error || 'Failed to create orders');
+          }
+
+          // Show results modal
+          showCreateOrdersResult(result, dryRun);
+
+          // If not dry run and successful, refresh the data
+          if (!dryRun && result.created > 0) {
+            selectedOrderIds.clear();
+            allFilteredSelected = false;
+            loadPendingOrders();
+          }
+        } catch (error) {
+          alert(`Error: ${error.message}`);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
+      }
+
+      function showCreateOrdersResult(result, dryRun) {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+          <div class="bg-slate-800 rounded-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between shrink-0">
+              <div class="flex items-center gap-3">
+                <h3 class="text-white font-semibold text-lg">
+                  ${dryRun ? 'Order Creation Preview' : 'Orders Created in Odoo'}
+                </h3>
+                ${dryRun ? `<span class="text-slate-400 text-xs">Click "Create Orders Now" to create them in Odoo</span>` : ''}
+              </div>
+              <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-1">
+              <!-- Summary -->
+              <div class="flex gap-3 mb-4 text-xs">
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-white font-bold">${result.processed || 0}</span>
+                  <span class="text-slate-400">Processed</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-green-400 font-bold">${result.created || 0}</span>
+                  <span class="text-slate-400">${dryRun ? 'Would Create' : 'Created'}</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-slate-400 font-bold">${result.skipped || 0}</span>
+                  <span class="text-slate-400">Skipped</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-red-400 font-bold">${result.errors?.length || 0}</span>
+                  <span class="text-slate-400">Errors</span>
+                </div>
+              </div>
+
+              <!-- Orders list -->
+              ${result.orders && result.orders.length > 0 ? `
+                <div class="space-y-2">
+                  ${result.orders.slice(0, 30).map(ord => `
+                    <div class="bg-slate-700/30 rounded-lg p-3">
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <span class="text-white font-mono text-sm font-semibold">${ord.amazonOrderId || ord.orderId}</span>
+                          ${ord.customerName ? `<span class="text-slate-400 text-xs ml-2">→ ${ord.customerName}</span>` : ''}
+                        </div>
+                        ${ord.odooOrderNumber ? `
+                          <span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-sm font-semibold">${ord.odooOrderNumber}</span>
+                        ` : ord.status === 'would_create' ? `
+                          <span class="px-2 py-1 bg-amber-900/50 text-amber-300 rounded text-xs">Would create</span>
+                        ` : ''}
+                      </div>
+                      ${ord.lines && ord.lines.length > 0 ? `
+                        <div class="mt-2 text-xs text-slate-400">
+                          ${ord.lines.map(l => `<span class="mr-2">${l.sku || l.productName}: ${l.quantity}x</span>`).join('')}
+                        </div>
+                      ` : ''}
+                      ${ord.error ? `
+                        <div class="mt-2 text-xs text-red-400">${ord.error}</div>
+                      ` : ''}
+                    </div>
+                  `).join('')}
+                  ${result.orders.length > 30 ? `<div class="text-slate-500 text-xs text-center py-1">... and ${result.orders.length - 30} more</div>` : ''}
+                </div>
+              ` : ''}
+
+              <!-- Errors -->
+              ${result.errors && result.errors.length > 0 ? `
+                <h4 class="text-red-400 font-semibold text-sm mt-3 mb-2">Errors:</h4>
+                <div class="space-y-1 max-h-32 overflow-y-auto">
+                  ${result.errors.map(err => `
+                    <div class="p-1.5 bg-red-900/30 border border-red-800 rounded text-xs">
+                      <span class="text-slate-300 font-mono">${err.orderId || err.amazonOrderId}</span>
+                      <span class="text-red-400 ml-2">${err.error}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+            <div class="px-4 py-2 border-t border-slate-700 flex justify-end gap-2 shrink-0">
+              <button onclick="this.closest('.fixed').remove()" class="px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-600">
+                Close
+              </button>
+              ${dryRun ? `
+                <button onclick="this.closest('.fixed').remove(); createOdooOrders(false);" class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded hover:bg-amber-700">
+                  Create Orders Now
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.remove();
+        });
       }
     </script>
   </body>

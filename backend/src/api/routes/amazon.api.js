@@ -26,6 +26,7 @@ const { VcsTaxReportParser } = require('../../services/amazon/VcsTaxReportParser
 const { FbaInventoryReportParser } = require('../../services/amazon/FbaInventoryReportParser');
 const { ReturnsReportParser } = require('../../services/amazon/ReturnsReportParser');
 const { VcsOdooInvoicer } = require('../../services/amazon/VcsOdooInvoicer');
+const { VcsOrderCreator } = require('../../services/amazon/VcsOrderCreator');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 
 // Configure multer for settlement report uploads
@@ -3408,6 +3409,48 @@ router.post('/vcs/create-credit-notes', async (req, res) => {
 
   } catch (error) {
     console.error('[VCS Credit Notes] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/vcs/create-orders
+ * @desc Create Odoo sale orders from selected VCS orders that don't exist in Odoo
+ * @body { orderIds, dryRun }
+ */
+router.post('/vcs/create-orders', async (req, res) => {
+  try {
+    const { orderIds = [], dryRun = true } = req.body;
+
+    if (!orderIds || orderIds.length === 0) {
+      return res.status(400).json({ error: 'No orders selected' });
+    }
+
+    // Check Odoo credentials
+    if (!process.env.ODOO_URL || !process.env.ODOO_DB || !process.env.ODOO_USERNAME || !process.env.ODOO_PASSWORD) {
+      return res.status(400).json({
+        error: 'Odoo not configured. Set ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD environment variables.',
+        missingEnvVars: ['ODOO_URL', 'ODOO_DB', 'ODOO_USERNAME', 'ODOO_PASSWORD'].filter(key => !process.env[key])
+      });
+    }
+
+    // Initialize Odoo client
+    const odooClient = new OdooDirectClient();
+    await odooClient.authenticate();
+    console.log('[VCS Create Orders] Connected to Odoo');
+
+    const orderCreator = new VcsOrderCreator(odooClient);
+
+    const result = await orderCreator.createOrders({ orderIds, dryRun });
+
+    res.json({
+      success: true,
+      dryRun,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('[VCS Create Orders] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
