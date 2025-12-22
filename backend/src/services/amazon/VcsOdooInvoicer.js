@@ -247,6 +247,117 @@ class VcsOdooInvoicer {
     this.options = options;
     this.defaultJournalId = options.defaultJournalId;
     this.amazonPartnerId = options.amazonPartnerId; // Partner for "Amazon Customer"
+    // Cache for batch-prefetched orders: amazonOrderId -> { saleOrder, orderLines }
+    this.orderCache = new Map();
+    // Cache for product SKUs: productId -> default_code
+    this.productSkuCache = new Map();
+  }
+
+  /**
+   * Batch prefetch all Odoo orders for the given VCS orders
+   * This dramatically improves performance by reducing thousands of API calls to just a few
+   * @param {object[]} vcsOrders - Array of VCS orders to prefetch
+   */
+  async prefetchOrders(vcsOrders) {
+    // Extract unique Amazon order IDs
+    const amazonOrderIds = [...new Set(vcsOrders.map(o => o.orderId))];
+
+    if (amazonOrderIds.length === 0) {
+      return;
+    }
+
+    console.log(`[VcsOdooInvoicer] Prefetching ${amazonOrderIds.length} orders from Odoo...`);
+    const startTime = Date.now();
+
+    // Fetch all orders in batches (Odoo can handle large 'in' queries, but let's batch for safety)
+    const BATCH_SIZE = 500;
+    const allOrders = [];
+
+    for (let i = 0; i < amazonOrderIds.length; i += BATCH_SIZE) {
+      const batchIds = amazonOrderIds.slice(i, i + BATCH_SIZE);
+      console.log(`[VcsOdooInvoicer] Fetching batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(amazonOrderIds.length / BATCH_SIZE)}...`);
+
+      const orders = await this.odoo.searchRead('sale.order',
+        [['client_order_ref', 'in', batchIds]],
+        ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id']
+      );
+      allOrders.push(...orders);
+    }
+
+    console.log(`[VcsOdooInvoicer] Found ${allOrders.length} Odoo orders`);
+
+    // Collect all order line IDs
+    const allOrderLineIds = [];
+    for (const order of allOrders) {
+      if (order.order_line && order.order_line.length > 0) {
+        allOrderLineIds.push(...order.order_line);
+      }
+    }
+
+    // Fetch all order lines in batches
+    console.log(`[VcsOdooInvoicer] Fetching ${allOrderLineIds.length} order lines...`);
+    const allOrderLines = [];
+    for (let i = 0; i < allOrderLineIds.length; i += BATCH_SIZE) {
+      const batchIds = allOrderLineIds.slice(i, i + BATCH_SIZE);
+      const lines = await this.odoo.searchRead('sale.order.line',
+        [['id', 'in', batchIds]],
+        ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'price_total', 'order_id']
+      );
+      allOrderLines.push(...lines);
+    }
+
+    // Collect all product IDs for SKU lookup
+    const productIds = [...new Set(allOrderLines.filter(l => l.product_id).map(l => l.product_id[0]))];
+
+    // Fetch all products in batches
+    console.log(`[VcsOdooInvoicer] Fetching ${productIds.length} product SKUs...`);
+    for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
+      const batchIds = productIds.slice(i, i + BATCH_SIZE);
+      const products = await this.odoo.searchRead('product.product',
+        [['id', 'in', batchIds]],
+        ['id', 'default_code', 'name']
+      );
+      for (const p of products) {
+        this.productSkuCache.set(p.id, p.default_code || '');
+      }
+    }
+
+    // Create order line lookup by order ID
+    const orderLinesByOrderId = {};
+    for (const line of allOrderLines) {
+      const orderId = line.order_id[0];
+      if (!orderLinesByOrderId[orderId]) {
+        orderLinesByOrderId[orderId] = [];
+      }
+      // Add product SKU from cache
+      if (line.product_id) {
+        line.product_default_code = this.productSkuCache.get(line.product_id[0]) || '';
+        line.product_name = line.name;
+      }
+      orderLinesByOrderId[orderId].push(line);
+    }
+
+    // Build the order cache - map Amazon order ID to Odoo order data
+    // Handle multiple orders for same Amazon ID (FBA/FBM split)
+    const ordersByAmazonId = {};
+    for (const order of allOrders) {
+      const amazonId = order.client_order_ref;
+      if (!ordersByAmazonId[amazonId]) {
+        ordersByAmazonId[amazonId] = [];
+      }
+      ordersByAmazonId[amazonId].push({
+        saleOrder: order,
+        orderLines: orderLinesByOrderId[order.id] || []
+      });
+    }
+
+    // Store in cache
+    for (const [amazonId, orderDataList] of Object.entries(ordersByAmazonId)) {
+      this.orderCache.set(amazonId, orderDataList);
+    }
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[VcsOdooInvoicer] Prefetch complete in ${elapsed}s. Cached ${this.orderCache.size} unique Amazon order IDs`);
   }
 
   /**
@@ -280,6 +391,11 @@ class VcsOdooInvoicer {
     if (orders.length === 0) {
       return { ...result, message: 'No orders found for the given IDs' };
     }
+
+    // PERFORMANCE OPTIMIZATION: Prefetch all Odoo orders in batch
+    // This reduces thousands of individual API calls to just a few batch calls
+    console.log(`[VcsOdooInvoicer] Processing ${orders.length} VCS orders...`);
+    await this.prefetchOrders(orders);
 
     // Get or create Amazon customer partner
     const partnerId = await this.getOrCreateAmazonPartner();
@@ -434,11 +550,43 @@ class VcsOdooInvoicer {
 
   /**
    * Find the Odoo sales order for a VCS order
+   * Uses cached data from prefetchOrders() if available, otherwise falls back to API call
    * @param {object} vcsOrder - The VCS order data
    * @returns {object|null} { saleOrder, orderLines } or null if not found
    */
   async findOdooOrder(vcsOrder) {
     const amazonOrderId = vcsOrder.orderId;
+
+    // Check cache first (populated by prefetchOrders)
+    const cachedOrderDataList = this.orderCache.get(amazonOrderId);
+    if (cachedOrderDataList && cachedOrderDataList.length > 0) {
+      // If only one order cached, use it
+      if (cachedOrderDataList.length === 1) {
+        return cachedOrderDataList[0];
+      }
+
+      // Multiple orders cached (FBA/FBM split) - match by SKU
+      const vcsSku = vcsOrder.items?.[0]?.sku;
+      if (!vcsSku) {
+        return cachedOrderDataList[0]; // No SKU, use first
+      }
+
+      const transformedSku = this.transformSku(vcsSku);
+      for (const orderData of cachedOrderDataList) {
+        for (const line of orderData.orderLines) {
+          const productSku = line.product_default_code || '';
+          if (productSku === transformedSku || productSku === vcsSku) {
+            return orderData;
+          }
+        }
+      }
+
+      // No exact match, use first
+      return cachedOrderDataList[0];
+    }
+
+    // Cache miss - fall back to individual API call (for orders not in the batch)
+    console.log(`[VcsOdooInvoicer] Cache miss for ${amazonOrderId}, fetching from Odoo...`);
 
     // Search for sale.order by client_order_ref (Amazon order ID)
     const orders = await this.odoo.searchRead('sale.order',
@@ -1396,6 +1544,10 @@ class VcsOdooInvoicer {
     if (orders.length === 0) {
       return { ...result, message: 'No return orders found for the given IDs' };
     }
+
+    // PERFORMANCE OPTIMIZATION: Prefetch all Odoo orders in batch
+    console.log(`[VcsOdooInvoicer] Processing ${orders.length} VCS return orders...`);
+    await this.prefetchOrders(orders);
 
     for (const order of orders) {
       result.processed++;
