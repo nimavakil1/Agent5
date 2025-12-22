@@ -326,6 +326,9 @@ class VcsOdooInvoicer {
           }
         );
 
+        // Rate limiting: add delay between invoice creations to prevent Odoo overload
+        await new Promise(resolve => setTimeout(resolve, 150));
+
       } catch (error) {
         result.errors.push({
           orderId: order.orderId,
