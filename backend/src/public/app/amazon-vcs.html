@@ -159,18 +159,46 @@
           <table class="w-full text-sm">
             <thead>
               <tr class="text-left text-slate-400 border-b border-slate-700">
-                <th class="pb-3 pr-4 pl-4">
+                <th class="pb-2 pr-4 pl-4">
                   <input type="checkbox" id="select-all" class="rounded bg-slate-700 border-slate-600">
                 </th>
-                <th class="pb-3 pr-4">Order ID</th>
-                <th class="pb-3 pr-4">Date</th>
-                <th class="pb-3 pr-4">Country</th>
-                <th class="pb-3 pr-4">Scheme</th>
-                <th class="pb-3 pr-4">Items</th>
-                <th class="pb-3 pr-4 text-right">Net</th>
-                <th class="pb-3 pr-4 text-right">VAT</th>
-                <th class="pb-3 pr-4 text-right">Total</th>
-                <th class="pb-3 pr-4">Odoo Order</th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('orderId')">
+                  Order ID <span id="sort-orderId" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('orderDate')">
+                  Date <span id="sort-orderDate" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('shipToCountry')">
+                  Country <span id="sort-shipToCountry" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('scheme')">
+                  Scheme <span id="sort-scheme" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('items')">
+                  Items <span id="sort-items" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 text-right cursor-pointer hover:text-white" onclick="sortOrdersBy('totalExclusive')">
+                  Net <span id="sort-totalExclusive" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 text-right cursor-pointer hover:text-white" onclick="sortOrdersBy('totalTax')">
+                  VAT <span id="sort-totalTax" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 text-right cursor-pointer hover:text-white" onclick="sortOrdersBy('totalInclusive')">
+                  Total <span id="sort-totalInclusive" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4">Odoo Order</th>
+              </tr>
+              <tr class="text-slate-500 border-b border-slate-700/50">
+                <th class="pb-2 pr-4 pl-4"></th>
+                <th class="pb-2 pr-4"><input type="text" placeholder="Search..." class="orders-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="orderId"></th>
+                <th class="pb-2 pr-4"><input type="text" placeholder="Search..." class="orders-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="orderDate"></th>
+                <th class="pb-2 pr-4"><input type="text" placeholder="Search..." class="orders-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="shipToCountry"></th>
+                <th class="pb-2 pr-4"><input type="text" placeholder="Search..." class="orders-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="scheme"></th>
+                <th class="pb-2 pr-4"></th>
+                <th class="pb-2 pr-4"></th>
+                <th class="pb-2 pr-4"></th>
+                <th class="pb-2 pr-4"></th>
+                <th class="pb-2 pr-4"></th>
               </tr>
             </thead>
             <tbody id="orders-table-body" class="text-slate-300">
@@ -187,6 +215,17 @@
         <!-- Pagination -->
         <div class="flex items-center justify-between mt-4 pt-4 border-t border-slate-700">
           <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-sm">Show</span>
+              <select id="orders-page-size" class="bg-slate-700 border border-slate-600 text-slate-300 rounded px-2 py-1 text-sm">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="250">250</option>
+                <option value="500">500</option>
+              </select>
+              <span class="text-slate-400 text-sm">per page</span>
+            </div>
             <div id="pagination-info" class="text-slate-400 text-sm">Showing 0 orders</div>
             <div id="selection-info" class="text-sm">
               <span id="selection-count" class="text-green-400 font-semibold">0</span>
@@ -233,13 +272,37 @@
             <thead class="text-slate-400 border-b border-slate-700">
               <tr>
                 <th class="text-left py-2 px-3"><input type="checkbox" id="select-all-returns" class="rounded"></th>
-                <th class="text-left py-2 px-3">Order ID</th>
-                <th class="text-left py-2 px-3">Return Date</th>
-                <th class="text-left py-2 px-3">Country</th>
-                <th class="text-left py-2 px-3">Items</th>
-                <th class="text-right py-2 px-3">Total (excl)</th>
-                <th class="text-right py-2 px-3">VAT</th>
-                <th class="text-left py-2 px-3">Scheme</th>
+                <th class="text-left py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('orderId')">
+                  Order ID <span id="ret-sort-orderId" class="text-xs"></span>
+                </th>
+                <th class="text-left py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('returnDate')">
+                  Return Date <span id="ret-sort-returnDate" class="text-xs"></span>
+                </th>
+                <th class="text-left py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('shipToCountry')">
+                  Country <span id="ret-sort-shipToCountry" class="text-xs"></span>
+                </th>
+                <th class="text-left py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('items')">
+                  Items <span id="ret-sort-items" class="text-xs"></span>
+                </th>
+                <th class="text-right py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('totalExclusive')">
+                  Total (excl) <span id="ret-sort-totalExclusive" class="text-xs"></span>
+                </th>
+                <th class="text-right py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('totalTax')">
+                  VAT <span id="ret-sort-totalTax" class="text-xs"></span>
+                </th>
+                <th class="text-left py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('scheme')">
+                  Scheme <span id="ret-sort-scheme" class="text-xs"></span>
+                </th>
+              </tr>
+              <tr class="text-slate-500 border-b border-slate-700/50">
+                <th class="py-2 px-3"></th>
+                <th class="py-2 px-3"><input type="text" placeholder="Search..." class="returns-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="orderId"></th>
+                <th class="py-2 px-3"><input type="text" placeholder="Search..." class="returns-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="returnDate"></th>
+                <th class="py-2 px-3"><input type="text" placeholder="Search..." class="returns-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="shipToCountry"></th>
+                <th class="py-2 px-3"></th>
+                <th class="py-2 px-3"></th>
+                <th class="py-2 px-3"></th>
+                <th class="py-2 px-3"><input type="text" placeholder="Search..." class="returns-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="scheme"></th>
               </tr>
             </thead>
             <tbody id="returns-table-body" class="text-slate-300">
@@ -248,7 +311,19 @@
           </table>
         </div>
         <div class="flex justify-between items-center mt-4">
-          <div id="returns-count" class="text-slate-400 text-sm"></div>
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-sm">Show</span>
+              <select id="returns-page-size" class="bg-slate-700 border border-slate-600 text-slate-300 rounded px-2 py-1 text-sm">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="250">250</option>
+              </select>
+              <span class="text-slate-400 text-sm">per page</span>
+            </div>
+            <div id="returns-count" class="text-slate-400 text-sm"></div>
+          </div>
           <div class="flex items-center gap-4">
             <span id="returns-pagination-info" class="text-slate-400 text-sm"></span>
             <div class="flex gap-2">
@@ -274,12 +349,22 @@
       let pendingReturns = [];
       let odooOrders = {}; // Map of orderId -> Odoo order info
       let currentPage = 1;
-      const pageSize = 50;
+      let pageSize = 50;
       let selectedOrderIds = new Set(); // Track selected order IDs across pages
       let allFilteredSelected = false; // Whether all filtered orders are selected
       let selectedReturnIds = new Set(); // Track selected return IDs
       let returnsPage = 1;
-      const returnsPageSize = 50;
+      let returnsPageSize = 50;
+
+      // Sorting state
+      let ordersSortColumn = null;
+      let ordersSortDirection = 'asc'; // 'asc' or 'desc'
+      let returnsSortColumn = null;
+      let returnsSortDirection = 'asc';
+
+      // Column search filters
+      let ordersColumnFilters = {};
+      let returnsColumnFilters = {};
 
       // DOM Elements
       const dropZone = document.getElementById('drop-zone');
@@ -416,12 +501,162 @@
           }
         });
         document.getElementById('returns-next-page')?.addEventListener('click', () => {
-          const maxPage = Math.ceil(pendingReturns.length / returnsPageSize);
+          const maxPage = Math.ceil(getFilteredReturns().length / returnsPageSize);
           if (returnsPage < maxPage) {
             returnsPage++;
             renderReturns();
           }
         });
+
+        // Page size selectors
+        document.getElementById('orders-page-size')?.addEventListener('change', (e) => {
+          pageSize = parseInt(e.target.value);
+          currentPage = 1;
+          renderOrders();
+        });
+        document.getElementById('returns-page-size')?.addEventListener('change', (e) => {
+          returnsPageSize = parseInt(e.target.value);
+          returnsPage = 1;
+          renderReturns();
+        });
+
+        // Column search filters for orders
+        document.querySelectorAll('.orders-col-filter').forEach(input => {
+          input.addEventListener('input', (e) => {
+            const column = e.target.dataset.column;
+            const value = e.target.value.trim().toLowerCase();
+            if (value) {
+              ordersColumnFilters[column] = value;
+            } else {
+              delete ordersColumnFilters[column];
+            }
+            currentPage = 1;
+            renderOrders();
+          });
+        });
+
+        // Column search filters for returns
+        document.querySelectorAll('.returns-col-filter').forEach(input => {
+          input.addEventListener('input', (e) => {
+            const column = e.target.dataset.column;
+            const value = e.target.value.trim().toLowerCase();
+            if (value) {
+              returnsColumnFilters[column] = value;
+            } else {
+              delete returnsColumnFilters[column];
+            }
+            returnsPage = 1;
+            renderReturns();
+          });
+        });
+      }
+
+      // Sorting functions
+      function sortOrdersBy(column) {
+        if (ordersSortColumn === column) {
+          ordersSortDirection = ordersSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          ordersSortColumn = column;
+          ordersSortDirection = 'asc';
+        }
+        updateSortIndicators('orders');
+        renderOrders();
+      }
+
+      function sortReturnsBy(column) {
+        if (returnsSortColumn === column) {
+          returnsSortDirection = returnsSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          returnsSortColumn = column;
+          returnsSortDirection = 'asc';
+        }
+        updateSortIndicators('returns');
+        renderReturns();
+      }
+
+      function updateSortIndicators(tableType) {
+        if (tableType === 'orders') {
+          // Clear all order sort indicators
+          ['orderId', 'orderDate', 'shipToCountry', 'scheme', 'items', 'totalExclusive', 'totalTax', 'totalInclusive'].forEach(col => {
+            const el = document.getElementById(`sort-${col}`);
+            if (el) el.textContent = '';
+          });
+          // Set active indicator
+          if (ordersSortColumn) {
+            const el = document.getElementById(`sort-${ordersSortColumn}`);
+            if (el) el.textContent = ordersSortDirection === 'asc' ? '▲' : '▼';
+          }
+        } else {
+          // Clear all return sort indicators
+          ['orderId', 'returnDate', 'shipToCountry', 'items', 'totalExclusive', 'totalTax', 'scheme'].forEach(col => {
+            const el = document.getElementById(`ret-sort-${col}`);
+            if (el) el.textContent = '';
+          });
+          // Set active indicator
+          if (returnsSortColumn) {
+            const el = document.getElementById(`ret-sort-${returnsSortColumn}`);
+            if (el) el.textContent = returnsSortDirection === 'asc' ? '▲' : '▼';
+          }
+        }
+      }
+
+      // Get filtered returns with column filters and sorting
+      function getFilteredReturns() {
+        let filtered = [...pendingReturns];
+
+        // Apply column filters
+        Object.entries(returnsColumnFilters).forEach(([column, searchValue]) => {
+          filtered = filtered.filter(ret => {
+            let fieldValue = '';
+            if (column === 'orderId') fieldValue = ret.orderId || '';
+            else if (column === 'returnDate') fieldValue = formatDate(ret.returnDate || ret.shipmentDate) || '';
+            else if (column === 'shipToCountry') fieldValue = ret.shipToCountry || '';
+            else if (column === 'scheme') fieldValue = getSchemeLabel(ret) || '';
+            return fieldValue.toLowerCase().includes(searchValue);
+          });
+        });
+
+        // Apply sorting
+        if (returnsSortColumn) {
+          filtered.sort((a, b) => {
+            let valA, valB;
+            if (returnsSortColumn === 'orderId') {
+              valA = a.orderId || '';
+              valB = b.orderId || '';
+            } else if (returnsSortColumn === 'returnDate') {
+              valA = new Date(a.returnDate || a.shipmentDate || 0);
+              valB = new Date(b.returnDate || b.shipmentDate || 0);
+              return returnsSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (returnsSortColumn === 'shipToCountry') {
+              valA = a.shipToCountry || '';
+              valB = b.shipToCountry || '';
+            } else if (returnsSortColumn === 'items') {
+              valA = a.items?.length || 0;
+              valB = b.items?.length || 0;
+              return returnsSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (returnsSortColumn === 'totalExclusive') {
+              valA = parseFloat(a.totalExclusive) || 0;
+              valB = parseFloat(b.totalExclusive) || 0;
+              return returnsSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (returnsSortColumn === 'totalTax') {
+              valA = parseFloat(a.totalTax) || 0;
+              valB = parseFloat(b.totalTax) || 0;
+              return returnsSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (returnsSortColumn === 'scheme') {
+              valA = getSchemeLabel(a) || '';
+              valB = getSchemeLabel(b) || '';
+            } else {
+              return 0;
+            }
+            // String comparison
+            if (typeof valA === 'string') {
+              return returnsSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+            return 0;
+          });
+        }
+
+        return filtered;
       }
 
       // Shared filter logic
@@ -429,7 +664,9 @@
         const country = document.getElementById('filter-country').value;
         const scheme = document.getElementById('filter-scheme').value;
 
-        let filtered = pendingOrders;
+        let filtered = [...pendingOrders];
+
+        // Apply dropdown filters
         if (country) filtered = filtered.filter(o => o.shipToCountry === country);
         if (scheme) {
           filtered = filtered.filter(o => {
@@ -449,6 +686,63 @@
             return true;
           });
         }
+
+        // Apply column search filters
+        Object.entries(ordersColumnFilters).forEach(([column, searchValue]) => {
+          filtered = filtered.filter(order => {
+            let fieldValue = '';
+            if (column === 'orderId') fieldValue = order.orderId || '';
+            else if (column === 'orderDate') fieldValue = formatDate(order.orderDate) || '';
+            else if (column === 'shipToCountry') fieldValue = order.shipToCountry || '';
+            else if (column === 'scheme') fieldValue = getSchemeLabel(order) || '';
+            return fieldValue.toLowerCase().includes(searchValue);
+          });
+        });
+
+        // Apply sorting
+        if (ordersSortColumn) {
+          filtered.sort((a, b) => {
+            let valA, valB;
+            if (ordersSortColumn === 'orderId') {
+              valA = a.orderId || '';
+              valB = b.orderId || '';
+            } else if (ordersSortColumn === 'orderDate') {
+              valA = new Date(a.orderDate || 0);
+              valB = new Date(b.orderDate || 0);
+              return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (ordersSortColumn === 'shipToCountry') {
+              valA = a.shipToCountry || '';
+              valB = b.shipToCountry || '';
+            } else if (ordersSortColumn === 'scheme') {
+              valA = getSchemeLabel(a) || '';
+              valB = getSchemeLabel(b) || '';
+            } else if (ordersSortColumn === 'items') {
+              valA = a.items?.length || 0;
+              valB = b.items?.length || 0;
+              return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (ordersSortColumn === 'totalExclusive') {
+              valA = parseFloat(a.totalExclusive) || 0;
+              valB = parseFloat(b.totalExclusive) || 0;
+              return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (ordersSortColumn === 'totalTax') {
+              valA = parseFloat(a.totalTax) || 0;
+              valB = parseFloat(b.totalTax) || 0;
+              return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (ordersSortColumn === 'totalInclusive') {
+              valA = parseFloat(a.totalInclusive) || 0;
+              valB = parseFloat(b.totalInclusive) || 0;
+              return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else {
+              return 0;
+            }
+            // String comparison
+            if (typeof valA === 'string') {
+              return ordersSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+            return 0;
+          });
+        }
+
         return filtered;
       }
 
@@ -577,27 +871,29 @@
         const prevBtn = document.getElementById('returns-prev-page');
         const nextBtn = document.getElementById('returns-next-page');
 
-        if (pendingReturns.length === 0) {
+        const filteredReturns = getFilteredReturns();
+
+        if (filteredReturns.length === 0) {
           tbody.innerHTML = `<tr><td colspan="8" class="py-4 text-center text-slate-500">No pending returns</td></tr>`;
-          countDiv.textContent = '';
+          countDiv.textContent = pendingReturns.length > 0 ? `0 of ${pendingReturns.length} returns match filters` : '';
           paginationInfo.textContent = '';
           prevBtn.disabled = true;
           nextBtn.disabled = true;
           return;
         }
 
-        const formatCurrency = (val) => {
+        const formatCurrencyLocal = (val) => {
           const num = Math.abs(parseFloat(val) || 0);
           return num.toFixed(2);
         };
 
-        const formatDate = (dateStr) => {
+        const formatDateLocal = (dateStr) => {
           if (!dateStr) return '-';
           const date = new Date(dateStr);
           return date.toLocaleDateString('en-GB');
         };
 
-        const getSchemeLabel = (order) => {
+        const getSchemeLabelLocal = (order) => {
           if (order.taxReportingScheme === 'VCS_EU_OSS') return 'OSS';
           if (order.taxReportingScheme === 'DEEMED_RESELLER') return 'Deemed';
           if (order.buyerTaxRegistration) return 'B2B';
@@ -606,11 +902,11 @@
         };
 
         // Pagination logic
-        const totalReturns = pendingReturns.length;
+        const totalReturns = filteredReturns.length;
         const totalPages = Math.ceil(totalReturns / returnsPageSize);
         const startIndex = (returnsPage - 1) * returnsPageSize;
         const endIndex = Math.min(startIndex + returnsPageSize, totalReturns);
-        const pageReturns = pendingReturns.slice(startIndex, endIndex);
+        const pageReturns = filteredReturns.slice(startIndex, endIndex);
 
         tbody.innerHTML = pageReturns.map(ret => `
           <tr class="border-b border-slate-700/50 hover:bg-slate-700/30">
@@ -620,20 +916,20 @@
                      onchange="toggleReturn('${ret._id}', this.checked)">
             </td>
             <td class="py-2 px-3 font-mono text-xs">${ret.orderId}</td>
-            <td class="py-2 px-3 text-slate-400 text-xs">${formatDate(ret.returnDate || ret.shipmentDate)}</td>
+            <td class="py-2 px-3 text-slate-400 text-xs">${formatDateLocal(ret.returnDate || ret.shipmentDate)}</td>
             <td class="py-2 px-3">
               <span class="px-2 py-0.5 bg-slate-700 rounded text-xs">${ret.shipToCountry || '-'}</span>
             </td>
             <td class="py-2 px-3 text-slate-400">${ret.items?.length || 0}</td>
-            <td class="py-2 px-3 text-right font-mono text-orange-400">-${formatCurrency(ret.totalExclusive)}</td>
-            <td class="py-2 px-3 text-right font-mono text-slate-400">-${formatCurrency(ret.totalTax)}</td>
+            <td class="py-2 px-3 text-right font-mono text-orange-400">-${formatCurrencyLocal(ret.totalExclusive)}</td>
+            <td class="py-2 px-3 text-right font-mono text-slate-400">-${formatCurrencyLocal(ret.totalTax)}</td>
             <td class="py-2 px-3">
-              <span class="px-2 py-0.5 bg-orange-900/30 text-orange-400 rounded text-xs">${getSchemeLabel(ret)}</span>
+              <span class="px-2 py-0.5 bg-orange-900/30 text-orange-400 rounded text-xs">${getSchemeLabelLocal(ret)}</span>
             </td>
           </tr>
         `).join('');
 
-        countDiv.textContent = `${totalReturns} pending return${totalReturns !== 1 ? 's' : ''} (${selectedReturnIds.size} selected)`;
+        countDiv.textContent = `${totalReturns} pending return${totalReturns !== 1 ? 's' : ''} (${selectedReturnIds.size} selected)${pendingReturns.length !== totalReturns ? ` · filtered from ${pendingReturns.length}` : ''}`;
         paginationInfo.textContent = `Page ${returnsPage} of ${totalPages} (${startIndex + 1}-${endIndex} of ${totalReturns})`;
         prevBtn.disabled = returnsPage <= 1;
         nextBtn.disabled = returnsPage >= totalPages;
