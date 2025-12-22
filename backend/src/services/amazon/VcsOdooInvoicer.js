@@ -721,11 +721,13 @@ class VcsOdooInvoicer {
     const isDomestic = shipFrom === shipTo && EU_COUNTRIES.includes(shipTo);
     const isCrossBorderEU = shipFrom !== shipTo && EU_COUNTRIES.includes(shipFrom) && EU_COUNTRIES.includes(shipTo);
 
-    // 1. Export orders - use 0% export tax
+    // 1. Export orders - use BE 0% export tax (must match BE export fiscal position)
+    // IMPORTANT: We always use BE's export fiscal position (ID 3), so we must use BE's 0% tax
+    // to avoid "tax not compatible with fiscal position" errors
     if (isExport) {
-      console.log(`[VcsOdooInvoicer] Export order - using 0% tax`);
-      const countryTaxes = DOMESTIC_TAXES[shipFrom] || DOMESTIC_TAXES['BE'];
-      return countryTaxes?.[0] || null;
+      console.log(`[VcsOdooInvoicer] Export order - using BE 0% export tax`);
+      const beTaxes = DOMESTIC_TAXES['BE'];
+      return beTaxes?.[0] || null; // BE*VAT | 0% (ID 8)
     }
 
     // 2. Explicit OSS scheme OR cross-border EU sale
