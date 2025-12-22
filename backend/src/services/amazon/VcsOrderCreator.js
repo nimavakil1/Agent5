@@ -832,39 +832,26 @@ class VcsOrderCreator {
       // Validate all pickings (mark as delivered)
       for (const picking of pickings) {
         try {
-          // Set quantities to what was reserved
-          await this.odoo.execute('stock.picking', 'action_set_quantities_to_reservation', [[picking.id]]);
-          console.log(`[VcsOrderCreator] Set quantities for picking ${picking.id} (${picking.name})`);
+          // Get move lines for this picking and set qty_done
+          const moveLines = await this.odoo.searchRead('stock.move.line',
+            [['picking_id', '=', picking.id]],
+            ['id', 'reserved_uom_qty', 'qty_done']
+          );
 
-          // Use immediate transfer wizard to validate
-          try {
-            // Create the immediate transfer wizard
-            const wizardId = await this.odoo.create('stock.immediate.transfer', {
-              pick_ids: [[4, picking.id]],
-            });
-            // Process the wizard
-            await this.odoo.execute('stock.immediate.transfer', 'process', [[wizardId]]);
-            console.log(`[VcsOrderCreator] Validated picking ${picking.id} (${picking.name}) via immediate transfer`);
-            result.pickingsValidated++;
-          } catch (wizardError) {
-            console.warn(`[VcsOrderCreator] Wizard failed for picking ${picking.id}: ${wizardError.message}`);
-
-            // Fallback: try button_validate
-            try {
-              await this.odoo.execute('stock.picking', 'button_validate', [[picking.id]]);
-              console.log(`[VcsOrderCreator] Validated picking ${picking.id} via button_validate`);
-              result.pickingsValidated++;
-            } catch (validateError) {
-              // Last resort: try action_done
-              try {
-                await this.odoo.execute('stock.picking', 'action_done', [[picking.id]]);
-                console.log(`[VcsOrderCreator] Force-validated picking ${picking.id} with action_done`);
-                result.pickingsValidated++;
-              } catch (actionError) {
-                throw actionError;
-              }
+          // Set qty_done = reserved_uom_qty for each line
+          for (const ml of moveLines) {
+            if (ml.qty_done < ml.reserved_uom_qty) {
+              await this.odoo.execute('stock.move.line', 'write',
+                [[ml.id], { qty_done: ml.reserved_uom_qty }]
+              );
+              console.log(`[VcsOrderCreator] Set qty_done=${ml.reserved_uom_qty} for move line ${ml.id}`);
             }
           }
+
+          // Now validate the picking
+          await this.odoo.execute('stock.picking', 'button_validate', [[picking.id]]);
+          console.log(`[VcsOrderCreator] Validated picking ${picking.id} (${picking.name})`);
+          result.pickingsValidated++;
 
         } catch (pickingError) {
           console.error(`[VcsOrderCreator] Failed to validate picking ${picking.id}:`, pickingError.message);
