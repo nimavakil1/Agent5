@@ -73,6 +73,52 @@ const OSS_FISCAL_POSITIONS = {
   'ES': 30, 'SE': 31, 'BE': 35,
 };
 
+// Journal IDs
+const JOURNALS = {
+  EXPORT: 52,  // INV*EX/ Export Invoices
+  OSS: 12,     // INV*OSS/ Invoices
+};
+
+// Export fiscal position ID
+const EXPORT_FISCAL_POSITION = 4;  // Export | Export
+
+// Tax IDs for 0% exports
+const EXPORT_TAX_IDS = {
+  'BE*VAT | 0% EX': 13,
+  'CZ*VAT | 0% EU': 193,
+};
+
+// OSS Tax IDs by country
+const OSS_TAX_IDS = {
+  'AT': 55,  // AT*VAT | 20%
+  'BG': 72,  // BG*VAT | 20%
+  'CY': 79,  // CY*VAT | 19%
+  'CZ': 82,  // CZ*VAT | 21%
+  'DE': 108, // DE*VAT | 19%
+  'DK': 85,  // DK*VAT | 25%
+  'EE': 88,  // EE*VAT | 22%
+  'ES': 132, // ES*VAT | 21%
+  'FI': 91,  // FI*VAT | 25.5%
+  'FR': 94,  // FR*VAT | 20%
+  'GR': 98,  // GR*VAT | 24%
+  'HR': 105, // HR*VAT | 25%
+  'HU': 101, // HU*VAT | 27%
+  'IE': 112, // IE*VAT | 23%
+  'IT': 115, // IT*VAT | 22%
+  'LT': 122, // LT*VAT | 21%
+  'LU': 125, // LU*VAT | 17%
+  'LV': 119, // LV*VAT | 21%
+  'MT': 128, // MT*VAT | 18%
+  'NL': 141, // NL*VAT | 21%
+  'PL': 144, // PL*VAT | 23%
+  'PT': 147, // PT*VAT | 23%
+  'RO': 150, // RO*VAT | 19%
+  'SE': 159, // SE*VAT | 25%
+  'SI': 153, // SI*VAT | 22%
+  'SK': 156, // SK*VAT | 20%
+  'BE': 21,  // BE*VAT | 21%
+};
+
 // EU countries
 const EU_COUNTRIES = ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'];
 
@@ -161,7 +207,7 @@ class VcsOrderCreator {
         const partnerId = await this.findOrCreateCustomer(vcsOrder, config);
 
         // Resolve order lines
-        const orderLines = await this.resolveOrderLines(vcsOrder);
+        const orderLines = await this.resolveOrderLines(vcsOrder, config);
         if (orderLines.lines.length === 0 && orderLines.errors.length > 0) {
           result.errors.push({
             orderId: vcsOrder.orderId,
@@ -251,9 +297,31 @@ class VcsOrderCreator {
     let fiscalPositionId = null;
     let fiscalPositionName = null;
 
-    if (isOSS && OSS_FISCAL_POSITIONS[shipToCountry]) {
+    if (isExport) {
+      // Export orders use the Export fiscal position
+      fiscalPositionId = EXPORT_FISCAL_POSITION;
+      fiscalPositionName = 'Export | Export';
+    } else if (isOSS && OSS_FISCAL_POSITIONS[shipToCountry]) {
       fiscalPositionId = OSS_FISCAL_POSITIONS[shipToCountry];
       fiscalPositionName = `${shipToCountry}*OSS | B2C ${euCountryConfig.getCountryName(shipToCountry)}`;
+    }
+
+    // Determine tax ID based on tax scheme
+    let taxId = null;
+    if (isExport) {
+      // Use 0% export tax
+      taxId = EXPORT_TAX_IDS['BE*VAT | 0% EX'];
+    } else if (isOSS && OSS_TAX_IDS[shipToCountry]) {
+      // Use the OSS tax for the destination country
+      taxId = OSS_TAX_IDS[shipToCountry];
+    }
+
+    // Determine journal
+    let journalId = null;
+    if (isExport) {
+      journalId = JOURNALS.EXPORT;
+    } else if (isOSS) {
+      journalId = JOURNALS.OSS;
     }
 
     // Get generic customer name for B2C
@@ -264,6 +332,8 @@ class VcsOrderCreator {
     // Get sales team
     const marketplace = vcsOrder.marketplaceId || shipToCountry;
     const teamId = MARKETPLACE_SALES_TEAMS[marketplace] || null;
+
+    console.log(`[VcsOrderCreator] Order config for ${vcsOrder.orderId}: scheme=${vcsOrder.taxReportingScheme}, isExport=${isExport}, isOSS=${isOSS}, taxId=${taxId}, journalId=${journalId}, fiscalPositionId=${fiscalPositionId}`);
 
     return {
       shipFromCountry,
@@ -278,6 +348,9 @@ class VcsOrderCreator {
       fiscalPositionName,
       genericCustomer,
       teamId,
+      taxId,
+      journalId,
+      taxReportingScheme: vcsOrder.taxReportingScheme,
     };
   }
 
@@ -443,8 +516,10 @@ class VcsOrderCreator {
 
   /**
    * Resolve VCS order items to Odoo order lines
+   * @param {object} vcsOrder - The VCS order
+   * @param {object} config - The order configuration with taxId
    */
-  async resolveOrderLines(vcsOrder) {
+  async resolveOrderLines(vcsOrder, config) {
     const lines = [];
     const errors = [];
 
@@ -479,12 +554,19 @@ class VcsOrderCreator {
         const quantity = Math.abs(item.quantity) || 1;
         const priceUnit = (Math.abs(item.priceExclusive) || 0) / quantity;
 
-        lines.push({
+        const lineData = {
           product_id: productId,
           product_uom_qty: quantity,
           price_unit: priceUnit,
           name: item.productName || transformedSku,
-        });
+        };
+
+        // Add tax_id if we have one - format: [[6, 0, [taxId]]] replaces existing taxes
+        if (config.taxId) {
+          lineData.tax_id = [[6, 0, [config.taxId]]];
+        }
+
+        lines.push(lineData);
 
       } catch (error) {
         errors.push(`Error processing SKU ${item.sku}: ${error.message}`);
@@ -495,12 +577,16 @@ class VcsOrderCreator {
     if (vcsOrder.totalShipping && vcsOrder.totalShipping > 0) {
       const shippingProductId = await this.findShippingProduct();
       if (shippingProductId) {
-        lines.push({
+        const shippingLine = {
           product_id: shippingProductId,
           product_uom_qty: 1,
           price_unit: vcsOrder.totalShipping,
           name: 'Shipping',
-        });
+        };
+        if (config.taxId) {
+          shippingLine.tax_id = [[6, 0, [config.taxId]]];
+        }
+        lines.push(shippingLine);
       }
     }
 
@@ -508,12 +594,16 @@ class VcsOrderCreator {
     if (vcsOrder.totalShippingPromo && vcsOrder.totalShippingPromo !== 0) {
       const shippingDiscountProductId = await this.findShippingDiscountProduct();
       if (shippingDiscountProductId) {
-        lines.push({
+        const discountLine = {
           product_id: shippingDiscountProductId,
           product_uom_qty: 1,
           price_unit: -Math.abs(vcsOrder.totalShippingPromo),
           name: 'Shipping Discount',
-        });
+        };
+        if (config.taxId) {
+          discountLine.tax_id = [[6, 0, [config.taxId]]];
+        }
+        lines.push(discountLine);
       }
     }
 
@@ -692,10 +782,9 @@ class VcsOrderCreator {
 
     console.log(`[VcsOrderCreator] Created order ${orderName} (ID: ${orderId})`);
 
-    // For FBA orders, confirm and mark delivered
-    if (isFBA) {
-      await this.confirmAndDeliverFba(orderId);
-    }
+    // VCS orders are already shipped - always confirm and deliver
+    // This is necessary to update stock levels in Odoo
+    const deliveryResult = await this.confirmAndDeliver(orderId, vcsOrder);
 
     return {
       id: orderId,
@@ -706,38 +795,78 @@ class VcsOrderCreator {
       isFBA,
       linesCreated: orderLines.lines.length,
       lineErrors: orderLines.errors,
+      deliveryValidated: deliveryResult.success,
+      deliveryError: deliveryResult.error,
     };
   }
 
   /**
-   * Confirm order and create delivery for FBA
+   * Confirm order and create/validate delivery
+   * VCS orders are already shipped so we need to update stock levels
+   * @param {number} orderId - Odoo sale.order ID
+   * @param {object} vcsOrder - The VCS order data for shipment date
+   * @returns {object} Result with success boolean and optional error
    */
-  async confirmAndDeliverFba(orderId) {
+  async confirmAndDeliver(orderId, vcsOrder) {
+    const result = { success: false, error: null, pickingsValidated: 0 };
+
     try {
       // Confirm the sale order
       await this.odoo.execute('sale.order', 'action_confirm', [[orderId]]);
       console.log(`[VcsOrderCreator] Confirmed order ${orderId}`);
 
-      // Find the delivery order
+      // Find all delivery orders for this sale
       const pickings = await this.odoo.searchRead('stock.picking',
         [['sale_id', '=', orderId], ['state', 'not in', ['done', 'cancel']]],
-        ['id']
+        ['id', 'name', 'state', 'move_ids_without_package']
       );
+
+      if (pickings.length === 0) {
+        console.warn(`[VcsOrderCreator] No pickings found for order ${orderId}`);
+        result.error = 'No delivery orders found';
+        return result;
+      }
+
+      console.log(`[VcsOrderCreator] Found ${pickings.length} picking(s) for order ${orderId}`);
 
       // Validate all pickings (mark as delivered)
       for (const picking of pickings) {
         try {
+          // Set quantities to what was reserved
           await this.odoo.execute('stock.picking', 'action_set_quantities_to_reservation', [[picking.id]]);
-          await this.odoo.execute('stock.picking', 'button_validate', [[picking.id]]);
-          console.log(`[VcsOrderCreator] Validated picking ${picking.id}`);
-        } catch (error) {
-          console.warn(`[VcsOrderCreator] Could not validate picking ${picking.id}:`, error.message);
+          console.log(`[VcsOrderCreator] Set quantities for picking ${picking.id} (${picking.name})`);
+
+          // Validate the picking
+          try {
+            await this.odoo.execute('stock.picking', 'button_validate', [[picking.id]]);
+            console.log(`[VcsOrderCreator] Validated picking ${picking.id} (${picking.name})`);
+            result.pickingsValidated++;
+          } catch (validateError) {
+            // Some pickings might require a backorder wizard - try to process it
+            if (validateError.message && validateError.message.includes('ir.actions.act_window')) {
+              // This means Odoo wants to show a wizard, try action_done instead
+              await this.odoo.execute('stock.picking', 'action_done', [[picking.id]]);
+              console.log(`[VcsOrderCreator] Force-validated picking ${picking.id} with action_done`);
+              result.pickingsValidated++;
+            } else {
+              throw validateError;
+            }
+          }
+
+        } catch (pickingError) {
+          console.error(`[VcsOrderCreator] Failed to validate picking ${picking.id}:`, pickingError.message);
+          result.error = `Picking ${picking.id}: ${pickingError.message}`;
         }
       }
+
+      result.success = result.pickingsValidated > 0;
+
     } catch (error) {
-      console.warn(`[VcsOrderCreator] Could not confirm/deliver order ${orderId}:`, error.message);
-      // Don't throw - order was still created
+      console.error(`[VcsOrderCreator] Could not confirm/deliver order ${orderId}:`, error.message);
+      result.error = error.message;
     }
+
+    return result;
   }
 
   /**
