@@ -161,6 +161,14 @@
             <option value="has-order">Has Odoo Order</option>
             <option value="missing-order">Missing Odoo Order</option>
           </select>
+          <select id="filter-currency" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Currencies</option>
+            <option value="EUR">EUR</option>
+            <option value="GBP">GBP</option>
+            <option value="PLN">PLN</option>
+            <option value="CZK">CZK</option>
+            <option value="SEK">SEK</option>
+          </select>
         </div>
 
         <!-- Orders Table -->
@@ -275,6 +283,18 @@
               Create Credit Notes in Odoo
             </button>
           </div>
+        </div>
+
+        <!-- Returns Filters -->
+        <div class="flex gap-4 mb-4">
+          <select id="filter-returns-currency" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Currencies</option>
+            <option value="EUR">EUR</option>
+            <option value="GBP">GBP</option>
+            <option value="PLN">PLN</option>
+            <option value="CZK">CZK</option>
+            <option value="SEK">SEK</option>
+          </select>
         </div>
 
         <!-- Returns Table -->
@@ -473,6 +493,8 @@
         document.getElementById('filter-country').addEventListener('change', applyFilters);
         document.getElementById('filter-scheme').addEventListener('change', applyFilters);
         document.getElementById('filter-odoo-status').addEventListener('change', applyFilters);
+        document.getElementById('filter-currency').addEventListener('change', applyFilters);
+        document.getElementById('filter-returns-currency').addEventListener('change', applyReturnsFilters);
 
         // Pagination
         document.getElementById('prev-page').addEventListener('click', () => {
@@ -617,7 +639,14 @@
 
       // Get filtered returns with column filters and sorting
       function getFilteredReturns() {
+        const returnsCurrency = document.getElementById('filter-returns-currency').value;
+
         let filtered = [...pendingReturns];
+
+        // Apply currency filter
+        if (returnsCurrency) {
+          filtered = filtered.filter(r => r.currency === returnsCurrency);
+        }
 
         // Apply column filters
         Object.entries(returnsColumnFilters).forEach(([column, searchValue]) => {
@@ -679,11 +708,13 @@
         const country = document.getElementById('filter-country').value;
         const scheme = document.getElementById('filter-scheme').value;
         const odooStatus = document.getElementById('filter-odoo-status').value;
+        const currency = document.getElementById('filter-currency').value;
 
         let filtered = [...pendingOrders];
 
         // Apply dropdown filters
         if (country) filtered = filtered.filter(o => o.shipToCountry === country);
+        if (currency) filtered = filtered.filter(o => o.currency === currency);
         if (scheme) {
           filtered = filtered.filter(o => {
             const isOSS = o.taxReportingScheme === 'VCS_EU_OSS';
@@ -1108,6 +1139,13 @@
         selectedOrderIds.clear();
         allFilteredSelected = false;
         renderOrders();
+      }
+
+      function applyReturnsFilters() {
+        returnsPage = 1;
+        // Reset selection when filters change
+        selectedReturnIds.clear();
+        renderReturns();
       }
 
       async function loadUploadHistory() {
