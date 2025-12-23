@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Odoo Invoice Form View Customizations for Acropaq
+
+  To apply these changes:
+  1. Go to Settings > Technical > Views
+  2. Create a new view with:
+     - View Name: account.move.form.acropaq.customizations
+     - Model: account.move
+     - Inherit: account.move.form (or the appropriate parent view)
+     - Priority: 99 (higher than existing inherits)
+  3. Paste the <xpath> blocks below into the Architecture field
+
+  Or apply via Developer Mode > Edit View directly on the invoice form.
+-->
+
+<data>
+  <!--
+    ========================================
+    1. ADD VCS Invoice Number to header
+    ========================================
+  -->
+  <xpath expr="//field[@name='ref']" position="after">
+    <field name="x_vcs_invoice_number" string="VCS Invoice Number" readonly="1"/>
+  </xpath>
+
+  <!--
+    ========================================
+    2. HIDE MARKETING section (Other Info tab)
+    ========================================
+  -->
+  <xpath expr="//page[@name='other_info']//group[@name='sale_info_group']" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+  <!-- Alternative: target by string if group name differs -->
+  <xpath expr="//page[@name='other_info']//group[.//field[@name='campaign_id']]" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+
+  <!--
+    ========================================
+    3. HIDE Emipro-related fields
+    ========================================
+    Common Emipro Amazon EPT fields to hide:
+  -->
+  <!-- VCS fields from Emipro -->
+  <xpath expr="//field[@name='vcs_invoice_number']" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+  <xpath expr="//field[@name='is_vcs_invoice']" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+  <xpath expr="//field[@name='amazon_instance_id']" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+  <xpath expr="//field[@name='seller_id']" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+  <xpath expr="//field[@name='amz_sale_order_id']" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+  <xpath expr="//field[@name='reimbursement_id']" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+  <xpath expr="//field[@name='feed_submission_id']" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+
+  <!--
+    ========================================
+    4. HIDE "FX Manual" from header
+    ========================================
+  -->
+  <xpath expr="//field[@name='x_fx_manual']" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+  <!-- Alternative selector if field name differs -->
+  <xpath expr="//field[@string='FX Manual']" position="attributes">
+    <attribute name="invisible">1</attribute>
+  </xpath>
+
+  <!--
+    ========================================
+    5. REMOVE "Customer Reference" from Other Info tab
+       (It's already in header as 'ref')
+    ========================================
+  -->
+  <xpath expr="//page[@name='other_info']//field[@name='ref']" position="replace">
+    <!-- Remove duplicate -->
+  </xpath>
+
+  <!--
+    ========================================
+    6. MOVE "Follow-up Note" from header to Other Info > ACCOUNTING
+    ========================================
+  -->
+  <!-- First, remove from header -->
+  <xpath expr="//sheet//field[@name='x_follow_up_note']" position="replace">
+    <!-- Removed from header -->
+  </xpath>
+  <!-- Alternative: might be named differently -->
+  <xpath expr="//sheet//field[@name='followup_note']" position="replace">
+    <!-- Removed from header -->
+  </xpath>
+
+  <!-- Then add to ACCOUNTING section in Other Info -->
+  <xpath expr="//page[@name='other_info']//group[@name='accounting_group']" position="inside">
+    <field name="x_follow_up_note" string="Follow-up Note"/>
+  </xpath>
+
+  <!--
+    ========================================
+    7. MOVE "Sales Team" from Other Info to header (under Journal)
+    ========================================
+  -->
+  <!-- Remove from Other Info -->
+  <xpath expr="//page[@name='other_info']//field[@name='team_id']" position="replace">
+    <!-- Moved to header -->
+  </xpath>
+
+  <!-- Add to header after journal_id -->
+  <xpath expr="//field[@name='journal_id']" position="after">
+    <field name="team_id" string="Sales Team"/>
+  </xpath>
+
+  <!--
+    ========================================
+    8. MOVE "Exported" from header to Other Info > INVOICE section
+    ========================================
+  -->
+  <!-- Remove from header -->
+  <xpath expr="//sheet//field[@name='x_exported']" position="replace">
+    <!-- Moved to Other Info -->
+  </xpath>
+  <!-- Alternative name -->
+  <xpath expr="//sheet//field[@name='is_exported']" position="replace">
+    <!-- Moved to Other Info -->
+  </xpath>
+
+  <!-- Add to INVOICE section in Other Info -->
+  <xpath expr="//page[@name='other_info']//group[@name='invoice_group']" position="inside">
+    <field name="x_exported" string="Exported"/>
+  </xpath>
+
+</data>
