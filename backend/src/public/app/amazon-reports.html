@@ -102,7 +102,7 @@
       </div>
 
       <!-- Quick Actions -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <!-- VCS Summary -->
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
           <div class="flex items-center gap-2 mb-4">
@@ -122,6 +122,31 @@
           <a href="/app/amazon-vcs.html" class="block w-full text-center bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg transition-colors">
             View VCS Orders
           </a>
+        </div>
+
+        <!-- Settlement Summary -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-blue-400">payments</span>
+            <h3 class="text-white font-semibold">Settlements</h3>
+          </div>
+          <div id="settlement-stats" class="space-y-2 text-sm mb-4">
+            <div class="flex justify-between text-slate-400">
+              <span>Last Settlement</span>
+              <span id="settlement-last-date" class="text-white font-semibold">-</span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span>Total Amount</span>
+              <span id="settlement-last-amount" class="text-green-400 font-semibold">-</span>
+            </div>
+            <div id="settlement-warning" class="hidden text-yellow-400 text-xs mt-2">
+              <span class="material-symbols-outlined text-sm align-middle">warning</span>
+              <span id="settlement-warning-text"></span>
+            </div>
+          </div>
+          <button onclick="viewSettlements()" class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors">
+            View Settlements
+          </button>
         </div>
 
         <!-- FBA Inventory Summary -->
@@ -227,6 +252,44 @@
               </thead>
               <tbody id="returns-table-body" class="text-slate-300"></tbody>
             </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settlements Modal -->
+    <div id="settlements-modal" class="fixed inset-0 bg-black/50 hidden z-50">
+      <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-5xl max-h-[80vh] overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-slate-700">
+            <h3 class="text-white font-semibold">Amazon Settlement Reports</h3>
+            <button onclick="closeModal('settlements-modal')" class="text-slate-400 hover:text-white">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="p-4 overflow-auto max-h-[60vh]">
+            <div id="settlements-list" class="space-y-4">
+              <div class="text-slate-500 text-sm">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settlement Detail Modal -->
+    <div id="settlement-detail-modal" class="fixed inset-0 bg-black/50 hidden z-50">
+      <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-5xl max-h-[85vh] overflow-hidden">
+          <div class="flex items-center justify-between p-4 border-b border-slate-700">
+            <h3 id="settlement-detail-title" class="text-white font-semibold">Settlement Details</h3>
+            <button onclick="closeModal('settlement-detail-modal')" class="text-slate-400 hover:text-white">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="p-4 overflow-auto max-h-[70vh]">
+            <div id="settlement-detail-content" class="space-y-6">
+              <div class="text-slate-500 text-sm">Loading...</div>
+            </div>
           </div>
         </div>
       </div>
@@ -382,6 +445,27 @@
           document.getElementById('returns-total').textContent = retData.totalReturns || 0;
           document.getElementById('returns-sellable').textContent = retData.sellableReturns || 0;
         } catch (e) { console.error('Returns stats error:', e); }
+
+        // Settlement Stats
+        try {
+          const settRes = await fetch('/api/amazon/settlement-reminders');
+          const settData = await settRes.json();
+          if (settData.lastSettlement) {
+            document.getElementById('settlement-last-date').textContent = formatDateShort(settData.lastSettlement.endDate);
+            const amount = settData.lastSettlement.totalAmount || 0;
+            document.getElementById('settlement-last-amount').textContent = formatCurrency(amount, 'EUR');
+          } else {
+            document.getElementById('settlement-last-date').textContent = 'None';
+            document.getElementById('settlement-last-amount').textContent = '-';
+          }
+          // Show warning if overdue
+          if (settData.isOverdue) {
+            document.getElementById('settlement-warning').classList.remove('hidden');
+            document.getElementById('settlement-warning-text').textContent = settData.message;
+          } else {
+            document.getElementById('settlement-warning').classList.add('hidden');
+          }
+        } catch (e) { console.error('Settlement stats error:', e); }
       }
 
       async function loadRecentUploads() {
@@ -482,6 +566,174 @@
         }
       }
 
+      async function viewSettlements() {
+        const modal = document.getElementById('settlements-modal');
+        const container = document.getElementById('settlements-list');
+        modal.classList.remove('hidden');
+        container.innerHTML = '<div class="text-slate-500 text-sm">Loading...</div>';
+
+        try {
+          const res = await fetch('/api/amazon/settlements?limit=20');
+          const data = await res.json();
+
+          if (!data.settlements || data.settlements.length === 0) {
+            container.innerHTML = '<div class="text-slate-500 text-sm">No settlements uploaded yet. Upload a Settlement Report using the button above.</div>';
+            return;
+          }
+
+          container.innerHTML = data.settlements.map(s => `
+            <div class="bg-slate-700/30 rounded-lg p-4 hover:bg-slate-700/50 cursor-pointer transition-colors" onclick="viewSettlementDetail('${s.settlementId}')">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-3">
+                  <span class="material-symbols-outlined text-blue-400">payments</span>
+                  <div>
+                    <div class="text-white font-semibold">${s.settlementId}</div>
+                    <div class="text-slate-400 text-sm">
+                      ${formatDateShort(s.settlementStartDate)} - ${formatDateShort(s.settlementEndDate)}
+                    </div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="text-green-400 font-semibold text-lg">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
+                  <div class="text-slate-500 text-xs">${s.transactionCount || 0} transactions</div>
+                </div>
+              </div>
+              ${s.depositDate ? `<div class="text-slate-500 text-xs">Deposit: ${formatDateShort(s.depositDate)}</div>` : ''}
+            </div>
+          `).join('');
+        } catch (error) {
+          container.innerHTML = `<div class="text-red-400 text-sm">Error: ${error.message}</div>`;
+        }
+      }
+
+      async function viewSettlementDetail(settlementId) {
+        const modal = document.getElementById('settlement-detail-modal');
+        const title = document.getElementById('settlement-detail-title');
+        const content = document.getElementById('settlement-detail-content');
+        modal.classList.remove('hidden');
+        title.textContent = `Settlement: ${settlementId}`;
+        content.innerHTML = '<div class="text-slate-500 text-sm">Loading...</div>';
+
+        try {
+          const res = await fetch(`/api/amazon/settlements/${settlementId}`);
+          const s = await res.json();
+
+          if (!s) {
+            content.innerHTML = '<div class="text-red-400">Settlement not found</div>';
+            return;
+          }
+
+          // Build summary sections
+          let html = `
+            <!-- Overview -->
+            <div class="bg-slate-700/30 rounded-lg p-4">
+              <h4 class="text-white font-semibold mb-3">Overview</h4>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <div class="text-slate-500">Period</div>
+                  <div class="text-white">${formatDateShort(s.settlementStartDate)} - ${formatDateShort(s.settlementEndDate)}</div>
+                </div>
+                <div>
+                  <div class="text-slate-500">Deposit Date</div>
+                  <div class="text-white">${formatDateShort(s.depositDate)}</div>
+                </div>
+                <div>
+                  <div class="text-slate-500">Total Amount</div>
+                  <div class="text-green-400 font-semibold">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
+                </div>
+                <div>
+                  <div class="text-slate-500">Transactions</div>
+                  <div class="text-white">${s.transactionCount || 0}</div>
+                </div>
+              </div>
+            </div>
+          `;
+
+          // Fees by Marketplace
+          if (s.feesByMarketplace && Object.keys(s.feesByMarketplace).length > 0) {
+            html += `
+              <div class="bg-slate-700/30 rounded-lg p-4">
+                <h4 class="text-white font-semibold mb-3">Fees by Marketplace</h4>
+                <table class="w-full text-sm">
+                  <thead class="text-slate-400 border-b border-slate-600">
+                    <tr>
+                      <th class="text-left py-2">Marketplace</th>
+                      <th class="text-right py-2">Commission</th>
+                      <th class="text-right py-2">FBA Fulfillment</th>
+                      <th class="text-right py-2">Storage</th>
+                      <th class="text-right py-2">Advertising</th>
+                      <th class="text-right py-2">Other</th>
+                      <th class="text-right py-2 font-semibold">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody class="text-slate-300">
+                    ${Object.entries(s.feesByMarketplace).map(([mp, fees]) => `
+                      <tr class="border-b border-slate-700/50">
+                        <td class="py-2 font-medium">${mp}</td>
+                        <td class="py-2 text-right text-red-400">${formatCurrency(fees.commission || 0, 'EUR')}</td>
+                        <td class="py-2 text-right text-orange-400">${formatCurrency(fees.fbaFulfillment || 0, 'EUR')}</td>
+                        <td class="py-2 text-right text-yellow-400">${formatCurrency(fees.fbaStorage || 0, 'EUR')}</td>
+                        <td class="py-2 text-right text-purple-400">${formatCurrency(fees.advertising || 0, 'EUR')}</td>
+                        <td class="py-2 text-right text-slate-400">${formatCurrency((fees.other || 0) + (fees.subscription || 0) + (fees.fbaRemoval || 0) + (fees.fbaInbound || 0), 'EUR')}</td>
+                        <td class="py-2 text-right font-semibold text-red-300">${formatCurrency(fees.total || 0, 'EUR')}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `;
+          }
+
+          // Order Totals by Marketplace
+          if (s.ordersByMarketplace && Object.keys(s.ordersByMarketplace).length > 0) {
+            html += `
+              <div class="bg-slate-700/30 rounded-lg p-4">
+                <h4 class="text-white font-semibold mb-3">Order Totals by Marketplace</h4>
+                <table class="w-full text-sm">
+                  <thead class="text-slate-400 border-b border-slate-600">
+                    <tr>
+                      <th class="text-left py-2">Marketplace</th>
+                      <th class="text-right py-2">Orders</th>
+                      <th class="text-right py-2">Refunds</th>
+                      <th class="text-right py-2">Chargebacks</th>
+                      <th class="text-right py-2 font-semibold">Net</th>
+                    </tr>
+                  </thead>
+                  <tbody class="text-slate-300">
+                    ${Object.entries(s.ordersByMarketplace).map(([mp, orders]) => `
+                      <tr class="border-b border-slate-700/50">
+                        <td class="py-2 font-medium">${mp}</td>
+                        <td class="py-2 text-right text-green-400">${formatCurrency(orders.orders || 0, 'EUR')}</td>
+                        <td class="py-2 text-right text-red-400">${formatCurrency(orders.refunds || 0, 'EUR')}</td>
+                        <td class="py-2 text-right text-orange-400">${formatCurrency(orders.chargebacks || 0, 'EUR')}</td>
+                        <td class="py-2 text-right font-semibold">${formatCurrency(orders.total || 0, 'EUR')}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `;
+          }
+
+          // Note about reconciliation
+          html += `
+            <div class="bg-blue-900/30 border border-blue-700 rounded-lg p-4">
+              <div class="flex items-center gap-2 text-blue-400 mb-2">
+                <span class="material-symbols-outlined">info</span>
+                <span class="font-semibold">Reconciliation Note</span>
+              </div>
+              <p class="text-slate-300 text-sm">
+                This settlement data is for reconciliation purposes only. Amazon fee vendor bills are created from PEPPOL invoices sent by Amazon, not from settlement reports.
+              </p>
+            </div>
+          `;
+
+          content.innerHTML = html;
+        } catch (error) {
+          content.innerHTML = `<div class="text-red-400">Error: ${error.message}</div>`;
+        }
+      }
+
       function closeModal(id) {
         document.getElementById(id).classList.add('hidden');
       }
@@ -489,6 +741,17 @@
       function formatDate(dateStr) {
         if (!dateStr) return '-';
         return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+
+      function formatDateShort(dateStr) {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+
+      function formatCurrency(amount, currency = 'EUR') {
+        const sign = amount < 0 ? '-' : '';
+        const absAmount = Math.abs(amount);
+        return sign + new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(absAmount);
       }
     </script>
   </body>
