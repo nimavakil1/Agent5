@@ -269,13 +269,29 @@ class VcsOdooInvoicer {
     console.log(`[VcsOdooInvoicer] Prefetching ${amazonOrderIds.length} orders from Odoo...`);
     const startTime = Date.now();
 
+    // Generate all possible variations of order IDs (raw, FBA, FBM)
+    // VCS provides raw IDs like "205-1829787-5409110" but Odoo stores them as "FBA205-1829787-5409110"
+    const allSearchIds = [];
+    for (const orderId of amazonOrderIds) {
+      // Add raw ID
+      allSearchIds.push(orderId);
+      // Add with FBA prefix if not already present
+      if (!orderId.startsWith('FBA')) {
+        allSearchIds.push('FBA' + orderId);
+      }
+      // Add with FBM prefix if not already present
+      if (!orderId.startsWith('FBM')) {
+        allSearchIds.push('FBM' + orderId);
+      }
+    }
+
     // Fetch all orders in batches (Odoo can handle large 'in' queries, but let's batch for safety)
     const BATCH_SIZE = 500;
     const allOrders = [];
 
-    for (let i = 0; i < amazonOrderIds.length; i += BATCH_SIZE) {
-      const batchIds = amazonOrderIds.slice(i, i + BATCH_SIZE);
-      console.log(`[VcsOdooInvoicer] Fetching batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(amazonOrderIds.length / BATCH_SIZE)}...`);
+    for (let i = 0; i < allSearchIds.length; i += BATCH_SIZE) {
+      const batchIds = allSearchIds.slice(i, i + BATCH_SIZE);
+      console.log(`[VcsOdooInvoicer] Fetching batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allSearchIds.length / BATCH_SIZE)}...`);
 
       const orders = await this.odoo.searchRead('sale.order',
         [['client_order_ref', 'in', batchIds]],
@@ -339,9 +355,14 @@ class VcsOdooInvoicer {
 
     // Build the order cache - map Amazon order ID to Odoo order data
     // Handle multiple orders for same Amazon ID (FBA/FBM split)
+    // Store by BOTH the Odoo format (FBA...) AND the raw VCS format for easy lookup
     const ordersByAmazonId = {};
     for (const order of allOrders) {
       const amazonId = order.client_order_ref;
+      // Extract the raw order ID without FBA/FBM prefix
+      const rawOrderId = amazonId.replace(/^(FBA|FBM)/, '');
+
+      // Add to grouping by Odoo format
       if (!ordersByAmazonId[amazonId]) {
         ordersByAmazonId[amazonId] = [];
       }
@@ -349,6 +370,17 @@ class VcsOdooInvoicer {
         saleOrder: order,
         orderLines: orderLinesByOrderId[order.id] || []
       });
+
+      // Also add to grouping by raw VCS format (for lookup from VCS orders)
+      if (rawOrderId !== amazonId) {
+        if (!ordersByAmazonId[rawOrderId]) {
+          ordersByAmazonId[rawOrderId] = [];
+        }
+        ordersByAmazonId[rawOrderId].push({
+          saleOrder: order,
+          orderLines: orderLinesByOrderId[order.id] || []
+        });
+      }
     }
 
     // Store in cache
