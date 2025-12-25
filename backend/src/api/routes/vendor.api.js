@@ -328,16 +328,20 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Purchase order not found' });
     }
 
-    // Get warehouse code
-    const warehouseCode = req.body.warehouseCode || MARKETPLACE_WAREHOUSE[po.marketplaceId] || 'be1';
+    // Always use Central Warehouse (CW) for stock checks
+    const warehouseCode = 'CW';
 
     // Initialize Odoo client
     const odoo = new OdooDirectClient();
     await odoo.authenticate();
 
-    // Find warehouse in Odoo
+    // Find Central Warehouse in Odoo
     const warehouses = await odoo.search('stock.warehouse', [['code', '=', warehouseCode]], { limit: 1 });
     const warehouseId = warehouses.length > 0 ? warehouses[0] : null;
+
+    if (!warehouseId) {
+      return res.status(500).json({ success: false, error: 'Central Warehouse (CW) not found in Odoo' });
+    }
 
     const productInfoList = [];
     const errors = [];
@@ -393,25 +397,20 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         continue;
       }
 
-      // Get warehouse-specific stock if warehouse found
-      let qtyAvailable = productData.free_qty || 0;
+      // Get stock from Central Warehouse using stock.quant
+      const quants = await odoo.searchRead('stock.quant',
+        [
+          ['product_id', '=', productId],
+          ['location_id.usage', '=', 'internal'],
+          ['location_id.warehouse_id', '=', warehouseId]
+        ],
+        ['quantity', 'reserved_quantity'],
+        { limit: 100 }
+      );
 
-      if (warehouseId) {
-        // Get stock for specific warehouse using quants
-        const quants = await odoo.searchRead('stock.quant',
-          [
-            ['product_id', '=', productId],
-            ['location_id.usage', '=', 'internal'],
-            ['location_id.warehouse_id', '=', warehouseId]
-          ],
-          ['quantity', 'reserved_quantity'],
-          { limit: 100 }
-        );
-
-        if (quants.length > 0) {
-          qtyAvailable = quants.reduce((sum, q) => sum + (q.quantity - q.reserved_quantity), 0);
-        }
-      }
+      const qtyAvailable = quants.length > 0
+        ? quants.reduce((sum, q) => sum + (q.quantity - q.reserved_quantity), 0)
+        : 0;
 
       productInfoList.push({
         vendorProductIdentifier: ean,

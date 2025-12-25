@@ -242,6 +242,15 @@ class VendorPOImporter {
       const odoo = new OdooDirectClient();
       await odoo.authenticate();
 
+      // Get Central Warehouse ID (code: CW)
+      const warehouses = await odoo.search('stock.warehouse', [['code', '=', 'CW']], { limit: 1 });
+      const warehouseId = warehouses.length > 0 ? warehouses[0] : null;
+
+      if (!warehouseId) {
+        console.error('[VendorPOImporter] Central Warehouse (CW) not found in Odoo');
+        return;
+      }
+
       const updatedItems = [];
 
       for (const item of po.items) {
@@ -254,7 +263,7 @@ class VendorPOImporter {
         if (ean) {
           const products = await odoo.searchRead('product.product',
             [['barcode', '=', ean]],
-            ['id', 'name', 'default_code', 'qty_available', 'free_qty'],
+            ['id', 'name', 'default_code'],
             { limit: 1 }
           );
           if (products.length > 0) {
@@ -266,7 +275,7 @@ class VendorPOImporter {
         if (!productData && asin) {
           const products = await odoo.searchRead('product.product',
             [['barcode', '=', asin]],
-            ['id', 'name', 'default_code', 'qty_available', 'free_qty'],
+            ['id', 'name', 'default_code'],
             { limit: 1 }
           );
           if (products.length > 0) {
@@ -275,12 +284,27 @@ class VendorPOImporter {
         }
 
         if (productData) {
+          // Get stock from Central Warehouse using stock.quant
+          const quants = await odoo.searchRead('stock.quant',
+            [
+              ['product_id', '=', productData.id],
+              ['location_id.usage', '=', 'internal'],
+              ['location_id.warehouse_id', '=', warehouseId]
+            ],
+            ['quantity', 'reserved_quantity'],
+            { limit: 100 }
+          );
+
+          const qtyAvailable = quants.length > 0
+            ? Math.max(0, quants.reduce((sum, q) => sum + (q.quantity - q.reserved_quantity), 0))
+            : 0;
+
           updatedItems.push({
             ...item,
             odooProductId: productData.id,
             odooProductName: productData.name,
             odooSku: productData.default_code,
-            qtyAvailable: productData.free_qty || 0
+            qtyAvailable
           });
         } else {
           updatedItems.push(item);
