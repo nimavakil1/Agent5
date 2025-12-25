@@ -13,6 +13,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../../db');
+const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const {
   VendorClient,
   getVendorPOImporter,
@@ -22,7 +23,8 @@ const {
   MARKETPLACE_IDS,
   VENDOR_ACCOUNTS,
   PO_STATES,
-  ACK_CODES
+  ACK_CODES,
+  MARKETPLACE_WAREHOUSE
 } = require('../../services/amazon/vendor');
 
 // ==================== PURCHASE ORDERS ====================
@@ -272,6 +274,199 @@ router.post('/orders/create-pending', async (req, res) => {
     });
   } catch (error) {
     console.error('[VendorAPI] POST /orders/create-pending error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/orders/:poNumber/check-stock
+ * @desc Check Odoo stock levels for PO items and update the PO with product info
+ * @body warehouseCode - Optional: warehouse code to check (default from marketplace config)
+ */
+router.post('/orders/:poNumber/check-stock', async (req, res) => {
+  try {
+    const importer = await getVendorPOImporter();
+    const po = await importer.getPurchaseOrder(req.params.poNumber);
+
+    if (!po) {
+      return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    }
+
+    // Get warehouse code
+    const warehouseCode = req.body.warehouseCode || MARKETPLACE_WAREHOUSE[po.marketplaceId] || 'be1';
+
+    // Initialize Odoo client
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+
+    // Find warehouse in Odoo
+    const warehouses = await odoo.search('stock.warehouse', [['code', '=', warehouseCode]], { limit: 1 });
+    const warehouseId = warehouses.length > 0 ? warehouses[0] : null;
+
+    const productInfoList = [];
+    const errors = [];
+
+    for (const item of po.items || []) {
+      const sku = item.vendorProductIdentifier;
+      const asin = item.amazonProductIdentifier;
+
+      if (!sku && !asin) {
+        errors.push({ itemSequenceNumber: item.itemSequenceNumber, error: 'No SKU or ASIN' });
+        continue;
+      }
+
+      // Find product in Odoo by SKU
+      let productId = null;
+      let productData = null;
+
+      if (sku) {
+        const products = await odoo.searchRead('product.product',
+          [['default_code', '=', sku]],
+          ['id', 'name', 'default_code', 'qty_available', 'free_qty'],
+          { limit: 1 }
+        );
+        if (products.length > 0) {
+          productData = products[0];
+          productId = productData.id;
+        }
+      }
+
+      // Try by barcode/ASIN if not found
+      if (!productId && asin) {
+        const products = await odoo.searchRead('product.product',
+          [['barcode', '=', asin]],
+          ['id', 'name', 'default_code', 'qty_available', 'free_qty'],
+          { limit: 1 }
+        );
+        if (products.length > 0) {
+          productData = products[0];
+          productId = productData.id;
+        }
+      }
+
+      if (!productId) {
+        errors.push({ itemSequenceNumber: item.itemSequenceNumber, sku, asin, error: 'Product not found in Odoo' });
+        productInfoList.push({
+          vendorProductIdentifier: sku,
+          odooProductId: null,
+          odooProductName: null,
+          qtyAvailable: 0
+        });
+        continue;
+      }
+
+      // Get warehouse-specific stock if warehouse found
+      let qtyAvailable = productData.free_qty || 0;
+
+      if (warehouseId) {
+        // Get stock for specific warehouse using quants
+        const quants = await odoo.searchRead('stock.quant',
+          [
+            ['product_id', '=', productId],
+            ['location_id.usage', '=', 'internal'],
+            ['location_id.warehouse_id', '=', warehouseId]
+          ],
+          ['quantity', 'reserved_quantity'],
+          { limit: 100 }
+        );
+
+        if (quants.length > 0) {
+          qtyAvailable = quants.reduce((sum, q) => sum + (q.quantity - q.reserved_quantity), 0);
+        }
+      }
+
+      productInfoList.push({
+        vendorProductIdentifier: sku,
+        odooProductId: productId,
+        odooProductName: productData.name,
+        qtyAvailable: Math.max(0, qtyAvailable)
+      });
+    }
+
+    // Update PO with product info
+    if (productInfoList.length > 0) {
+      await importer.updateItemsProductInfo(req.params.poNumber, productInfoList);
+    }
+
+    // Get updated PO
+    const updatedPO = await importer.getPurchaseOrder(req.params.poNumber);
+
+    res.json({
+      success: true,
+      purchaseOrderNumber: req.params.poNumber,
+      warehouseCode,
+      itemsChecked: productInfoList.length,
+      errors: errors.length > 0 ? errors : undefined,
+      items: updatedPO.items.map(item => ({
+        itemSequenceNumber: item.itemSequenceNumber,
+        vendorProductIdentifier: item.vendorProductIdentifier,
+        amazonProductIdentifier: item.amazonProductIdentifier,
+        orderedQty: item.orderedQuantity?.amount || 0,
+        odooProductId: item.odooProductId,
+        odooProductName: item.odooProductName,
+        qtyAvailable: item.qtyAvailable,
+        acknowledgeQty: item.acknowledgeQty,
+        backorderQty: item.backorderQty,
+        productAvailability: item.productAvailability
+      }))
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /orders/:poNumber/check-stock error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/orders/:poNumber/update-acknowledgments
+ * @desc Update line-level acknowledgment quantities for a PO
+ * @body items - Array of { vendorProductIdentifier, acknowledgeQty, backorderQty, productAvailability }
+ * @body scheduledShipDate - Optional: scheduled ship date
+ * @body scheduledDeliveryDate - Optional: scheduled delivery date
+ * @body autoFill - Optional: if true, auto-fill based on stock levels
+ */
+router.post('/orders/:poNumber/update-acknowledgments', async (req, res) => {
+  try {
+    const importer = await getVendorPOImporter();
+    const po = await importer.getPurchaseOrder(req.params.poNumber);
+
+    if (!po) {
+      return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    }
+
+    // Auto-fill based on stock if requested
+    if (req.body.autoFill) {
+      await importer.autoFillAcknowledgments(req.params.poNumber);
+    } else if (req.body.items && req.body.items.length > 0) {
+      // Manual update
+      await importer.updateLineAcknowledgments(
+        req.params.poNumber,
+        req.body.items,
+        {
+          scheduledShipDate: req.body.scheduledShipDate,
+          scheduledDeliveryDate: req.body.scheduledDeliveryDate
+        }
+      );
+    }
+
+    // Get updated PO
+    const updatedPO = await importer.getPurchaseOrder(req.params.poNumber);
+
+    res.json({
+      success: true,
+      purchaseOrderNumber: req.params.poNumber,
+      items: updatedPO.items.map(item => ({
+        itemSequenceNumber: item.itemSequenceNumber,
+        vendorProductIdentifier: item.vendorProductIdentifier,
+        orderedQty: item.orderedQuantity?.amount || 0,
+        acknowledgeQty: item.acknowledgeQty,
+        backorderQty: item.backorderQty,
+        productAvailability: item.productAvailability,
+        qtyAvailable: item.qtyAvailable
+      })),
+      acknowledgment: updatedPO.acknowledgment
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /orders/:poNumber/update-acknowledgments error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

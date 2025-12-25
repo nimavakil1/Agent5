@@ -114,8 +114,14 @@ class VendorPOAcknowledger {
       const client = this.getClient(po.marketplaceId);
       const partyId = VENDOR_PARTY_IDS[po.marketplaceId] || 'ACROPAQ';
 
-      // Build acknowledgment payload
-      const ackItems = items || this.buildItemAcknowledgments(po.items, status);
+      // Get schedule data from PO (set by user via update-acknowledgments endpoint)
+      const scheduleData = {
+        scheduledShipDate: po.acknowledgment?.scheduledShipDate || po.deliveryWindow?.startDate,
+        scheduledDeliveryDate: po.acknowledgment?.scheduledDeliveryDate || po.deliveryWindow?.endDate
+      };
+
+      // Build acknowledgment payload with line-level data
+      const ackItems = items || this.buildItemAcknowledgments(po.items, status, scheduleData);
 
       const acknowledgment = {
         acknowledgements: [{
@@ -164,24 +170,122 @@ class VendorPOAcknowledger {
 
   /**
    * Build item-level acknowledgments from PO items
+   * Supports line-level quantities: acknowledgeQty, backorderQty, productAvailability
+   *
+   * @param {Array} items - PO items with acknowledgment data
+   * @param {string} defaultStatus - Default status if item doesn't have one
+   * @param {Object} scheduleData - { scheduledShipDate, scheduledDeliveryDate }
    */
-  buildItemAcknowledgments(items, status) {
+  buildItemAcknowledgments(items, defaultStatus = ACK_CODES.ACCEPTED, scheduleData = {}) {
     if (!items || items.length === 0) {
       return [];
     }
 
-    return items.map(item => ({
-      itemSequenceNumber: item.itemSequenceNumber || '1',
-      amazonProductIdentifier: item.amazonProductIdentifier,
-      vendorProductIdentifier: item.vendorProductIdentifier,
-      orderedQuantity: item.orderedQuantity || { amount: 1, unitOfMeasure: 'Each' },
-      netCost: item.netCost,
-      acknowledgedQuantity: {
-        amount: item.orderedQuantity?.amount || 1,
-        unitOfMeasure: item.orderedQuantity?.unitOfMeasure || 'Each'
-      },
-      acknowledgementCode: status
-    }));
+    // Default schedule dates (today + 7 days for ship, +14 for delivery)
+    const defaultShipDate = scheduleData.scheduledShipDate ||
+      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const defaultDeliveryDate = scheduleData.scheduledDeliveryDate ||
+      new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
+    return items.map(item => {
+      const orderedQty = item.orderedQuantity?.amount || 0;
+      const acknowledgeQty = item.acknowledgeQty ?? orderedQty; // Default to full order
+      const backorderQty = item.backorderQty ?? 0;
+      const productAvailability = item.productAvailability || 'accepted';
+      const unitOfMeasure = item.orderedQuantity?.unitOfMeasure || 'Eaches';
+
+      // Calculate cancelled/rejected quantity
+      const cancelledQty = Math.max(0, orderedQty - acknowledgeQty - backorderQty);
+
+      // Build itemAcknowledgements array (like Emipro)
+      const itemAcknowledgements = [];
+
+      // Add accepted quantity
+      if (acknowledgeQty > 0 && productAvailability === 'accepted') {
+        itemAcknowledgements.push({
+          acknowledgementCode: 'Accepted',
+          acknowledgedQuantity: {
+            amount: acknowledgeQty,
+            unitOfMeasure: unitOfMeasure
+          },
+          scheduledShipDate: this.formatScheduleDate(defaultShipDate),
+          scheduledDeliveryDate: this.formatScheduleDate(defaultDeliveryDate)
+        });
+      }
+
+      // Add backordered quantity
+      if (item.isBackOrderAllowed && backorderQty > 0) {
+        itemAcknowledgements.push({
+          acknowledgementCode: 'Backordered',
+          acknowledgedQuantity: {
+            amount: backorderQty,
+            unitOfMeasure: unitOfMeasure
+          },
+          scheduledShipDate: this.formatScheduleDate(defaultShipDate),
+          scheduledDeliveryDate: this.formatScheduleDate(defaultDeliveryDate)
+        });
+      }
+
+      // Add rejected/cancelled quantity
+      if (cancelledQty > 0) {
+        // Map productAvailability to rejection reason
+        let rejectionReason = 'TemporarilyUnavailable';
+        if (productAvailability.includes('ObsoleteProduct')) {
+          rejectionReason = 'ObsoleteProduct';
+        } else if (productAvailability.includes('InvalidProductIdentifier')) {
+          rejectionReason = 'InvalidProductIdentifier';
+        }
+
+        itemAcknowledgements.push({
+          acknowledgementCode: 'Rejected',
+          acknowledgedQuantity: {
+            amount: cancelledQty,
+            unitOfMeasure: unitOfMeasure
+          },
+          scheduledShipDate: this.formatScheduleDate(defaultShipDate),
+          scheduledDeliveryDate: this.formatScheduleDate(defaultDeliveryDate),
+          rejectionReason: rejectionReason
+        });
+      }
+
+      // If no acknowledgements built (e.g., all zeros), default to accepting full order
+      if (itemAcknowledgements.length === 0) {
+        itemAcknowledgements.push({
+          acknowledgementCode: defaultStatus,
+          acknowledgedQuantity: {
+            amount: orderedQty,
+            unitOfMeasure: unitOfMeasure
+          },
+          scheduledShipDate: this.formatScheduleDate(defaultShipDate),
+          scheduledDeliveryDate: this.formatScheduleDate(defaultDeliveryDate)
+        });
+      }
+
+      return {
+        itemSequenceNumber: parseInt(item.itemSequenceNumber) || 1,
+        amazonProductIdentifier: item.amazonProductIdentifier,
+        vendorProductIdentifier: item.vendorProductIdentifier,
+        orderedQuantity: {
+          amount: orderedQty,
+          unitOfMeasure: unitOfMeasure
+        },
+        netCost: item.netCost ? {
+          currencyCode: item.netCost.currencyCode,
+          amount: String(item.netCost.amount)
+        } : undefined,
+        itemAcknowledgements: itemAcknowledgements
+      };
+    });
+  }
+
+  /**
+   * Format date for Amazon API (ISO 8601 with time)
+   */
+  formatScheduleDate(date) {
+    if (!date) return null;
+    const d = new Date(date);
+    // Format as YYYY-MM-DDTHH:MM:SSZ
+    return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
   }
 
   /**

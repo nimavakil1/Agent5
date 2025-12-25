@@ -233,7 +233,7 @@ class VendorPOImporter {
         address: order.billToParty.address
       } : null,
 
-      // Items
+      // Items with acknowledgment fields
       items: (order.items || []).map(item => ({
         itemSequenceNumber: item.itemSequenceNumber,
         amazonProductIdentifier: item.amazonProductIdentifier, // ASIN
@@ -251,7 +251,17 @@ class VendorPOImporter {
         listPrice: item.listPrice ? {
           currencyCode: item.listPrice.currencyCode,
           amount: item.listPrice.amount
-        } : null
+        } : null,
+
+        // Line-level acknowledgment fields (user-filled)
+        acknowledgeQty: 0,           // Quantity to accept
+        backorderQty: 0,             // Quantity on backorder
+        productAvailability: 'accepted', // 'accepted', 'rejected_TemporarilyUnavailable', 'rejected_ObsoleteProduct', 'rejected_InvalidProductIdentifier'
+
+        // Odoo product link (populated by stock check)
+        odooProductId: null,
+        odooProductName: null,
+        qtyAvailable: null           // Cached stock level from Odoo
       })),
 
       // Calculate totals
@@ -560,6 +570,181 @@ class VendorPOImporter {
       .sort({ purchaseOrderDate: 1 })
       .limit(limit)
       .toArray();
+  }
+
+  /**
+   * Update line-level acknowledgment data for a PO
+   * @param {string} poNumber - Purchase order number
+   * @param {Array} itemUpdates - Array of { itemSequenceNumber, acknowledgeQty, backorderQty, productAvailability }
+   * @param {Object} scheduleData - { scheduledShipDate, scheduledDeliveryDate }
+   */
+  async updateLineAcknowledgments(poNumber, itemUpdates, scheduleData = {}) {
+    const collection = this.db.collection(COLLECTION_NAME);
+
+    const po = await this.getPurchaseOrder(poNumber);
+    if (!po) {
+      throw new Error(`PO not found: ${poNumber}`);
+    }
+
+    // Update each item with acknowledgment data
+    const updatedItems = po.items.map(item => {
+      const update = itemUpdates.find(u =>
+        u.itemSequenceNumber === item.itemSequenceNumber ||
+        u.vendorProductIdentifier === item.vendorProductIdentifier
+      );
+
+      if (update) {
+        return {
+          ...item,
+          acknowledgeQty: update.acknowledgeQty ?? item.acknowledgeQty,
+          backorderQty: update.backorderQty ?? item.backorderQty,
+          productAvailability: update.productAvailability ?? item.productAvailability
+        };
+      }
+      return item;
+    });
+
+    // Build the update
+    const updateData = {
+      items: updatedItems,
+      updatedAt: new Date()
+    };
+
+    // Add schedule data if provided
+    if (scheduleData.scheduledShipDate) {
+      updateData['acknowledgment.scheduledShipDate'] = new Date(scheduleData.scheduledShipDate);
+    }
+    if (scheduleData.scheduledDeliveryDate) {
+      updateData['acknowledgment.scheduledDeliveryDate'] = new Date(scheduleData.scheduledDeliveryDate);
+    }
+
+    return collection.updateOne(
+      { purchaseOrderNumber: poNumber },
+      { $set: updateData }
+    );
+  }
+
+  /**
+   * Update item with Odoo product info and stock level
+   * @param {string} poNumber - Purchase order number
+   * @param {string} vendorProductIdentifier - SKU
+   * @param {Object} productInfo - { odooProductId, odooProductName, qtyAvailable }
+   */
+  async updateItemProductInfo(poNumber, vendorProductIdentifier, productInfo) {
+    const collection = this.db.collection(COLLECTION_NAME);
+
+    return collection.updateOne(
+      {
+        purchaseOrderNumber: poNumber,
+        'items.vendorProductIdentifier': vendorProductIdentifier
+      },
+      {
+        $set: {
+          'items.$.odooProductId': productInfo.odooProductId,
+          'items.$.odooProductName': productInfo.odooProductName,
+          'items.$.qtyAvailable': productInfo.qtyAvailable,
+          updatedAt: new Date()
+        }
+      }
+    );
+  }
+
+  /**
+   * Bulk update items with Odoo product info
+   * @param {string} poNumber - Purchase order number
+   * @param {Array} productInfoList - Array of { vendorProductIdentifier, odooProductId, odooProductName, qtyAvailable }
+   */
+  async updateItemsProductInfo(poNumber, productInfoList) {
+    const collection = this.db.collection(COLLECTION_NAME);
+
+    const po = await this.getPurchaseOrder(poNumber);
+    if (!po) {
+      throw new Error(`PO not found: ${poNumber}`);
+    }
+
+    // Update each item with product info
+    const updatedItems = po.items.map(item => {
+      const info = productInfoList.find(p =>
+        p.vendorProductIdentifier === item.vendorProductIdentifier
+      );
+
+      if (info) {
+        return {
+          ...item,
+          odooProductId: info.odooProductId,
+          odooProductName: info.odooProductName,
+          qtyAvailable: info.qtyAvailable
+        };
+      }
+      return item;
+    });
+
+    return collection.updateOne(
+      { purchaseOrderNumber: poNumber },
+      {
+        $set: {
+          items: updatedItems,
+          updatedAt: new Date()
+        }
+      }
+    );
+  }
+
+  /**
+   * Auto-fill acknowledgment quantities based on available stock
+   * Sets acknowledgeQty = min(orderedQty, qtyAvailable)
+   * Sets backorderQty = remaining if backorder allowed
+   * @param {string} poNumber - Purchase order number
+   */
+  async autoFillAcknowledgments(poNumber) {
+    const collection = this.db.collection(COLLECTION_NAME);
+
+    const po = await this.getPurchaseOrder(poNumber);
+    if (!po) {
+      throw new Error(`PO not found: ${poNumber}`);
+    }
+
+    const updatedItems = po.items.map(item => {
+      const orderedQty = item.orderedQuantity?.amount || 0;
+      const available = item.qtyAvailable || 0;
+
+      if (available >= orderedQty) {
+        // Full stock available
+        return {
+          ...item,
+          acknowledgeQty: orderedQty,
+          backorderQty: 0,
+          productAvailability: 'accepted'
+        };
+      } else if (available > 0) {
+        // Partial stock
+        const remaining = orderedQty - available;
+        return {
+          ...item,
+          acknowledgeQty: available,
+          backorderQty: item.isBackOrderAllowed ? remaining : 0,
+          productAvailability: 'accepted'
+        };
+      } else {
+        // No stock
+        return {
+          ...item,
+          acknowledgeQty: 0,
+          backorderQty: item.isBackOrderAllowed ? orderedQty : 0,
+          productAvailability: item.isBackOrderAllowed ? 'accepted' : 'rejected_TemporarilyUnavailable'
+        };
+      }
+    });
+
+    return collection.updateOne(
+      { purchaseOrderNumber: poNumber },
+      {
+        $set: {
+          items: updatedItems,
+          updatedAt: new Date()
+        }
+      }
+    );
   }
 }
 
