@@ -343,21 +343,23 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
     const errors = [];
 
     for (const item of po.items || []) {
-      const sku = item.vendorProductIdentifier;
+      // vendorProductIdentifier from Amazon = EAN/barcode
+      // amazonProductIdentifier = ASIN
+      const ean = item.vendorProductIdentifier;
       const asin = item.amazonProductIdentifier;
 
-      if (!sku && !asin) {
-        errors.push({ itemSequenceNumber: item.itemSequenceNumber, error: 'No SKU or ASIN' });
+      if (!ean && !asin) {
+        errors.push({ itemSequenceNumber: item.itemSequenceNumber, error: 'No EAN or ASIN' });
         continue;
       }
 
-      // Find product in Odoo by SKU
+      // Find product in Odoo by barcode (EAN)
       let productId = null;
       let productData = null;
 
-      if (sku) {
+      if (ean) {
         const products = await odoo.searchRead('product.product',
-          [['default_code', '=', sku]],
+          [['barcode', '=', ean]],
           ['id', 'name', 'default_code', 'qty_available', 'free_qty'],
           { limit: 1 }
         );
@@ -367,7 +369,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         }
       }
 
-      // Try by barcode/ASIN if not found
+      // Try by ASIN in barcode field if not found by EAN
       if (!productId && asin) {
         const products = await odoo.searchRead('product.product',
           [['barcode', '=', asin]],
@@ -381,9 +383,9 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
       }
 
       if (!productId) {
-        errors.push({ itemSequenceNumber: item.itemSequenceNumber, sku, asin, error: 'Product not found in Odoo' });
+        errors.push({ itemSequenceNumber: item.itemSequenceNumber, ean, asin, error: 'Product not found in Odoo' });
         productInfoList.push({
-          vendorProductIdentifier: sku,
+          vendorProductIdentifier: ean,
           odooProductId: null,
           odooProductName: null,
           qtyAvailable: 0
@@ -412,7 +414,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
       }
 
       productInfoList.push({
-        vendorProductIdentifier: sku,
+        vendorProductIdentifier: ean,
         odooProductId: productId,
         odooProductName: productData.name,
         odooSku: productData.default_code,
