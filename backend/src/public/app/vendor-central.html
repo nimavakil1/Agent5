@@ -1,0 +1,817 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Amazon Vendor Central · ACROPAQ AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <style>
+      .loader { animation: spin 1s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-900">
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <a href="/app/amazon-config.html" class="text-slate-400 hover:text-white">
+            <span class="material-symbols-outlined">arrow_back</span>
+          </a>
+          <span class="material-symbols-outlined text-orange-400 text-2xl">inventory_2</span>
+          <h1 class="text-white text-xl font-semibold">Amazon Vendor Central</h1>
+        </div>
+        <div id="status-indicator" class="flex items-center gap-2 text-sm text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-green-500"></span>
+          Ready
+        </div>
+      </div>
+    </header>
+
+    <main class="px-6 py-8">
+      <!-- Stats Section -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div id="stat-total" class="text-3xl font-bold text-white">-</div>
+          <div class="text-slate-400 text-sm">Total POs</div>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div id="stat-new" class="text-3xl font-bold text-blue-400">-</div>
+          <div class="text-slate-400 text-sm">New</div>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div id="stat-acknowledged" class="text-3xl font-bold text-green-400">-</div>
+          <div class="text-slate-400 text-sm">Acknowledged</div>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div id="stat-pending-ack" class="text-3xl font-bold text-yellow-400">-</div>
+          <div class="text-slate-400 text-sm">Pending Ack</div>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div id="stat-with-odoo" class="text-3xl font-bold text-purple-400">-</div>
+          <div class="text-slate-400 text-sm">With Odoo</div>
+        </div>
+      </div>
+
+      <!-- Actions Bar -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6">
+        <div class="flex flex-wrap items-center gap-4">
+          <button id="poll-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <span class="material-symbols-outlined text-sm">cloud_download</span>
+            Poll Amazon
+          </button>
+          <button id="refresh-btn" class="flex items-center gap-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
+            <span class="material-symbols-outlined text-sm">refresh</span>
+            Refresh
+          </button>
+
+          <div class="flex-1"></div>
+
+          <!-- Filters -->
+          <select id="filter-marketplace" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Marketplaces</option>
+            <option value="DE">Germany (DE)</option>
+            <option value="FR">France (FR)</option>
+            <option value="NL">Netherlands (NL)</option>
+            <option value="UK">United Kingdom (UK)</option>
+            <option value="IT">Italy (IT)</option>
+            <option value="ES">Spain (ES)</option>
+            <option value="SE">Sweden (SE)</option>
+            <option value="PL">Poland (PL)</option>
+          </select>
+          <select id="filter-state" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All States</option>
+            <option value="New">New</option>
+            <option value="Acknowledged">Acknowledged</option>
+            <option value="Closed">Closed</option>
+          </select>
+          <select id="filter-odoo" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Orders</option>
+            <option value="true">With Odoo Order</option>
+            <option value="false">Without Odoo Order</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- PO List -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden mb-6">
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-slate-700/50">
+              <tr>
+                <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">PO Number</th>
+                <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Marketplace</th>
+                <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Date</th>
+                <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">State</th>
+                <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Items</th>
+                <th class="text-right text-slate-400 font-medium text-sm px-4 py-3">Total</th>
+                <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Odoo</th>
+                <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="po-table-body" class="divide-y divide-slate-700">
+              <tr>
+                <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                  <span class="material-symbols-outlined text-4xl mb-2 block">inventory_2</span>
+                  Loading purchase orders...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex items-center justify-between">
+        <div class="text-slate-400 text-sm">
+          Showing <span id="showing-count">0</span> orders
+        </div>
+        <div class="flex gap-2">
+          <button id="load-more-btn" class="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
+            Load More
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- PO Detail Modal -->
+    <div id="po-modal" class="fixed inset-0 bg-black/50 z-50 hidden">
+      <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+          <!-- Modal Header -->
+          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-orange-400">receipt_long</span>
+              <h2 class="text-white text-lg font-semibold">PO: <span id="modal-po-number">-</span></h2>
+              <span id="modal-state-badge" class="px-2 py-1 rounded text-xs font-medium">-</span>
+            </div>
+            <button id="close-modal-btn" class="text-slate-400 hover:text-white">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <!-- Modal Content -->
+          <div class="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+            <!-- PO Info -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div>
+                <div class="text-slate-400 text-sm">Marketplace</div>
+                <div id="modal-marketplace" class="text-white font-medium">-</div>
+              </div>
+              <div>
+                <div class="text-slate-400 text-sm">PO Date</div>
+                <div id="modal-date" class="text-white font-medium">-</div>
+              </div>
+              <div>
+                <div class="text-slate-400 text-sm">Delivery Window</div>
+                <div id="modal-delivery" class="text-white font-medium">-</div>
+              </div>
+              <div>
+                <div class="text-slate-400 text-sm">Odoo Order</div>
+                <div id="modal-odoo" class="text-white font-medium">-</div>
+              </div>
+            </div>
+
+            <!-- Schedule Dates -->
+            <div class="bg-slate-700/50 rounded-lg p-4 mb-6">
+              <h3 class="text-white font-medium mb-3">Schedule Dates</h3>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="text-slate-400 text-sm block mb-1">Scheduled Ship Date</label>
+                  <input type="date" id="modal-ship-date" class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2">
+                </div>
+                <div>
+                  <label class="text-slate-400 text-sm block mb-1">Scheduled Delivery Date</label>
+                  <input type="date" id="modal-delivery-date" class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2">
+                </div>
+              </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="mb-6">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-white font-medium">Line Items</h3>
+                <div class="flex gap-2">
+                  <button id="check-stock-btn" class="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors">
+                    <span class="material-symbols-outlined text-sm">inventory</span>
+                    Check Stock
+                  </button>
+                  <button id="auto-fill-btn" class="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 transition-colors">
+                    <span class="material-symbols-outlined text-sm">auto_fix_high</span>
+                    Auto-Fill
+                  </button>
+                </div>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead class="bg-slate-700/50">
+                    <tr>
+                      <th class="text-left text-slate-400 font-medium px-3 py-2">SKU</th>
+                      <th class="text-left text-slate-400 font-medium px-3 py-2">Product</th>
+                      <th class="text-right text-slate-400 font-medium px-3 py-2">Ordered</th>
+                      <th class="text-right text-slate-400 font-medium px-3 py-2">Available</th>
+                      <th class="text-right text-slate-400 font-medium px-3 py-2">Ack Qty</th>
+                      <th class="text-right text-slate-400 font-medium px-3 py-2">Backorder</th>
+                      <th class="text-left text-slate-400 font-medium px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="modal-items-body" class="divide-y divide-slate-700">
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Summary -->
+            <div id="modal-summary" class="bg-slate-700/30 rounded-lg p-4">
+              <div class="grid grid-cols-4 gap-4 text-center">
+                <div>
+                  <div class="text-slate-400 text-sm">Total Ordered</div>
+                  <div id="summary-ordered" class="text-white font-bold text-lg">0</div>
+                </div>
+                <div>
+                  <div class="text-slate-400 text-sm">To Accept</div>
+                  <div id="summary-accept" class="text-green-400 font-bold text-lg">0</div>
+                </div>
+                <div>
+                  <div class="text-slate-400 text-sm">Backorder</div>
+                  <div id="summary-backorder" class="text-yellow-400 font-bold text-lg">0</div>
+                </div>
+                <div>
+                  <div class="text-slate-400 text-sm">Rejected</div>
+                  <div id="summary-rejected" class="text-red-400 font-bold text-lg">0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="flex items-center justify-between px-6 py-4 border-t border-slate-700 bg-slate-800">
+            <div id="modal-message" class="text-sm"></div>
+            <div class="flex gap-3">
+              <button id="save-ack-btn" class="flex items-center gap-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
+                <span class="material-symbols-outlined text-sm">save</span>
+                Save Changes
+              </button>
+              <button id="send-ack-btn" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                <span class="material-symbols-outlined text-sm">send</span>
+                Send Acknowledgment
+              </button>
+              <button id="create-odoo-btn" class="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                <span class="material-symbols-outlined text-sm">add_business</span>
+                Create Odoo Order
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 shadow-lg transform translate-y-full opacity-0 transition-all duration-300 z-50">
+      <div class="flex items-center gap-3">
+        <span id="toast-icon" class="material-symbols-outlined text-green-400">check_circle</span>
+        <span id="toast-message" class="text-white">Success</span>
+      </div>
+    </div>
+
+    <script>
+      // State
+      let orders = [];
+      let currentPO = null;
+      let skip = 0;
+      const limit = 50;
+
+      // DOM Elements
+      const poTableBody = document.getElementById('po-table-body');
+      const poModal = document.getElementById('po-modal');
+      const modalItemsBody = document.getElementById('modal-items-body');
+
+      // Initialize
+      document.addEventListener('DOMContentLoaded', () => {
+        loadStats();
+        loadOrders();
+        setupEventListeners();
+      });
+
+      function setupEventListeners() {
+        // Filters
+        document.getElementById('filter-marketplace').addEventListener('change', () => { skip = 0; loadOrders(); });
+        document.getElementById('filter-state').addEventListener('change', () => { skip = 0; loadOrders(); });
+        document.getElementById('filter-odoo').addEventListener('change', () => { skip = 0; loadOrders(); });
+
+        // Buttons
+        document.getElementById('poll-btn').addEventListener('click', pollAmazon);
+        document.getElementById('refresh-btn').addEventListener('click', () => { skip = 0; loadOrders(); loadStats(); });
+        document.getElementById('load-more-btn').addEventListener('click', () => { skip += limit; loadOrders(true); });
+
+        // Modal
+        document.getElementById('close-modal-btn').addEventListener('click', closeModal);
+        document.getElementById('check-stock-btn').addEventListener('click', checkStock);
+        document.getElementById('auto-fill-btn').addEventListener('click', autoFill);
+        document.getElementById('save-ack-btn').addEventListener('click', saveAcknowledgments);
+        document.getElementById('send-ack-btn').addEventListener('click', sendAcknowledgment);
+        document.getElementById('create-odoo-btn').addEventListener('click', createOdooOrder);
+
+        // Close modal on backdrop click
+        poModal.addEventListener('click', (e) => {
+          if (e.target === poModal) closeModal();
+        });
+      }
+
+      async function loadStats() {
+        try {
+          const res = await fetch('/api/vendor/stats');
+          const data = await res.json();
+          if (data.success) {
+            const s = data.stats.summary;
+            document.getElementById('stat-total').textContent = s.total || 0;
+            document.getElementById('stat-new').textContent = s.new || 0;
+            document.getElementById('stat-acknowledged').textContent = s.acknowledged || 0;
+            document.getElementById('stat-pending-ack').textContent = s.pendingAck || 0;
+            document.getElementById('stat-with-odoo').textContent = s.withOdooOrder || 0;
+          }
+        } catch (err) {
+          console.error('Failed to load stats:', err);
+        }
+      }
+
+      async function loadOrders(append = false) {
+        try {
+          const marketplace = document.getElementById('filter-marketplace').value;
+          const state = document.getElementById('filter-state').value;
+          const hasOdooOrder = document.getElementById('filter-odoo').value;
+
+          let url = `/api/vendor/orders?limit=${limit}&skip=${skip}`;
+          if (marketplace) url += `&marketplace=${marketplace}`;
+          if (state) url += `&state=${state}`;
+          if (hasOdooOrder) url += `&hasOdooOrder=${hasOdooOrder}`;
+
+          const res = await fetch(url);
+          const data = await res.json();
+
+          if (data.success) {
+            if (append) {
+              orders = [...orders, ...data.orders];
+            } else {
+              orders = data.orders;
+            }
+            renderOrders();
+          }
+        } catch (err) {
+          console.error('Failed to load orders:', err);
+          showToast('Failed to load orders', 'error');
+        }
+      }
+
+      function renderOrders() {
+        if (orders.length === 0) {
+          poTableBody.innerHTML = `
+            <tr>
+              <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                <span class="material-symbols-outlined text-4xl mb-2 block">inbox</span>
+                No purchase orders found
+              </td>
+            </tr>
+          `;
+          document.getElementById('showing-count').textContent = '0';
+          return;
+        }
+
+        poTableBody.innerHTML = orders.map(po => {
+          const stateColors = {
+            'New': 'bg-blue-500/20 text-blue-400',
+            'Acknowledged': 'bg-green-500/20 text-green-400',
+            'Closed': 'bg-slate-500/20 text-slate-400'
+          };
+          const stateClass = stateColors[po.purchaseOrderState] || 'bg-slate-500/20 text-slate-400';
+          const date = po.purchaseOrderDate ? new Date(po.purchaseOrderDate).toLocaleDateString() : '-';
+          const total = po.totals?.totalAmount?.toFixed(2) || '0.00';
+          const currency = po.totals?.currency || 'EUR';
+
+          return `
+            <tr class="hover:bg-slate-700/30 cursor-pointer" onclick="openPO('${po.purchaseOrderNumber}')">
+              <td class="px-4 py-3">
+                <span class="text-white font-medium">${po.purchaseOrderNumber}</span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="text-slate-300">${po.marketplaceId}</span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="text-slate-300">${date}</span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="px-2 py-1 rounded text-xs font-medium ${stateClass}">${po.purchaseOrderState}</span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="text-slate-300">${po.itemCount || 0}</span>
+              </td>
+              <td class="px-4 py-3 text-right">
+                <span class="text-white">${currency} ${total}</span>
+              </td>
+              <td class="px-4 py-3">
+                ${po.odoo?.saleOrderName
+                  ? `<span class="text-purple-400">${po.odoo.saleOrderName}</span>`
+                  : '<span class="text-slate-500">-</span>'}
+              </td>
+              <td class="px-4 py-3">
+                <button class="text-slate-400 hover:text-white" onclick="event.stopPropagation(); openPO('${po.purchaseOrderNumber}')">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        document.getElementById('showing-count').textContent = orders.length;
+      }
+
+      async function openPO(poNumber) {
+        try {
+          const res = await fetch(`/api/vendor/orders/${poNumber}`);
+          const data = await res.json();
+
+          if (!data.success) {
+            showToast('Failed to load PO details', 'error');
+            return;
+          }
+
+          currentPO = data.order;
+          renderModal();
+          poModal.classList.remove('hidden');
+        } catch (err) {
+          console.error('Failed to load PO:', err);
+          showToast('Failed to load PO details', 'error');
+        }
+      }
+
+      function renderModal() {
+        const po = currentPO;
+
+        // Header info
+        document.getElementById('modal-po-number').textContent = po.purchaseOrderNumber;
+
+        const stateColors = {
+          'New': 'bg-blue-500/20 text-blue-400',
+          'Acknowledged': 'bg-green-500/20 text-green-400',
+          'Closed': 'bg-slate-500/20 text-slate-400'
+        };
+        const badge = document.getElementById('modal-state-badge');
+        badge.textContent = po.purchaseOrderState;
+        badge.className = `px-2 py-1 rounded text-xs font-medium ${stateColors[po.purchaseOrderState] || ''}`;
+
+        // Info
+        document.getElementById('modal-marketplace').textContent = po.marketplaceId;
+        document.getElementById('modal-date').textContent = po.purchaseOrderDate
+          ? new Date(po.purchaseOrderDate).toLocaleDateString() : '-';
+
+        const deliveryStart = po.deliveryWindow?.startDate ? new Date(po.deliveryWindow.startDate).toLocaleDateString() : '';
+        const deliveryEnd = po.deliveryWindow?.endDate ? new Date(po.deliveryWindow.endDate).toLocaleDateString() : '';
+        document.getElementById('modal-delivery').textContent = deliveryStart && deliveryEnd
+          ? `${deliveryStart} - ${deliveryEnd}` : '-';
+
+        document.getElementById('modal-odoo').innerHTML = po.odoo?.saleOrderName
+          ? `<span class="text-purple-400">${po.odoo.saleOrderName}</span>`
+          : '<span class="text-slate-500">Not created</span>';
+
+        // Schedule dates
+        if (po.deliveryWindow?.startDate) {
+          document.getElementById('modal-ship-date').value = po.acknowledgment?.scheduledShipDate
+            ? new Date(po.acknowledgment.scheduledShipDate).toISOString().split('T')[0]
+            : new Date(po.deliveryWindow.startDate).toISOString().split('T')[0];
+        }
+        if (po.deliveryWindow?.endDate) {
+          document.getElementById('modal-delivery-date').value = po.acknowledgment?.scheduledDeliveryDate
+            ? new Date(po.acknowledgment.scheduledDeliveryDate).toISOString().split('T')[0]
+            : new Date(po.deliveryWindow.endDate).toISOString().split('T')[0];
+        }
+
+        // Items
+        renderModalItems();
+        updateSummary();
+
+        // Update button states
+        const isAcknowledged = po.acknowledgment?.acknowledged || po.purchaseOrderState === 'Acknowledged';
+        document.getElementById('send-ack-btn').disabled = isAcknowledged;
+        document.getElementById('send-ack-btn').classList.toggle('opacity-50', isAcknowledged);
+      }
+
+      function renderModalItems() {
+        const items = currentPO.items || [];
+
+        modalItemsBody.innerHTML = items.map((item, idx) => {
+          const orderedQty = item.orderedQuantity?.amount || 0;
+          const availableQty = item.qtyAvailable ?? '-';
+          const ackQty = item.acknowledgeQty ?? orderedQty;
+          const backorderQty = item.backorderQty ?? 0;
+          const status = item.productAvailability || 'accepted';
+
+          const stockClass = availableQty === '-' ? 'text-slate-500'
+            : availableQty >= orderedQty ? 'text-green-400'
+            : availableQty > 0 ? 'text-yellow-400'
+            : 'text-red-400';
+
+          return `
+            <tr class="hover:bg-slate-700/30">
+              <td class="px-3 py-2">
+                <span class="text-white font-mono">${item.vendorProductIdentifier || '-'}</span>
+              </td>
+              <td class="px-3 py-2">
+                <span class="text-slate-300">${item.odooProductName || item.amazonProductIdentifier || '-'}</span>
+              </td>
+              <td class="px-3 py-2 text-right">
+                <span class="text-white">${orderedQty}</span>
+              </td>
+              <td class="px-3 py-2 text-right">
+                <span class="${stockClass}">${availableQty}</span>
+              </td>
+              <td class="px-3 py-2 text-right">
+                <input type="number" min="0" max="${orderedQty}" value="${ackQty}"
+                  data-idx="${idx}" data-field="acknowledgeQty"
+                  class="w-20 bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-right"
+                  onchange="updateItemField(${idx}, 'acknowledgeQty', this.value)">
+              </td>
+              <td class="px-3 py-2 text-right">
+                <input type="number" min="0" value="${backorderQty}"
+                  data-idx="${idx}" data-field="backorderQty"
+                  class="w-20 bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-right"
+                  ${!item.isBackOrderAllowed ? 'disabled' : ''}
+                  onchange="updateItemField(${idx}, 'backorderQty', this.value)">
+              </td>
+              <td class="px-3 py-2">
+                <select data-idx="${idx}" data-field="productAvailability"
+                  class="bg-slate-700 border border-slate-600 text-slate-300 rounded px-2 py-1 text-xs"
+                  onchange="updateItemField(${idx}, 'productAvailability', this.value)">
+                  <option value="accepted" ${status === 'accepted' ? 'selected' : ''}>Accepted</option>
+                  <option value="rejected_TemporarilyUnavailable" ${status.includes('Temporarily') ? 'selected' : ''}>Temp Unavailable</option>
+                  <option value="rejected_ObsoleteProduct" ${status.includes('Obsolete') ? 'selected' : ''}>Obsolete</option>
+                  <option value="rejected_InvalidProductIdentifier" ${status.includes('Invalid') ? 'selected' : ''}>Invalid SKU</option>
+                </select>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      function updateItemField(idx, field, value) {
+        if (!currentPO || !currentPO.items[idx]) return;
+
+        if (field === 'acknowledgeQty' || field === 'backorderQty') {
+          currentPO.items[idx][field] = parseInt(value) || 0;
+        } else {
+          currentPO.items[idx][field] = value;
+        }
+
+        updateSummary();
+      }
+
+      function updateSummary() {
+        const items = currentPO?.items || [];
+        let ordered = 0, accept = 0, backorder = 0, rejected = 0;
+
+        items.forEach(item => {
+          const qty = item.orderedQuantity?.amount || 0;
+          const ack = item.acknowledgeQty ?? qty;
+          const back = item.backorderQty ?? 0;
+
+          ordered += qty;
+          accept += ack;
+          backorder += back;
+          rejected += Math.max(0, qty - ack - back);
+        });
+
+        document.getElementById('summary-ordered').textContent = ordered;
+        document.getElementById('summary-accept').textContent = accept;
+        document.getElementById('summary-backorder').textContent = backorder;
+        document.getElementById('summary-rejected').textContent = rejected;
+      }
+
+      function closeModal() {
+        poModal.classList.add('hidden');
+        currentPO = null;
+      }
+
+      async function pollAmazon() {
+        const btn = document.getElementById('poll-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span> Polling...';
+
+        try {
+          const res = await fetch('/api/vendor/orders/poll', { method: 'POST' });
+          const data = await res.json();
+
+          if (data.success) {
+            showToast(`Imported ${data.result.totalNew} new, updated ${data.result.totalUpdated} POs`, 'success');
+            loadStats();
+            loadOrders();
+          } else {
+            showToast('Poll failed: ' + (data.error || 'Unknown error'), 'error');
+          }
+        } catch (err) {
+          showToast('Poll failed: ' + err.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm">cloud_download</span> Poll Amazon';
+        }
+      }
+
+      async function checkStock() {
+        const btn = document.getElementById('check-stock-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span>';
+
+        try {
+          const res = await fetch(`/api/vendor/orders/${currentPO.purchaseOrderNumber}/check-stock`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            // Update current PO items with stock info
+            data.items.forEach(item => {
+              const poItem = currentPO.items.find(i => i.vendorProductIdentifier === item.vendorProductIdentifier);
+              if (poItem) {
+                poItem.odooProductId = item.odooProductId;
+                poItem.odooProductName = item.odooProductName;
+                poItem.qtyAvailable = item.qtyAvailable;
+              }
+            });
+            renderModalItems();
+            showToast('Stock levels updated', 'success');
+          } else {
+            showToast('Failed to check stock', 'error');
+          }
+        } catch (err) {
+          showToast('Failed to check stock: ' + err.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm">inventory</span> Check Stock';
+        }
+      }
+
+      async function autoFill() {
+        const btn = document.getElementById('auto-fill-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span>';
+
+        try {
+          const res = await fetch(`/api/vendor/orders/${currentPO.purchaseOrderNumber}/update-acknowledgments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ autoFill: true })
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            // Update current PO items
+            data.items.forEach(item => {
+              const poItem = currentPO.items.find(i => i.vendorProductIdentifier === item.vendorProductIdentifier);
+              if (poItem) {
+                poItem.acknowledgeQty = item.acknowledgeQty;
+                poItem.backorderQty = item.backorderQty;
+                poItem.productAvailability = item.productAvailability;
+              }
+            });
+            renderModalItems();
+            updateSummary();
+            showToast('Quantities auto-filled based on stock', 'success');
+          } else {
+            showToast('Failed to auto-fill', 'error');
+          }
+        } catch (err) {
+          showToast('Failed to auto-fill: ' + err.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm">auto_fix_high</span> Auto-Fill';
+        }
+      }
+
+      async function saveAcknowledgments() {
+        const btn = document.getElementById('save-ack-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span>';
+
+        try {
+          const items = currentPO.items.map(item => ({
+            vendorProductIdentifier: item.vendorProductIdentifier,
+            acknowledgeQty: item.acknowledgeQty,
+            backorderQty: item.backorderQty,
+            productAvailability: item.productAvailability
+          }));
+
+          const res = await fetch(`/api/vendor/orders/${currentPO.purchaseOrderNumber}/update-acknowledgments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items,
+              scheduledShipDate: document.getElementById('modal-ship-date').value,
+              scheduledDeliveryDate: document.getElementById('modal-delivery-date').value
+            })
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            showToast('Changes saved', 'success');
+          } else {
+            showToast('Failed to save changes', 'error');
+          }
+        } catch (err) {
+          showToast('Failed to save: ' + err.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm">save</span> Save Changes';
+        }
+      }
+
+      async function sendAcknowledgment() {
+        if (!confirm('Send acknowledgment to Amazon? This cannot be undone.')) return;
+
+        const btn = document.getElementById('send-ack-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span>';
+
+        try {
+          // First save changes
+          await saveAcknowledgments();
+
+          // Then send acknowledgment
+          const res = await fetch(`/api/vendor/orders/${currentPO.purchaseOrderNumber}/acknowledge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            showToast('Acknowledgment sent to Amazon!', 'success');
+            loadStats();
+            loadOrders();
+            closeModal();
+          } else {
+            showToast('Failed: ' + (data.errors?.join(', ') || 'Unknown error'), 'error');
+          }
+        } catch (err) {
+          showToast('Failed: ' + err.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm">send</span> Send Acknowledgment';
+        }
+      }
+
+      async function createOdooOrder() {
+        const btn = document.getElementById('create-odoo-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span>';
+
+        try {
+          const res = await fetch(`/api/vendor/orders/${currentPO.purchaseOrderNumber}/create-odoo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            if (data.skipped) {
+              showToast(data.skipReason, 'info');
+            } else {
+              showToast(`Created Odoo order: ${data.odooOrderName}`, 'success');
+            }
+            // Reload PO to show Odoo link
+            openPO(currentPO.purchaseOrderNumber);
+            loadOrders();
+          } else {
+            showToast('Failed: ' + (data.errors?.join(', ') || 'Unknown error'), 'error');
+          }
+        } catch (err) {
+          showToast('Failed: ' + err.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm">add_business</span> Create Odoo Order';
+        }
+      }
+
+      function showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        const icon = document.getElementById('toast-icon');
+        const msg = document.getElementById('toast-message');
+
+        const icons = {
+          success: { icon: 'check_circle', color: 'text-green-400' },
+          error: { icon: 'error', color: 'text-red-400' },
+          info: { icon: 'info', color: 'text-blue-400' }
+        };
+
+        icon.textContent = icons[type].icon;
+        icon.className = `material-symbols-outlined ${icons[type].color}`;
+        msg.textContent = message;
+
+        toast.classList.remove('translate-y-full', 'opacity-0');
+
+        setTimeout(() => {
+          toast.classList.add('translate-y-full', 'opacity-0');
+        }, 4000);
+      }
+    </script>
+  </body>
+</html>
