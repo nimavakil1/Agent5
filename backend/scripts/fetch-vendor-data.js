@@ -137,12 +137,18 @@ async function tryRequestReport(marketplace = 'DE') {
   const client = new VendorClient(marketplace);
   const spClient = await client.getClient();
 
-  // Try different report types
+  // Try ALL known vendor report types
   const reportTypes = [
-    'GET_VENDOR_REAL_TIME_INVENTORY_REPORT',
-    'GET_VENDOR_INVENTORY_HEALTH_AND_PLANNING_REPORT'
+    'GET_VENDOR_SALES_REPORT',
+    'GET_VENDOR_TRAFFIC_REPORT',
+    'GET_VENDOR_INVENTORY_REPORT',
+    'GET_VENDOR_FORECASTING_REPORT',
+    'GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT',
+    'GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT',
+    'GET_BRAND_ANALYTICS_REPEAT_PURCHASE_REPORT'
   ];
 
+  const results = [];
   for (const reportType of reportTypes) {
     console.log(`\nRequesting: ${reportType}`);
     try {
@@ -153,12 +159,15 @@ async function tryRequestReport(marketplace = 'DE') {
           marketplaceIds: [client.marketplaceId]
         }
       });
-      console.log(`  Report ID: ${result.reportId}`);
-      return result;
+      console.log(`  ✓ Report ID: ${result.reportId}`);
+      results.push({ reportType, reportId: result.reportId, success: true });
     } catch (err) {
-      console.log(`  Error: ${err.message}`);
+      console.log(`  ✗ Error: ${err.message}`);
+      results.push({ reportType, error: err.message, success: false });
     }
   }
+
+  return results;
 }
 
 async function getRecentReports(marketplace = 'DE') {
