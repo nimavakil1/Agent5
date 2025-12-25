@@ -473,20 +473,22 @@ class VendorPOImporter {
           closed: { $sum: { $cond: [{ $eq: ['$purchaseOrderState', 'Closed'] }, 1, 0] } },
           // Our tracking flags
           pendingAck: { $sum: { $cond: ['$acknowledgment.acknowledged', 0, 1] } },
-          // Shipment status (for open orders)
-          // Use $ifNull to handle missing fields (undefined → 'not_shipped')
-          notShipped: { $sum: { $cond: [
+          // Open Orders = Acknowledged AND not shipped (need to ship)
+          openOrders: { $sum: { $cond: [
             { $and: [
               { $eq: ['$purchaseOrderState', 'Acknowledged'] },
-              { $in: [{ $ifNull: ['$shipmentStatus', 'not_shipped'] }, ['not_shipped', null]] }
+              { $eq: ['$shipmentStatus', 'not_shipped'] }
             ]}, 1, 0
           ]}},
+          // Shipment status counts
+          notShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'not_shipped'] }, 1, 0] } },
           partiallyShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'partially_shipped'] }, 1, 0] } },
           fullyShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'fully_shipped'] }, 1, 0] } },
-          // Invoice status (for open orders)
-          invoiceNotSubmitted: { $sum: { $cond: [
+          // Invoice Pending = Acknowledged AND shipped AND no invoice submitted
+          invoicePending: { $sum: { $cond: [
             { $and: [
               { $eq: ['$purchaseOrderState', 'Acknowledged'] },
+              { $eq: ['$shipmentStatus', 'fully_shipped'] },
               { $in: [{ $ifNull: ['$invoiceStatus', 'not_submitted'] }, ['not_submitted', null]] }
             ]}, 1, 0
           ]}},
@@ -532,10 +534,11 @@ class VendorPOImporter {
         acknowledged: 0,
         closed: 0,
         pendingAck: 0,
+        openOrders: 0,
         notShipped: 0,
         partiallyShipped: 0,
         fullyShipped: 0,
-        invoiceNotSubmitted: 0,
+        invoicePending: 0,
         invoiceSubmitted: 0,
         invoiceAccepted: 0,
         withOdooOrder: 0,

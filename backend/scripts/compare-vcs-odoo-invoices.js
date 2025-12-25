@@ -215,8 +215,9 @@ async function compareOrder(db, orderName, verbose = true) {
     console.log('\n--- ODOO INVOICE ---');
     console.log('Invoices: ' + order.invoice_ids.length);
     for (const [name, data] of Object.entries(invoiceBySku)) {
+      const unitPrice = data.qty > 0 ? (data.price / data.qty).toFixed(2) : 'N/A';
       console.log('  ' + name.substring(0, 40));
-      console.log('    qty=' + data.qty + ', price=' + data.price.toFixed(2));
+      console.log('    qty=' + data.qty + ', total=' + data.price.toFixed(2) + ' (unit=' + unitPrice + ')');
     }
     console.log('  Invoice Total: ' + invoiceTotal.toFixed(2));
   }

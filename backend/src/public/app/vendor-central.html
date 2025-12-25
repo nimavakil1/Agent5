@@ -338,9 +338,9 @@
           if (data.success) {
             const s = data.stats.summary;
             document.getElementById('stat-total').textContent = s.total || 0;
-            document.getElementById('stat-open').textContent = s.acknowledged || 0;  // Open = Acknowledged state
+            document.getElementById('stat-open').textContent = s.openOrders || 0;  // Open = Not shipped
             document.getElementById('stat-not-shipped').textContent = s.notShipped || 0;
-            document.getElementById('stat-invoice-pending').textContent = s.invoiceNotSubmitted || 0;
+            document.getElementById('stat-invoice-pending').textContent = s.invoicePending || 0;  // Shipped but no invoice
             document.getElementById('stat-closed').textContent = s.closed || 0;
             document.getElementById('stat-with-odoo').textContent = s.withOdooOrder || 0;
           }
