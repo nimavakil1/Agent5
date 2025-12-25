@@ -474,13 +474,11 @@ class VendorPOImporter {
           // Our tracking flags
           pendingAck: { $sum: { $cond: ['$acknowledgment.acknowledged', 0, 1] } },
           // Shipment status (for open orders)
+          // Use $ifNull to handle missing fields (undefined → 'not_shipped')
           notShipped: { $sum: { $cond: [
             { $and: [
               { $eq: ['$purchaseOrderState', 'Acknowledged'] },
-              { $or: [
-                { $eq: ['$shipmentStatus', null] },
-                { $eq: ['$shipmentStatus', 'not_shipped'] }
-              ]}
+              { $in: [{ $ifNull: ['$shipmentStatus', 'not_shipped'] }, ['not_shipped', null]] }
             ]}, 1, 0
           ]}},
           partiallyShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'partially_shipped'] }, 1, 0] } },
@@ -489,10 +487,7 @@ class VendorPOImporter {
           invoiceNotSubmitted: { $sum: { $cond: [
             { $and: [
               { $eq: ['$purchaseOrderState', 'Acknowledged'] },
-              { $or: [
-                { $eq: ['$invoiceStatus', null] },
-                { $eq: ['$invoiceStatus', 'not_submitted'] }
-              ]}
+              { $in: [{ $ifNull: ['$invoiceStatus', 'not_submitted'] }, ['not_submitted', null]] }
             ]}, 1, 0
           ]}},
           invoiceSubmitted: { $sum: { $cond: [{ $eq: ['$invoiceStatus', 'submitted'] }, 1, 0] } },
