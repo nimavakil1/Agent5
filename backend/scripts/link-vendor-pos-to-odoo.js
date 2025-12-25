@@ -42,12 +42,23 @@ async function linkPOsToOdoo() {
   // Get all PO numbers
   const poNumbers = pos.map(po => po.purchaseOrderNumber);
 
-  // Fetch matching sale.orders from Odoo in batches
-  console.log('Fetching Odoo orders...');
-  const odooOrders = await odoo.searchRead('sale.order',
-    [['client_order_ref', 'in', poNumbers]],
-    ['id', 'name', 'client_order_ref', 'state', 'invoice_ids']
-  );
+  // Fetch matching sale.orders from Odoo in batches (Odoo has 100 record limit)
+  console.log('Fetching Odoo orders in batches...');
+  const odooOrders = [];
+  const batchSize = 100;
+
+  for (let i = 0; i < poNumbers.length; i += batchSize) {
+    const batchPOs = poNumbers.slice(i, i + batchSize);
+    const batch = await odoo.searchRead('sale.order',
+      [['client_order_ref', 'in', batchPOs]],
+      ['id', 'name', 'client_order_ref', 'state', 'invoice_ids'],
+      { limit: batchSize }
+    );
+    odooOrders.push(...batch);
+    if ((i + batchSize) % 500 === 0 || i + batchSize >= poNumbers.length) {
+      console.log(`  Fetched ${Math.min(i + batchSize, poNumbers.length)}/${poNumbers.length} PO batches...`);
+    }
+  }
 
   console.log(`Found ${odooOrders.length} matching Odoo orders\n`);
 
