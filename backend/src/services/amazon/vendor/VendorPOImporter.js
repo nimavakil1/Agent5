@@ -541,6 +541,10 @@ class VendorPOImporter {
 
   /**
    * Get POs that are ready for invoicing
+   * Criteria:
+   * - Has Odoo sale order linked
+   * - No invoice linked yet
+   * - Acknowledged (either locally or by Amazon state)
    */
   async getReadyForInvoicing(limit = 50) {
     const collection = this.db.collection(COLLECTION_NAME);
@@ -548,7 +552,10 @@ class VendorPOImporter {
     return collection.find({
       'odoo.saleOrderId': { $ne: null },
       'odoo.invoiceId': null,
-      'acknowledgment.acknowledged': true
+      $or: [
+        { 'acknowledgment.acknowledged': true },
+        { purchaseOrderState: 'Acknowledged' }
+      ]
     })
       .sort({ purchaseOrderDate: 1 })
       .limit(limit)
