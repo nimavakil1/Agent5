@@ -8,7 +8,8 @@
  * Usage: node scripts/link-vendor-pos-to-odoo.js [--dry-run]
  */
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { connectDb, getDb } = require('../src/db');
 const { OdooDirectClient } = require('../src/core/agents/integrations/OdooMCP');
 
