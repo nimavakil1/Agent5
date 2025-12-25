@@ -122,10 +122,10 @@ async function pollVendorOrders() {
 
     for (const mp of marketplaces) {
       try {
-        const result = await importer.pollAndImport(mp, { daysBack: 7 });
-        totalNew += result.new || 0;
-        totalUpdated += result.updated || 0;
-        console.log(`[scheduler] Vendor poll ${mp}: ${result.new} new, ${result.updated} updated`);
+        const result = await importer.pollMarketplace(mp, { daysBack: 7 });
+        totalNew += result.newOrders || 0;
+        totalUpdated += result.updatedOrders || 0;
+        console.log(`[scheduler] Vendor poll ${mp}: ${result.newOrders || 0} new, ${result.updatedOrders || 0} updated`);
       } catch (e) {
         console.error(`[scheduler] Vendor poll ${mp} failed:`, e?.message || e);
       }
