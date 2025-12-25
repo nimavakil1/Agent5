@@ -31,14 +31,10 @@
 
     <main class="px-6 py-8">
       <!-- Stats Section -->
-      <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
           <div id="stat-total" class="text-3xl font-bold text-white">-</div>
           <div class="text-slate-400 text-sm">Total POs</div>
-        </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-          <div id="stat-open" class="text-3xl font-bold text-orange-400">-</div>
-          <div class="text-slate-400 text-sm">Open Orders</div>
         </div>
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
           <div id="stat-not-shipped" class="text-3xl font-bold text-red-400">-</div>
@@ -338,8 +334,7 @@
           if (data.success) {
             const s = data.stats.summary;
             document.getElementById('stat-total').textContent = s.total || 0;
-            document.getElementById('stat-open').textContent = s.openOrders || 0;  // Open = Not shipped
-            document.getElementById('stat-not-shipped').textContent = s.notShipped || 0;
+            document.getElementById('stat-not-shipped').textContent = s.openOrders || 0;  // Not shipped = needs shipping
             document.getElementById('stat-invoice-pending').textContent = s.invoicePending || 0;  // Shipped but no invoice
             document.getElementById('stat-closed').textContent = s.closed || 0;
             document.getElementById('stat-with-odoo').textContent = s.withOdooOrder || 0;
