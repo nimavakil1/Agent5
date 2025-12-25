@@ -188,6 +188,10 @@
         <!-- Shipment Actions -->
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6">
           <div class="flex items-center gap-4">
+            <button id="poll-shipments-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">cloud_download</span>
+              Poll Amazon
+            </button>
             <button id="submit-pending-asn-btn" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
               <span class="material-symbols-outlined text-sm">local_shipping</span>
               Submit Pending ASNs
@@ -196,6 +200,13 @@
               <span class="material-symbols-outlined text-sm">refresh</span>
               Refresh
             </button>
+            <div class="flex-1"></div>
+            <select id="shipment-filter-marketplace" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">All Marketplaces</option>
+              <option value="DE">Germany (DE)</option>
+              <option value="FR">France (FR)</option>
+              <option value="NL">Netherlands (NL)</option>
+            </select>
           </div>
         </div>
 
@@ -1205,8 +1216,12 @@
       // ==================== SHIPMENTS ====================
       async function loadShipments() {
         try {
+          const marketplace = document.getElementById('shipment-filter-marketplace')?.value || '';
+          let shipmentsUrl = '/api/vendor/shipments?limit=50';
+          if (marketplace) shipmentsUrl += `&marketplace=${marketplace}`;
+
           const [shipmentsRes, readyRes] = await Promise.all([
-            fetch('/api/vendor/shipments?limit=50'),
+            fetch(shipmentsUrl),
             fetch('/api/vendor/shipments/ready')
           ]);
           const shipmentsData = await shipmentsRes.json();
@@ -1226,6 +1241,33 @@
         }
       }
 
+      async function pollShipmentsFromAmazon() {
+        const btn = document.getElementById('poll-shipments-btn');
+        const marketplace = document.getElementById('shipment-filter-marketplace')?.value || 'DE';
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span> Polling...';
+
+        try {
+          const res = await fetch(`/api/vendor/shipments/poll?marketplace=${marketplace}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            showToast(data.message, 'success');
+            loadShipments();
+          } else {
+            showToast('Poll failed: ' + (data.error || 'Unknown error'), 'error');
+          }
+        } catch (err) {
+          showToast('Poll failed: ' + err.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm">cloud_download</span> Poll Amazon';
+        }
+      }
+
       function renderShipments(shipments) {
         const tbody = document.getElementById('shipments-table-body');
         if (shipments.length === 0) {
@@ -1233,7 +1275,9 @@
             <tr>
               <td colspan="7" class="px-4 py-8 text-center text-slate-400">
                 <span class="material-symbols-outlined text-4xl mb-2 block">local_shipping</span>
-                No shipments found
+                <div class="font-medium text-white mb-1">No shipments yet</div>
+                <div class="text-sm">Shipments appear here after you submit ASNs for acknowledged purchase orders.</div>
+                <div class="text-sm mt-2">Click "Poll Amazon" to check for any existing shipments.</div>
               </td>
             </tr>
           `;
@@ -1304,7 +1348,9 @@
             <tr>
               <td colspan="8" class="px-4 py-8 text-center text-slate-400">
                 <span class="material-symbols-outlined text-4xl mb-2 block">money_off</span>
-                No chargebacks found
+                <div class="font-medium text-white mb-1">No chargebacks found</div>
+                <div class="text-sm">Download chargeback reports from Vendor Central and click "Import CSV" to track them here.</div>
+                <div class="text-sm mt-1">Chargebacks include shortages, compliance issues, and price claims.</div>
               </td>
             </tr>
           `;
@@ -1409,7 +1455,9 @@
             <tr>
               <td colspan="8" class="px-4 py-8 text-center text-slate-400">
                 <span class="material-symbols-outlined text-4xl mb-2 block">payments</span>
-                No payments found
+                <div class="font-medium text-white mb-1">No payments found</div>
+                <div class="text-sm">Download remittance reports from Vendor Central and click "Import Remittance" to track payments.</div>
+                <div class="text-sm mt-1">This helps reconcile Amazon payments with your submitted invoices.</div>
               </td>
             </tr>
           `;
@@ -1447,7 +1495,9 @@
       }
 
       // Setup event listeners for new tabs
+      document.getElementById('poll-shipments-btn')?.addEventListener('click', pollShipmentsFromAmazon);
       document.getElementById('refresh-shipments-btn')?.addEventListener('click', loadShipments);
+      document.getElementById('shipment-filter-marketplace')?.addEventListener('change', loadShipments);
       document.getElementById('refresh-cb-btn')?.addEventListener('click', loadChargebacks);
       document.getElementById('refresh-payments-btn')?.addEventListener('click', loadPayments);
       document.getElementById('cb-filter-type')?.addEventListener('change', loadChargebacks);

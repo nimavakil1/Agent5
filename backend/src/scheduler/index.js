@@ -3,6 +3,7 @@ const CampaignDefinition = require('../models/CampaignDefinition');
 const { getDb } = require('../db');
 let shopifyTimer = null;
 let amazonSettlementTimer = null;
+let vendorOrdersTimer = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -91,6 +92,49 @@ function start() {
     setTimeout(checkAmazonSettlementReminders, 5000); // Wait 5s for DB connection
     console.log('[scheduler] Amazon settlement reminder check initialized (daily)');
   } catch (e) { console.error('[scheduler] Amazon settlement check init error', e); }
+
+  // Amazon Vendor Central PO polling (every 2 hours)
+  try {
+    if (process.env.VENDOR_POLLING_ENABLED === '1') {
+      const minutes = Number(process.env.VENDOR_POLLING_INTERVAL_MIN || '120');
+      const periodMs = Math.max(15, minutes) * 60 * 1000;
+      vendorOrdersTimer = setInterval(pollVendorOrders, periodMs);
+      // Run immediately on start (with delay for DB connection)
+      setTimeout(pollVendorOrders, 10000);
+      console.log(`[scheduler] Vendor Central PO polling initialized (every ${minutes} minutes)`);
+    }
+  } catch (e) { console.error('[scheduler] Vendor polling init error', e); }
+}
+
+/**
+ * Poll Amazon Vendor Central for new purchase orders
+ * Polls all configured marketplaces (DE, FR, NL)
+ */
+async function pollVendorOrders() {
+  try {
+    const { getVendorPOImporter } = require('../services/amazon/vendor');
+    const importer = await getVendorPOImporter();
+
+    // Poll orders from all configured marketplaces
+    const marketplaces = ['DE', 'FR', 'NL'];
+    let totalNew = 0;
+    let totalUpdated = 0;
+
+    for (const mp of marketplaces) {
+      try {
+        const result = await importer.pollAndImport(mp, { daysBack: 7 });
+        totalNew += result.new || 0;
+        totalUpdated += result.updated || 0;
+        console.log(`[scheduler] Vendor poll ${mp}: ${result.new} new, ${result.updated} updated`);
+      } catch (e) {
+        console.error(`[scheduler] Vendor poll ${mp} failed:`, e?.message || e);
+      }
+    }
+
+    console.log(`[scheduler] Vendor polling complete: ${totalNew} new, ${totalUpdated} updated total`);
+  } catch (e) {
+    console.error('[scheduler] Vendor polling error:', e?.message || e);
+  }
 }
 
 /**
@@ -156,4 +200,4 @@ async function checkAmazonSettlementReminders() {
   }
 }
 
-module.exports = { start, checkAmazonSettlementReminders };
+module.exports = { start, checkAmazonSettlementReminders, pollVendorOrders };
