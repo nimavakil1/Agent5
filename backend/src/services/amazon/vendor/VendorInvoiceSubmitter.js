@@ -37,7 +37,7 @@ const ACROPAQ_COMPANY = {
     addressLine1: 'Patronaatstraat 79',
     city: 'Dendermonde',
     stateOrRegion: 'Oost-Vlaanderen',
-    postalCode: '9200',
+    postalOrZipCode: '9200',
     countryCode: 'BE'
   },
   taxRegistrationDetails: [{
