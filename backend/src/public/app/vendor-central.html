@@ -148,7 +148,7 @@
     <!-- PO Detail Modal -->
     <div id="po-modal" class="fixed inset-0 bg-black/50 z-50 hidden">
       <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-[95vw] max-h-[90vh] overflow-hidden">
           <!-- Modal Header -->
           <div class="flex items-center justify-between px-6 py-2 border-b border-slate-700">
             <div class="flex items-center gap-2">
@@ -217,8 +217,9 @@
                 <table class="w-full text-sm">
                   <thead class="bg-slate-700/50">
                     <tr>
+                      <th class="text-left text-slate-400 font-medium px-3 py-2">ASIN</th>
                       <th class="text-left text-slate-400 font-medium px-3 py-2">SKU</th>
-                      <th class="text-left text-slate-400 font-medium px-3 py-2">Product</th>
+                      <th class="text-left text-slate-400 font-medium px-3 py-2 min-w-[250px]">Product</th>
                       <th class="text-right text-slate-400 font-medium px-3 py-2">Ordered</th>
                       <th class="text-right text-slate-400 font-medium px-3 py-2">Available</th>
                       <th class="text-right text-slate-400 font-medium px-3 py-2">Ack Qty</th>
@@ -586,16 +587,22 @@
             : availableQty > 0 ? 'text-yellow-400'
             : 'text-red-400';
 
-          // Use Odoo SKU if available, otherwise show vendor identifier
+          // ASIN from Amazon
+          const asin = item.amazonProductIdentifier || '-';
+
+          // Use Odoo SKU if available, otherwise show EAN
           const displaySku = item.odooSku || item.vendorProductIdentifier || '-';
 
-          // Product name: first 40 chars with tooltip for full name
-          const fullProductName = item.odooProductName || item.amazonProductIdentifier || '-';
-          const shortProductName = fullProductName.length > 40 ? fullProductName.substring(0, 40) + '...' : fullProductName;
-          const productTooltip = fullProductName.length > 40 ? `title="${fullProductName.replace(/"/g, '&quot;')}"` : '';
+          // Product name: first 60 chars with tooltip for full name
+          const fullProductName = item.odooProductName || '-';
+          const shortProductName = fullProductName.length > 60 ? fullProductName.substring(0, 60) + '...' : fullProductName;
+          const productTooltip = fullProductName.length > 60 ? `title="${fullProductName.replace(/"/g, '&quot;')}"` : '';
 
           return `
             <tr class="hover:bg-slate-700/30">
+              <td class="px-3 py-2">
+                <span class="text-slate-400 font-mono text-xs">${asin}</span>
+              </td>
               <td class="px-3 py-2">
                 <span class="text-white font-mono text-xs">${displaySku}</span>
               </td>

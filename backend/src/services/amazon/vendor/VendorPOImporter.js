@@ -14,6 +14,7 @@
 
 const { getDb } = require('../../../db');
 const { VendorClient, VENDOR_TOKEN_MAP, MARKETPLACE_IDS, PO_STATES } = require('./VendorClient');
+const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 
 /**
  * MongoDB collection name for vendor purchase orders
@@ -215,7 +216,86 @@ class VendorPOImporter {
         createdAt: new Date(),
         updatedAt: new Date()
       });
+
+      // Enrich items with Odoo product data (async, don't wait)
+      this.enrichItemsWithOdooData(poNumber).catch(err => {
+        console.error(`[VendorPOImporter] Failed to enrich items for ${poNumber}:`, err.message);
+      });
+
       return { isNew: true, purchaseOrderNumber: poNumber };
+    }
+  }
+
+  /**
+   * Enrich PO items with Odoo product data (SKU, name, stock)
+   * Searches Odoo by barcode (EAN from Amazon's vendorProductIdentifier)
+   */
+  async enrichItemsWithOdooData(poNumber) {
+    const collection = this.db.collection(COLLECTION_NAME);
+    const po = await collection.findOne({ purchaseOrderNumber: poNumber });
+
+    if (!po || !po.items || po.items.length === 0) {
+      return;
+    }
+
+    try {
+      const odoo = new OdooDirectClient();
+      await odoo.authenticate();
+
+      const updatedItems = [];
+
+      for (const item of po.items) {
+        const ean = item.vendorProductIdentifier;
+        const asin = item.amazonProductIdentifier;
+
+        let productData = null;
+
+        // Search by EAN (barcode)
+        if (ean) {
+          const products = await odoo.searchRead('product.product',
+            [['barcode', '=', ean]],
+            ['id', 'name', 'default_code', 'qty_available', 'free_qty'],
+            { limit: 1 }
+          );
+          if (products.length > 0) {
+            productData = products[0];
+          }
+        }
+
+        // Fallback: search by ASIN in barcode
+        if (!productData && asin) {
+          const products = await odoo.searchRead('product.product',
+            [['barcode', '=', asin]],
+            ['id', 'name', 'default_code', 'qty_available', 'free_qty'],
+            { limit: 1 }
+          );
+          if (products.length > 0) {
+            productData = products[0];
+          }
+        }
+
+        if (productData) {
+          updatedItems.push({
+            ...item,
+            odooProductId: productData.id,
+            odooProductName: productData.name,
+            odooSku: productData.default_code,
+            qtyAvailable: productData.free_qty || 0
+          });
+        } else {
+          updatedItems.push(item);
+        }
+      }
+
+      // Update PO with enriched items
+      await collection.updateOne(
+        { purchaseOrderNumber: poNumber },
+        { $set: { items: updatedItems, updatedAt: new Date() } }
+      );
+
+      console.log(`[VendorPOImporter] Enriched ${updatedItems.filter(i => i.odooProductId).length}/${po.items.length} items for ${poNumber}`);
+    } catch (err) {
+      console.error(`[VendorPOImporter] Odoo enrichment failed for ${poNumber}:`, err.message);
     }
   }
 
