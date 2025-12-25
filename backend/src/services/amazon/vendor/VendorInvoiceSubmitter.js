@@ -324,7 +324,7 @@ class VendorInvoiceSubmitter {
       const product = products?.[0];
 
       items.push({
-        itemSequenceNumber: String(sequenceNumber++),
+        itemSequenceNumber: sequenceNumber++,
         amazonProductIdentifier: product?.barcode || null,
         vendorProductIdentifier: product?.default_code || null,
         invoicedQuantity: {
