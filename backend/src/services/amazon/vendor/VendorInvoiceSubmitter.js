@@ -329,7 +329,7 @@ class VendorInvoiceSubmitter {
         vendorProductIdentifier: product?.default_code || null,
         invoicedQuantity: {
           amount: Math.round(line.quantity),
-          unitOfMeasure: 'Each'
+          unitOfMeasure: 'Eaches'
         },
         netCost: {
           currencyCode: currency,
