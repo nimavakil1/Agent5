@@ -129,15 +129,33 @@ class VendorPOImporter {
 
     console.log(`[VendorPOImporter] Polling ${marketplace} for POs since ${createdAfter.toISOString()}`);
 
-    const response = await client.getPurchaseOrders(params);
-    const orders = response.orders || [];
+    let allOrders = [];
+    let nextToken = null;
+    let pageCount = 0;
 
-    console.log(`[VendorPOImporter] Found ${orders.length} POs for ${marketplace}`);
+    // Paginate through all results
+    do {
+      const response = await client.getPurchaseOrders({
+        ...params,
+        ...(nextToken && { nextToken })
+      });
+
+      const orders = response.orders || [];
+      allOrders = allOrders.concat(orders);
+      nextToken = response.pagination?.nextToken || null;
+      pageCount++;
+
+      if (nextToken) {
+        console.log(`[VendorPOImporter] ${marketplace} page ${pageCount}: ${orders.length} POs, fetching more...`);
+      }
+    } while (nextToken && pageCount < 50); // Safety limit of 50 pages (5000 POs)
+
+    console.log(`[VendorPOImporter] Found ${allOrders.length} total POs for ${marketplace} (${pageCount} pages)`);
 
     let newCount = 0;
     let updatedCount = 0;
 
-    for (const order of orders) {
+    for (const order of allOrders) {
       const result = await this.upsertPurchaseOrder(order, marketplace);
       if (result.isNew) {
         newCount++;
@@ -148,7 +166,7 @@ class VendorPOImporter {
 
     return {
       marketplace,
-      fetched: orders.length,
+      fetched: allOrders.length,
       new: newCount,
       updated: updatedCount
     };
