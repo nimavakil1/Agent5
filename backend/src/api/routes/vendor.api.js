@@ -50,9 +50,16 @@ router.get('/orders', async (req, res) => {
     // Handle stat filter (from clicking stat cards)
     if (req.query.statFilter) {
       switch (req.query.statFilter) {
+        case 'new':
+          filters.state = 'New';
+          break;
         case 'not-shipped':
           filters.state = 'Acknowledged';
           filters.shipmentStatus = 'not_shipped';
+          break;
+        case 'action-required':
+          // New orders OR Acknowledged but not shipped
+          filters.actionRequired = true;
           break;
         case 'invoice-pending':
           filters.state = 'Acknowledged';

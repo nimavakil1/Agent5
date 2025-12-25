@@ -427,6 +427,14 @@ class VendorPOImporter {
       ];
     }
 
+    // Action required filter (New OR Acknowledged+not_shipped)
+    if (filters.actionRequired) {
+      query.$or = [
+        { purchaseOrderState: 'New' },
+        { purchaseOrderState: 'Acknowledged', shipmentStatus: 'not_shipped' }
+      ];
+    }
+
     return query;
   }
 
