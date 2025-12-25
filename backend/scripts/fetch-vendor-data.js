@@ -15,26 +15,39 @@ async function fetchShipmentDetails(marketplace = 'DE') {
 
   try {
     const client = new VendorClient(marketplace);
-    await client.init();
+    const spClient = await client.getClient();
 
     // Get shipments from last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const result = await client.getShipmentDetails({
-      createdAfter: thirtyDaysAgo.toISOString(),
-      limit: 50
-    });
+    // Try different operation names
+    const operations = [
+      'vendorShipments.getShipmentDetails',
+      'vendorDirectFulfillmentShipping.getShippingLabels',
+      'vendorDirectFulfillmentShipping.getPackingSlips'
+    ];
 
-    console.log('Shipment Details Response:');
-    console.log(JSON.stringify(result, null, 2));
-
-    return result;
-  } catch (error) {
-    console.error(`Error fetching shipments for ${marketplace}:`, error.message);
-    if (error.response) {
-      console.error('Response:', JSON.stringify(error.response, null, 2));
+    for (const op of operations) {
+      console.log(`Trying operation: ${op}`);
+      try {
+        const result = await spClient.callAPI({
+          operation: op,
+          query: {
+            createdAfter: thirtyDaysAgo.toISOString(),
+            limit: 10
+          }
+        });
+        console.log(`${op} Response:`);
+        console.log(JSON.stringify(result, null, 2));
+      } catch (err) {
+        console.log(`  ${op}: ${err.message}`);
+      }
     }
+
+    return null;
+  } catch (error) {
+    console.error(`Error:`, error.message);
     return null;
   }
 }
@@ -118,6 +131,69 @@ async function requestReport(marketplace = 'DE', reportType = 'GET_VENDOR_REAL_T
   }
 }
 
+async function tryRequestReport(marketplace = 'DE') {
+  console.log(`\n=== Requesting Vendor Reports for ${marketplace} ===`);
+
+  const client = new VendorClient(marketplace);
+  const spClient = await client.getClient();
+
+  // Try different report types
+  const reportTypes = [
+    'GET_VENDOR_REAL_TIME_INVENTORY_REPORT',
+    'GET_VENDOR_INVENTORY_HEALTH_AND_PLANNING_REPORT'
+  ];
+
+  for (const reportType of reportTypes) {
+    console.log(`\nRequesting: ${reportType}`);
+    try {
+      const result = await spClient.callAPI({
+        operation: 'reports.createReport',
+        body: {
+          reportType,
+          marketplaceIds: [client.marketplaceId]
+        }
+      });
+      console.log(`  Report ID: ${result.reportId}`);
+      return result;
+    } catch (err) {
+      console.log(`  Error: ${err.message}`);
+    }
+  }
+}
+
+async function getRecentReports(marketplace = 'DE') {
+  console.log(`\n=== Getting Recent Reports for ${marketplace} ===`);
+
+  const client = new VendorClient(marketplace);
+  const spClient = await client.getClient();
+
+  try {
+    // Get all reports from last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const result = await spClient.callAPI({
+      operation: 'reports.getReports',
+      query: {
+        createdSince: thirtyDaysAgo.toISOString(),
+        pageSize: 100
+      }
+    });
+
+    console.log(`Found ${result.reports?.length || 0} reports`);
+    if (result.reports && result.reports.length > 0) {
+      result.reports.forEach(r => {
+        console.log(`  - ${r.reportType}: ${r.processingStatus} (${r.reportId})`);
+      });
+    }
+
+    return result;
+  } catch (err) {
+    console.log(`Error: ${err.message}`);
+    return null;
+  }
+}
+
 async function main() {
   console.log('===========================================');
   console.log('   Amazon Vendor Central Data Fetcher');
@@ -137,14 +213,14 @@ async function main() {
   // 1. Fetch Shipment Details
   await fetchShipmentDetails(marketplace);
 
-  // 2. List Available Reports
-  await listAvailableReports(marketplace);
+  // 2. Get recent reports
+  await getRecentReports(marketplace);
 
-  // 3. Show known vendor report types
+  // 3. Try requesting a report
+  await tryRequestReport(marketplace);
+
+  // 4. Show known vendor report types
   await getVendorReportTypes(marketplace);
-
-  // 4. Try requesting a report (optional)
-  // await requestReport(marketplace, 'GET_VENDOR_REAL_TIME_INVENTORY_REPORT');
 
   console.log('\n===========================================');
   console.log('   Done!');
