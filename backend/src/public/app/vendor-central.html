@@ -30,6 +30,24 @@
     </header>
 
     <main class="px-6 py-8">
+      <!-- Tab Navigation -->
+      <div class="flex gap-1 mb-6 bg-slate-800 p-1 rounded-lg w-fit">
+        <button class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors bg-slate-700 text-white" data-tab="orders">
+          Purchase Orders
+        </button>
+        <button class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors text-slate-400 hover:text-white" data-tab="shipments">
+          Shipments
+        </button>
+        <button class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors text-slate-400 hover:text-white" data-tab="chargebacks">
+          Chargebacks
+        </button>
+        <button class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors text-slate-400 hover:text-white" data-tab="payments">
+          Payments
+        </button>
+      </div>
+
+      <!-- Orders Tab Content -->
+      <div id="tab-orders" class="tab-content">
       <!-- Stats Section -->
       <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
         <div class="stat-card bg-slate-800 border-2 border-slate-700 rounded-xl p-4 cursor-pointer hover:border-slate-500 transition-colors" data-filter="all">
@@ -143,6 +161,237 @@
           </button>
         </div>
       </div>
+      </div><!-- End Orders Tab -->
+
+      <!-- Shipments Tab Content -->
+      <div id="tab-shipments" class="tab-content hidden">
+        <!-- Shipment Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="shipment-stat-total" class="text-3xl font-bold text-white">-</div>
+            <div class="text-slate-400 text-sm">Total Shipments</div>
+          </div>
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="shipment-stat-submitted" class="text-3xl font-bold text-blue-400">-</div>
+            <div class="text-slate-400 text-sm">Submitted</div>
+          </div>
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="shipment-stat-ready" class="text-3xl font-bold text-yellow-400">-</div>
+            <div class="text-slate-400 text-sm">Ready to Ship</div>
+          </div>
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="shipment-stat-confirmed" class="text-3xl font-bold text-green-400">-</div>
+            <div class="text-slate-400 text-sm">Confirmed</div>
+          </div>
+        </div>
+
+        <!-- Shipment Actions -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6">
+          <div class="flex items-center gap-4">
+            <button id="submit-pending-asn-btn" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">local_shipping</span>
+              Submit Pending ASNs
+            </button>
+            <button id="refresh-shipments-btn" class="flex items-center gap-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
+              <span class="material-symbols-outlined text-sm">refresh</span>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <!-- Shipments Table -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-slate-700/50">
+                <tr>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Shipment ID</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">PO Number</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Marketplace</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Submitted</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Carrier</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Tracking</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody id="shipments-table-body" class="divide-y divide-slate-700">
+                <tr>
+                  <td colspan="7" class="px-4 py-8 text-center text-slate-400">
+                    <span class="material-symbols-outlined text-4xl mb-2 block">local_shipping</span>
+                    Loading shipments...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- End Shipments Tab -->
+
+      <!-- Chargebacks Tab Content -->
+      <div id="tab-chargebacks" class="tab-content hidden">
+        <!-- Chargeback Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="cb-stat-total" class="text-3xl font-bold text-white">-</div>
+            <div class="text-slate-400 text-sm">Total</div>
+          </div>
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="cb-stat-pending" class="text-3xl font-bold text-yellow-400">-</div>
+            <div class="text-slate-400 text-sm">Pending Review</div>
+          </div>
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="cb-stat-disputed" class="text-3xl font-bold text-orange-400">-</div>
+            <div class="text-slate-400 text-sm">Disputed</div>
+          </div>
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="cb-stat-won" class="text-3xl font-bold text-green-400">-</div>
+            <div class="text-slate-400 text-sm">Won</div>
+          </div>
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="cb-stat-amount" class="text-3xl font-bold text-red-400">-</div>
+            <div class="text-slate-400 text-sm">Total Amount</div>
+          </div>
+        </div>
+
+        <!-- Chargeback Actions -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6">
+          <div class="flex items-center gap-4">
+            <button id="import-cb-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">upload_file</span>
+              Import CSV
+            </button>
+            <button id="add-cb-btn" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">add</span>
+              Add Chargeback
+            </button>
+            <button id="refresh-cb-btn" class="flex items-center gap-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
+              <span class="material-symbols-outlined text-sm">refresh</span>
+              Refresh
+            </button>
+            <div class="flex-1"></div>
+            <select id="cb-filter-type" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">All Types</option>
+              <option value="Shortage">Shortage</option>
+              <option value="PriceClaim">Price Claim</option>
+              <option value="Compliance">Compliance</option>
+              <option value="CoOp">CoOp/Marketing</option>
+              <option value="Freight">Freight</option>
+            </select>
+            <select id="cb-filter-status" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="disputed">Disputed</option>
+              <option value="won">Won</option>
+              <option value="lost">Lost</option>
+              <option value="accepted">Accepted</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Chargebacks Table -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-slate-700/50">
+                <tr>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">ID</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Date</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Type</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">PO/Invoice</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Description</th>
+                  <th class="text-right text-slate-400 font-medium text-sm px-4 py-3">Amount</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Status</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="chargebacks-table-body" class="divide-y divide-slate-700">
+                <tr>
+                  <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                    <span class="material-symbols-outlined text-4xl mb-2 block">money_off</span>
+                    No chargebacks found
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- End Chargebacks Tab -->
+
+      <!-- Payments Tab Content -->
+      <div id="tab-payments" class="tab-content hidden">
+        <!-- Payment Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="pay-stat-total" class="text-3xl font-bold text-white">-</div>
+            <div class="text-slate-400 text-sm">Total Payments</div>
+          </div>
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="pay-stat-amount" class="text-3xl font-bold text-green-400">-</div>
+            <div class="text-slate-400 text-sm">Total Received</div>
+          </div>
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="pay-stat-deductions" class="text-3xl font-bold text-red-400">-</div>
+            <div class="text-slate-400 text-sm">Total Deductions</div>
+          </div>
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div id="pay-stat-unpaid" class="text-3xl font-bold text-yellow-400">-</div>
+            <div class="text-slate-400 text-sm">Unpaid Invoices</div>
+          </div>
+        </div>
+
+        <!-- Payment Actions -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6">
+          <div class="flex items-center gap-4">
+            <button id="import-remittance-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">upload_file</span>
+              Import Remittance
+            </button>
+            <button id="reconcile-btn" class="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">sync</span>
+              Reconcile Payments
+            </button>
+            <button id="refresh-payments-btn" class="flex items-center gap-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
+              <span class="material-symbols-outlined text-sm">refresh</span>
+              Refresh
+            </button>
+            <div class="flex-1"></div>
+            <select id="pay-filter-status" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">All Statuses</option>
+              <option value="received">Received</option>
+              <option value="reconciled">Reconciled</option>
+              <option value="disputed">Disputed</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Payments Table -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-slate-700/50">
+                <tr>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Payment ID</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Date</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Invoice</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Type</th>
+                  <th class="text-right text-slate-400 font-medium text-sm px-4 py-3">Invoice Amt</th>
+                  <th class="text-right text-slate-400 font-medium text-sm px-4 py-3">Paid</th>
+                  <th class="text-right text-slate-400 font-medium text-sm px-4 py-3">Deductions</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody id="payments-table-body" class="divide-y divide-slate-700">
+                <tr>
+                  <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                    <span class="material-symbols-outlined text-4xl mb-2 block">payments</span>
+                    No payments found
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- End Payments Tab -->
     </main>
 
     <!-- PO Detail Modal -->
@@ -301,13 +550,59 @@
       const poModal = document.getElementById('po-modal');
       const modalItemsBody = document.getElementById('modal-items-body');
 
+      // Current tab
+      let currentTab = 'orders';
+
       // Initialize
       document.addEventListener('DOMContentLoaded', () => {
         loadStats();
         loadOrders();
         setupEventListeners();
+        setupTabListeners();
         updateStatCardStyles();  // Highlight the default stat filter
       });
+
+      function setupTabListeners() {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            switchTab(tab);
+          });
+        });
+      }
+
+      function switchTab(tab) {
+        currentTab = tab;
+
+        // Update tab button styles
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          if (btn.dataset.tab === tab) {
+            btn.classList.add('bg-slate-700', 'text-white');
+            btn.classList.remove('text-slate-400');
+          } else {
+            btn.classList.remove('bg-slate-700', 'text-white');
+            btn.classList.add('text-slate-400');
+          }
+        });
+
+        // Show/hide tab content
+        document.querySelectorAll('.tab-content').forEach(content => {
+          content.classList.add('hidden');
+        });
+        document.getElementById(`tab-${tab}`).classList.remove('hidden');
+
+        // Load data for the tab
+        if (tab === 'orders') {
+          loadOrders();
+          loadStats();
+        } else if (tab === 'shipments') {
+          loadShipments();
+        } else if (tab === 'chargebacks') {
+          loadChargebacks();
+        } else if (tab === 'payments') {
+          loadPayments();
+        }
+      }
 
       function setupEventListeners() {
         // Stat card clicks
@@ -906,6 +1201,308 @@
           toast.classList.add('translate-y-full', 'opacity-0');
         }, 4000);
       }
+
+      // ==================== SHIPMENTS ====================
+      async function loadShipments() {
+        try {
+          const [shipmentsRes, readyRes] = await Promise.all([
+            fetch('/api/vendor/shipments?limit=50'),
+            fetch('/api/vendor/shipments/ready')
+          ]);
+          const shipmentsData = await shipmentsRes.json();
+          const readyData = await readyRes.json();
+
+          // Update stats
+          const shipments = shipmentsData.shipments || [];
+          document.getElementById('shipment-stat-total').textContent = shipments.length;
+          document.getElementById('shipment-stat-submitted').textContent = shipments.filter(s => s.status === 'submitted').length;
+          document.getElementById('shipment-stat-ready').textContent = readyData.count || 0;
+          document.getElementById('shipment-stat-confirmed').textContent = shipments.filter(s => s.amazonStatus === 'Success').length;
+
+          renderShipments(shipments);
+        } catch (err) {
+          console.error('Failed to load shipments:', err);
+          showToast('Failed to load shipments', 'error');
+        }
+      }
+
+      function renderShipments(shipments) {
+        const tbody = document.getElementById('shipments-table-body');
+        if (shipments.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" class="px-4 py-8 text-center text-slate-400">
+                <span class="material-symbols-outlined text-4xl mb-2 block">local_shipping</span>
+                No shipments found
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = shipments.map(s => {
+          const statusColors = {
+            'submitted': 'bg-blue-500/20 text-blue-400',
+            'Success': 'bg-green-500/20 text-green-400',
+            'Failure': 'bg-red-500/20 text-red-400'
+          };
+          const statusClass = statusColors[s.amazonStatus || s.status] || 'bg-slate-500/20 text-slate-400';
+          const date = s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '-';
+
+          return `
+            <tr class="hover:bg-slate-700/30">
+              <td class="px-4 py-3"><span class="text-white font-medium">${s.shipmentId}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${s.purchaseOrderNumber}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${s.marketplaceId}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${date}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${s.carrier || '-'}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${s.trackingNumber || '-'}</span></td>
+              <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-medium ${statusClass}">${s.amazonStatus || s.status}</span></td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // ==================== CHARGEBACKS ====================
+      async function loadChargebacks() {
+        try {
+          const type = document.getElementById('cb-filter-type')?.value || '';
+          const status = document.getElementById('cb-filter-status')?.value || '';
+
+          let url = '/api/vendor/chargebacks?limit=50';
+          if (type) url += `&type=${type}`;
+          if (status) url += `&status=${status}`;
+
+          const [cbRes, statsRes] = await Promise.all([
+            fetch(url),
+            fetch('/api/vendor/chargebacks/stats')
+          ]);
+          const cbData = await cbRes.json();
+          const statsData = await statsRes.json();
+
+          // Update stats
+          if (statsData.success && statsData.stats) {
+            const s = statsData.stats.summary;
+            document.getElementById('cb-stat-total').textContent = s.totalCount || 0;
+            document.getElementById('cb-stat-pending').textContent = s.pendingCount || 0;
+            document.getElementById('cb-stat-disputed').textContent = s.disputedCount || 0;
+            document.getElementById('cb-stat-won').textContent = s.wonCount || 0;
+            document.getElementById('cb-stat-amount').textContent = `€${(s.totalAmount || 0).toFixed(0)}`;
+          }
+
+          renderChargebacks(cbData.chargebacks || []);
+        } catch (err) {
+          console.error('Failed to load chargebacks:', err);
+          showToast('Failed to load chargebacks', 'error');
+        }
+      }
+
+      function renderChargebacks(chargebacks) {
+        const tbody = document.getElementById('chargebacks-table-body');
+        if (chargebacks.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                <span class="material-symbols-outlined text-4xl mb-2 block">money_off</span>
+                No chargebacks found
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        const statusColors = {
+          'pending': 'bg-yellow-500/20 text-yellow-400',
+          'disputed': 'bg-orange-500/20 text-orange-400',
+          'won': 'bg-green-500/20 text-green-400',
+          'lost': 'bg-red-500/20 text-red-400',
+          'accepted': 'bg-slate-500/20 text-slate-400'
+        };
+
+        tbody.innerHTML = chargebacks.map(cb => {
+          const statusClass = statusColors[cb.disputeStatus] || 'bg-slate-500/20 text-slate-400';
+          const date = cb.chargebackDate ? new Date(cb.chargebackDate).toLocaleDateString() : '-';
+          const amount = cb.amount?.amount?.toFixed(2) || '0.00';
+          const currency = cb.amount?.currencyCode || 'EUR';
+          const desc = cb.description?.length > 40 ? cb.description.substring(0, 40) + '...' : (cb.description || '-');
+
+          return `
+            <tr class="hover:bg-slate-700/30">
+              <td class="px-4 py-3"><span class="text-white font-medium">${cb.chargebackId}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${date}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${cb.chargebackType}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${cb.purchaseOrderNumber || cb.invoiceNumber || '-'}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-400 text-sm">${desc}</span></td>
+              <td class="px-4 py-3 text-right"><span class="text-red-400">${currency} ${amount}</span></td>
+              <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-medium ${statusClass}">${cb.disputeStatus}</span></td>
+              <td class="px-4 py-3">
+                <select onchange="updateChargebackStatus('${cb.chargebackId}', this.value)"
+                  class="bg-slate-700 border border-slate-600 text-slate-300 rounded px-2 py-1 text-xs">
+                  <option value="">Change...</option>
+                  <option value="disputed">Dispute</option>
+                  <option value="accepted">Accept</option>
+                  <option value="won">Mark Won</option>
+                  <option value="lost">Mark Lost</option>
+                </select>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      async function updateChargebackStatus(chargebackId, status) {
+        if (!status) return;
+        try {
+          const res = await fetch(`/api/vendor/chargebacks/${chargebackId}/dispute`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast('Chargeback status updated', 'success');
+            loadChargebacks();
+          } else {
+            showToast('Failed to update status', 'error');
+          }
+        } catch (err) {
+          showToast('Failed to update status', 'error');
+        }
+      }
+
+      // ==================== PAYMENTS ====================
+      async function loadPayments() {
+        try {
+          const status = document.getElementById('pay-filter-status')?.value || '';
+          let url = '/api/vendor/payments?limit=50';
+          if (status) url += `&status=${status}`;
+
+          const [paymentsRes, statsRes, unpaidRes] = await Promise.all([
+            fetch(url),
+            fetch('/api/vendor/remittances/stats'),
+            fetch('/api/vendor/invoices/unpaid')
+          ]);
+          const paymentsData = await paymentsRes.json();
+          const statsData = await statsRes.json();
+          const unpaidData = await unpaidRes.json();
+
+          // Update stats
+          if (statsData.success && statsData.stats) {
+            const s = statsData.stats.summary;
+            document.getElementById('pay-stat-total').textContent = s.totalPayments || 0;
+            document.getElementById('pay-stat-amount').textContent = `€${(s.totalAmount || 0).toFixed(0)}`;
+            document.getElementById('pay-stat-deductions').textContent = `€${(s.totalDeductions || 0).toFixed(0)}`;
+          }
+          document.getElementById('pay-stat-unpaid').textContent = unpaidData.count || 0;
+
+          renderPayments(paymentsData.payments || []);
+        } catch (err) {
+          console.error('Failed to load payments:', err);
+          showToast('Failed to load payments', 'error');
+        }
+      }
+
+      function renderPayments(payments) {
+        const tbody = document.getElementById('payments-table-body');
+        if (payments.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                <span class="material-symbols-outlined text-4xl mb-2 block">payments</span>
+                No payments found
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        const statusColors = {
+          'received': 'bg-blue-500/20 text-blue-400',
+          'reconciled': 'bg-green-500/20 text-green-400',
+          'disputed': 'bg-red-500/20 text-red-400',
+          'pending': 'bg-yellow-500/20 text-yellow-400'
+        };
+
+        tbody.innerHTML = payments.map(p => {
+          const statusClass = statusColors[p.status] || 'bg-slate-500/20 text-slate-400';
+          const date = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : '-';
+          const invoiceAmt = p.invoiceAmount?.amount?.toFixed(2) || '0.00';
+          const paidAmt = p.amount?.amount?.toFixed(2) || '0.00';
+          const deductions = p.deductions?.amount?.toFixed(2) || '0.00';
+          const currency = p.amount?.currencyCode || 'EUR';
+
+          return `
+            <tr class="hover:bg-slate-700/30">
+              <td class="px-4 py-3"><span class="text-white font-medium text-sm">${p.paymentId}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${date}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${p.invoiceNumber || '-'}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300">${p.paymentType}</span></td>
+              <td class="px-4 py-3 text-right"><span class="text-slate-300">${currency} ${invoiceAmt}</span></td>
+              <td class="px-4 py-3 text-right"><span class="text-green-400">${currency} ${paidAmt}</span></td>
+              <td class="px-4 py-3 text-right"><span class="text-red-400">${currency} ${deductions}</span></td>
+              <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-medium ${statusClass}">${p.status}</span></td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // Setup event listeners for new tabs
+      document.getElementById('refresh-shipments-btn')?.addEventListener('click', loadShipments);
+      document.getElementById('refresh-cb-btn')?.addEventListener('click', loadChargebacks);
+      document.getElementById('refresh-payments-btn')?.addEventListener('click', loadPayments);
+      document.getElementById('cb-filter-type')?.addEventListener('change', loadChargebacks);
+      document.getElementById('cb-filter-status')?.addEventListener('change', loadChargebacks);
+      document.getElementById('pay-filter-status')?.addEventListener('change', loadPayments);
+
+      // Submit pending ASNs
+      document.getElementById('submit-pending-asn-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('submit-pending-asn-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span> Submitting...';
+        try {
+          const res = await fetch('/api/vendor/shipments/submit-pending', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(`Submitted ${data.successful} ASNs`, 'success');
+            loadShipments();
+          } else {
+            showToast('Failed to submit ASNs', 'error');
+          }
+        } catch (err) {
+          showToast('Failed to submit ASNs', 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm">local_shipping</span> Submit Pending ASNs';
+        }
+      });
+
+      // Reconcile payments
+      document.getElementById('reconcile-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('reconcile-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span> Reconciling...';
+        try {
+          const res = await fetch('/api/vendor/payments/reconcile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(`Matched: ${data.matched}, Disputed: ${data.disputed}`, 'success');
+            loadPayments();
+          } else {
+            showToast('Failed to reconcile', 'error');
+          }
+        } catch (err) {
+          showToast('Failed to reconcile', 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm">sync</span> Reconcile Payments';
+        }
+      });
     </script>
   </body>
 </html>

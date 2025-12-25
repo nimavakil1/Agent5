@@ -20,11 +20,17 @@ const {
   getVendorOrderCreator,
   getVendorPOAcknowledger,
   getVendorInvoiceSubmitter,
+  getVendorASNCreator,
+  getVendorChargebackTracker,
+  getVendorRemittanceParser,
   MARKETPLACE_IDS,
   VENDOR_ACCOUNTS,
   PO_STATES,
   ACK_CODES,
-  MARKETPLACE_WAREHOUSE
+  MARKETPLACE_WAREHOUSE,
+  CHARGEBACK_TYPES,
+  DISPUTE_STATUS,
+  PAYMENT_STATUS
 } = require('../../services/amazon/vendor');
 
 // ==================== PURCHASE ORDERS ====================
@@ -660,24 +666,502 @@ router.get('/shipments', async (req, res) => {
 /**
  * @route POST /api/vendor/shipments/:poNumber/create-asn
  * @desc Create ASN/shipment confirmation for a PO
+ * @body odooPickingId - Optional: specific Odoo picking ID
+ * @body dryRun - Optional: simulate without sending (default false)
  */
 router.post('/shipments/:poNumber/create-asn', async (req, res) => {
   try {
-    const importer = await getVendorPOImporter();
-    const order = await importer.getPurchaseOrder(req.params.poNumber);
+    const asnCreator = await getVendorASNCreator();
 
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    const result = await asnCreator.submitASN(req.params.poNumber, {
+      odooPickingId: req.body.odooPickingId || null,
+      dryRun: req.body.dryRun || false
+    });
+
+    if (!result.success && result.errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        errors: result.errors,
+        warnings: result.warnings
+      });
     }
 
-    // TODO: Implement VendorASNCreator
-    res.status(501).json({
-      success: false,
-      error: 'VendorASNCreator not yet implemented',
-      message: 'This feature will create ASN/shipment confirmations'
+    res.json({
+      success: true,
+      submitted: !result.dryRun,
+      dryRun: result.dryRun || false,
+      purchaseOrderNumber: result.purchaseOrderNumber,
+      shipmentId: result.shipmentId,
+      transactionId: result.transactionId,
+      warnings: result.warnings,
+      ...(result.payload && { payload: result.payload })
     });
   } catch (error) {
     console.error('[VendorAPI] POST /shipments/:poNumber/create-asn error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/shipments/:shipmentId
+ * @desc Get a specific shipment by ID
+ */
+router.get('/shipments/:shipmentId', async (req, res) => {
+  try {
+    const asnCreator = await getVendorASNCreator();
+    const shipment = await asnCreator.getShipment(req.params.shipmentId);
+
+    if (!shipment) {
+      return res.status(404).json({ success: false, error: 'Shipment not found' });
+    }
+
+    res.json({
+      success: true,
+      shipment
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /shipments/:shipmentId error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/shipments/:shipmentId/check-status
+ * @desc Check transaction status with Amazon for a shipment
+ */
+router.post('/shipments/:shipmentId/check-status', async (req, res) => {
+  try {
+    const asnCreator = await getVendorASNCreator();
+    const status = await asnCreator.checkTransactionStatus(req.params.shipmentId);
+
+    if (status.error) {
+      return res.status(400).json({ success: false, error: status.error });
+    }
+
+    res.json({
+      success: true,
+      shipmentId: req.params.shipmentId,
+      status
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /shipments/:shipmentId/check-status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/shipments/submit-pending
+ * @desc Submit ASNs for all POs ready to ship
+ * @body dryRun - Optional: simulate without sending (default false)
+ */
+router.post('/shipments/submit-pending', async (req, res) => {
+  try {
+    const asnCreator = await getVendorASNCreator();
+    const results = await asnCreator.autoSubmitASNs(req.body.dryRun || false);
+
+    res.json({
+      success: true,
+      ...results
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /shipments/submit-pending error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/shipments/ready
+ * @desc Get POs that are ready to ship (acknowledged but no ASN sent)
+ */
+router.get('/shipments/ready', async (req, res) => {
+  try {
+    const asnCreator = await getVendorASNCreator();
+    const readyPOs = await asnCreator.findPOsReadyToShip();
+
+    res.json({
+      success: true,
+      count: readyPOs.length,
+      orders: readyPOs.map(po => ({
+        purchaseOrderNumber: po.purchaseOrderNumber,
+        marketplaceId: po.marketplaceId,
+        purchaseOrderDate: po.purchaseOrderDate,
+        odoo: po.odoo,
+        totals: po.totals
+      }))
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /shipments/ready error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== CHARGEBACKS ====================
+
+/**
+ * @route GET /api/vendor/chargebacks
+ * @desc Get chargebacks with filters
+ */
+router.get('/chargebacks', async (req, res) => {
+  try {
+    const tracker = await getVendorChargebackTracker();
+
+    const filters = {};
+    if (req.query.marketplace) filters.marketplaceId = req.query.marketplace.toUpperCase();
+    if (req.query.type) filters.chargebackType = req.query.type;
+    if (req.query.status) filters.disputeStatus = req.query.status;
+    if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
+    if (req.query.dateTo) filters.dateTo = req.query.dateTo;
+
+    const options = {
+      limit: parseInt(req.query.limit) || 50,
+      skip: parseInt(req.query.skip) || 0
+    };
+
+    const chargebacks = await tracker.getChargebacks(filters, options);
+
+    res.json({
+      success: true,
+      count: chargebacks.length,
+      chargebacks
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /chargebacks error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/chargebacks/stats
+ * @desc Get chargeback statistics
+ */
+router.get('/chargebacks/stats', async (req, res) => {
+  try {
+    const tracker = await getVendorChargebackTracker();
+
+    const filters = {};
+    if (req.query.marketplace) filters.marketplaceId = req.query.marketplace.toUpperCase();
+    if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
+    if (req.query.dateTo) filters.dateTo = req.query.dateTo;
+
+    const stats = await tracker.getStats(filters);
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /chargebacks/stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/chargebacks/:chargebackId
+ * @desc Get a specific chargeback
+ */
+router.get('/chargebacks/:chargebackId', async (req, res) => {
+  try {
+    const tracker = await getVendorChargebackTracker();
+    const chargeback = await tracker.getChargeback(req.params.chargebackId);
+
+    if (!chargeback) {
+      return res.status(404).json({ success: false, error: 'Chargeback not found' });
+    }
+
+    res.json({
+      success: true,
+      chargeback
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /chargebacks/:chargebackId error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/chargebacks/import
+ * @desc Import chargebacks from CSV file
+ * @body csvContent - CSV file content
+ * @body marketplace - Marketplace ID
+ */
+router.post('/chargebacks/import', async (req, res) => {
+  try {
+    const tracker = await getVendorChargebackTracker();
+
+    if (!req.body.csvContent) {
+      return res.status(400).json({ success: false, error: 'CSV content is required' });
+    }
+
+    const result = await tracker.importFromCSV(req.body.csvContent, {
+      marketplace: req.body.marketplace || 'DE'
+    });
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /chargebacks/import error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/chargebacks
+ * @desc Manually create a chargeback entry
+ */
+router.post('/chargebacks', async (req, res) => {
+  try {
+    const tracker = await getVendorChargebackTracker();
+
+    const chargeback = await tracker.createChargeback(req.body);
+
+    res.json({
+      success: true,
+      chargeback
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /chargebacks error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route PUT /api/vendor/chargebacks/:chargebackId/dispute
+ * @desc Update dispute status for a chargeback
+ * @body status - Dispute status (pending, accepted, disputed, won, lost, partial)
+ * @body notes - Optional notes
+ */
+router.put('/chargebacks/:chargebackId/dispute', async (req, res) => {
+  try {
+    const tracker = await getVendorChargebackTracker();
+
+    if (!req.body.status) {
+      return res.status(400).json({ success: false, error: 'Status is required' });
+    }
+
+    const updated = await tracker.updateDisputeStatus(
+      req.params.chargebackId,
+      req.body.status,
+      req.body.notes
+    );
+
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Chargeback not found or not updated' });
+    }
+
+    res.json({
+      success: true,
+      chargebackId: req.params.chargebackId,
+      status: req.body.status
+    });
+  } catch (error) {
+    console.error('[VendorAPI] PUT /chargebacks/:chargebackId/dispute error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route DELETE /api/vendor/chargebacks/:chargebackId
+ * @desc Delete a chargeback
+ */
+router.delete('/chargebacks/:chargebackId', async (req, res) => {
+  try {
+    const tracker = await getVendorChargebackTracker();
+    const deleted = await tracker.deleteChargeback(req.params.chargebackId);
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: 'Chargeback not found' });
+    }
+
+    res.json({
+      success: true,
+      deleted: true
+    });
+  } catch (error) {
+    console.error('[VendorAPI] DELETE /chargebacks/:chargebackId error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== REMITTANCES ====================
+
+/**
+ * @route GET /api/vendor/remittances
+ * @desc Get remittances with filters
+ */
+router.get('/remittances', async (req, res) => {
+  try {
+    const parser = await getVendorRemittanceParser();
+
+    const filters = {};
+    if (req.query.marketplace) filters.marketplaceId = req.query.marketplace.toUpperCase();
+    if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
+    if (req.query.dateTo) filters.dateTo = req.query.dateTo;
+
+    const options = {
+      limit: parseInt(req.query.limit) || 50,
+      skip: parseInt(req.query.skip) || 0
+    };
+
+    const remittances = await parser.getRemittances(filters, options);
+
+    res.json({
+      success: true,
+      count: remittances.length,
+      remittances
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /remittances error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/remittances/stats
+ * @desc Get remittance/payment statistics
+ */
+router.get('/remittances/stats', async (req, res) => {
+  try {
+    const parser = await getVendorRemittanceParser();
+
+    const filters = {};
+    if (req.query.marketplace) filters.marketplaceId = req.query.marketplace.toUpperCase();
+    if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
+    if (req.query.dateTo) filters.dateTo = req.query.dateTo;
+
+    const stats = await parser.getStats(filters);
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /remittances/stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/remittances/:remittanceId
+ * @desc Get a specific remittance with payment lines
+ */
+router.get('/remittances/:remittanceId', async (req, res) => {
+  try {
+    const parser = await getVendorRemittanceParser();
+    const remittance = await parser.getRemittance(req.params.remittanceId);
+
+    if (!remittance) {
+      return res.status(404).json({ success: false, error: 'Remittance not found' });
+    }
+
+    res.json({
+      success: true,
+      remittance
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /remittances/:remittanceId error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/remittances/import
+ * @desc Import remittance from CSV file
+ * @body csvContent - CSV file content
+ * @body marketplace - Marketplace ID
+ */
+router.post('/remittances/import', async (req, res) => {
+  try {
+    const parser = await getVendorRemittanceParser();
+
+    if (!req.body.csvContent) {
+      return res.status(400).json({ success: false, error: 'CSV content is required' });
+    }
+
+    const result = await parser.importFromCSV(req.body.csvContent, {
+      marketplace: req.body.marketplace || 'DE'
+    });
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /remittances/import error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/payments
+ * @desc Get payment lines with filters
+ */
+router.get('/payments', async (req, res) => {
+  try {
+    const parser = await getVendorRemittanceParser();
+
+    const filters = {};
+    if (req.query.marketplace) filters.marketplaceId = req.query.marketplace.toUpperCase();
+    if (req.query.invoiceNumber) filters.invoiceNumber = req.query.invoiceNumber;
+    if (req.query.status) filters.status = req.query.status;
+    if (req.query.remittanceId) filters.remittanceId = req.query.remittanceId;
+    if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
+    if (req.query.dateTo) filters.dateTo = req.query.dateTo;
+
+    const options = {
+      limit: parseInt(req.query.limit) || 50,
+      skip: parseInt(req.query.skip) || 0
+    };
+
+    const payments = await parser.getPayments(filters, options);
+
+    res.json({
+      success: true,
+      count: payments.length,
+      payments
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /payments error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/payments/reconcile
+ * @desc Reconcile payments with invoices
+ */
+router.post('/payments/reconcile', async (req, res) => {
+  try {
+    const parser = await getVendorRemittanceParser();
+    const results = await parser.reconcilePayments();
+
+    res.json({
+      success: true,
+      ...results
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /payments/reconcile error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/invoices/unpaid
+ * @desc Get unpaid invoices
+ */
+router.get('/invoices/unpaid', async (req, res) => {
+  try {
+    const parser = await getVendorRemittanceParser();
+    const unpaidInvoices = await parser.getUnpaidInvoices();
+
+    res.json({
+      success: true,
+      count: unpaidInvoices.length,
+      invoices: unpaidInvoices
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /invoices/unpaid error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
