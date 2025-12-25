@@ -305,7 +305,9 @@ class VendorInvoiceSubmitter {
    */
   async buildInvoicePayload(po, odooInvoice) {
     const invoiceNumber = odooInvoice.name;
-    const invoiceDate = odooInvoice.invoice_date || new Date().toISOString().split('T')[0];
+    // Amazon requires full ISO 8601 datetime format
+    const rawDate = odooInvoice.invoice_date || new Date().toISOString().split('T')[0];
+    const invoiceDate = rawDate.includes('T') ? rawDate : `${rawDate}T00:00:00Z`;
     const currency = odooInvoice.currency_id?.[1]?.split(' ')[0] || 'EUR';
 
     // Build items from invoice lines
