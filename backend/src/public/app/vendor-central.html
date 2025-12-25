@@ -598,7 +598,11 @@
         btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span> Polling...';
 
         try {
-          const res = await fetch('/api/vendor/orders/poll', { method: 'POST' });
+          const res = await fetch('/api/vendor/orders/poll', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          });
           const data = await res.json();
 
           if (data.success) {

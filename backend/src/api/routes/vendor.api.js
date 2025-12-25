@@ -115,15 +115,16 @@ router.get('/orders/:poNumber', async (req, res) => {
 router.post('/orders/poll', async (req, res) => {
   try {
     const importer = await getVendorPOImporter();
+    const body = req.body || {};
 
     const options = {
-      daysBack: req.body.daysBack || 7,
-      state: req.body.state
+      daysBack: body.daysBack || 7,
+      state: body.state
     };
 
     let result;
-    if (req.body.marketplace) {
-      result = await importer.pollMarketplace(req.body.marketplace.toUpperCase(), options);
+    if (body.marketplace) {
+      result = await importer.pollMarketplace(body.marketplace.toUpperCase(), options);
     } else {
       result = await importer.pollAllMarketplaces(options);
     }
