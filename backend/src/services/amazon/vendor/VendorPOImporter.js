@@ -214,45 +214,62 @@ class VendorPOImporter {
 
   /**
    * Transform Amazon PO to our MongoDB schema
+   * Amazon nests most data under orderDetails
    */
   transformPurchaseOrder(order, marketplace) {
+    const details = order.orderDetails || {};
+
+    // Parse delivery window string format: "2025-12-23T23:00:00Z--2026-01-02T00:00:00Z"
+    let deliveryWindow = null;
+    if (details.deliveryWindow && typeof details.deliveryWindow === 'string') {
+      const parts = details.deliveryWindow.split('--');
+      if (parts.length === 2) {
+        deliveryWindow = {
+          startDate: new Date(parts[0]),
+          endDate: new Date(parts[1])
+        };
+      }
+    } else if (details.deliveryWindow && typeof details.deliveryWindow === 'object') {
+      deliveryWindow = {
+        startDate: details.deliveryWindow.startDate ? new Date(details.deliveryWindow.startDate) : null,
+        endDate: details.deliveryWindow.endDate ? new Date(details.deliveryWindow.endDate) : null
+      };
+    }
+
     return {
       purchaseOrderNumber: order.purchaseOrderNumber,
       marketplaceId: marketplace,
       amazonMarketplaceId: MARKETPLACE_IDS[marketplace],
       purchaseOrderState: order.purchaseOrderState,
-      purchaseOrderType: order.purchaseOrderType || 'RegularOrder',
-      purchaseOrderDate: new Date(order.purchaseOrderDate),
+      purchaseOrderType: details.purchaseOrderType || 'RegularOrder',
+      purchaseOrderDate: new Date(details.purchaseOrderDate),
 
       // Delivery window
-      deliveryWindow: order.deliveryWindow ? {
-        startDate: order.deliveryWindow.startDate ? new Date(order.deliveryWindow.startDate) : null,
-        endDate: order.deliveryWindow.endDate ? new Date(order.deliveryWindow.endDate) : null
+      deliveryWindow,
+
+      // Parties (from orderDetails)
+      buyingParty: details.buyingParty ? {
+        partyId: details.buyingParty.partyId,
+        address: details.buyingParty.address
       } : null,
 
-      // Parties
-      buyingParty: order.buyingParty ? {
-        partyId: order.buyingParty.partyId,
-        address: order.buyingParty.address
+      sellingParty: details.sellingParty ? {
+        partyId: details.sellingParty.partyId,
+        address: details.sellingParty.address
       } : null,
 
-      sellingParty: order.sellingParty ? {
-        partyId: order.sellingParty.partyId,
-        address: order.sellingParty.address
+      shipToParty: details.shipToParty ? {
+        partyId: details.shipToParty.partyId,
+        address: details.shipToParty.address
       } : null,
 
-      shipToParty: order.shipToParty ? {
-        partyId: order.shipToParty.partyId,
-        address: order.shipToParty.address
+      billToParty: details.billToParty ? {
+        partyId: details.billToParty.partyId,
+        address: details.billToParty.address
       } : null,
 
-      billToParty: order.billToParty ? {
-        partyId: order.billToParty.partyId,
-        address: order.billToParty.address
-      } : null,
-
-      // Items with acknowledgment fields
-      items: (order.items || []).map(item => ({
+      // Items with acknowledgment fields (from orderDetails.items)
+      items: (details.items || []).map(item => ({
         itemSequenceNumber: item.itemSequenceNumber,
         amazonProductIdentifier: item.amazonProductIdentifier, // ASIN
         vendorProductIdentifier: item.vendorProductIdentifier, // SKU
@@ -283,7 +300,7 @@ class VendorPOImporter {
       })),
 
       // Calculate totals
-      totals: this.calculateTotals(order.items || []),
+      totals: this.calculateTotals(details.items || []),
 
       // Raw data for reference
       rawData: order
