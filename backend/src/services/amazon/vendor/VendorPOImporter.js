@@ -780,6 +780,7 @@ class VendorPOImporter {
           ...item,
           odooProductId: info.odooProductId,
           odooProductName: info.odooProductName,
+          odooSku: info.odooSku,
           qtyAvailable: info.qtyAvailable
         };
       }

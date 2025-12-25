@@ -82,7 +82,8 @@
           </select>
           <select id="filter-state" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
             <option value="">All States</option>
-            <option value="Acknowledged" selected>Open</option>
+            <option value="New" selected>New (Pending Ack)</option>
+            <option value="Acknowledged">Acknowledged</option>
             <option value="Closed">Closed</option>
           </select>
           <select id="filter-odoo" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
@@ -143,7 +144,7 @@
     <!-- PO Detail Modal -->
     <div id="po-modal" class="fixed inset-0 bg-black/50 z-50 hidden">
       <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
           <!-- Modal Header -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
             <div class="flex items-center gap-3">
@@ -577,13 +578,21 @@
             : availableQty > 0 ? 'text-yellow-400'
             : 'text-red-400';
 
+          // Use Odoo SKU if available, otherwise show vendor identifier
+          const displaySku = item.odooSku || item.vendorProductIdentifier || '-';
+
+          // Product name: first 40 chars with tooltip for full name
+          const fullProductName = item.odooProductName || item.amazonProductIdentifier || '-';
+          const shortProductName = fullProductName.length > 40 ? fullProductName.substring(0, 40) + '...' : fullProductName;
+          const productTooltip = fullProductName.length > 40 ? `title="${fullProductName.replace(/"/g, '&quot;')}"` : '';
+
           return `
             <tr class="hover:bg-slate-700/30">
               <td class="px-3 py-2">
-                <span class="text-white font-mono">${item.vendorProductIdentifier || '-'}</span>
+                <span class="text-white font-mono text-xs">${displaySku}</span>
               </td>
               <td class="px-3 py-2">
-                <span class="text-slate-300">${item.odooProductName || item.amazonProductIdentifier || '-'}</span>
+                <span class="text-slate-300 cursor-default" ${productTooltip}>${shortProductName}</span>
               </td>
               <td class="px-3 py-2 text-right">
                 <span class="text-white">${orderedQty}</span>
@@ -704,6 +713,7 @@
               if (poItem) {
                 poItem.odooProductId = item.odooProductId;
                 poItem.odooProductName = item.odooProductName;
+                poItem.odooSku = item.odooSku;
                 poItem.qtyAvailable = item.qtyAvailable;
               }
             });

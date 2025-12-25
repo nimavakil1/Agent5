@@ -408,6 +408,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         vendorProductIdentifier: sku,
         odooProductId: productId,
         odooProductName: productData.name,
+        odooSku: productData.default_code,
         qtyAvailable: Math.max(0, qtyAvailable)
       });
     }
@@ -433,6 +434,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         orderedQty: item.orderedQuantity?.amount || 0,
         odooProductId: item.odooProductId,
         odooProductName: item.odooProductName,
+        odooSku: item.odooSku,
         qtyAvailable: item.qtyAvailable,
         acknowledgeQty: item.acknowledgeQty,
         backorderQty: item.backorderQty,
