@@ -1,7 +1,7 @@
 # Amazon Vendor Module Migration
 
 **Project:** Migrate Amazon Vendor functionality from Odoo to Agent5 AI Platform
-**Status:** Planning
+**Status:** Planning (Analysis Phase Complete)
 **Created:** 2024-12-23
 **Last Updated:** 2024-12-23
 
@@ -19,91 +19,116 @@ Migrate the Amazon Vendor (Emipro/EPT) module from Odoo 16 to Agent5, allowing c
 - **Platform:** Odoo.sh
 - **Version:** Odoo 16
 - **Database:** `ninicocolala-v16-fvl-fvl-7662670`
+- **GitHub Repo:** `https://github.com/ninicocolala/acropaq` (branch: `acr_prd`)
 - **Module:** Amazon EPT (Emipro)
 
 ### Installed Modules (Emipro)
 
-| Module | Description | Author |
-|--------|-------------|--------|
-| `amazon_ept` | Amazon Odoo Connector | Emipro Technologies |
-| `amazon_vendor_central_ept` | Amazon Vendor Central Odoo Connector | Emipro Technologies |
+| Module | Version | Description | Price |
+|--------|---------|-------------|-------|
+| `amazon_ept` | 16.0.1.2.37 | Amazon Odoo Connector | €479 |
+| `amazon_vendor_central_ept` | 16.0.0.0.1 | Amazon Vendor Central | Included |
+| `common_connector_library` | - | Shared library | Dependency |
 
-### Amazon-Related Models (47 total)
+### Dependencies
+- `common_connector_library` - Shared connector utilities
+- `iap` - Odoo IAP for API communication
+- `rating` - Customer ratings
 
-Key models that would need migration:
+---
 
-| Model | Purpose | Priority |
-|-------|---------|----------|
-| `amazon.seller.ept` | Seller account configuration | High |
-| `amazon.instance.ept` | Marketplace instances (DE, FR, etc.) | High |
-| `amazon.vendor.instance` | Vendor Central instances | Medium |
-| `amazon.product.ept` | Product mappings to Odoo products | High |
-| `amazon.vcs.tax.report.ept` | VCS tax reports | Already migrated |
-| `amazon.vendor.sale.requisition` | Vendor purchase orders | Medium |
-| `amazon.fba.live.stock.report.ept` | Live inventory | Medium |
-| `amazon.inbound.shipment.ept` | FBA inbound shipments | Low |
-| `amazon.removal.order.ept` | FBA removal orders | Low |
+## Source Code Analysis (from GitHub)
 
-### Fields on Invoices (account.move)
+### Module: amazon_ept (Seller Central)
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `amazon_instance_id` | many2one → amazon.instance.ept | Marketplace reference |
-| `is_undefined_amazon_returns` | boolean | Return flag |
-| `vcs_invoice_number` | char | VCS invoice ref (Emipro) |
-| `x_vcs_invoice_number` | char | VCS invoice ref (Agent5 - independent) |
-| `x_vcs_invoice_url` | char | VCS PDF URL (Agent5 - independent) |
+**Path:** `/amazon_ept/`
 
-### Fields on Sales Orders (sale.order)
+**64 Model Files:**
+- `amazon_seller.py` - Seller account configuration
+- `instance.py` - Marketplace instances
+- `product.py` - Product mappings
+- `sale_order.py` - Sales order integration
+- `account_move.py` - Invoice integration with VCS
+- `vcs_tax_report_ept.py` - VCS report processing
+- `settlement_report.py` - Settlement reconciliation
+- `shipping_report.py` - Shipping reports
+- `amazon_fba_live_stock_report_ept.py` - FBA inventory
+- `removal_order.py` - FBA removal orders
+- `stock_adjustment_report.py` - Stock adjustments
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `amazon_instance_id` | many2one → amazon.vendor.instance | Vendor instance |
-| `amazon_vendor_sale_requisition_id` | many2one | Requisition reference |
-| `exported_in_amazon` | boolean | Export sync flag |
-| `is_amazon_canceled` | boolean | Cancellation flag |
-| `updated_in_amazon` | boolean | Update sync flag |
+**Key account.move Fields (Invoices):**
+```python
+amazon_instance_id = fields.Many2one("amazon.instance.ept")
+seller_id = fields.Many2one("amazon.seller.ept")
+amz_fulfillment_by = fields.Selection([('FBA', 'FBA'), ('FBM', 'FBM')])
+amz_sale_order_id = fields.Many2one("sale.order")
+invoice_url = fields.Char()  # VCS PDF URL
+vcs_invoice_number = fields.Char()  # VCS invoice reference
+invoice_sent = fields.Boolean()  # Sent to Amazon flag
+ship_city, ship_postal_code, ship_state_id, ship_country_id
+bill_city, bill_postal_code, bill_state_id, bill_country_id
+```
 
-### Scheduled Actions (21 active crons)
+**VCS Processing Logic (`vcs_tax_report_ept.py`):**
+1. Download encrypted VCS report from Amazon
+2. Decode via Emipro IAP service
+3. Parse CSV with DictReader
+4. Match orders by `amz_order_reference`
+5. Update invoices with `invoice_url` and `vcs_invoice_number`
 
-**FBA-Acropaq crons:**
-- Import FBA Shipment Report (every 8h)
-- Process FBA Shipment Report (every 30min)
-- Import FBA Customer Return Report (every 8h)
-- Process FBA Customer Return Report (every 8h)
-- Import FBA Live Stock Report (every 1h)
-- Process FBA Live Stock Report (every 1h)
-- Create Removal Order Report (every 8h)
-- Create Stock Adjustment Report (every 8h)
-- Check inbound shipment status (every 1h)
+### Module: amazon_vendor_central_ept (Vendor Central)
 
-**FBM-Acropaq crons:**
-- Import Amazon Orders (every 1h)
-- Process Amazon Orders (every 30min)
-- Import Missing Unshipped Orders (every 1h)
+**Path:** `/amazon_vendor_central_ept/`
 
-**System crons:**
-- Shipped Order Queue processing (every 50min)
-- Feed Submission History Results (every 5min)
-- Auto Create Outbound Orders (every 1h)
-- Auto Delete Customer PII Details (daily)
-- Sync Fulfillment Centers (weekly)
+**16 Model Files:**
+- `amazon_vendor_instance.py` - Vendor account configuration
+- `amazon_vendor_sale_requisition.py` - Purchase orders from Amazon
+- `amazon_vendor_sale_requisition_line.py` - PO line items
+- `sale_order.py` - Order linking
+- `account_move.py` - Invoice submission to Amazon
+- `stock_picking.py` - Shipment handling
+- `amazon_vendor_data_queue.py` - Order import queue
+
+**Vendor Instance Configuration:**
+```python
+vendor_name = fields.Char(required=True)
+vendor_code = fields.Char(required=True)
+selling_party_id = fields.Char()
+warehouse_id = fields.Many2one("stock.warehouse")
+region = fields.Selection([('india', 'India'), ('europe', 'Europe'), ('north_america', 'North America')])
+pricelist_id = fields.Many2one('product.pricelist')
+delivery_type = fields.Selection([('we_pay', 'We Pay'), ('we_not_pay', 'We not Pay')])
+is_auto_confirm_order = fields.Boolean()
+```
+
+**Vendor Requisition (Purchase Order) States:**
+```python
+STATES = [('new', 'New'), ('acknowledged', 'Acknowledged'), ('closed', 'Closed')]
+PURCHASE_ORDER_TYPE = [('regularorder', 'Regular Order'), ('consignedorder', 'Consigned Order'),
+                        ('newproductintroduction', 'New Product Introduction'), ('rushorder', 'Rush Order')]
+```
+
+**Invoice Submission to Amazon (account_move.py):**
+- Prepare invoice JSON with remit_to_party, ship_to_party, bill_to_party
+- Submit via Emipro IAP to Amazon Vendor API
+- Track with `is_invoice_submitted` flag
 
 ---
 
 ## What Already Exists in Agent5
 
-### VCS Tax Reports
+### VCS Tax Reports (COMPLETE)
 - `/services/amazon/VcsTaxReportParser.js` - Parses VCS tax reports
 - `/services/amazon/VcsOdooInvoicer.js` - Creates invoices in Odoo from VCS data
 - UI: `/public/app/amazon-vcs.html`
+- **Note:** This duplicates what `vcs_tax_report_ept.py` does, but with our own independent fields
 
-### Settlement Reports
+### Settlement Reports (COMPLETE)
 - `/services/amazon/SettlementReportParser.js` - Parses settlement reports
 - UI: `/public/app/amazon-settlements.html`
 - Stores in MongoDB: `amazon_settlements`
 
-### FBA Reports
+### FBA Reports (COMPLETE)
 - `/services/amazon/FbaInventoryReportParser.js`
 - `/services/amazon/ReturnsReportParser.js`
 
@@ -113,59 +138,136 @@ Key models that would need migration:
 
 ---
 
-## Migration Plan
+## Migration Priority Analysis
 
-### Phase 1: Analysis (Current)
-- [ ] Connect to Odoo.sh and analyze Amazon Vendor module
-- [ ] Document all custom fields and their usage
-- [ ] Document all Python code/automation
-- [ ] Identify dependencies between modules
+### HIGH PRIORITY (Currently in use, business-critical)
 
-### Phase 2: Data Migration Strategy
-- [ ] Design MongoDB schema for vendor data
-- [ ] Create migration scripts for existing data
-- [ ] Define Odoo API interactions (what stays, what goes)
+| Feature | Odoo Module | Agent5 Status | Notes |
+|---------|-------------|---------------|-------|
+| VCS Tax Reports | `amazon_ept` | **DONE** | Using independent `x_` fields |
+| Settlement Reports | `amazon_ept` | **DONE** | Stored in MongoDB |
+| FBA Inventory | `amazon_ept` | **DONE** | Parser exists |
+| Returns Reports | `amazon_ept` | **DONE** | Parser exists |
 
-### Phase 3: Core Functionality
-- [ ] Vendor order processing
-- [ ] EDI/PEPPOL invoice handling
-- [ ] Purchase order automation
-- [ ] Product synchronization
+### MEDIUM PRIORITY (Used but can continue in Odoo short-term)
 
-### Phase 4: Testing & Validation
-- [ ] Test data migration with subset
-- [ ] Parallel run (both systems active)
-- [ ] Validate financial data accuracy
+| Feature | Odoo Module | Agent5 Status | Notes |
+|---------|-------------|---------------|-------|
+| Vendor Purchase Orders | `amazon_vendor_central_ept` | NOT STARTED | Requisition → Sale Order flow |
+| Vendor Invoice Submission | `amazon_vendor_central_ept` | NOT STARTED | Submit invoices to Amazon |
+| Product Mappings | Both modules | PARTIAL | Using Odoo product IDs |
+| Order Import (FBA/FBM) | `amazon_ept` | VIA ODOO | Crons still running |
 
-### Phase 5: Cutover
-- [ ] Final data migration
-- [ ] Disable Odoo module
-- [ ] Monitor for issues
-- [ ] Uninstall Odoo module
+### LOW PRIORITY (Rarely used or can be deferred)
+
+| Feature | Odoo Module | Notes |
+|---------|-------------|-------|
+| FBA Inbound Shipments | `amazon_ept` | Only for FBA sends |
+| Removal Orders | `amazon_ept` | Inventory removal from FBA |
+| Rating Reports | `amazon_ept` | Customer feedback |
+| Active Product Listings | `amazon_ept` | Catalog sync |
 
 ---
 
-## Technical Notes
+## API Access Limitations
 
-### Odoo Fields to Preserve
-*Document x_ prefixed custom fields used*
+### No Amazon Developer Account
 
-| Field | Model | Purpose |
-|-------|-------|---------|
-| `x_vcs_invoice_number` | account.move | VCS invoice reference |
-| `x_vcs_invoice_url` | account.move | PDF download URL |
-| `x_exported` | account.move | Export flag |
-| *TBD* | | |
+**Critical Constraint:** We do NOT have an Amazon Developer account and cannot access Amazon SP-API directly.
 
-### Emipro Fields to Migrate/Replace
-*Document EPT module fields*
+**Current Situation:**
+- Emipro modules use their IAP (In-App Purchase) service to proxy API calls
+- All Amazon SP-API calls go through Emipro's `global_variables.REQUEST_URL`
+- VCS report decryption is done by Emipro's service
 
-| Field | Model | Purpose | Agent5 Replacement |
-|-------|-------|---------|-------------------|
-| `vcs_invoice_number` | account.move | VCS ref (Emipro) | Use x_vcs_invoice_number |
-| `is_vcs_invoice` | account.move | VCS flag | Check x_vcs_invoice_number not null |
-| `amazon_instance_id` | Multiple | Instance reference | MongoDB config |
-| *TBD* | | | |
+**Make.com Limitations:**
+Make.com can access some Amazon data but NOT everything:
+
+| Data Type | Make.com Access | Notes |
+|-----------|-----------------|-------|
+| Basic Orders | YES | Order ID, customer, items |
+| VCS Tax Reports | NO | Requires SP-API |
+| Settlement Reports | NO | Requires SP-API |
+| Vendor Central POs | UNKNOWN | Need to verify |
+| Invoice Submission | UNKNOWN | Need to verify |
+
+**Agent5 Workaround:**
+- VCS and Settlement reports: Manual CSV upload via Agent5 UI
+- Orders: Receive via Make.com webhook (limited data)
+- Vendor Central: May need to keep Emipro dependency
+
+### Emipro IAP Dependency (Vendor Central)
+
+For Vendor Central specifically, we may need to keep using Emipro's IAP for:
+- Invoice submission to Amazon
+- PO acknowledgment
+- ASN (Advance Shipment Notification)
+
+This is because Make.com may not have access to Amazon Vendor API endpoints.
+
+---
+
+## Fields on Odoo Models
+
+### Fields on Invoices (account.move)
+
+| Field | Type | Module | Description |
+|-------|------|--------|-------------|
+| `amazon_instance_id` | many2one → amazon.instance.ept | amazon_ept | Marketplace reference |
+| `seller_id` | many2one → amazon.seller.ept | amazon_ept | Seller reference |
+| `amz_fulfillment_by` | selection | amazon_ept | FBA or FBM |
+| `invoice_url` | char | amazon_ept | VCS PDF URL |
+| `vcs_invoice_number` | char | amazon_ept | VCS invoice ref (Emipro) |
+| `invoice_sent` | boolean | amazon_ept | Sent to Amazon flag |
+| `is_invoice_submitted` | boolean | amazon_vendor_central_ept | Vendor submission flag |
+| `x_vcs_invoice_number` | char | Agent5 (custom) | VCS invoice ref (independent) |
+| `x_vcs_invoice_url` | char | Agent5 (custom) | VCS PDF URL (independent) |
+
+### Fields on Sales Orders (sale.order)
+
+| Field | Type | Module | Description |
+|-------|------|--------|-------------|
+| `amazon_vendor_sale_requisition_id` | many2one | amazon_vendor_central_ept | Requisition reference |
+| `amazon_instance_id` | many2one → amazon.vendor.instance | amazon_vendor_central_ept | Vendor instance |
+| `amz_instance_id` | many2one → amazon.instance.ept | amazon_ept | Seller instance |
+| `amz_order_reference` | char | amazon_ept | Amazon Order ID |
+
+---
+
+## Migration Plan
+
+### Phase 1: Analysis ✅ COMPLETE
+- [x] Connect to Odoo.sh GitHub repo
+- [x] Analyze Amazon EPT module source code
+- [x] Analyze Amazon Vendor Central EPT source code
+- [x] Document all fields and their usage
+- [x] Identify Emipro IAP dependencies
+
+### Phase 2: Parallel Independence (CURRENT)
+- [ ] Ensure VCS uses only `x_` prefixed fields (already done)
+- [ ] Ensure Settlement reports are fully in MongoDB
+- [ ] Document which Odoo crons can be disabled
+- [ ] Test full VCS workflow without Emipro fields
+
+### Phase 3: Vendor Central Migration
+- [ ] Design MongoDB schema for vendor orders
+- [ ] Implement requisition import from Amazon
+- [ ] Implement sale order creation
+- [ ] Implement invoice submission to Amazon
+
+### Phase 4: ~~Direct Amazon SP-API Integration~~ NOT POSSIBLE
+~~- [ ] Set up AWS credentials~~
+~~- [ ] Implement SP-API client for reports~~
+~~- [ ] Replace Make.com webhooks with direct polling~~
+~~- [ ] Remove Emipro IAP dependency~~
+
+**Note:** This phase is not possible without an Amazon Developer account. Current workflow uses manual CSV uploads for VCS and Settlement reports.
+
+### Phase 5: Cutover
+- [ ] Disable Emipro module crons
+- [ ] Monitor for 30 days
+- [ ] Uninstall Emipro modules
+- [ ] Archive Emipro-specific fields
 
 ---
 
@@ -173,18 +275,32 @@ Key models that would need migration:
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Data loss during migration | High | Full backup before cutover |
-| Broken Odoo reports | Medium | Test all reports pre-cutover |
-| Accounting discrepancies | High | Parallel validation period |
+| Emipro IAP unavailable | High | Agent5 already handles VCS independently |
+| Data loss during migration | High | MongoDB backup + Odoo backup |
+| Broken Odoo reports | Medium | Phase 2 validation before removal |
+| SP-API rate limits | Medium | Implement exponential backoff |
+| Vendor order failures | High | Keep Odoo module active until tested |
 
 ---
 
-## Open Questions
+## Answers to Open Questions
 
-1. Which Emipro features are actually used vs just installed?
-2. Are there any scheduled actions/crons that need migration?
-3. What reports depend on Emipro fields?
-4. How is inventory sync currently working?
+1. **Which Emipro features are actually used?**
+   - VCS Tax Reports → **Migrated to Agent5**
+   - Settlement Reports → **Migrated to Agent5**
+   - Vendor Purchase Orders → Still in Odoo
+   - FBA/FBM Order Import → Via Odoo crons
+
+2. **Are there scheduled actions that need migration?**
+   - 21 crons are active, but most can be replaced with Agent5 polling
+
+3. **What reports depend on Emipro fields?**
+   - VCS reports now use `x_` fields, so Emipro fields can be ignored
+   - Some accounting views may show Emipro fields
+
+4. **How is inventory sync currently working?**
+   - `amazon_fba_live_stock_report_ept.py` imports FBA stock
+   - Agent5 has its own parser for this
 
 ---
 
@@ -193,6 +309,7 @@ Key models that would need migration:
 - `/docs/projects/index.md` - Project index
 - `/backend/CLAUDE.md` - Claude Code notes
 - `/backend/TESTING_PLAN_2025-12-21.md` - Testing plan
+- **GitHub Source:** https://github.com/ninicocolala/acropaq (branch: acr_prd)
 
 ---
 
@@ -200,4 +317,8 @@ Key models that would need migration:
 
 | Date | Change |
 |------|--------|
+| 2024-12-23 | Updated to document API access limitations (no Amazon Developer account) |
+| 2024-12-23 | Marked Phase 4 (SP-API) as NOT POSSIBLE |
+| 2024-12-23 | Added Make.com limitation table |
 | 2024-12-23 | Initial project document created |
+| 2024-12-23 | Complete source code analysis from GitHub repo |

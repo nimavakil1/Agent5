@@ -17,9 +17,12 @@ const {
   VendorClient,
   getVendorPOImporter,
   getVendorOrderCreator,
+  getVendorPOAcknowledger,
+  getVendorInvoiceSubmitter,
   MARKETPLACE_IDS,
   VENDOR_ACCOUNTS,
-  PO_STATES
+  PO_STATES,
+  ACK_CODES
 } = require('../../services/amazon/vendor');
 
 // ==================== PURCHASE ORDERS ====================
@@ -137,51 +140,66 @@ router.post('/orders/poll', async (req, res) => {
  * @route POST /api/vendor/orders/:poNumber/acknowledge
  * @desc Send acknowledgment to Amazon for a PO
  * @body status - Acknowledgment status: Accepted, Rejected, Backordered
- * @body items - Optional: item-level acknowledgments
+ * @body dryRun - Optional: simulate without sending (default false)
  */
 router.post('/orders/:poNumber/acknowledge', async (req, res) => {
   try {
-    const importer = await getVendorPOImporter();
-    const order = await importer.getPurchaseOrder(req.params.poNumber);
+    const acknowledger = await getVendorPOAcknowledger();
 
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Purchase order not found' });
-    }
+    const result = await acknowledger.acknowledgePO(req.params.poNumber, {
+      status: req.body.status || ACK_CODES.ACCEPTED,
+      dryRun: req.body.dryRun || false
+    });
 
-    if (order.acknowledgment?.acknowledged) {
+    if (!result.success && result.errors.length > 0) {
       return res.status(400).json({
         success: false,
-        error: 'Order already acknowledged',
-        acknowledgedAt: order.acknowledgment.acknowledgedAt
+        errors: result.errors,
+        warnings: result.warnings
       });
     }
 
-    // Create vendor client for the marketplace
-    const client = new VendorClient(order.marketplaceId);
-
-    // Build acknowledgment
-    const acknowledgementCode = req.body.status || 'Accepted';
-    const acknowledgement = client.buildAcknowledgement(
-      order.purchaseOrderNumber,
-      acknowledgementCode,
-      req.body.items || order.items
-    );
-
-    // Submit to Amazon
-    const response = await client.submitAcknowledgement(acknowledgement);
-
-    // Update local record
-    await importer.markAcknowledged(order.purchaseOrderNumber, acknowledgementCode);
-
     res.json({
       success: true,
-      message: 'Purchase order acknowledged',
-      purchaseOrderNumber: order.purchaseOrderNumber,
-      status: acknowledgementCode,
-      amazonResponse: response
+      acknowledged: !result.skipped && !result.dryRun,
+      skipped: result.skipped,
+      skipReason: result.skipReason,
+      dryRun: result.dryRun || false,
+      purchaseOrderNumber: result.purchaseOrderNumber,
+      status: result.status,
+      transactionId: result.transactionId,
+      warnings: result.warnings,
+      ...(result.payload && { payload: result.payload })
     });
   } catch (error) {
     console.error('[VendorAPI] POST /orders/:poNumber/acknowledge error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/orders/acknowledge-pending
+ * @desc Acknowledge all pending POs (those not yet acknowledged)
+ * @body limit - Optional: max POs to process (default 50)
+ * @body status - Optional: acknowledgment status (default Accepted)
+ * @body dryRun - Optional: simulate without sending (default false)
+ */
+router.post('/orders/acknowledge-pending', async (req, res) => {
+  try {
+    const acknowledger = await getVendorPOAcknowledger();
+
+    const results = await acknowledger.acknowledgePendingPOs({
+      limit: req.body.limit || 50,
+      status: req.body.status || ACK_CODES.ACCEPTED,
+      dryRun: req.body.dryRun || false
+    });
+
+    res.json({
+      success: true,
+      ...results
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /orders/acknowledge-pending error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -292,24 +310,84 @@ router.get('/invoices', async (req, res) => {
 /**
  * @route POST /api/vendor/invoices/:poNumber/submit
  * @desc Submit invoice to Amazon for a PO
+ * @body odooInvoiceId - Optional: specific Odoo invoice ID to use
+ * @body dryRun - Optional: simulate without sending (default false)
  */
 router.post('/invoices/:poNumber/submit', async (req, res) => {
   try {
-    const importer = await getVendorPOImporter();
-    const order = await importer.getPurchaseOrder(req.params.poNumber);
+    const submitter = await getVendorInvoiceSubmitter();
 
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Purchase order not found' });
+    const result = await submitter.submitInvoice(req.params.poNumber, {
+      odooInvoiceId: req.body.odooInvoiceId || null,
+      dryRun: req.body.dryRun || false
+    });
+
+    if (!result.success && result.errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        errors: result.errors,
+        warnings: result.warnings
+      });
     }
 
-    // TODO: Implement VendorInvoiceSubmitter
-    res.status(501).json({
-      success: false,
-      error: 'VendorInvoiceSubmitter not yet implemented',
-      message: 'This feature will submit invoices to Amazon'
+    res.json({
+      success: true,
+      submitted: !result.skipped && !result.dryRun,
+      skipped: result.skipped,
+      skipReason: result.skipReason,
+      dryRun: result.dryRun || false,
+      purchaseOrderNumber: result.purchaseOrderNumber,
+      invoiceNumber: result.invoiceNumber,
+      transactionId: result.transactionId,
+      warnings: result.warnings,
+      ...(result.payload && { payload: result.payload })
     });
   } catch (error) {
     console.error('[VendorAPI] POST /invoices/:poNumber/submit error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/invoices/submit-pending
+ * @desc Submit invoices for all POs ready for invoicing
+ * @body limit - Optional: max POs to process (default 50)
+ * @body dryRun - Optional: simulate without sending (default false)
+ */
+router.post('/invoices/submit-pending', async (req, res) => {
+  try {
+    const submitter = await getVendorInvoiceSubmitter();
+
+    const results = await submitter.submitPendingInvoices({
+      limit: req.body.limit || 50,
+      dryRun: req.body.dryRun || false
+    });
+
+    res.json({
+      success: true,
+      ...results
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /invoices/submit-pending error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/invoices/stats
+ * @desc Get invoice submission statistics
+ */
+router.get('/invoices/stats', async (req, res) => {
+  try {
+    const submitter = await getVendorInvoiceSubmitter();
+    const stats = await submitter.getStats();
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /invoices/stats error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
