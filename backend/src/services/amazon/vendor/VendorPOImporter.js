@@ -354,38 +354,8 @@ class VendorPOImporter {
   async getPurchaseOrders(filters = {}, options = {}) {
     const collection = this.db.collection(COLLECTION_NAME);
 
-    const query = {};
-
-    if (filters.marketplace) {
-      query.marketplaceId = filters.marketplace;
-    }
-
-    if (filters.state) {
-      query.purchaseOrderState = filters.state;
-    }
-
-    if (filters.acknowledged !== undefined) {
-      query['acknowledgment.acknowledged'] = filters.acknowledged;
-    }
-
-    if (filters.hasOdooOrder !== undefined) {
-      if (filters.hasOdooOrder) {
-        query['odoo.saleOrderId'] = { $ne: null };
-      } else {
-        query['odoo.saleOrderId'] = null;
-      }
-    }
-
-    if (filters.dateFrom) {
-      query.purchaseOrderDate = { $gte: new Date(filters.dateFrom) };
-    }
-
-    if (filters.dateTo) {
-      query.purchaseOrderDate = {
-        ...query.purchaseOrderDate,
-        $lte: new Date(filters.dateTo)
-      };
-    }
+    // Use shared query builder to ensure consistent filtering
+    const query = this._buildQuery(filters);
 
     const cursor = collection.find(query);
 
