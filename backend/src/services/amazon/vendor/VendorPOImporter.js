@@ -467,10 +467,37 @@ class VendorPOImporter {
         $group: {
           _id: null,
           total: { $sum: 1 },
+          // Amazon PO states
           new: { $sum: { $cond: [{ $eq: ['$purchaseOrderState', 'New'] }, 1, 0] } },
           acknowledged: { $sum: { $cond: [{ $eq: ['$purchaseOrderState', 'Acknowledged'] }, 1, 0] } },
           closed: { $sum: { $cond: [{ $eq: ['$purchaseOrderState', 'Closed'] }, 1, 0] } },
+          // Our tracking flags
           pendingAck: { $sum: { $cond: ['$acknowledgment.acknowledged', 0, 1] } },
+          // Shipment status (for open orders)
+          notShipped: { $sum: { $cond: [
+            { $and: [
+              { $eq: ['$purchaseOrderState', 'Acknowledged'] },
+              { $or: [
+                { $eq: ['$shipmentStatus', null] },
+                { $eq: ['$shipmentStatus', 'not_shipped'] }
+              ]}
+            ]}, 1, 0
+          ]}},
+          partiallyShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'partially_shipped'] }, 1, 0] } },
+          fullyShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'fully_shipped'] }, 1, 0] } },
+          // Invoice status (for open orders)
+          invoiceNotSubmitted: { $sum: { $cond: [
+            { $and: [
+              { $eq: ['$purchaseOrderState', 'Acknowledged'] },
+              { $or: [
+                { $eq: ['$invoiceStatus', null] },
+                { $eq: ['$invoiceStatus', 'not_submitted'] }
+              ]}
+            ]}, 1, 0
+          ]}},
+          invoiceSubmitted: { $sum: { $cond: [{ $eq: ['$invoiceStatus', 'submitted'] }, 1, 0] } },
+          invoiceAccepted: { $sum: { $cond: [{ $eq: ['$invoiceStatus', 'accepted'] }, 1, 0] } },
+          // Odoo integration
           withOdooOrder: { $sum: { $cond: [{ $ne: ['$odoo.saleOrderId', null] }, 1, 0] } },
           totalAmount: { $sum: '$totals.totalAmount' }
         }
@@ -510,6 +537,12 @@ class VendorPOImporter {
         acknowledged: 0,
         closed: 0,
         pendingAck: 0,
+        notShipped: 0,
+        partiallyShipped: 0,
+        fullyShipped: 0,
+        invoiceNotSubmitted: 0,
+        invoiceSubmitted: 0,
+        invoiceAccepted: 0,
         withOdooOrder: 0,
         totalAmount: 0
       },
