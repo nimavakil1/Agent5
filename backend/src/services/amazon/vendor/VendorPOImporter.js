@@ -366,6 +366,55 @@ class VendorPOImporter {
   }
 
   /**
+   * Build query object from filters (shared helper)
+   */
+  _buildQuery(filters = {}) {
+    const query = {};
+
+    if (filters.marketplace) {
+      query.marketplaceId = filters.marketplace;
+    }
+
+    if (filters.state) {
+      query.purchaseOrderState = filters.state;
+    }
+
+    if (filters.acknowledged !== undefined) {
+      query['acknowledgment.acknowledged'] = filters.acknowledged;
+    }
+
+    if (filters.hasOdooOrder !== undefined) {
+      if (filters.hasOdooOrder) {
+        query['odoo.saleOrderId'] = { $ne: null };
+      } else {
+        query['odoo.saleOrderId'] = null;
+      }
+    }
+
+    if (filters.dateFrom) {
+      query.purchaseOrderDate = { $gte: new Date(filters.dateFrom) };
+    }
+
+    if (filters.dateTo) {
+      query.purchaseOrderDate = {
+        ...query.purchaseOrderDate,
+        $lte: new Date(filters.dateTo)
+      };
+    }
+
+    return query;
+  }
+
+  /**
+   * Count purchase orders with filters
+   */
+  async countPurchaseOrders(filters = {}) {
+    const collection = this.db.collection(COLLECTION_NAME);
+    const query = this._buildQuery(filters);
+    return collection.countDocuments(query);
+  }
+
+  /**
    * Get statistics
    */
   async getStats() {

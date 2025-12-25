@@ -58,11 +58,16 @@ router.get('/orders', async (req, res) => {
       skip: parseInt(req.query.skip) || 0
     };
 
-    const orders = await importer.getPurchaseOrders(filters, options);
+    // Get orders and total count in parallel
+    const [orders, total] = await Promise.all([
+      importer.getPurchaseOrders(filters, options),
+      importer.countPurchaseOrders(filters)
+    ]);
 
     res.json({
       success: true,
       count: orders.length,
+      total,
       orders: orders.map(o => ({
         purchaseOrderNumber: o.purchaseOrderNumber,
         marketplaceId: o.marketplaceId,

@@ -82,7 +82,7 @@
           </select>
           <select id="filter-state" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
             <option value="">All States</option>
-            <option value="New">New</option>
+            <option value="New" selected>New</option>
             <option value="Acknowledged">Acknowledged</option>
             <option value="Closed">Closed</option>
           </select>
@@ -125,11 +125,17 @@
       <!-- Pagination -->
       <div class="flex items-center justify-between">
         <div class="text-slate-400 text-sm">
-          Showing <span id="showing-count">0</span> orders
+          Showing <span id="showing-start">0</span>-<span id="showing-end">0</span> of <span id="showing-total">0</span> orders
         </div>
-        <div class="flex gap-2">
-          <button id="load-more-btn" class="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
-            Load More
+        <div class="flex items-center gap-2">
+          <button id="prev-btn" class="flex items-center gap-1 px-3 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <span class="material-symbols-outlined text-sm">chevron_left</span>
+            Previous
+          </button>
+          <span id="page-info" class="text-slate-400 text-sm px-3">Page 1</span>
+          <button id="next-btn" class="flex items-center gap-1 px-3 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            Next
+            <span class="material-symbols-outlined text-sm">chevron_right</span>
           </button>
         </div>
       </div>
@@ -281,6 +287,7 @@
       let orders = [];
       let currentPO = null;
       let skip = 0;
+      let totalCount = 0;
       const limit = 50;
 
       // DOM Elements
@@ -304,7 +311,8 @@
         // Buttons
         document.getElementById('poll-btn').addEventListener('click', pollAmazon);
         document.getElementById('refresh-btn').addEventListener('click', () => { skip = 0; loadOrders(); loadStats(); });
-        document.getElementById('load-more-btn').addEventListener('click', () => { skip += limit; loadOrders(true); });
+        document.getElementById('prev-btn').addEventListener('click', () => { skip = Math.max(0, skip - limit); loadOrders(); });
+        document.getElementById('next-btn').addEventListener('click', () => { skip += limit; loadOrders(); });
 
         // Modal
         document.getElementById('close-modal-btn').addEventListener('click', closeModal);
@@ -337,7 +345,7 @@
         }
       }
 
-      async function loadOrders(append = false) {
+      async function loadOrders() {
         try {
           const marketplace = document.getElementById('filter-marketplace').value;
           const state = document.getElementById('filter-state').value;
@@ -352,17 +360,30 @@
           const data = await res.json();
 
           if (data.success) {
-            if (append) {
-              orders = [...orders, ...data.orders];
-            } else {
-              orders = data.orders;
-            }
+            orders = data.orders;
+            totalCount = data.total || orders.length;
             renderOrders();
+            updatePagination();
           }
         } catch (err) {
           console.error('Failed to load orders:', err);
           showToast('Failed to load orders', 'error');
         }
+      }
+
+      function updatePagination() {
+        const start = totalCount === 0 ? 0 : skip + 1;
+        const end = Math.min(skip + orders.length, totalCount);
+        const currentPage = Math.floor(skip / limit) + 1;
+        const totalPages = Math.ceil(totalCount / limit);
+
+        document.getElementById('showing-start').textContent = start;
+        document.getElementById('showing-end').textContent = end;
+        document.getElementById('showing-total').textContent = totalCount;
+        document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages || 1}`;
+
+        document.getElementById('prev-btn').disabled = skip === 0;
+        document.getElementById('next-btn').disabled = skip + limit >= totalCount;
       }
 
       function renderOrders() {
@@ -375,7 +396,7 @@
               </td>
             </tr>
           `;
-          document.getElementById('showing-count').textContent = '0';
+          updatePagination();
           return;
         }
 
@@ -423,8 +444,6 @@
             </tr>
           `;
         }).join('');
-
-        document.getElementById('showing-count').textContent = orders.length;
       }
 
       async function openPO(poNumber) {
