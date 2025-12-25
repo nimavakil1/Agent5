@@ -210,7 +210,8 @@ class VendorClient {
       ...(params.purchaseOrderState && { purchaseOrderState: params.purchaseOrderState }),
       ...(params.orderingVendorCode && { orderingVendorCode: params.orderingVendorCode }),
       ...(params.limit && { limit: params.limit }),
-      ...(params.sortOrder && { sortOrder: params.sortOrder })
+      ...(params.sortOrder && { sortOrder: params.sortOrder }),
+      ...(params.nextToken && { nextToken: params.nextToken })
     };
 
     return client.callAPI({
