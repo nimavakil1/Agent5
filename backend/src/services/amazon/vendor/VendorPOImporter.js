@@ -444,6 +444,19 @@ class VendorPOImporter {
       };
     }
 
+    // Shipment status filter
+    if (filters.shipmentStatus) {
+      query.shipmentStatus = filters.shipmentStatus;
+    }
+
+    // Invoice pending filter (shipped but no invoice)
+    if (filters.invoicePending) {
+      query.$or = [
+        { invoiceStatus: null },
+        { invoiceStatus: 'not_submitted' }
+      ];
+    }
+
     return query;
   }
 

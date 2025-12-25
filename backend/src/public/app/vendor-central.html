@@ -32,23 +32,23 @@
     <main class="px-6 py-8">
       <!-- Stats Section -->
       <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div class="stat-card bg-slate-800 border-2 border-slate-700 rounded-xl p-4 cursor-pointer hover:border-slate-500 transition-colors" data-filter="all">
           <div id="stat-total" class="text-3xl font-bold text-white">-</div>
           <div class="text-slate-400 text-sm">Total POs</div>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div class="stat-card bg-slate-800 border-2 border-slate-700 rounded-xl p-4 cursor-pointer hover:border-red-500 transition-colors" data-filter="not-shipped">
           <div id="stat-not-shipped" class="text-3xl font-bold text-red-400">-</div>
           <div class="text-slate-400 text-sm">Not Shipped</div>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div class="stat-card bg-slate-800 border-2 border-slate-700 rounded-xl p-4 cursor-pointer hover:border-yellow-500 transition-colors" data-filter="invoice-pending">
           <div id="stat-invoice-pending" class="text-3xl font-bold text-yellow-400">-</div>
           <div class="text-slate-400 text-sm">Invoice Pending</div>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div class="stat-card bg-slate-800 border-2 border-slate-700 rounded-xl p-4 cursor-pointer hover:border-green-500 transition-colors" data-filter="closed">
           <div id="stat-closed" class="text-3xl font-bold text-green-400">-</div>
           <div class="text-slate-400 text-sm">Closed</div>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div class="stat-card bg-slate-800 border-2 border-slate-700 rounded-xl p-4 cursor-pointer hover:border-gray-500 transition-colors" data-filter="cancelled">
           <div id="stat-cancelled" class="text-3xl font-bold text-gray-400">-</div>
           <div class="text-slate-400 text-sm">Cancelled</div>
         </div>
@@ -288,6 +288,7 @@
       let skip = 0;
       let totalCount = 0;
       const limit = 50;
+      let currentStatFilter = 'all';
 
       // DOM Elements
       const poTableBody = document.getElementById('po-table-body');
@@ -302,10 +303,24 @@
       });
 
       function setupEventListeners() {
+        // Stat card clicks
+        document.querySelectorAll('.stat-card').forEach(card => {
+          card.addEventListener('click', () => {
+            currentStatFilter = card.dataset.filter;
+            skip = 0;
+            updateStatCardStyles();
+            // Reset dropdown filters when clicking stat cards
+            document.getElementById('filter-marketplace').value = '';
+            document.getElementById('filter-state').value = '';
+            document.getElementById('filter-odoo').value = '';
+            loadOrders();
+          });
+        });
+
         // Filters
-        document.getElementById('filter-marketplace').addEventListener('change', () => { skip = 0; loadOrders(); });
-        document.getElementById('filter-state').addEventListener('change', () => { skip = 0; loadOrders(); });
-        document.getElementById('filter-odoo').addEventListener('change', () => { skip = 0; loadOrders(); });
+        document.getElementById('filter-marketplace').addEventListener('change', () => { skip = 0; currentStatFilter = 'all'; updateStatCardStyles(); loadOrders(); });
+        document.getElementById('filter-state').addEventListener('change', () => { skip = 0; currentStatFilter = 'all'; updateStatCardStyles(); loadOrders(); });
+        document.getElementById('filter-odoo').addEventListener('change', () => { skip = 0; currentStatFilter = 'all'; updateStatCardStyles(); loadOrders(); });
 
         // Buttons
         document.getElementById('poll-btn').addEventListener('click', pollAmazon);
@@ -324,6 +339,28 @@
         // Close modal on backdrop click
         poModal.addEventListener('click', (e) => {
           if (e.target === poModal) closeModal();
+        });
+      }
+
+      function updateStatCardStyles() {
+        const borderColors = {
+          'all': 'border-slate-500',
+          'not-shipped': 'border-red-500',
+          'invoice-pending': 'border-yellow-500',
+          'closed': 'border-green-500',
+          'cancelled': 'border-gray-500'
+        };
+
+        document.querySelectorAll('.stat-card').forEach(card => {
+          const filter = card.dataset.filter;
+          // Remove all active border colors
+          card.classList.remove('border-slate-500', 'border-red-500', 'border-yellow-500', 'border-green-500', 'border-gray-500');
+
+          if (filter === currentStatFilter) {
+            card.classList.add(borderColors[filter]);
+          } else {
+            card.classList.add('border-slate-700');
+          }
         });
       }
 
@@ -351,9 +388,16 @@
           const hasOdooOrder = document.getElementById('filter-odoo').value;
 
           let url = `/api/vendor/orders?limit=${limit}&skip=${skip}`;
-          if (marketplace) url += `&marketplace=${marketplace}`;
-          if (state) url += `&state=${state}`;
-          if (hasOdooOrder) url += `&hasOdooOrder=${hasOdooOrder}`;
+
+          // Apply stat filter if active
+          if (currentStatFilter && currentStatFilter !== 'all') {
+            url += `&statFilter=${currentStatFilter}`;
+          } else {
+            // Only apply dropdown filters if no stat filter
+            if (marketplace) url += `&marketplace=${marketplace}`;
+            if (state) url += `&state=${state}`;
+            if (hasOdooOrder) url += `&hasOdooOrder=${hasOdooOrder}`;
+          }
 
           const res = await fetch(url);
           const data = await res.json();

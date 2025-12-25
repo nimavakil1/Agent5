@@ -46,12 +46,35 @@ router.get('/orders', async (req, res) => {
     const importer = await getVendorPOImporter();
 
     const filters = {};
-    if (req.query.marketplace) filters.marketplace = req.query.marketplace.toUpperCase();
-    if (req.query.state) filters.state = req.query.state;
-    if (req.query.acknowledged !== undefined) filters.acknowledged = req.query.acknowledged === 'true';
-    if (req.query.hasOdooOrder !== undefined) filters.hasOdooOrder = req.query.hasOdooOrder === 'true';
-    if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
-    if (req.query.dateTo) filters.dateTo = req.query.dateTo;
+
+    // Handle stat filter (from clicking stat cards)
+    if (req.query.statFilter) {
+      switch (req.query.statFilter) {
+        case 'not-shipped':
+          filters.state = 'Acknowledged';
+          filters.shipmentStatus = 'not_shipped';
+          break;
+        case 'invoice-pending':
+          filters.state = 'Acknowledged';
+          filters.shipmentStatus = 'fully_shipped';
+          filters.invoicePending = true;
+          break;
+        case 'closed':
+          filters.state = 'Closed';
+          break;
+        case 'cancelled':
+          filters.shipmentStatus = 'cancelled';
+          break;
+      }
+    } else {
+      // Regular filters
+      if (req.query.marketplace) filters.marketplace = req.query.marketplace.toUpperCase();
+      if (req.query.state) filters.state = req.query.state;
+      if (req.query.acknowledged !== undefined) filters.acknowledged = req.query.acknowledged === 'true';
+      if (req.query.hasOdooOrder !== undefined) filters.hasOdooOrder = req.query.hasOdooOrder === 'true';
+      if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
+      if (req.query.dateTo) filters.dateTo = req.query.dateTo;
+    }
 
     const options = {
       limit: parseInt(req.query.limit) || 50,
