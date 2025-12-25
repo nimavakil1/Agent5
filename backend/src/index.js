@@ -193,7 +193,17 @@ app.get('/app/login', (req, res) => {
 app.get('/app/shell.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app', 'shell.js'));
 });
-app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'app')));
+app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'app'), {
+  etag: false,
+  maxAge: 0,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
 
 const protectedPages = ['dashboard.html', 'call-review.html', 'admin.html', 'monitor.html'];
