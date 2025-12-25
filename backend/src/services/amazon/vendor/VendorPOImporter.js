@@ -484,6 +484,7 @@ class VendorPOImporter {
           notShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'not_shipped'] }, 1, 0] } },
           partiallyShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'partially_shipped'] }, 1, 0] } },
           fullyShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'fully_shipped'] }, 1, 0] } },
+          cancelled: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'cancelled'] }, 1, 0] } },
           // Invoice Pending = Acknowledged AND shipped AND no invoice submitted
           invoicePending: { $sum: { $cond: [
             { $and: [
@@ -538,6 +539,7 @@ class VendorPOImporter {
         notShipped: 0,
         partiallyShipped: 0,
         fullyShipped: 0,
+        cancelled: 0,
         invoicePending: 0,
         invoiceSubmitted: 0,
         invoiceAccepted: 0,

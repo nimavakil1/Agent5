@@ -1,0 +1,28 @@
+/* Custom black background for Odoo main menu */
+
+/* Main home menu / app launcher background */
+.o_home_menu {
+    background-color: #000000 !important;
+    background-image: none !important;
+}
+
+/* App drawer background */
+.o_apps {
+    background-color: #000000 !important;
+}
+
+/* Home menu background container */
+.o_home_menu_background {
+    background-color: #000000 !important;
+    background-image: none !important;
+}
+
+/* Odoo 16+ specific selectors */
+.o_web_client .o_home_menu {
+    background: #000000 !important;
+}
+
+/* Ensure the search bar area also has black background */
+.o_home_menu .o_search_container {
+    background-color: transparent !important;
+}

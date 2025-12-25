@@ -49,8 +49,8 @@
           <div class="text-slate-400 text-sm">Closed</div>
         </div>
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-          <div id="stat-with-odoo" class="text-3xl font-bold text-purple-400">-</div>
-          <div class="text-slate-400 text-sm">With Odoo</div>
+          <div id="stat-cancelled" class="text-3xl font-bold text-gray-400">-</div>
+          <div class="text-slate-400 text-sm">Cancelled</div>
         </div>
       </div>
 
@@ -337,7 +337,7 @@
             document.getElementById('stat-not-shipped').textContent = s.openOrders || 0;  // Not shipped = needs shipping
             document.getElementById('stat-invoice-pending').textContent = s.invoicePending || 0;  // Shipped but no invoice
             document.getElementById('stat-closed').textContent = s.closed || 0;
-            document.getElementById('stat-with-odoo').textContent = s.withOdooOrder || 0;
+            document.getElementById('stat-cancelled').textContent = s.cancelled || 0;
           }
         } catch (err) {
           console.error('Failed to load stats:', err);
