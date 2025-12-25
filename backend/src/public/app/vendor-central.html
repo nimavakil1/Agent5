@@ -289,6 +289,7 @@
       let totalCount = 0;
       const limit = 50;
       let currentStatFilter = 'all';
+      let isResettingFilters = false;  // Flag to prevent change events during reset
 
       // DOM Elements
       const poTableBody = document.getElementById('po-table-body');
@@ -309,18 +310,20 @@
             currentStatFilter = card.dataset.filter;
             skip = 0;
             updateStatCardStyles();
-            // Reset dropdown filters when clicking stat cards
+            // Reset dropdown filters when clicking stat cards (use flag to prevent change events)
+            isResettingFilters = true;
             document.getElementById('filter-marketplace').value = '';
             document.getElementById('filter-state').value = '';
             document.getElementById('filter-odoo').value = '';
+            isResettingFilters = false;
             loadOrders();
           });
         });
 
-        // Filters
-        document.getElementById('filter-marketplace').addEventListener('change', () => { skip = 0; currentStatFilter = 'all'; updateStatCardStyles(); loadOrders(); });
-        document.getElementById('filter-state').addEventListener('change', () => { skip = 0; currentStatFilter = 'all'; updateStatCardStyles(); loadOrders(); });
-        document.getElementById('filter-odoo').addEventListener('change', () => { skip = 0; currentStatFilter = 'all'; updateStatCardStyles(); loadOrders(); });
+        // Filters - ignore change events during programmatic reset
+        document.getElementById('filter-marketplace').addEventListener('change', () => { if (isResettingFilters) return; skip = 0; currentStatFilter = 'all'; updateStatCardStyles(); loadOrders(); });
+        document.getElementById('filter-state').addEventListener('change', () => { if (isResettingFilters) return; skip = 0; currentStatFilter = 'all'; updateStatCardStyles(); loadOrders(); });
+        document.getElementById('filter-odoo').addEventListener('change', () => { if (isResettingFilters) return; skip = 0; currentStatFilter = 'all'; updateStatCardStyles(); loadOrders(); });
 
         // Buttons
         document.getElementById('poll-btn').addEventListener('click', pollAmazon);
