@@ -387,7 +387,7 @@
           const state = document.getElementById('filter-state').value;
           const hasOdooOrder = document.getElementById('filter-odoo').value;
 
-          let url = `/api/vendor/orders?limit=${limit}&skip=${skip}`;
+          let url = `/api/vendor/orders?limit=${limit}&skip=${skip}&_t=${Date.now()}`;
 
           // Apply stat filter if active
           if (currentStatFilter && currentStatFilter !== 'all') {
