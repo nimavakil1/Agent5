@@ -199,9 +199,16 @@ class VendorPOImporter {
       return { isNew: false, purchaseOrderNumber: poNumber };
     } else {
       // Insert new
+      // If Amazon says it's already Acknowledged or Closed, mark our flag too
+      const isAlreadyAcknowledged = ['Acknowledged', 'Closed'].includes(document.purchaseOrderState);
+
       await collection.insertOne({
         ...document,
-        acknowledgment: { acknowledged: false },
+        acknowledgment: {
+          acknowledged: isAlreadyAcknowledged,
+          acknowledgedAt: isAlreadyAcknowledged ? new Date() : null,
+          status: isAlreadyAcknowledged ? 'Accepted' : null
+        },
         odoo: { saleOrderId: null, saleOrderName: null, invoiceId: null },
         shipments: [],
         invoices: [],
