@@ -16,6 +16,9 @@ const { VcsOdooInvoicer, MARKETPLACE_JOURNALS, FISCAL_POSITIONS } = require('./V
 const { FbaInventoryReportParser, FBA_WAREHOUSES } = require('./FbaInventoryReportParser');
 const { ReturnsReportParser, RETURN_REASONS, DISPOSITIONS } = require('./ReturnsReportParser');
 
+// Vendor Central
+const vendor = require('./vendor');
+
 module.exports = {
   // SKU Resolution
   SkuResolver,
@@ -63,4 +66,10 @@ module.exports = {
   VAT_REGISTERED_COUNTRIES,
   MARKETPLACE_TO_COUNTRY,
   FBA_WAREHOUSE_COUNTRY,
+
+  // Vendor Central
+  vendor,
+  VendorClient: vendor.VendorClient,
+  VendorPOImporter: vendor.VendorPOImporter,
+  getVendorPOImporter: vendor.getVendorPOImporter,
 };
