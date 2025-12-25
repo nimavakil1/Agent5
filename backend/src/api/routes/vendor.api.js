@@ -664,6 +664,69 @@ router.get('/shipments', async (req, res) => {
 });
 
 /**
+ * @route POST /api/vendor/shipments/poll
+ * @desc Poll shipments from Amazon Vendor Central
+ * @query marketplace - Marketplace code (default: DE)
+ * @query days - Number of days to look back (default: 30)
+ */
+router.post('/shipments/poll', async (req, res) => {
+  try {
+    const marketplace = req.query.marketplace || req.body.marketplace || 'DE';
+    const days = parseInt(req.query.days || req.body.days) || 30;
+
+    const client = new VendorClient(marketplace);
+    await client.init();
+
+    const createdAfter = new Date();
+    createdAfter.setDate(createdAfter.getDate() - days);
+
+    // Fetch shipments from Amazon
+    const result = await client.getShipmentDetails({
+      createdAfter: createdAfter.toISOString(),
+      limit: 100
+    });
+
+    const shipments = result.shipments || [];
+
+    // Store shipments in MongoDB
+    if (shipments.length > 0) {
+      const db = getDb();
+      const collection = db.collection('vendor_shipments');
+
+      for (const shipment of shipments) {
+        await collection.updateOne(
+          { shipmentId: shipment.shipmentIdentifier },
+          {
+            $set: {
+              ...shipment,
+              marketplaceId: marketplace,
+              source: 'amazon_poll',
+              updatedAt: new Date()
+            },
+            $setOnInsert: {
+              createdAt: new Date()
+            }
+          },
+          { upsert: true }
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      marketplace,
+      found: shipments.length,
+      message: shipments.length === 0
+        ? 'No shipments found in Amazon. Shipments appear after ASN submission.'
+        : `Found and synced ${shipments.length} shipments from Amazon`
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /shipments/poll error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route POST /api/vendor/shipments/:poNumber/create-asn
  * @desc Create ASN/shipment confirmation for a PO
  * @body odooPickingId - Optional: specific Odoo picking ID

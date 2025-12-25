@@ -314,7 +314,7 @@ class VendorClient {
     const client = await this.getClient();
 
     return client.callAPI({
-      operation: 'vendorShipping.submitShipmentConfirmations',
+      operation: 'vendorShipments.SubmitShipmentConfirmations',
       body: shipmentConfirmations
     });
   }
@@ -335,8 +335,189 @@ class VendorClient {
     };
 
     return client.callAPI({
-      operation: 'vendorShipping.getShipmentDetails',
+      operation: 'vendorShipments.GetShipmentDetails',
       query: queryParams
+    });
+  }
+
+  /**
+   * Submit shipments
+   * @param {Object} shipments - Shipment data
+   */
+  async submitShipments(shipments) {
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'vendorShipments.SubmitShipments',
+      body: shipments
+    });
+  }
+
+  // ==================== VENDOR REPORTS API ====================
+
+  /**
+   * Create a vendor report request
+   * @param {string} reportType - Report type (e.g., GET_VENDOR_SALES_REPORT)
+   * @param {Object} options - Report options
+   */
+  async createReport(reportType, options = {}) {
+    const client = await this.getClient();
+
+    const body = {
+      reportType,
+      marketplaceIds: [this.marketplaceId],
+      ...(options.dataStartTime && { dataStartTime: options.dataStartTime }),
+      ...(options.dataEndTime && { dataEndTime: options.dataEndTime }),
+      ...(options.reportOptions && { reportOptions: options.reportOptions })
+    };
+
+    return client.callAPI({
+      operation: 'reports.createReport',
+      body
+    });
+  }
+
+  /**
+   * Get report status
+   * @param {string} reportId - Report ID
+   */
+  async getReportStatus(reportId) {
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'reports.getReport',
+      path: { reportId }
+    });
+  }
+
+  /**
+   * Get report document
+   * @param {string} reportDocumentId - Report document ID
+   */
+  async getReportDocument(reportDocumentId) {
+    const client = await this.getClient();
+
+    return client.callAPI({
+      operation: 'reports.getReportDocument',
+      path: { reportDocumentId }
+    });
+  }
+
+  /**
+   * Download and parse a report document
+   * @param {string} reportDocumentId - Report document ID
+   */
+  async downloadReport(reportDocumentId) {
+    const https = require('https');
+    const zlib = require('zlib');
+
+    const doc = await this.getReportDocument(reportDocumentId);
+
+    const data = await new Promise((resolve, reject) => {
+      https.get(doc.url, (response) => {
+        const chunks = [];
+        response.on('data', chunk => chunks.push(chunk));
+        response.on('end', () => resolve(Buffer.concat(chunks)));
+        response.on('error', reject);
+      });
+    });
+
+    let content;
+    if (doc.compressionAlgorithm === 'GZIP') {
+      content = zlib.gunzipSync(data).toString('utf8');
+    } else {
+      content = data.toString('utf8');
+    }
+
+    // Try to parse as JSON
+    try {
+      return JSON.parse(content);
+    } catch {
+      return content; // Return raw content if not JSON
+    }
+  }
+
+  /**
+   * Request and wait for a vendor report
+   * @param {string} reportType - Report type
+   * @param {Object} options - Report options including date range
+   * @param {number} maxWaitMs - Max wait time in milliseconds (default 60000)
+   */
+  async fetchReport(reportType, options = {}, maxWaitMs = 60000) {
+    // Create report request
+    const createResult = await this.createReport(reportType, options);
+    const reportId = createResult.reportId;
+
+    // Poll for completion
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitMs) {
+      await new Promise(r => setTimeout(r, 5000));
+
+      const status = await this.getReportStatus(reportId);
+
+      if (status.processingStatus === 'DONE') {
+        return this.downloadReport(status.reportDocumentId);
+      }
+
+      if (status.processingStatus === 'FATAL' || status.processingStatus === 'CANCELLED') {
+        // Try to get error details
+        if (status.reportDocumentId) {
+          const errorDoc = await this.downloadReport(status.reportDocumentId);
+          throw new Error(`Report failed: ${JSON.stringify(errorDoc)}`);
+        }
+        throw new Error(`Report failed with status: ${status.processingStatus}`);
+      }
+    }
+
+    throw new Error(`Report timed out after ${maxWaitMs}ms`);
+  }
+
+  /**
+   * Fetch vendor sales report
+   * @param {Date} startDate - Start date
+   * @param {Date} endDate - End date
+   */
+  async fetchSalesReport(startDate, endDate) {
+    return this.fetchReport('GET_VENDOR_SALES_REPORT', {
+      dataStartTime: startDate.toISOString(),
+      dataEndTime: endDate.toISOString(),
+      reportOptions: {
+        reportPeriod: 'DAY',
+        distributorView: 'MANUFACTURING',
+        sellingProgram: 'RETAIL'
+      }
+    });
+  }
+
+  /**
+   * Fetch vendor inventory report
+   * @param {Date} startDate - Start date
+   * @param {Date} endDate - End date
+   */
+  async fetchInventoryReport(startDate, endDate) {
+    return this.fetchReport('GET_VENDOR_INVENTORY_REPORT', {
+      dataStartTime: startDate.toISOString(),
+      dataEndTime: endDate.toISOString(),
+      reportOptions: {
+        reportPeriod: 'DAY',
+        sellingProgram: 'RETAIL'
+      }
+    });
+  }
+
+  /**
+   * Fetch vendor traffic report
+   * @param {Date} startDate - Start date
+   * @param {Date} endDate - End date
+   */
+  async fetchTrafficReport(startDate, endDate) {
+    return this.fetchReport('GET_VENDOR_TRAFFIC_REPORT', {
+      dataStartTime: startDate.toISOString(),
+      dataEndTime: endDate.toISOString(),
+      reportOptions: {
+        reportPeriod: 'DAY',
+        sellingProgram: 'RETAIL'
+      }
     });
   }
 
