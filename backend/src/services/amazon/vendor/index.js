@@ -8,6 +8,7 @@
 
 const { VendorClient, createAllVendorClients, MARKETPLACE_IDS, VENDOR_TOKEN_MAP, VENDOR_ACCOUNTS, PO_STATES, PO_TYPES } = require('./VendorClient');
 const { VendorPOImporter, getVendorPOImporter, COLLECTION_NAME: PO_COLLECTION } = require('./VendorPOImporter');
+const { VendorOrderCreator, getVendorOrderCreator, AMAZON_VENDOR_PARTNERS, MARKETPLACE_WAREHOUSE, VENDOR_SALES_TEAMS } = require('./VendorOrderCreator');
 
 module.exports = {
   // Client
@@ -18,11 +19,18 @@ module.exports = {
   VendorPOImporter,
   getVendorPOImporter,
 
+  // Order Creation
+  VendorOrderCreator,
+  getVendorOrderCreator,
+
   // Constants
   MARKETPLACE_IDS,
   VENDOR_TOKEN_MAP,
   VENDOR_ACCOUNTS,
   PO_STATES,
   PO_TYPES,
-  PO_COLLECTION
+  PO_COLLECTION,
+  AMAZON_VENDOR_PARTNERS,
+  MARKETPLACE_WAREHOUSE,
+  VENDOR_SALES_TEAMS
 };

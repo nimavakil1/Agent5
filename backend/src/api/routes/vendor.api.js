@@ -16,6 +16,7 @@ const { getDb } = require('../../db');
 const {
   VendorClient,
   getVendorPOImporter,
+  getVendorOrderCreator,
   MARKETPLACE_IDS,
   VENDOR_ACCOUNTS,
   PO_STATES
@@ -189,34 +190,70 @@ router.post('/orders/:poNumber/acknowledge', async (req, res) => {
  * @route POST /api/vendor/orders/:poNumber/create-odoo
  * @desc Create an Odoo sale order from a vendor PO
  * @body confirm - Optional: auto-confirm the order (default false)
+ * @body dryRun - Optional: simulate without creating (default false)
+ *
+ * IMPORTANT: This endpoint checks if the order already exists in Odoo before creating.
+ * If it exists, it returns the existing order info without creating a duplicate.
  */
 router.post('/orders/:poNumber/create-odoo', async (req, res) => {
   try {
-    const importer = await getVendorPOImporter();
-    const order = await importer.getPurchaseOrder(req.params.poNumber);
+    const creator = await getVendorOrderCreator();
 
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Purchase order not found' });
-    }
+    const result = await creator.createOrder(req.params.poNumber, {
+      dryRun: req.body.dryRun || false,
+      autoConfirm: req.body.confirm || false
+    });
 
-    if (order.odoo?.saleOrderId) {
+    if (!result.success && result.errors.length > 0) {
       return res.status(400).json({
         success: false,
-        error: 'Odoo order already exists',
-        odooOrderId: order.odoo.saleOrderId,
-        odooOrderName: order.odoo.saleOrderName
+        errors: result.errors,
+        warnings: result.warnings
       });
     }
 
-    // TODO: Implement VendorOrderCreator
-    // For now, return a placeholder response
-    res.status(501).json({
-      success: false,
-      error: 'VendorOrderCreator not yet implemented',
-      message: 'This feature will create Odoo sale.order from Vendor PO'
+    res.json({
+      success: true,
+      created: !result.skipped && !result.dryRun,
+      skipped: result.skipped,
+      skipReason: result.skipReason,
+      dryRun: result.dryRun || false,
+      purchaseOrderNumber: result.purchaseOrderNumber,
+      odooOrderId: result.odooOrderId,
+      odooOrderName: result.odooOrderName,
+      confirmed: result.confirmed || false,
+      warnings: result.warnings,
+      ...(result.orderData && { orderData: result.orderData })
     });
   } catch (error) {
     console.error('[VendorAPI] POST /orders/:poNumber/create-odoo error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/orders/create-pending
+ * @desc Create Odoo orders for all pending POs (those without Odoo orders)
+ * @body limit - Optional: max POs to process (default 50)
+ * @body confirm - Optional: auto-confirm orders (default false)
+ * @body dryRun - Optional: simulate without creating (default false)
+ */
+router.post('/orders/create-pending', async (req, res) => {
+  try {
+    const creator = await getVendorOrderCreator();
+
+    const results = await creator.createPendingOrders({
+      limit: req.body.limit || 50,
+      dryRun: req.body.dryRun || false,
+      autoConfirm: req.body.confirm || false
+    });
+
+    res.json({
+      success: true,
+      ...results
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /orders/create-pending error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
