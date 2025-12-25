@@ -44,12 +44,20 @@ async function syncDeliveryStatus() {
   // Get all Odoo order IDs
   const odooOrderIds = pos.map(po => po.odoo.saleOrderId);
 
-  // Fetch delivery_status from Odoo
+  // Fetch delivery_status from Odoo (in batches to avoid limits)
   console.log('Fetching delivery status from Odoo...');
-  const odooOrders = await odoo.searchRead('sale.order',
-    [['id', 'in', odooOrderIds]],
-    ['id', 'name', 'delivery_status', 'state']
-  );
+  const odooOrders = [];
+  const batchSize = 200;
+
+  for (let i = 0; i < odooOrderIds.length; i += batchSize) {
+    const batchIds = odooOrderIds.slice(i, i + batchSize);
+    const batch = await odoo.searchRead('sale.order',
+      [['id', 'in', batchIds]],
+      ['id', 'name', 'delivery_status', 'state'],
+      { limit: batchSize }
+    );
+    odooOrders.push(...batch);
+  }
 
   console.log(`Got ${odooOrders.length} orders from Odoo\n`);
 
