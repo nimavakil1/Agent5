@@ -57,9 +57,8 @@
 
     .profile-avatar-container {
       position: relative;
-      /* Ensure buttons outside the avatar are visible */
-      padding: 8px;
-      margin: -8px;
+      width: 80px;
+      height: 80px;
     }
 
     .profile-avatar {
@@ -84,13 +83,13 @@
 
     .avatar-upload-btn {
       position: absolute;
-      bottom: 4px;
-      right: 4px;
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
+      bottom: -6px;
+      right: -6px;
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
       background: #6366f1;
-      border: 2px solid #18181f;
+      border: 3px solid #18181f;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -105,7 +104,7 @@
     }
 
     .avatar-upload-btn .material-symbols-outlined {
-      font-size: 16px;
+      font-size: 18px;
       color: white;
     }
 
@@ -115,8 +114,8 @@
 
     .avatar-delete-btn {
       position: absolute;
-      top: 4px;
-      right: 4px;
+      top: -6px;
+      right: -6px;
       width: 24px;
       height: 24px;
       border-radius: 6px;
@@ -127,7 +126,7 @@
       justify-content: center;
       cursor: pointer;
       transition: all 0.15s;
-      z-index: 10;
+      z-index: 11;
     }
 
     .avatar-delete-btn.show {

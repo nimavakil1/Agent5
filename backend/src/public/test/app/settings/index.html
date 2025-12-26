@@ -529,8 +529,8 @@
     function populateRoleSelect() {
       const select = document.getElementById('user-role');
       select.innerHTML = '<option value="">-- Select Role --</option>';
-      // Filter out protected roles (superadmin) - these cannot be assigned via UI
-      roles.filter(role => !role.protected).forEach(role => {
+      // Filter out superadmin only - it cannot be assigned via UI
+      roles.filter(role => role.name !== 'superadmin').forEach(role => {
         select.innerHTML += `<option value="${role._id}">${role.name}</option>`;
       });
     }
