@@ -45,6 +45,14 @@ router.put('/:id', requirePrivilege('roles.manage'), async (req, res) => {
   try {
     const role = await Role.findById(req.params.id);
     if (!role) return res.status(404).json({ message: 'not found' });
+
+    console.log('=== ROLE UPDATE DEBUG ===');
+    console.log('Role ID:', req.params.id);
+    console.log('Role name:', role.name);
+    console.log('Role protected:', role.protected);
+    console.log('Current moduleAccess:', role.moduleAccess);
+    console.log('Incoming body:', JSON.stringify(req.body, null, 2));
+
     if (role.protected && req.body.privileges && role.name === 'superadmin') {
       return res.status(400).json({ message: 'cannot modify superadmin privileges' });
     }
@@ -52,10 +60,18 @@ router.put('/:id', requirePrivilege('roles.manage'), async (req, res) => {
     if (req.body.description !== undefined) update.description = String(req.body.description);
     if (Array.isArray(req.body.privileges)) update.privileges = req.body.privileges.filter(Boolean);
     if (Array.isArray(req.body.moduleAccess)) update.moduleAccess = req.body.moduleAccess.filter(Boolean);
+
+    console.log('Update object:', JSON.stringify(update, null, 2));
+
     await Role.findByIdAndUpdate(role._id, update);
     const fresh = await Role.findById(role._id);
+
+    console.log('After save moduleAccess:', fresh.moduleAccess);
+    console.log('=== END ROLE UPDATE DEBUG ===');
+
     res.json(fresh);
   } catch (e) {
+    console.error('Role update error:', e);
     res.status(500).json({ message: 'error', error: e.message });
   }
 });
