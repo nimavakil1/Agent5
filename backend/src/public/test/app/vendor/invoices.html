@@ -74,8 +74,8 @@
       <div class="stat-card danger" id="stat-card-failed" onclick="filterByStatus('failed')"><div class="stat-value" id="stat-failed">--</div><div class="stat-label">Failed</div></div>
     </div>
     <div class="filters-bar">
-      <select class="filter-select" id="filter-marketplace" onchange="loadInvoices()">
-        <option value="">All Marketplaces</option>
+      <select class="filter-select" id="filter-country" onchange="loadInvoices()">
+        <option value="">All Countries</option>
         <option value="DE">Germany</option>
         <option value="FR">France</option>
         <option value="IT">Italy</option>
@@ -161,8 +161,8 @@
         document.getElementById('stat-amazon-unpaid').textContent = stats.amazon_unpaid;
         document.getElementById('stat-failed').textContent = stats.failed;
 
-        // Apply marketplace filter
-        const mpFilter = document.getElementById('filter-marketplace').value;
+        // Apply country filter
+        const mpFilter = document.getElementById('filter-country').value;
         if (mpFilter) {
           allInvoices = allInvoices.filter(inv => inv.marketplace === mpFilter);
         }

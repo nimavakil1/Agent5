@@ -103,6 +103,20 @@ router.get('/orders', async (req, res) => {
       if (req.query.hasOdooOrder !== undefined) filters.hasOdooOrder = req.query.hasOdooOrder === 'true';
       if (req.query.dateFrom) filters.dateFrom = req.query.dateFrom;
       if (req.query.dateTo) filters.dateTo = req.query.dateTo;
+      // Shipping status filter: not-shipped, open (partial), shipped (fully shipped)
+      if (req.query.shippingStatus) {
+        switch (req.query.shippingStatus) {
+          case 'not-shipped':
+            filters.shipmentStatus = 'not_shipped';
+            break;
+          case 'open':
+            filters.shipmentStatus = 'partially_shipped';
+            break;
+          case 'shipped':
+            filters.shipmentStatus = 'fully_shipped';
+            break;
+        }
+      }
     }
 
     const options = {

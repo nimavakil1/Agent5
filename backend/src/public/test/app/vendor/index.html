@@ -104,8 +104,8 @@
       <div class="stat-card success" onclick="filterByStat('closed')" id="stat-closed"><div class="stat-value" id="stat-closed-value">--</div><div class="stat-label">Closed</div></div>
     </div>
     <div class="filters-bar">
-      <select class="filter-select" id="filter-marketplace" onchange="loadOrders()">
-        <option value="">All Marketplaces</option>
+      <select class="filter-select" id="filter-country" onchange="loadOrders()">
+        <option value="">All Countries</option>
         <option value="DE">Germany (DE)</option>
         <option value="FR">France (FR)</option>
         <option value="IT">Italy (IT)</option>
@@ -120,6 +120,12 @@
         <option value="New">New</option>
         <option value="Acknowledged">Acknowledged</option>
         <option value="Closed">Closed</option>
+      </select>
+      <select class="filter-select" id="filter-shipping" onchange="loadOrders()">
+        <option value="">All Shipping</option>
+        <option value="not-shipped">Not Shipped</option>
+        <option value="open">Open (Partial)</option>
+        <option value="shipped">Fully Shipped</option>
       </select>
       <input type="date" class="filter-input" id="filter-date-from" onchange="loadOrders()">
       <input type="date" class="filter-input" id="filter-date-to" onchange="loadOrders()">
@@ -154,7 +160,12 @@
   </div>
   <script>
     let orders = [], stats = {}, currentPage = 0, pageSize = 50, totalOrders = 0, currentPO = null, currentStatFilter = null;
-    async function init() { await Promise.all([loadStats(), loadOrders()]); }
+    async function init() {
+      // Set default filter: New + Not Shipped
+      document.getElementById('filter-state').value = 'New';
+      document.getElementById('filter-shipping').value = 'not-shipped';
+      await Promise.all([loadStats(), loadOrders()]);
+    }
     async function loadStats() {
       try {
         const res = await fetch('/api/vendor/stats', { credentials: 'include' });
@@ -175,12 +186,14 @@
         params.append('skip', currentPage * pageSize);
         if (currentStatFilter) { params.append('statFilter', currentStatFilter); }
         else {
-          const mp = document.getElementById('filter-marketplace').value;
+          const country = document.getElementById('filter-country').value;
           const st = document.getElementById('filter-state').value;
+          const ship = document.getElementById('filter-shipping').value;
           const df = document.getElementById('filter-date-from').value;
           const dt = document.getElementById('filter-date-to').value;
-          if (mp) params.append('marketplace', mp);
+          if (country) params.append('marketplace', country);
           if (st) params.append('state', st);
+          if (ship) params.append('shippingStatus', ship);
           if (df) params.append('dateFrom', df);
           if (dt) params.append('dateTo', dt);
         }
@@ -217,8 +230,9 @@
       currentPage = 0; loadOrders();
     }
     function clearFilters() {
-      document.getElementById('filter-marketplace').value = '';
+      document.getElementById('filter-country').value = '';
       document.getElementById('filter-state').value = '';
+      document.getElementById('filter-shipping').value = '';
       document.getElementById('filter-date-from').value = '';
       document.getElementById('filter-date-to').value = '';
       document.querySelectorAll('.stat-card').forEach(el => el.classList.remove('active'));
