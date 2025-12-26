@@ -36,6 +36,7 @@ const aiAgentsRouter = require('./api/routes/agents.api');
 const knowledgeRouter = require('./api/routes/knowledge.api');
 const amazonRouter = require('./api/routes/amazon.api');
 const vendorRouter = require('./api/routes/vendor.api');
+const sellerRouter = require('./api/routes/seller.api');
 const odooRouter = require('./api/routes/odoo.api');
 const ms365Router = require('./api/routes/ms365.api');
 const bolcomRouter = require('./api/routes/bolcom.api');
@@ -109,6 +110,17 @@ if (process.env.NODE_ENV !== 'test') {
       }
     } catch (e) {
       console.warn('Purchasing Agent initialization skipped:', e.message);
+    }
+
+    // Initialize Amazon Seller order scheduler if configured
+    try {
+      if (process.env.AMAZON_SELLER_REFRESH_TOKEN) {
+        const { startSellerScheduler } = require('./services/amazon/seller');
+        await startSellerScheduler();
+        console.log('Amazon Seller order scheduler started (every 15 minutes)');
+      }
+    } catch (e) {
+      console.warn('Seller scheduler initialization skipped:', e.message);
     }
   });
 }
@@ -298,6 +310,7 @@ app.use('/api/ai-agents', allowBearerOrSession, aiAgentsRouter);
 app.use('/api/knowledge', requireSession, knowledgeRouter);
 app.use('/api/amazon', amazonRouter); // Webhooks are public (validated by signature), GET routes need auth
 app.use('/api/vendor', requireSession, vendorRouter); // Vendor Central requires auth
+app.use('/api/seller', requireSession, sellerRouter); // Seller Central requires auth
 app.use('/api/odoo', requireSession, odooRouter);
 app.use('/api/ms365', requireSession, ms365Router);
 app.use('/api/bolcom', requireSession, bolcomRouter);

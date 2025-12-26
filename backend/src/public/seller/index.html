@@ -10,38 +10,51 @@
     .page { max-width: 1600px; margin: 0 auto; padding: 24px; }
     .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
     .page-title { font-size: 24px; font-weight: 700; color: #fff; margin: 0; }
-    .header-actions { display: flex; gap: 12px; }
+    .header-actions { display: flex; gap: 12px; align-items: center; }
     .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
     .btn-primary { background: #f59e0b; color: white; }
     .btn-primary:hover { background: #d97706; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-success:hover { background: #16a34a; }
     .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
     .btn-secondary:hover { background: #2a2a3a; }
     .btn-sm { padding: 6px 12px; font-size: 13px; }
     .btn .material-symbols-outlined { font-size: 20px; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-    @media (max-width: 1000px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
-    .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 12px; padding: 20px; }
+    .btn.loading .material-symbols-outlined { animation: spin 1s linear infinite; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 768px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+    .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 12px; padding: 20px; cursor: pointer; transition: border-color 0.15s; }
+    .stat-card:hover { border-color: #f59e0b; }
     .stat-value { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 4px; }
     .stat-label { font-size: 13px; color: #71717a; }
     .stat-card.warning .stat-value { color: #fbbf24; }
     .stat-card.success .stat-value { color: #4ade80; }
     .stat-card.info .stat-value { color: #60a5fa; }
-    .filters-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .filters-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
     .filter-select, .filter-input { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; }
     .filter-select:focus, .filter-input:focus { outline: none; border-color: #f59e0b; }
     .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
+    .card-header { padding: 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .card-title { font-size: 16px; font-weight: 600; color: #fff; margin: 0; }
     .table-container { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid #252532; }
     th { background: #12121a; font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; }
     td { font-size: 14px; color: #e4e4e7; }
     tr:hover td { background: #1a1a28; }
-    .order-id { font-weight: 600; color: #f59e0b; }
+    .order-id { font-weight: 600; color: #f59e0b; cursor: pointer; }
+    .order-id:hover { text-decoration: underline; }
     .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
     .badge-pending { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
     .badge-shipped { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
     .badge-cancelled { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+    .badge-fba { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+    .badge-fbm { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
+    .badge-odoo { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .badge-no-odoo { background: rgba(113, 113, 122, 0.15); color: #a1a1aa; }
     .empty-state { padding: 60px 20px; text-align: center; }
     .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
     .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
@@ -59,6 +72,18 @@
     .quick-link-icon.reports { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
     .quick-link-content h3 { font-size: 16px; font-weight: 600; color: #fff; margin: 0 0 4px 0; }
     .quick-link-content p { font-size: 13px; color: #71717a; margin: 0; }
+    .status-bar { background: #12121a; border: 1px solid #252532; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .status-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #a1a1aa; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .status-dot.running { background: #4ade80; animation: pulse 2s ease-in-out infinite; }
+    .status-dot.stopped { background: #71717a; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .actions-cell { display: flex; gap: 6px; }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #252532; border: 1px solid #3f3f50; border-radius: 10px; padding: 16px 20px; color: #e4e4e7; font-size: 14px; z-index: 1000; display: none; }
+    .toast.success { border-color: #22c55e; }
+    .toast.error { border-color: #ef4444; }
+    .toast.show { display: block; animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   </style>
 </head>
 <body>
@@ -66,11 +91,30 @@
     <header class="page-header">
       <h1 class="page-title">Amazon Seller Central</h1>
       <div class="header-actions">
+        <button class="btn btn-primary" id="fetch-btn" onclick="fetchOrders()">
+          <span class="material-symbols-outlined">sync</span>Fetch Now
+        </button>
         <a href="https://sellercentral.amazon.de" target="_blank" class="btn btn-secondary">
           <span class="material-symbols-outlined">open_in_new</span>Open Seller Central
         </a>
       </div>
     </header>
+
+    <!-- Scheduler Status -->
+    <div class="status-bar" id="status-bar">
+      <div class="status-item">
+        <span class="status-dot" id="scheduler-dot"></span>
+        <span id="scheduler-status">Loading...</span>
+      </div>
+      <div class="status-item">
+        <span class="material-symbols-outlined" style="font-size: 16px;">schedule</span>
+        <span id="last-poll">--</span>
+      </div>
+      <div class="status-item">
+        <span class="material-symbols-outlined" style="font-size: 16px;">update</span>
+        <span id="next-poll">--</span>
+      </div>
+    </div>
 
     <!-- Quick Links -->
     <div class="quick-links">
@@ -105,28 +149,61 @@
 
     <!-- Stats -->
     <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-value" id="stat-orders">--</div>
-        <div class="stat-label">Total Orders (30 days)</div>
+      <div class="stat-card" onclick="filterOrders('')">
+        <div class="stat-value" id="stat-total">--</div>
+        <div class="stat-label">Total Orders</div>
       </div>
-      <div class="stat-card warning">
-        <div class="stat-value" id="stat-pending-vcs">--</div>
-        <div class="stat-label">Pending VCS Orders</div>
+      <div class="stat-card info" onclick="filterOrders('fba')">
+        <div class="stat-value" id="stat-fba">--</div>
+        <div class="stat-label">FBA Orders</div>
       </div>
-      <div class="stat-card info">
-        <div class="stat-value" id="stat-settlements">--</div>
-        <div class="stat-label">Settlements This Month</div>
+      <div class="stat-card" onclick="filterOrders('fbm')">
+        <div class="stat-value" id="stat-fbm">--</div>
+        <div class="stat-label">FBM Orders</div>
       </div>
-      <div class="stat-card success">
-        <div class="stat-value" id="stat-revenue">--</div>
-        <div class="stat-label">Revenue (30 days)</div>
+      <div class="stat-card warning" onclick="filterOrders('pending-odoo')">
+        <div class="stat-value" id="stat-pending-odoo">--</div>
+        <div class="stat-label">Pending Odoo</div>
+      </div>
+      <div class="stat-card success" onclick="filterOrders('with-odoo')">
+        <div class="stat-value" id="stat-with-odoo">--</div>
+        <div class="stat-label">In Odoo</div>
       </div>
     </div>
 
-    <!-- Recent Orders -->
+    <!-- Filters -->
+    <div class="filters-bar">
+      <select class="filter-select" id="filter-marketplace" onchange="loadOrders()">
+        <option value="">All Marketplaces</option>
+        <option value="FR">France</option>
+        <option value="DE">Germany</option>
+        <option value="NL">Netherlands</option>
+        <option value="ES">Spain</option>
+        <option value="IT">Italy</option>
+        <option value="BE">Belgium</option>
+        <option value="UK">United Kingdom</option>
+        <option value="PL">Poland</option>
+        <option value="SE">Sweden</option>
+      </select>
+      <select class="filter-select" id="filter-fulfillment" onchange="loadOrders()">
+        <option value="">All Types</option>
+        <option value="AFN">FBA</option>
+        <option value="MFN">FBM</option>
+      </select>
+      <select class="filter-select" id="filter-odoo" onchange="loadOrders()">
+        <option value="">Odoo Status</option>
+        <option value="false">Not in Odoo</option>
+        <option value="true">In Odoo</option>
+      </select>
+      <button class="btn btn-success btn-sm" onclick="createPendingOrders()" id="create-pending-btn">
+        <span class="material-symbols-outlined">add_circle</span>Create Pending Odoo Orders
+      </button>
+    </div>
+
+    <!-- Orders Table -->
     <div class="card">
-      <div style="padding: 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center;">
-        <h2 style="font-size: 16px; font-weight: 600; color: #fff; margin: 0;">Recent Orders</h2>
+      <div class="card-header">
+        <h2 class="card-title">Orders</h2>
         <button class="btn btn-secondary btn-sm" onclick="loadOrders()">
           <span class="material-symbols-outlined">refresh</span>Refresh
         </button>
@@ -137,15 +214,18 @@
             <tr>
               <th>Order ID</th>
               <th>Date</th>
-              <th>Status</th>
-              <th>Items</th>
-              <th>Total</th>
+              <th>Customer</th>
               <th>Marketplace</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Total</th>
+              <th>Odoo</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="orders-table">
             <tr>
-              <td colspan="6">
+              <td colspan="9">
                 <div class="empty-state">
                   <span class="material-symbols-outlined">hourglass_empty</span>
                   <div class="empty-state-title">Loading orders...</div>
@@ -169,34 +249,69 @@
     </div>
   </div>
 
+  <div class="toast" id="toast"></div>
+
   <script>
     let orders = [];
     let currentPage = 1;
-    const pageSize = 20;
+    const pageSize = 25;
+    let totalOrders = 0;
 
     async function init() {
-      await Promise.all([loadStats(), loadOrders()]);
+      await Promise.all([loadStatus(), loadStats(), loadOrders()]);
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast ${type} show`;
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    async function loadStatus() {
+      try {
+        const res = await fetch('/api/seller/status');
+        const data = await res.json();
+
+        const dot = document.getElementById('scheduler-dot');
+        const statusText = document.getElementById('scheduler-status');
+        const lastPoll = document.getElementById('last-poll');
+        const nextPoll = document.getElementById('next-poll');
+
+        if (data.scheduler?.isRunning) {
+          dot.className = 'status-dot running';
+          statusText.textContent = 'Scheduler running';
+        } else {
+          dot.className = 'status-dot stopped';
+          statusText.textContent = 'Scheduler stopped';
+        }
+
+        if (data.importer?.lastPollTime) {
+          lastPoll.textContent = 'Last poll: ' + new Date(data.importer.lastPollTime).toLocaleTimeString();
+        } else if (data.scheduler?.lastPollTime) {
+          lastPoll.textContent = 'Last poll: ' + new Date(data.scheduler.lastPollTime).toLocaleTimeString();
+        }
+
+        if (data.scheduler?.nextPollTime) {
+          nextPoll.textContent = 'Next: ' + new Date(data.scheduler.nextPollTime).toLocaleTimeString();
+        }
+      } catch (e) {
+        console.error('Error loading status:', e);
+        document.getElementById('scheduler-status').textContent = 'Status unavailable';
+      }
     }
 
     async function loadStats() {
       try {
-        // Load VCS summary for pending count
-        const vcsRes = await fetch('/api/amazon/vcs/summary');
-        const vcsData = await vcsRes.json();
-        let pendingVcs = 0;
-        vcsData.byStatus?.forEach(s => {
-          if (s._id === 'pending') pendingVcs = s.count;
-        });
-        document.getElementById('stat-pending-vcs').textContent = pendingVcs;
+        const res = await fetch('/api/seller/stats');
+        const data = await res.json();
 
-        // Load general stats
-        const statsRes = await fetch('/api/amazon/stats');
-        if (statsRes.ok) {
-          const stats = await statsRes.json();
-          document.getElementById('stat-orders').textContent = stats.orderCount || 0;
-          document.getElementById('stat-settlements').textContent = stats.settlementCount || 0;
-          const revenue = stats.totalRevenue || 0;
-          document.getElementById('stat-revenue').textContent = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(revenue);
+        if (data.stats) {
+          document.getElementById('stat-total').textContent = data.stats.total || 0;
+          document.getElementById('stat-fba').textContent = data.stats.fba || 0;
+          document.getElementById('stat-fbm').textContent = data.stats.fbm || 0;
+          document.getElementById('stat-pending-odoo').textContent = data.stats.pendingOdoo || 0;
+          document.getElementById('stat-with-odoo').textContent = data.stats.withOdoo || 0;
         }
       } catch (e) {
         console.error('Error loading stats:', e);
@@ -205,15 +320,25 @@
 
     async function loadOrders() {
       try {
-        const res = await fetch(`/api/amazon/orders?limit=${pageSize}&offset=${(currentPage - 1) * pageSize}`);
+        const marketplace = document.getElementById('filter-marketplace').value;
+        const fulfillment = document.getElementById('filter-fulfillment').value;
+        const odooFilter = document.getElementById('filter-odoo').value;
+
+        let url = `/api/seller/orders?limit=${pageSize}&skip=${(currentPage - 1) * pageSize}`;
+        if (marketplace) url += `&marketplace=${marketplace}`;
+        if (fulfillment) url += `&fulfillmentChannel=${fulfillment}`;
+        if (odooFilter !== '') url += `&hasOdooOrder=${odooFilter}`;
+
+        const res = await fetch(url);
         const data = await res.json();
         orders = data.orders || [];
+        totalOrders = data.total || orders.length;
         renderOrders();
-        updatePagination(data.total || orders.length);
+        updatePagination();
       } catch (e) {
         console.error('Error loading orders:', e);
         document.getElementById('orders-table').innerHTML = `
-          <tr><td colspan="6">
+          <tr><td colspan="9">
             <div class="empty-state">
               <span class="material-symbols-outlined">error</span>
               <div class="empty-state-title">Error loading orders</div>
@@ -224,16 +349,43 @@
       }
     }
 
+    function filterOrders(filter) {
+      const odooSelect = document.getElementById('filter-odoo');
+      const fulfillmentSelect = document.getElementById('filter-fulfillment');
+
+      // Reset filters
+      odooSelect.value = '';
+      fulfillmentSelect.value = '';
+
+      switch (filter) {
+        case 'fba':
+          fulfillmentSelect.value = 'AFN';
+          break;
+        case 'fbm':
+          fulfillmentSelect.value = 'MFN';
+          break;
+        case 'pending-odoo':
+          odooSelect.value = 'false';
+          break;
+        case 'with-odoo':
+          odooSelect.value = 'true';
+          break;
+      }
+
+      currentPage = 1;
+      loadOrders();
+    }
+
     function renderOrders() {
       const tbody = document.getElementById('orders-table');
 
       if (orders.length === 0) {
         tbody.innerHTML = `
-          <tr><td colspan="6">
+          <tr><td colspan="9">
             <div class="empty-state">
               <span class="material-symbols-outlined">shopping_cart</span>
               <div class="empty-state-title">No orders found</div>
-              <div class="empty-state-text">Orders will appear here once imported from Amazon</div>
+              <div class="empty-state-text">Click "Fetch Now" to import orders from Amazon</div>
             </div>
           </td></tr>
         `;
@@ -244,31 +396,50 @@
         const date = order.purchaseDate ? new Date(order.purchaseDate).toLocaleDateString('en-GB') : '-';
         const statusClass = order.orderStatus === 'Shipped' ? 'badge-shipped' :
                            order.orderStatus === 'Canceled' ? 'badge-cancelled' : 'badge-pending';
+        const typeClass = order.fulfillmentChannel === 'AFN' ? 'badge-fba' : 'badge-fbm';
+        const typeLabel = order.fulfillmentChannel === 'AFN' ? 'FBA' : 'FBM';
+
         const total = order.orderTotal ?
           new Intl.NumberFormat('de-DE', { style: 'currency', currency: order.orderTotal.currencyCode || 'EUR' })
             .format(order.orderTotal.amount || 0) : '-';
 
+        const odooStatus = order.odoo?.saleOrderId
+          ? `<span class="badge badge-odoo">${order.odoo.saleOrderName || 'Created'}</span>`
+          : `<span class="badge badge-no-odoo">Not created</span>`;
+
+        const customerName = order.shippingAddress?.name || order.buyerName || '-';
+        const shortCustomer = customerName.length > 25 ? customerName.substring(0, 25) + '...' : customerName;
+
+        const createBtn = !order.odoo?.saleOrderId
+          ? `<button class="btn btn-success btn-sm" onclick="createOdooOrder('${order.amazonOrderId}')" title="Create Odoo Order">
+               <span class="material-symbols-outlined">add</span>
+             </button>`
+          : '';
+
         return `
           <tr>
-            <td><span class="order-id">${order.amazonOrderId || '-'}</span></td>
+            <td><span class="order-id" onclick="viewOrder('${order.amazonOrderId}')">${order.amazonOrderId || '-'}</span></td>
             <td>${date}</td>
+            <td title="${customerName}">${shortCustomer}</td>
+            <td>${order.marketplaceCountry || '-'}</td>
+            <td><span class="badge ${typeClass}">${typeLabel}</span></td>
             <td><span class="badge ${statusClass}">${order.orderStatus || 'Unknown'}</span></td>
-            <td>${order.numberOfItemsShipped || 0} / ${order.numberOfItemsUnshipped || 0}</td>
             <td>${total}</td>
-            <td>${order.marketplaceId || '-'}</td>
+            <td>${odooStatus}</td>
+            <td class="actions-cell">${createBtn}</td>
           </tr>
         `;
       }).join('');
     }
 
-    function updatePagination(total) {
+    function updatePagination() {
       const info = document.getElementById('pagination-info');
       const start = (currentPage - 1) * pageSize + 1;
-      const end = Math.min(currentPage * pageSize, total);
-      info.textContent = `Showing ${start}-${end} of ${total} orders`;
+      const end = Math.min(currentPage * pageSize, totalOrders);
+      info.textContent = `Showing ${start}-${end} of ${totalOrders} orders`;
 
       document.getElementById('prev-btn').disabled = currentPage <= 1;
-      document.getElementById('next-btn').disabled = end >= total;
+      document.getElementById('next-btn').disabled = end >= totalOrders;
     }
 
     function prevPage() {
@@ -281,6 +452,85 @@
     function nextPage() {
       currentPage++;
       loadOrders();
+    }
+
+    async function fetchOrders() {
+      const btn = document.getElementById('fetch-btn');
+      btn.classList.add('loading');
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/seller/orders/poll', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast(`Fetched ${data.result.ordersFound} orders, ${data.result.ordersUpserted} updated`);
+          await Promise.all([loadStatus(), loadStats(), loadOrders()]);
+        } else {
+          showToast(data.error || 'Fetch failed', 'error');
+        }
+      } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+      } finally {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      }
+    }
+
+    async function createOdooOrder(orderId) {
+      if (!confirm(`Create Odoo order for ${orderId}?`)) return;
+
+      try {
+        const res = await fetch(`/api/seller/orders/${orderId}/create-odoo`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirm: true })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast(`Created ${data.odooOrderName || 'order'} in Odoo`);
+          loadOrders();
+          loadStats();
+        } else {
+          showToast(data.error || 'Failed to create order', 'error');
+        }
+      } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+      }
+    }
+
+    async function createPendingOrders() {
+      if (!confirm('Create Odoo orders for all pending eligible orders?')) return;
+
+      const btn = document.getElementById('create-pending-btn');
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/seller/orders/create-pending', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ limit: 50 })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast(`Created ${data.created} orders, ${data.skipped} skipped`);
+          loadOrders();
+          loadStats();
+        } else {
+          showToast(data.error || 'Failed to create orders', 'error');
+        }
+      } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function viewOrder(orderId) {
+      // Could open a modal or navigate to order detail page
+      alert('Order details view coming soon: ' + orderId);
     }
 
     init();
