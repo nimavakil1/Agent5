@@ -550,10 +550,7 @@
       <!-- Top Bar -->
       <header class="shell-topbar">
         <a href="/test/app/" class="shell-logo">
-          <div class="shell-logo-icon">
-            <span class="material-symbols-outlined">auto_awesome</span>
-          </div>
-          <span class="shell-logo-text">ACROPAQ.com AI and Apps platform</span>
+          ${isHome ? `<span class="shell-logo-text">ACROPAQ.com AI and Apps platform</span>` : ''}
         </a>
 
         <div class="shell-breadcrumb">
