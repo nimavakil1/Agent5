@@ -87,7 +87,7 @@
     }
 
     .module-icon {
-      width: 56px;
+      min-width: 56px;
       height: 56px;
       border-radius: 16px;
       background: #ffffff;
@@ -95,6 +95,12 @@
       align-items: center;
       justify-content: center;
       margin-bottom: 20px;
+      padding: 0 12px;
+    }
+
+    .module-icon.icon-only {
+      width: 56px;
+      padding: 0;
     }
 
     .module-icon .material-symbols-outlined {
@@ -103,8 +109,8 @@
     }
 
     .module-icon img {
-      width: 32px;
-      height: 32px;
+      height: 28px;
+      width: auto;
       object-fit: contain;
     }
 
@@ -480,7 +486,7 @@
 
       grid.innerHTML = userModules.map(m => `
         <a href="${m.path}" class="module-tile" style="--module-color: ${m.color};">
-          <div class="module-icon">
+          <div class="module-icon${m.logo ? '' : ' icon-only'}">
             ${m.logo
               ? `<img src="${m.logo}" alt="${m.name}">`
               : `<span class="material-symbols-outlined">${m.icon}</span>`
