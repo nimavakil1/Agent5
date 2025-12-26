@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Amazon Vendor</title>
+  <script src="/test/app/shell-v2.js"></script>
+  <style>
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 32px;
+      background: #18181f;
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid #252532;
+      width: fit-content;
+    }
+
+    .tab {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #71717a;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tab:hover {
+      color: #e4e4e7;
+      background: #252536;
+    }
+
+    .tab.active {
+      background: #6366f1;
+      color: white;
+    }
+
+    .tab .material-symbols-outlined {
+      font-size: 20px;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Cards */
+    .card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #252532;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title .material-symbols-outlined {
+      font-size: 20px;
+      color: #6366f1;
+    }
+
+    .card-body {
+      padding: 24px;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat-item {
+      background: #1a1a28;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #71717a;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: none;
+    }
+
+    .btn .material-symbols-outlined {
+      font-size: 20px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-secondary {
+      background: #252536;
+      color: #e4e4e7;
+      border: 1px solid #3f3f5a;
+    }
+
+    .btn-secondary:hover {
+      background: #2a2a40;
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+    }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #71717a;
+      background: #1a1a24;
+      border-bottom: 1px solid #252532;
+    }
+
+    td {
+      padding: 14px 16px;
+      font-size: 14px;
+      color: #e4e4e7;
+      border-bottom: 1px solid #252532;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover {
+      background: #1a1a28;
+    }
+
+    .party-id {
+      font-weight: 600;
+      color: #f97316;
+      font-family: monospace;
+      font-size: 13px;
+    }
+
+    .odoo-partner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .odoo-partner-id {
+      font-size: 12px;
+      color: #71717a;
+      background: #252536;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .vat-number {
+      font-family: monospace;
+      font-size: 13px;
+      color: #22c55e;
+    }
+
+    .country-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      background: #252532;
+      color: #a1a1aa;
+    }
+
+    /* Actions */
+    .row-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .row-action {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: #252536;
+      border: 1px solid #3f3f5a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #a1a1aa;
+      transition: all 0.15s;
+    }
+
+    .row-action:hover {
+      background: #6366f1;
+      border-color: #6366f1;
+      color: white;
+    }
+
+    .row-action.danger:hover {
+      background: #ef4444;
+      border-color: #ef4444;
+    }
+
+    .row-action .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    /* Unmapped Alert */
+    .unmapped-alert {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .unmapped-alert-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: rgba(239, 68, 68, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ef4444;
+    }
+
+    .unmapped-alert-content {
+      flex: 1;
+    }
+
+    .unmapped-alert-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #ef4444;
+      margin-bottom: 2px;
+    }
+
+    .unmapped-alert-text {
+      font-size: 13px;
+      color: #71717a;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      width: 500px;
+      max-width: 90vw;
+      max-height: 90vh;
+      overflow: auto;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #252532;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: transparent;
+      border: none;
+      color: #71717a;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-close:hover {
+      background: #252536;
+      color: #fff;
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #252532;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #a1a1aa;
+      margin-bottom: 8px;
+    }
+
+    .form-input, .form-select {
+      width: 100%;
+      padding: 10px 14px;
+      background: #1a1a28;
+      border: 1px solid #3f3f5a;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #e4e4e7;
+    }
+
+    .form-input:focus, .form-select:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+
+    .form-input::placeholder {
+      color: #52525b;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 16px 20px;
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      z-index: 1100;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .toast.success { border-color: #22c55e; }
+    .toast.error { border-color: #ef4444; }
+
+    .toast-message {
+      font-size: 14px;
+      color: #e4e4e7;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">Vendor Settings</h1>
+    </header>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" data-tab="mappings">
+        <span class="material-symbols-outlined">link</span>
+        Party Mappings
+      </div>
+      <div class="tab" data-tab="config">
+        <span class="material-symbols-outlined">tune</span>
+        Configuration
+      </div>
+    </div>
+
+    <!-- Party Mappings Tab -->
+    <div class="tab-content active" id="tab-mappings">
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value" id="stat-total">--</div>
+          <div class="stat-label">Total Mappings</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-active">--</div>
+          <div class="stat-label">Active</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-with-vat">--</div>
+          <div class="stat-label">With VAT</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-unmapped">--</div>
+          <div class="stat-label">Unmapped</div>
+        </div>
+      </div>
+
+      <!-- Unmapped Alert -->
+      <div class="unmapped-alert" id="unmapped-alert" style="display: none;">
+        <div class="unmapped-alert-icon">
+          <span class="material-symbols-outlined">warning</span>
+        </div>
+        <div class="unmapped-alert-content">
+          <div class="unmapped-alert-title" id="unmapped-title">Unmapped Party IDs Found</div>
+          <div class="unmapped-alert-text" id="unmapped-text">Some party IDs in your orders are not mapped to Odoo partners.</div>
+        </div>
+        <button class="btn btn-secondary" onclick="showUnmapped()">View & Map</button>
+      </div>
+
+      <!-- Actions -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-outlined">settings</span>
+            Actions
+          </div>
+        </div>
+        <div class="card-body" style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <button class="btn btn-success" onclick="importFromOdoo()">
+            <span class="material-symbols-outlined">cloud_download</span>
+            Import from Odoo
+          </button>
+          <button class="btn btn-primary" onclick="openAddModal()">
+            <span class="material-symbols-outlined">add</span>
+            Add Mapping
+          </button>
+          <button class="btn btn-secondary" onclick="loadMappings()">
+            <span class="material-symbols-outlined">refresh</span>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Mappings Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-outlined">table_rows</span>
+            Party ID Mappings
+          </div>
+          <span id="mapping-count" style="font-size: 13px; color: #71717a;">Loading...</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Party ID</th>
+              <th>Odoo Partner</th>
+              <th>VAT Number</th>
+              <th>Country</th>
+              <th>Type</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mappings-tbody">
+            <tr><td colspan="6" style="text-align: center; padding: 40px; color: #71717a;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Configuration Tab -->
+    <div class="tab-content" id="tab-config">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-outlined">schedule</span>
+            Polling Schedule
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Poll Interval (minutes)</label>
+            <input type="number" class="form-input" value="60" style="max-width: 200px;">
+          </div>
+          <p style="font-size: 13px; color: #71717a;">
+            Agent5 automatically polls Amazon for new purchase orders. Adjust the interval as needed.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-outlined">warehouse</span>
+            Default Warehouse
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Odoo Warehouse</label>
+            <select class="form-select" style="max-width: 300px;">
+              <option>Central Warehouse</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div class="modal-overlay" id="mapping-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">Add Mapping</div>
+        <button class="modal-close" onclick="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Party ID *</label>
+          <input type="text" class="form-input" id="input-party-id" placeholder="e.g., BRE4">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Odoo Partner ID *</label>
+          <input type="number" class="form-input" id="input-partner-id" placeholder="e.g., 3110">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Partner Name</label>
+          <input type="text" class="form-input" id="input-partner-name" placeholder="e.g., Amazon EU SARL BRE4">
+        </div>
+        <div class="form-group">
+          <label class="form-label">VAT Number</label>
+          <input type="text" class="form-input" id="input-vat" placeholder="e.g., DE814584193">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Country</label>
+          <input type="text" class="form-input" id="input-country" placeholder="e.g., Germany">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Party Type</label>
+          <select class="form-select" id="input-type">
+            <option value="shipTo">Ship To</option>
+            <option value="billTo">Bill To</option>
+            <option value="buying">Buying</option>
+            <option value="selling">Selling</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveMapping()">Save Mapping</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast">
+    <span class="material-symbols-outlined" id="toast-icon">check_circle</span>
+    <div class="toast-message" id="toast-message"></div>
+  </div>
+
+  <script>
+    let mappings = [];
+    let editingPartyId = null;
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.onclick = () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      };
+    });
+
+    async function loadMappings() {
+      const tbody = document.getElementById('mappings-tbody');
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #71717a;">Loading...</td></tr>';
+
+      try {
+        const res = await fetch('/api/vendor/party-mappings', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load');
+        mappings = await res.json();
+        renderMappings();
+        loadStats();
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: #ef4444;">Error: ${e.message}</td></tr>`;
+      }
+    }
+
+    function renderMappings() {
+      const tbody = document.getElementById('mappings-tbody');
+      document.getElementById('mapping-count').textContent = `${mappings.length} mappings`;
+
+      if (mappings.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #71717a;">No mappings found. Click "Import from Odoo" to get started.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = mappings.map(m => `
+        <tr>
+          <td><span class="party-id">${m.partyId}</span></td>
+          <td>
+            <div class="odoo-partner">
+              ${m.odooPartnerName || 'Unknown'}
+              <span class="odoo-partner-id">#${m.odooPartnerId}</span>
+            </div>
+          </td>
+          <td><span class="vat-number">${m.vatNumber || '--'}</span></td>
+          <td><span class="country-badge">${m.country || '--'}</span></td>
+          <td>${m.partyType || 'shipTo'}</td>
+          <td>
+            <div class="row-actions">
+              <button class="row-action" title="Edit" onclick='editMapping(${JSON.stringify(m)})'>
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button class="row-action danger" title="Delete" onclick="deleteMapping('${m.partyId}')">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/vendor/party-mappings/stats', { credentials: 'include' });
+        if (res.ok) {
+          const stats = await res.json();
+          document.getElementById('stat-total').textContent = stats.total || 0;
+          document.getElementById('stat-active').textContent = stats.active || 0;
+          document.getElementById('stat-with-vat').textContent = stats.withVat || 0;
+          document.getElementById('stat-unmapped').textContent = stats.unmappedCount || 0;
+
+          if (stats.unmappedCount > 0) {
+            document.getElementById('unmapped-alert').style.display = 'flex';
+            document.getElementById('unmapped-title').textContent = `${stats.unmappedCount} Unmapped Party IDs`;
+          } else {
+            document.getElementById('unmapped-alert').style.display = 'none';
+          }
+        }
+      } catch (e) {}
+    }
+
+    async function importFromOdoo() {
+      showToast('Importing from Odoo...', 'success');
+      try {
+        const res = await fetch('/api/vendor/party-mappings/import-odoo', {
+          method: 'POST',
+          credentials: 'include'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          showToast(`Imported ${data.imported || 0} mappings`, 'success');
+          loadMappings();
+        } else {
+          throw new Error('Import failed');
+        }
+      } catch (e) {
+        showToast('Failed to import from Odoo', 'error');
+      }
+    }
+
+    function openAddModal() {
+      editingPartyId = null;
+      document.getElementById('modal-title').textContent = 'Add Mapping';
+      document.getElementById('input-party-id').value = '';
+      document.getElementById('input-party-id').disabled = false;
+      document.getElementById('input-partner-id').value = '';
+      document.getElementById('input-partner-name').value = '';
+      document.getElementById('input-vat').value = '';
+      document.getElementById('input-country').value = '';
+      document.getElementById('input-type').value = 'shipTo';
+      document.getElementById('mapping-modal').classList.add('open');
+    }
+
+    function editMapping(m) {
+      editingPartyId = m.partyId;
+      document.getElementById('modal-title').textContent = 'Edit Mapping';
+      document.getElementById('input-party-id').value = m.partyId;
+      document.getElementById('input-party-id').disabled = true;
+      document.getElementById('input-partner-id').value = m.odooPartnerId || '';
+      document.getElementById('input-partner-name').value = m.odooPartnerName || '';
+      document.getElementById('input-vat').value = m.vatNumber || '';
+      document.getElementById('input-country').value = m.country || '';
+      document.getElementById('input-type').value = m.partyType || 'shipTo';
+      document.getElementById('mapping-modal').classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('mapping-modal').classList.remove('open');
+    }
+
+    async function saveMapping() {
+      const partyId = document.getElementById('input-party-id').value.trim().toUpperCase();
+      const partnerId = parseInt(document.getElementById('input-partner-id').value);
+
+      if (!partyId || !partnerId) {
+        showToast('Party ID and Partner ID are required', 'error');
+        return;
+      }
+
+      const mapping = {
+        partyId,
+        odooPartnerId: partnerId,
+        odooPartnerName: document.getElementById('input-partner-name').value.trim(),
+        vatNumber: document.getElementById('input-vat').value.trim(),
+        country: document.getElementById('input-country').value.trim(),
+        partyType: document.getElementById('input-type').value
+      };
+
+      try {
+        const res = await fetch('/api/vendor/party-mappings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(mapping)
+        });
+
+        if (res.ok) {
+          showToast(`Mapping ${editingPartyId ? 'updated' : 'created'} successfully`, 'success');
+          closeModal();
+          loadMappings();
+        } else {
+          throw new Error('Save failed');
+        }
+      } catch (e) {
+        showToast('Failed to save mapping', 'error');
+      }
+    }
+
+    async function deleteMapping(partyId) {
+      if (!confirm(`Delete mapping for ${partyId}?`)) return;
+
+      try {
+        const res = await fetch(`/api/vendor/party-mappings/${partyId}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+
+        if (res.ok) {
+          showToast('Mapping deleted', 'success');
+          loadMappings();
+        } else {
+          throw new Error('Delete failed');
+        }
+      } catch (e) {
+        showToast('Failed to delete mapping', 'error');
+      }
+    }
+
+    async function showUnmapped() {
+      try {
+        const res = await fetch('/api/vendor/party-mappings/unmapped', { credentials: 'include' });
+        if (res.ok) {
+          const unmapped = await res.json();
+          const list = unmapped.map(u => `${u.partyId} (${u.usageCount} uses)`).join('\n');
+          alert('Unmapped Party IDs:\n\n' + list);
+        }
+      } catch (e) {
+        showToast('Failed to load unmapped IDs', 'error');
+      }
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const icon = document.getElementById('toast-icon');
+      document.getElementById('toast-message').textContent = message;
+      toast.className = `toast ${type}`;
+      icon.textContent = type === 'success' ? 'check_circle' : 'error';
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Initial load
+    loadMappings();
+  </script>
+</body>
+</html>

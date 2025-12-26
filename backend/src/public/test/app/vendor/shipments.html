@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shipments - Amazon Vendor</title>
+  <script src="/test/app/shell-v2.js"></script>
+  <style>
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    .coming-soon {
+      text-align: center;
+      padding: 80px 20px;
+    }
+
+    .coming-soon-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      background: rgba(99, 102, 241, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+    }
+
+    .coming-soon-icon .material-symbols-outlined {
+      font-size: 40px;
+      color: #6366f1;
+    }
+
+    .coming-soon-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .coming-soon-text {
+      font-size: 15px;
+      color: #71717a;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      padding: 32px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">Shipments</h1>
+    </header>
+
+    <div class="card">
+      <div class="coming-soon">
+        <div class="coming-soon-icon">
+          <span class="material-symbols-outlined">local_shipping</span>
+        </div>
+        <h2 class="coming-soon-title">Shipment Management</h2>
+        <p class="coming-soon-text">
+          Create and submit ASN (Advanced Shipment Notifications) to Amazon. Track shipment status and delivery confirmations.
+        </p>
+        <p style="margin-top: 24px; font-size: 13px; color: #6366f1;">
+          This feature is being built as part of the new Agent5 UI.
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
