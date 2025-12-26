@@ -1755,8 +1755,6 @@ router.get('/party-mappings/search-odoo', async (req, res) => {
 
 const { VendorRemittanceImporter } = require('../../services/amazon/vendor/VendorRemittanceImporter');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 
 // Configure multer for file uploads
 const remittanceUpload = multer({
