@@ -204,6 +204,23 @@ app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'a
     }
   }
 }));
+
+// New modular UI at /test/app/ (v2)
+app.get('/test/app/shell-v2.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'test', 'app', 'shell-v2.js'));
+});
+app.use('/test/app', requireSession, express.static(path.join(__dirname, 'public', 'test', 'app'), {
+  etag: false,
+  maxAge: 0,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
+
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
 
 const protectedPages = ['dashboard.html', 'call-review.html', 'admin.html', 'monitor.html'];
