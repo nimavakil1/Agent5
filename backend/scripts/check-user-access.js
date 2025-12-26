@@ -4,7 +4,7 @@ const User = require('../src/models/User');
 const Role = require('../src/models/Role');
 
 async function checkUserAccess() {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await mongoose.connect(process.env.MONGO_URI || process.env.MONGODB_URI);
 
   // Find the user
   const user = await User.findOne({ email: 'nimavakil@gmail.com' }).lean();
