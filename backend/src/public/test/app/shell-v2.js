@@ -87,10 +87,10 @@
       id: 'settings', name: 'Settings', icon: 'settings', color: '#64748b',
       basePath: '/test/app/settings',
       pages: [
-        { id: 'users', path: '/test/app/settings/users', name: 'Users', icon: 'group' },
-        { id: 'roles', path: '/test/app/settings/roles', name: 'Roles', icon: 'admin_panel_settings' },
-        { id: 'integrations', path: '/test/app/settings/integrations', name: 'Integrations', icon: 'hub' },
-        { id: 'profile', path: '/test/app/settings/profile', name: 'Profile', icon: 'person' }
+        { id: 'users', path: '/test/app/settings/', name: 'Users', icon: 'group' },
+        { id: 'roles', path: '/test/app/settings/roles.html', name: 'Roles', icon: 'admin_panel_settings' },
+        { id: 'integrations', path: '/test/app/settings/integrations.html', name: 'Integrations', icon: 'hub' },
+        { id: 'profile', path: '/test/app/settings/profile.html', name: 'Profile', icon: 'person' }
       ],
       adminOnly: true
     }

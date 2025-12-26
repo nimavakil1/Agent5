@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Users - Settings</title>
+  <script src="/test/app/shell-v2.js"></script>
+  <style>
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: #6366f1;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #4f46e5;
+    }
+
+    .btn-secondary {
+      background: #252532;
+      color: #e4e4e7;
+      border: 1px solid #3f3f50;
+    }
+
+    .btn-secondary:hover {
+      background: #2a2a3a;
+    }
+
+    .btn-danger {
+      background: #7f1d1d;
+      color: #fecaca;
+    }
+
+    .btn-danger:hover {
+      background: #991b1b;
+    }
+
+    .btn .material-symbols-outlined {
+      font-size: 20px;
+    }
+
+    /* Card */
+    .card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    /* Table */
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 14px 20px;
+      text-align: left;
+      border-bottom: 1px solid #252532;
+    }
+
+    th {
+      background: #12121a;
+      font-size: 12px;
+      font-weight: 600;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      font-size: 14px;
+      color: #e4e4e7;
+    }
+
+    tr:hover td {
+      background: #1a1a28;
+    }
+
+    .user-email {
+      font-weight: 500;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-admin {
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+    }
+
+    .badge-manager {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+    }
+
+    .badge-user {
+      background: rgba(113, 113, 122, 0.15);
+      color: #a1a1aa;
+    }
+
+    .badge-active {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+    }
+
+    .badge-inactive {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .action-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: #252532;
+      border: none;
+      color: #71717a;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .action-btn:hover {
+      background: #3f3f50;
+      color: #e4e4e7;
+    }
+
+    .action-btn .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #252532;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin: 0;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: transparent;
+      border: none;
+      color: #71717a;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-close:hover {
+      background: #252532;
+      color: #e4e4e7;
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #252532;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #a1a1aa;
+      margin-bottom: 8px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #e4e4e7;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .form-input:focus {
+      border-color: #6366f1;
+    }
+
+    .form-select {
+      width: 100%;
+      padding: 12px 14px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #e4e4e7;
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .form-select:focus {
+      border-color: #6366f1;
+    }
+
+    /* Empty State */
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+    }
+
+    .empty-state .material-symbols-outlined {
+      font-size: 48px;
+      color: #3f3f50;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e4e4e7;
+      margin-bottom: 4px;
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+      color: #71717a;
+    }
+
+    /* Loading */
+    .loading {
+      padding: 60px 20px;
+      text-align: center;
+      color: #71717a;
+    }
+
+    /* Stats */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #71717a;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">Users</h1>
+      <button class="btn btn-primary" onclick="openCreateModal()">
+        <span class="material-symbols-outlined">person_add</span>
+        Add User
+      </button>
+    </header>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total">--</div>
+        <div class="stat-label">Total Users</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-active">--</div>
+        <div class="stat-label">Active</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-admins">--</div>
+        <div class="stat-label">Admins</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-roles">--</div>
+        <div class="stat-label">Roles</div>
+      </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="card">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-table">
+            <tr>
+              <td colspan="5">
+                <div class="loading">Loading users...</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create/Edit User Modal -->
+  <div class="modal-overlay" id="user-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">Add User</h2>
+        <button class="modal-close" onclick="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="user-form" onsubmit="saveUser(event)">
+          <input type="hidden" id="user-id">
+
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-input" id="user-email" required>
+          </div>
+
+          <div class="form-group" id="password-group">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-input" id="user-password" minlength="6">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Role</label>
+            <select class="form-select" id="user-role">
+              <option value="">-- Select Role --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-select" id="user-active">
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" form="user-form" class="btn btn-primary" id="save-btn">Save User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reset Password Modal -->
+  <div class="modal-overlay" id="password-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title">Reset Password</h2>
+        <button class="modal-close" onclick="closePasswordModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="password-form" onsubmit="resetPassword(event)">
+          <input type="hidden" id="password-user-id">
+          <p style="color: #71717a; margin-bottom: 20px;">
+            Enter a new password for <strong id="password-user-email" style="color: #e4e4e7;"></strong>
+          </p>
+          <div class="form-group">
+            <label class="form-label">New Password</label>
+            <input type="password" class="form-input" id="new-password" required minlength="6">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closePasswordModal()">Cancel</button>
+        <button type="submit" form="password-form" class="btn btn-primary">Reset Password</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let users = [];
+    let roles = [];
+
+    async function init() {
+      await loadRoles();
+      await loadUsers();
+    }
+
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/auth/users', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load users');
+        users = await res.json();
+        renderUsers();
+        updateStats();
+      } catch (e) {
+        console.error('Error loading users:', e);
+        document.getElementById('users-table').innerHTML = `
+          <tr><td colspan="5"><div class="empty-state">
+            <span class="material-symbols-outlined">error</span>
+            <div class="empty-state-title">Failed to load users</div>
+            <div class="empty-state-text">${e.message}</div>
+          </div></td></tr>
+        `;
+      }
+    }
+
+    async function loadRoles() {
+      try {
+        const res = await fetch('/api/admin/roles', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load roles');
+        roles = await res.json();
+        populateRoleSelect();
+      } catch (e) {
+        console.error('Error loading roles:', e);
+      }
+    }
+
+    function populateRoleSelect() {
+      const select = document.getElementById('user-role');
+      select.innerHTML = '<option value="">-- Select Role --</option>';
+      roles.forEach(role => {
+        select.innerHTML += `<option value="${role._id}">${role.name}</option>`;
+      });
+    }
+
+    function renderUsers() {
+      const tbody = document.getElementById('users-table');
+
+      if (users.length === 0) {
+        tbody.innerHTML = `
+          <tr><td colspan="5"><div class="empty-state">
+            <span class="material-symbols-outlined">group</span>
+            <div class="empty-state-title">No users yet</div>
+            <div class="empty-state-text">Create your first user to get started</div>
+          </div></td></tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = users.map(user => `
+        <tr>
+          <td class="user-email">${user.email}</td>
+          <td>
+            <span class="badge badge-${getBadgeClass(user.roleName || user.role)}">${user.roleName || user.role}</span>
+          </td>
+          <td>
+            <span class="badge ${user.active ? 'badge-active' : 'badge-inactive'}">${user.active ? 'Active' : 'Inactive'}</span>
+          </td>
+          <td>${formatDate(user.createdAt)}</td>
+          <td>
+            <div class="actions">
+              <button class="action-btn" onclick="editUser('${user._id}')" title="Edit">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button class="action-btn" onclick="openPasswordModal('${user._id}', '${user.email}')" title="Reset Password">
+                <span class="material-symbols-outlined">key</span>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function getBadgeClass(role) {
+      if (role === 'superadmin' || role === 'admin') return 'admin';
+      if (role === 'manager') return 'manager';
+      return 'user';
+    }
+
+    function updateStats() {
+      document.getElementById('stat-total').textContent = users.length;
+      document.getElementById('stat-active').textContent = users.filter(u => u.active).length;
+      document.getElementById('stat-admins').textContent = users.filter(u => ['superadmin', 'admin'].includes(u.role)).length;
+      document.getElementById('stat-roles').textContent = roles.length;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    }
+
+    function openCreateModal() {
+      document.getElementById('modal-title').textContent = 'Add User';
+      document.getElementById('user-id').value = '';
+      document.getElementById('user-email').value = '';
+      document.getElementById('user-email').disabled = false;
+      document.getElementById('user-password').value = '';
+      document.getElementById('password-group').style.display = 'block';
+      document.getElementById('user-role').value = '';
+      document.getElementById('user-active').value = 'true';
+      document.getElementById('save-btn').textContent = 'Create User';
+      document.getElementById('user-modal').classList.add('open');
+    }
+
+    function editUser(userId) {
+      const user = users.find(u => u._id === userId);
+      if (!user) return;
+
+      document.getElementById('modal-title').textContent = 'Edit User';
+      document.getElementById('user-id').value = user._id;
+      document.getElementById('user-email').value = user.email;
+      document.getElementById('user-email').disabled = true;
+      document.getElementById('password-group').style.display = 'none';
+      document.getElementById('user-role').value = user.roleId || '';
+      document.getElementById('user-active').value = String(user.active);
+      document.getElementById('save-btn').textContent = 'Save Changes';
+      document.getElementById('user-modal').classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('user-modal').classList.remove('open');
+    }
+
+    async function saveUser(e) {
+      e.preventDefault();
+
+      const userId = document.getElementById('user-id').value;
+      const email = document.getElementById('user-email').value;
+      const password = document.getElementById('user-password').value;
+      const roleId = document.getElementById('user-role').value;
+      const active = document.getElementById('user-active').value === 'true';
+
+      try {
+        if (userId) {
+          // Update existing user
+          const res = await fetch(`/api/auth/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ roleId, active })
+          });
+          if (!res.ok) throw new Error('Failed to update user');
+        } else {
+          // Create new user
+          if (!password || password.length < 6) {
+            alert('Password must be at least 6 characters');
+            return;
+          }
+          const res = await fetch('/api/auth/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ email, password, roleId })
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.message || 'Failed to create user');
+          }
+        }
+
+        closeModal();
+        await loadUsers();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function openPasswordModal(userId, email) {
+      document.getElementById('password-user-id').value = userId;
+      document.getElementById('password-user-email').textContent = email;
+      document.getElementById('new-password').value = '';
+      document.getElementById('password-modal').classList.add('open');
+    }
+
+    function closePasswordModal() {
+      document.getElementById('password-modal').classList.remove('open');
+    }
+
+    async function resetPassword(e) {
+      e.preventDefault();
+
+      const userId = document.getElementById('password-user-id').value;
+      const password = document.getElementById('new-password').value;
+
+      try {
+        const res = await fetch(`/api/auth/users/${userId}/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ password })
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.message || 'Failed to reset password');
+        }
+
+        closePasswordModal();
+        alert('Password reset successfully');
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

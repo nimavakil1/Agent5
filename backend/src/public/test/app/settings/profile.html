@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile - Settings</title>
+  <script src="/test/app/shell-v2.js"></script>
+  <style>
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .page-header {
+      margin-bottom: 32px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    .card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #252532;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      margin: 0;
+    }
+
+    .card-body {
+      padding: 24px;
+    }
+
+    /* Profile Header */
+    .profile-header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .profile-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .profile-info h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #fff;
+      margin: 0 0 4px 0;
+    }
+
+    .profile-info p {
+      font-size: 14px;
+      color: #71717a;
+      margin: 0;
+    }
+
+    .profile-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #a1a1aa;
+      margin-bottom: 8px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #e4e4e7;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .form-input:focus {
+      border-color: #6366f1;
+    }
+
+    .form-input:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .form-hint {
+      font-size: 12px;
+      color: #71717a;
+      margin-top: 6px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: #6366f1;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #4f46e5;
+    }
+
+    .btn-secondary {
+      background: #252532;
+      color: #e4e4e7;
+      border: 1px solid #3f3f50;
+    }
+
+    .btn-secondary:hover {
+      background: #2a2a3a;
+    }
+
+    .btn .material-symbols-outlined {
+      font-size: 20px;
+    }
+
+    /* Success Message */
+    .success-message {
+      padding: 12px 16px;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      border-radius: 10px;
+      color: #4ade80;
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .success-message.show {
+      display: block;
+    }
+
+    /* Error Message */
+    .error-message {
+      padding: 12px 16px;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 10px;
+      color: #f87171;
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .error-message.show {
+      display: block;
+    }
+
+    /* Session Info */
+    .session-info {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .session-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #12121a;
+      border-radius: 10px;
+    }
+
+    .session-item-label {
+      font-size: 13px;
+      color: #71717a;
+    }
+
+    .session-item-value {
+      font-size: 13px;
+      color: #e4e4e7;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">My Profile</h1>
+    </header>
+
+    <!-- Profile Info -->
+    <div class="card">
+      <div class="card-body">
+        <div class="profile-header">
+          <div class="profile-avatar" id="profile-avatar">?</div>
+          <div class="profile-info">
+            <h2 id="profile-email">Loading...</h2>
+            <p>Account created <span id="profile-created">-</span></p>
+            <div class="profile-badge" id="profile-role">
+              <span class="material-symbols-outlined" style="font-size: 14px;">shield</span>
+              <span>-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Change Password -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Change Password</h3>
+      </div>
+      <div class="card-body">
+        <div class="success-message" id="password-success">Password changed successfully!</div>
+        <div class="error-message" id="password-error"></div>
+
+        <form id="password-form" onsubmit="changePassword(event)">
+          <div class="form-group">
+            <label class="form-label">Current Password</label>
+            <input type="password" class="form-input" id="current-password" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">New Password</label>
+            <input type="password" class="form-input" id="new-password" required minlength="6">
+            <div class="form-hint">Minimum 6 characters</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Confirm New Password</label>
+            <input type="password" class="form-input" id="confirm-password" required minlength="6">
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <span class="material-symbols-outlined">key</span>
+            Change Password
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Session Info -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Session Information</h3>
+      </div>
+      <div class="card-body">
+        <div class="session-info">
+          <div class="session-item">
+            <span class="session-item-label">User ID</span>
+            <span class="session-item-value" id="session-id">-</span>
+          </div>
+          <div class="session-item">
+            <span class="session-item-label">Role</span>
+            <span class="session-item-value" id="session-role">-</span>
+          </div>
+          <div class="session-item">
+            <span class="session-item-label">Session Status</span>
+            <span class="session-item-value" style="color: #4ade80;">Active</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function init() {
+      // Wait for shell to load
+      await new Promise(resolve => {
+        const check = () => {
+          if (window.Agent5Shell && window.Agent5Shell.getCurrentUser()) {
+            resolve();
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        check();
+      });
+
+      const user = window.Agent5Shell.getCurrentUser();
+
+      // Update profile info
+      document.getElementById('profile-avatar').textContent = (user.email || 'U').charAt(0).toUpperCase();
+      document.getElementById('profile-email').textContent = user.email;
+      document.getElementById('profile-role').querySelector('span:last-child').textContent = user.role;
+
+      // Update session info
+      document.getElementById('session-id').textContent = user.id;
+      document.getElementById('session-role').textContent = user.role;
+    }
+
+    async function changePassword(e) {
+      e.preventDefault();
+
+      const currentPassword = document.getElementById('current-password').value;
+      const newPassword = document.getElementById('new-password').value;
+      const confirmPassword = document.getElementById('confirm-password').value;
+
+      // Hide messages
+      document.getElementById('password-success').classList.remove('show');
+      document.getElementById('password-error').classList.remove('show');
+
+      // Validate
+      if (newPassword !== confirmPassword) {
+        document.getElementById('password-error').textContent = 'New passwords do not match';
+        document.getElementById('password-error').classList.add('show');
+        return;
+      }
+
+      if (newPassword.length < 6) {
+        document.getElementById('password-error').textContent = 'Password must be at least 6 characters';
+        document.getElementById('password-error').classList.add('show');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/me/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            current_password: currentPassword,
+            new_password: newPassword
+          })
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.message || 'Failed to change password');
+        }
+
+        // Success
+        document.getElementById('password-form').reset();
+        document.getElementById('password-success').classList.add('show');
+      } catch (e) {
+        document.getElementById('password-error').textContent = e.message;
+        document.getElementById('password-error').classList.add('show');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integrations - Settings</title>
+  <script src="/test/app/shell-v2.js"></script>
+  <style>
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    .integrations-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 20px;
+    }
+
+    .integration-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    .integration-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .integration-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+    }
+
+    .integration-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .integration-logo .material-symbols-outlined {
+      font-size: 28px;
+      color: #333;
+    }
+
+    .integration-info h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      margin: 0 0 4px 0;
+    }
+
+    .integration-info p {
+      font-size: 13px;
+      color: #71717a;
+      margin: 0;
+    }
+
+    .integration-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+
+    .integration-status.connected {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+    }
+
+    .integration-status.disconnected {
+      background: rgba(113, 113, 122, 0.15);
+      color: #a1a1aa;
+    }
+
+    .integration-status .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    .integration-details {
+      font-size: 13px;
+      color: #a1a1aa;
+      margin-bottom: 16px;
+    }
+
+    .integration-details dt {
+      color: #71717a;
+      margin-bottom: 2px;
+    }
+
+    .integration-details dd {
+      margin: 0 0 12px 0;
+      color: #e4e4e7;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .btn-secondary {
+      background: #252532;
+      color: #e4e4e7;
+      border: 1px solid #3f3f50;
+    }
+
+    .btn-secondary:hover {
+      background: #2a2a3a;
+    }
+
+    .btn .material-symbols-outlined {
+      font-size: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">Integrations</h1>
+    </header>
+
+    <div class="integrations-grid">
+      <!-- Odoo -->
+      <div class="integration-card">
+        <div class="integration-header">
+          <div class="integration-logo">
+            <span class="material-symbols-outlined">deployed_code</span>
+          </div>
+          <div class="integration-info">
+            <h3>Odoo ERP</h3>
+            <p>Enterprise resource planning</p>
+          </div>
+        </div>
+        <div class="integration-status connected" id="odoo-status">
+          <span class="material-symbols-outlined">check_circle</span>
+          Connected
+        </div>
+        <dl class="integration-details">
+          <dt>URL</dt>
+          <dd id="odoo-url">Loading...</dd>
+          <dt>Database</dt>
+          <dd id="odoo-db">Loading...</dd>
+        </dl>
+        <button class="btn btn-secondary" onclick="testOdoo()">
+          <span class="material-symbols-outlined">sync</span>
+          Test Connection
+        </button>
+      </div>
+
+      <!-- Amazon SP-API -->
+      <div class="integration-card">
+        <div class="integration-header">
+          <div class="integration-logo">
+            <img src="/assets/logos/amazon-seller-central.png" alt="Amazon" onerror="this.parentElement.innerHTML='<span class=\'material-symbols-outlined\'>shopping_cart</span>'">
+          </div>
+          <div class="integration-info">
+            <h3>Amazon SP-API</h3>
+            <p>Seller & Vendor Central</p>
+          </div>
+        </div>
+        <div class="integration-status connected">
+          <span class="material-symbols-outlined">check_circle</span>
+          Connected
+        </div>
+        <dl class="integration-details">
+          <dt>Region</dt>
+          <dd>Europe (EU)</dd>
+          <dt>Marketplaces</dt>
+          <dd>9 connected</dd>
+        </dl>
+        <button class="btn btn-secondary" disabled>
+          <span class="material-symbols-outlined">settings</span>
+          Manage
+        </button>
+      </div>
+
+      <!-- OpenAI -->
+      <div class="integration-card">
+        <div class="integration-header">
+          <div class="integration-logo">
+            <span class="material-symbols-outlined">psychology</span>
+          </div>
+          <div class="integration-info">
+            <h3>OpenAI</h3>
+            <p>AI models & embeddings</p>
+          </div>
+        </div>
+        <div class="integration-status connected" id="openai-status">
+          <span class="material-symbols-outlined">check_circle</span>
+          Connected
+        </div>
+        <dl class="integration-details">
+          <dt>Model</dt>
+          <dd>GPT-4o</dd>
+          <dt>Realtime</dt>
+          <dd>Enabled</dd>
+        </dl>
+        <button class="btn btn-secondary" disabled>
+          <span class="material-symbols-outlined">settings</span>
+          Manage
+        </button>
+      </div>
+
+      <!-- Telnyx -->
+      <div class="integration-card">
+        <div class="integration-header">
+          <div class="integration-logo">
+            <span class="material-symbols-outlined">phone</span>
+          </div>
+          <div class="integration-info">
+            <h3>Telnyx</h3>
+            <p>Voice & telephony</p>
+          </div>
+        </div>
+        <div class="integration-status connected">
+          <span class="material-symbols-outlined">check_circle</span>
+          Connected
+        </div>
+        <dl class="integration-details">
+          <dt>Type</dt>
+          <dd>Voice API</dd>
+          <dt>Phone Numbers</dt>
+          <dd>Configured</dd>
+        </dl>
+        <button class="btn btn-secondary" disabled>
+          <span class="material-symbols-outlined">settings</span>
+          Manage
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function init() {
+      await loadOdooStatus();
+    }
+
+    async function loadOdooStatus() {
+      try {
+        const res = await fetch('/api/odoo/status', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('odoo-url').textContent = data.url || 'Not configured';
+          document.getElementById('odoo-db').textContent = data.db || 'Not configured';
+        }
+      } catch (e) {
+        document.getElementById('odoo-url').textContent = 'Error loading';
+        document.getElementById('odoo-db').textContent = 'Error loading';
+      }
+    }
+
+    async function testOdoo() {
+      try {
+        const res = await fetch('/api/odoo/test', { credentials: 'include' });
+        if (res.ok) {
+          alert('Odoo connection successful!');
+        } else {
+          alert('Odoo connection failed');
+        }
+      } catch (e) {
+        alert('Error testing connection: ' + e.message);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

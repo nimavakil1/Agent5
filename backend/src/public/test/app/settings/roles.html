@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roles - Settings</title>
+  <script src="/test/app/shell-v2.js"></script>
+  <style>
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: #6366f1;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #4f46e5;
+    }
+
+    .btn-secondary {
+      background: #252532;
+      color: #e4e4e7;
+      border: 1px solid #3f3f50;
+    }
+
+    .btn-secondary:hover {
+      background: #2a2a3a;
+    }
+
+    .btn-danger {
+      background: #7f1d1d;
+      color: #fecaca;
+    }
+
+    .btn-danger:hover {
+      background: #991b1b;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .btn .material-symbols-outlined {
+      font-size: 20px;
+    }
+
+    /* Roles Grid */
+    .roles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      gap: 20px;
+    }
+
+    .role-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .role-card.protected {
+      border-color: #3b82f6;
+    }
+
+    .role-header {
+      padding: 20px;
+      border-bottom: 1px solid #252532;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .role-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .role-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(99, 102, 241, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .role-icon .material-symbols-outlined {
+      font-size: 24px;
+      color: #818cf8;
+    }
+
+    .role-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .role-meta {
+      font-size: 12px;
+      color: #71717a;
+      margin-top: 2px;
+    }
+
+    .role-badge {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+    }
+
+    .role-body {
+      padding: 20px;
+    }
+
+    .role-section {
+      margin-bottom: 16px;
+    }
+
+    .role-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .role-section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+    }
+
+    .modules-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .module-tag {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #252532;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #e4e4e7;
+    }
+
+    .module-tag .material-symbols-outlined {
+      font-size: 16px;
+      color: #71717a;
+    }
+
+    .no-modules {
+      color: #71717a;
+      font-size: 13px;
+      font-style: italic;
+    }
+
+    .role-actions {
+      padding: 16px 20px;
+      border-top: 1px solid #252532;
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 560px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #252532;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin: 0;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: transparent;
+      border: none;
+      color: #71717a;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-close:hover {
+      background: #252532;
+      color: #e4e4e7;
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #252532;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #a1a1aa;
+      margin-bottom: 8px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #e4e4e7;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .form-input:focus {
+      border-color: #6366f1;
+    }
+
+    .form-textarea {
+      width: 100%;
+      padding: 12px 14px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #e4e4e7;
+      font-size: 14px;
+      outline: none;
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .form-textarea:focus {
+      border-color: #6366f1;
+    }
+
+    /* Checkbox Grid */
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .checkbox-item:hover {
+      border-color: #3f3f50;
+    }
+
+    .checkbox-item.checked {
+      background: rgba(99, 102, 241, 0.1);
+      border-color: #6366f1;
+    }
+
+    .checkbox-item input {
+      display: none;
+    }
+
+    .checkbox-box {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 2px solid #3f3f50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .checkbox-item.checked .checkbox-box {
+      background: #6366f1;
+      border-color: #6366f1;
+    }
+
+    .checkbox-box .material-symbols-outlined {
+      font-size: 16px;
+      color: white;
+      opacity: 0;
+    }
+
+    .checkbox-item.checked .checkbox-box .material-symbols-outlined {
+      opacity: 1;
+    }
+
+    .checkbox-label {
+      font-size: 14px;
+      color: #e4e4e7;
+      flex: 1;
+    }
+
+    .checkbox-icon {
+      font-size: 20px;
+      color: #71717a;
+    }
+
+    /* Empty State */
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+    }
+
+    .empty-state .material-symbols-outlined {
+      font-size: 48px;
+      color: #3f3f50;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e4e4e7;
+      margin-bottom: 4px;
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+      color: #71717a;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">Roles & Permissions</h1>
+      <button class="btn btn-primary" onclick="openCreateModal()">
+        <span class="material-symbols-outlined">add</span>
+        Create Role
+      </button>
+    </header>
+
+    <div class="roles-grid" id="roles-grid">
+      <div class="empty-state">
+        <span class="material-symbols-outlined">hourglass_empty</span>
+        <div class="empty-state-title">Loading roles...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create/Edit Role Modal -->
+  <div class="modal-overlay" id="role-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">Create Role</h2>
+        <button class="modal-close" onclick="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="role-form" onsubmit="saveRole(event)">
+          <input type="hidden" id="role-id">
+
+          <div class="form-group">
+            <label class="form-label">Role Name</label>
+            <input type="text" class="form-input" id="role-name" required placeholder="e.g. Sales Manager">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea class="form-textarea" id="role-description" placeholder="What can users with this role do?"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Module Access</label>
+            <p style="font-size: 12px; color: #71717a; margin-bottom: 12px;">Select which modules users with this role can access</p>
+            <div class="checkbox-grid" id="modules-grid">
+              <!-- Modules will be rendered here -->
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" form="role-form" class="btn btn-primary" id="save-btn">Create Role</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="delete-modal">
+    <div class="modal" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Delete Role</h2>
+        <button class="modal-close" onclick="closeDeleteModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="color: #e4e4e7;">Are you sure you want to delete the role "<strong id="delete-role-name"></strong>"?</p>
+        <p style="color: #71717a; font-size: 13px; margin-top: 8px;">This action cannot be undone. Users with this role will lose their permissions.</p>
+        <input type="hidden" id="delete-role-id">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button type="button" class="btn btn-danger" onclick="confirmDelete()">Delete Role</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Module definitions
+    const ALL_MODULES = [
+      { id: 'ai-agents', name: 'AI Agents', icon: 'smart_toy' },
+      { id: 'call-center', name: 'Call Center', icon: 'headset_mic' },
+      { id: 'amazon-seller', name: 'Amazon Seller', icon: 'storefront' },
+      { id: 'amazon-vendor', name: 'Amazon Vendor', icon: 'local_shipping' },
+      { id: 'inventory', name: 'Inventory', icon: 'inventory_2' },
+      { id: 'accounting', name: 'Accounting', icon: 'account_balance' },
+      { id: 'analytics', name: 'Analytics', icon: 'analytics' },
+      { id: 'settings', name: 'Settings', icon: 'settings' }
+    ];
+
+    let roles = [];
+
+    async function init() {
+      renderModulesCheckboxes();
+      await loadRoles();
+    }
+
+    function renderModulesCheckboxes() {
+      const grid = document.getElementById('modules-grid');
+      grid.innerHTML = ALL_MODULES.map(m => `
+        <label class="checkbox-item" data-module="${m.id}">
+          <input type="checkbox" name="modules" value="${m.id}">
+          <div class="checkbox-box">
+            <span class="material-symbols-outlined">check</span>
+          </div>
+          <span class="checkbox-label">${m.name}</span>
+          <span class="material-symbols-outlined checkbox-icon">${m.icon}</span>
+        </label>
+      `).join('');
+
+      // Add click handlers
+      grid.querySelectorAll('.checkbox-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          if (e.target.tagName === 'INPUT') return;
+          const checkbox = item.querySelector('input');
+          checkbox.checked = !checkbox.checked;
+          item.classList.toggle('checked', checkbox.checked);
+        });
+      });
+    }
+
+    async function loadRoles() {
+      try {
+        const res = await fetch('/api/admin/roles', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load roles');
+        roles = await res.json();
+        renderRoles();
+      } catch (e) {
+        console.error('Error loading roles:', e);
+        document.getElementById('roles-grid').innerHTML = `
+          <div class="empty-state">
+            <span class="material-symbols-outlined">error</span>
+            <div class="empty-state-title">Failed to load roles</div>
+            <div class="empty-state-text">${e.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    function renderRoles() {
+      const grid = document.getElementById('roles-grid');
+
+      if (roles.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state">
+            <span class="material-symbols-outlined">admin_panel_settings</span>
+            <div class="empty-state-title">No roles yet</div>
+            <div class="empty-state-text">Create your first role to manage user permissions</div>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = roles.map(role => `
+        <div class="role-card ${role.protected ? 'protected' : ''}">
+          <div class="role-header">
+            <div class="role-info">
+              <div class="role-icon">
+                <span class="material-symbols-outlined">${role.protected ? 'shield' : 'badge'}</span>
+              </div>
+              <div>
+                <div class="role-name">${role.name}</div>
+                <div class="role-meta">${role.users || 0} users</div>
+              </div>
+            </div>
+            ${role.protected ? '<span class="role-badge">Protected</span>' : ''}
+          </div>
+          <div class="role-body">
+            ${role.description ? `<p style="color: #a1a1aa; font-size: 13px; margin-bottom: 16px;">${role.description}</p>` : ''}
+            <div class="role-section">
+              <div class="role-section-title">Module Access</div>
+              <div class="modules-list">
+                ${renderModuleTags(role.moduleAccess || [])}
+              </div>
+            </div>
+          </div>
+          <div class="role-actions">
+            <button class="btn btn-secondary btn-sm" onclick="editRole('${role._id}')">
+              <span class="material-symbols-outlined">edit</span>
+              Edit
+            </button>
+            ${!role.protected ? `
+              <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${role._id}', '${role.name}')">
+                <span class="material-symbols-outlined">delete</span>
+                Delete
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderModuleTags(moduleIds) {
+      if (!moduleIds || moduleIds.length === 0) {
+        return '<span class="no-modules">No module access</span>';
+      }
+
+      return moduleIds.map(id => {
+        const m = ALL_MODULES.find(mod => mod.id === id);
+        if (!m) return '';
+        return `
+          <div class="module-tag">
+            <span class="material-symbols-outlined">${m.icon}</span>
+            ${m.name}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openCreateModal() {
+      document.getElementById('modal-title').textContent = 'Create Role';
+      document.getElementById('role-id').value = '';
+      document.getElementById('role-name').value = '';
+      document.getElementById('role-name').disabled = false;
+      document.getElementById('role-description').value = '';
+      document.getElementById('save-btn').textContent = 'Create Role';
+
+      // Uncheck all modules
+      document.querySelectorAll('#modules-grid .checkbox-item').forEach(item => {
+        item.classList.remove('checked');
+        item.querySelector('input').checked = false;
+      });
+
+      document.getElementById('role-modal').classList.add('open');
+    }
+
+    function editRole(roleId) {
+      const role = roles.find(r => r._id === roleId);
+      if (!role) return;
+
+      document.getElementById('modal-title').textContent = 'Edit Role';
+      document.getElementById('role-id').value = role._id;
+      document.getElementById('role-name').value = role.name;
+      document.getElementById('role-name').disabled = role.protected;
+      document.getElementById('role-description').value = role.description || '';
+      document.getElementById('save-btn').textContent = 'Save Changes';
+
+      // Set module checkboxes
+      document.querySelectorAll('#modules-grid .checkbox-item').forEach(item => {
+        const moduleId = item.dataset.module;
+        const checked = (role.moduleAccess || []).includes(moduleId);
+        item.classList.toggle('checked', checked);
+        item.querySelector('input').checked = checked;
+      });
+
+      document.getElementById('role-modal').classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('role-modal').classList.remove('open');
+    }
+
+    async function saveRole(e) {
+      e.preventDefault();
+
+      const roleId = document.getElementById('role-id').value;
+      const name = document.getElementById('role-name').value;
+      const description = document.getElementById('role-description').value;
+
+      // Get selected modules
+      const moduleAccess = [];
+      document.querySelectorAll('#modules-grid input:checked').forEach(input => {
+        moduleAccess.push(input.value);
+      });
+
+      // Get existing privileges (we need to preserve them)
+      const existingRole = roleId ? roles.find(r => r._id === roleId) : null;
+      const privileges = existingRole?.privileges || [];
+
+      try {
+        if (roleId) {
+          // Update existing role
+          const res = await fetch(`/api/admin/roles/${roleId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ description, moduleAccess, privileges })
+          });
+          if (!res.ok) throw new Error('Failed to update role');
+        } else {
+          // Create new role
+          const res = await fetch('/api/admin/roles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ name, description, moduleAccess, privileges: [] })
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.message || 'Failed to create role');
+          }
+        }
+
+        closeModal();
+        await loadRoles();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function openDeleteModal(roleId, roleName) {
+      document.getElementById('delete-role-id').value = roleId;
+      document.getElementById('delete-role-name').textContent = roleName;
+      document.getElementById('delete-modal').classList.add('open');
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('delete-modal').classList.remove('open');
+    }
+
+    async function confirmDelete() {
+      const roleId = document.getElementById('delete-role-id').value;
+
+      try {
+        const res = await fetch(`/api/admin/roles/${roleId}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.message || 'Failed to delete role');
+        }
+
+        closeDeleteModal();
+        await loadRoles();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
