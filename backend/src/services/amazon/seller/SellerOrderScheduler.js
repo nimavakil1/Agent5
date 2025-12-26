@@ -13,6 +13,12 @@ const { getSellerOrderImporter } = require('./SellerOrderImporter');
 const { getSellerOrderCreator } = require('./SellerOrderCreator');
 const { getSellerShipmentSync } = require('./SellerShipmentSync');
 const { getSellerTrackingPusher } = require('./SellerTrackingPusher');
+const { getSellerCanceledOrderSync } = require('./SellerCanceledOrderSync');
+const { getSellerFbaInventorySync } = require('./SellerFbaInventorySync');
+const { getSellerInventoryExport } = require('./SellerInventoryExport');
+const { getSellerFbaReportsSync } = require('./SellerFbaReportsSync');
+const { getSellerInboundShipmentSync } = require('./SellerInboundShipmentSync');
+const { getSellerFulfillmentSync } = require('./SellerFulfillmentSync');
 
 // Default polling interval: 15 minutes
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
@@ -168,6 +174,83 @@ class SellerOrderScheduler {
           console.error('[SellerOrderScheduler] FBM tracking push error:', pushError.message);
           pollResult.fbmTrackingError = pushError.message;
         }
+      }
+
+      // Sync canceled orders (Amazon → Odoo)
+      try {
+        const canceledSync = await getSellerCanceledOrderSync();
+        const cancelResult = await canceledSync.syncCanceledOrders();
+        console.log(`[SellerOrderScheduler] Canceled orders: ${cancelResult.canceled} canceled`);
+        pollResult.ordersCanceled = cancelResult.canceled;
+      } catch (cancelError) {
+        console.error('[SellerOrderScheduler] Canceled order sync error:', cancelError.message);
+        pollResult.canceledOrderError = cancelError.message;
+      }
+
+      // Process pending FBA reports (stock adjustments, removals)
+      try {
+        const fbaReportsSync = await getSellerFbaReportsSync();
+        const reportsResult = await fbaReportsSync.processAllPendingReports();
+        if (reportsResult.processed > 0) {
+          console.log(`[SellerOrderScheduler] FBA reports: ${reportsResult.processed} processed`);
+        }
+        pollResult.fbaReportsProcessed = reportsResult.processed;
+      } catch (reportsError) {
+        console.error('[SellerOrderScheduler] FBA reports sync error:', reportsError.message);
+        pollResult.fbaReportsError = reportsError.message;
+      }
+
+      // Process pending FBA inventory reports
+      try {
+        const fbaInventorySync = await getSellerFbaInventorySync();
+        const invResult = await fbaInventorySync.processReports();
+        if (invResult.processed > 0) {
+          console.log(`[SellerOrderScheduler] FBA inventory reports: ${invResult.processed} processed`);
+        }
+        pollResult.fbaInventoryReportsProcessed = invResult.processed;
+      } catch (invError) {
+        console.error('[SellerOrderScheduler] FBA inventory sync error:', invError.message);
+        pollResult.fbaInventoryError = invError.message;
+      }
+
+      // Check feed status for inventory exports
+      try {
+        const inventoryExport = await getSellerInventoryExport();
+        const feedResult = await inventoryExport.checkFeedStatus();
+        if (feedResult.completed > 0) {
+          console.log(`[SellerOrderScheduler] Inventory feeds: ${feedResult.completed} completed`);
+        }
+        pollResult.inventoryFeedsCompleted = feedResult.completed;
+      } catch (feedError) {
+        console.error('[SellerOrderScheduler] Inventory feed check error:', feedError.message);
+        pollResult.inventoryFeedError = feedError.message;
+      }
+
+      // Sync inbound shipments
+      try {
+        const inboundSync = await getSellerInboundShipmentSync();
+        const inboundResult = await inboundSync.syncShipments();
+        if (inboundResult.updated > 0 || inboundResult.new > 0) {
+          console.log(`[SellerOrderScheduler] Inbound shipments: ${inboundResult.new} new, ${inboundResult.updated} updated`);
+        }
+        pollResult.inboundShipmentsNew = inboundResult.new;
+        pollResult.inboundShipmentsUpdated = inboundResult.updated;
+      } catch (inboundError) {
+        console.error('[SellerOrderScheduler] Inbound shipment sync error:', inboundError.message);
+        pollResult.inboundShipmentError = inboundError.message;
+      }
+
+      // Sync MCF order status
+      try {
+        const fulfillmentSync = await getSellerFulfillmentSync();
+        const mcfResult = await fulfillmentSync.syncMcfOrders();
+        if (mcfResult.updated > 0) {
+          console.log(`[SellerOrderScheduler] MCF orders: ${mcfResult.updated} updated`);
+        }
+        pollResult.mcfOrdersUpdated = mcfResult.updated;
+      } catch (mcfError) {
+        console.error('[SellerOrderScheduler] MCF order sync error:', mcfError.message);
+        pollResult.mcfOrderError = mcfError.message;
       }
 
       return pollResult;

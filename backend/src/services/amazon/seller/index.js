@@ -1,8 +1,16 @@
 /**
  * Amazon Seller Central Services
  *
- * Exports all seller-related services for order import, Odoo creation, scheduling,
- * shipment sync, and tracking push.
+ * Complete Emipro replacement - all seller-related services:
+ * - Order import, creation, scheduling
+ * - Shipment sync (FBA) and tracking push (FBM)
+ * - Canceled order sync
+ * - FBA inventory import
+ * - FBM inventory export
+ * - Stock adjustments and removal orders
+ * - Inbound shipment tracking
+ * - Fulfillment center sync
+ * - Multi-Channel Fulfillment (MCF)
  *
  * @module services/amazon/seller
  */
@@ -37,6 +45,12 @@ const {
 } = require('./SellerMarketplaceConfig');
 const { SellerShipmentSync, getSellerShipmentSync } = require('./SellerShipmentSync');
 const { SellerTrackingPusher, getSellerTrackingPusher, CARRIER_MAPPING } = require('./SellerTrackingPusher');
+const { SellerCanceledOrderSync, getSellerCanceledOrderSync } = require('./SellerCanceledOrderSync');
+const { SellerFbaInventorySync, getSellerFbaInventorySync, FBA_INVENTORY_REPORT } = require('./SellerFbaInventorySync');
+const { SellerInventoryExport, getSellerInventoryExport, INVENTORY_FEED_TYPE } = require('./SellerInventoryExport');
+const { SellerFbaReportsSync, getSellerFbaReportsSync, STOCK_ADJUSTMENT_REPORT, REMOVAL_ORDER_REPORT } = require('./SellerFbaReportsSync');
+const { SellerInboundShipmentSync, getSellerInboundShipmentSync, SHIPMENT_STATUSES } = require('./SellerInboundShipmentSync');
+const { SellerFulfillmentSync, getSellerFulfillmentSync } = require('./SellerFulfillmentSync');
 
 module.exports = {
   // Client
@@ -66,6 +80,35 @@ module.exports = {
   SellerTrackingPusher,
   getSellerTrackingPusher,
   CARRIER_MAPPING,
+
+  // Canceled Order Sync
+  SellerCanceledOrderSync,
+  getSellerCanceledOrderSync,
+
+  // FBA Inventory Import
+  SellerFbaInventorySync,
+  getSellerFbaInventorySync,
+  FBA_INVENTORY_REPORT,
+
+  // FBM Inventory Export
+  SellerInventoryExport,
+  getSellerInventoryExport,
+  INVENTORY_FEED_TYPE,
+
+  // FBA Reports (Adjustments & Removals)
+  SellerFbaReportsSync,
+  getSellerFbaReportsSync,
+  STOCK_ADJUSTMENT_REPORT,
+  REMOVAL_ORDER_REPORT,
+
+  // Inbound Shipment Tracking
+  SellerInboundShipmentSync,
+  getSellerInboundShipmentSync,
+  SHIPMENT_STATUSES,
+
+  // Fulfillment Centers & MCF
+  SellerFulfillmentSync,
+  getSellerFulfillmentSync,
 
   // Marketplace Config
   MARKETPLACE_IDS,
