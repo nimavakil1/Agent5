@@ -553,7 +553,7 @@
           <div class="shell-logo-icon">
             <span class="material-symbols-outlined">auto_awesome</span>
           </div>
-          <span class="shell-logo-text">Agent5</span>
+          <span class="shell-logo-text">ACROPAQ.com AI and Apps platform</span>
         </a>
 
         <div class="shell-breadcrumb">
@@ -591,11 +591,6 @@
               <a href="/test/app/settings/" class="shell-dropdown-item">
                 <span class="material-symbols-outlined">settings</span>
                 Settings
-              </a>
-              <div class="shell-dropdown-divider"></div>
-              <a href="/app/" class="shell-dropdown-item">
-                <span class="material-symbols-outlined">arrow_back</span>
-                Old Interface
               </a>
               <div class="shell-dropdown-divider"></div>
               <button class="shell-dropdown-item danger" id="shell-logout">
