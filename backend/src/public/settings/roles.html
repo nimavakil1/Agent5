@@ -522,13 +522,11 @@
         </label>
       `).join('');
 
-      // Add click handlers
-      grid.querySelectorAll('.checkbox-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-          if (e.target.tagName === 'INPUT') return;
-          const checkbox = item.querySelector('input');
-          checkbox.checked = !checkbox.checked;
-          item.classList.toggle('checked', checkbox.checked);
+      // Add click handlers - use change event on input to avoid double-toggle
+      grid.querySelectorAll('.checkbox-item input').forEach(input => {
+        input.addEventListener('change', () => {
+          const item = input.closest('.checkbox-item');
+          item.classList.toggle('checked', input.checked);
         });
       });
     }
