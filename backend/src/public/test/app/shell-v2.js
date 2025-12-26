@@ -630,7 +630,7 @@
       <!-- Top Bar -->
       <header class="shell-topbar">
         <a href="/test/app/" class="shell-logo">
-          ${isHome ? `<span class="shell-logo-text">ACROPAQ.com AI and Apps platform</span>` : ''}
+          ${isHome ? `<span class="shell-logo-text">ACROPAQ AI platform</span>` : ''}
         </a>
 
         <div class="shell-breadcrumb">
