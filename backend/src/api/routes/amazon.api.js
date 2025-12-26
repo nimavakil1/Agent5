@@ -3633,11 +3633,11 @@ router.post('/vcs/create-invoices', async (req, res) => {
 });
 
 /**
- * @route GET /api/amazon/vcs/create-invoices-stream
+ * @route POST /api/amazon/vcs/create-invoices-stream
  * @desc Stream invoice creation progress using Server-Sent Events
- * @query { orderIds (comma-separated), dryRun }
+ * @body { orderIds, dryRun }
  */
-router.get('/vcs/create-invoices-stream', async (req, res) => {
+router.post('/vcs/create-invoices-stream', async (req, res) => {
   // Set up SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -3646,13 +3646,16 @@ router.get('/vcs/create-invoices-stream', async (req, res) => {
   res.flushHeaders();
 
   const sendEvent = (event, data) => {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    try {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    } catch (e) {
+      // Connection may have closed
+    }
   };
 
   try {
-    const orderIds = req.query.orderIds ? req.query.orderIds.split(',') : [];
-    const dryRun = req.query.dryRun === 'true';
+    const { orderIds = [], dryRun = false } = req.body;
 
     if (!orderIds || orderIds.length === 0) {
       sendEvent('error', { message: 'No orders selected' });

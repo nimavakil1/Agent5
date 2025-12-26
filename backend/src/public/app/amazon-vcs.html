@@ -1548,53 +1548,72 @@
         btn.disabled = true;
 
         try {
-          // Use SSE for real-time progress
-          const url = `/api/amazon/vcs/create-invoices-stream?orderIds=${selectedIds.join(',')}&dryRun=${dryRun}`;
-          const eventSource = new EventSource(url);
+          // Use fetch with streaming for real-time progress (POST to handle large payloads)
+          const response = await fetch('/api/amazon/vcs/create-invoices-stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderIds: selectedIds, dryRun })
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error: ${response.status}`);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
           let finalResult = null;
 
-          eventSource.addEventListener('start', (e) => {
-            const data = JSON.parse(e.data);
-            updateProgress(progressModal, { phase: 'start', total: data.total });
-          });
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          eventSource.addEventListener('progress', (e) => {
-            const data = JSON.parse(e.data);
-            updateProgress(progressModal, data);
-          });
+            buffer += decoder.decode(value, { stream: true });
 
-          eventSource.addEventListener('complete', (e) => {
-            const data = JSON.parse(e.data);
-            finalResult = data;
-            eventSource.close();
+            // Parse SSE events from buffer
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            let eventType = null;
+            for (const line of lines) {
+              if (line.startsWith('event: ')) {
+                eventType = line.slice(7).trim();
+              } else if (line.startsWith('data: ') && eventType) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+
+                  if (eventType === 'start') {
+                    updateProgress(progressModal, { phase: 'start', total: data.total });
+                  } else if (eventType === 'progress') {
+                    updateProgress(progressModal, data);
+                  } else if (eventType === 'complete') {
+                    finalResult = data;
+                    closeProgressModal(progressModal);
+                    showInvoiceResult(data, dryRun);
+
+                    // Refresh if real creation
+                    if (!dryRun) {
+                      selectedOrderIds.clear();
+                      allFilteredSelected = false;
+                      loadSummary();
+                      loadPendingOrders();
+                    }
+                  } else if (eventType === 'error') {
+                    alert(`Error: ${data.message}`);
+                    closeProgressModal(progressModal);
+                  }
+                } catch (parseErr) {
+                  console.error('Failed to parse SSE data:', parseErr);
+                }
+                eventType = null;
+              }
+            }
+          }
+
+          if (!finalResult) {
             closeProgressModal(progressModal);
-            showInvoiceResult(data, dryRun);
-
-            // Refresh if real creation
-            if (!dryRun) {
-              selectedOrderIds.clear();
-              allFilteredSelected = false;
-              loadSummary();
-              loadPendingOrders();
-            }
-          });
-
-          eventSource.addEventListener('error', (e) => {
-            if (e.data) {
-              const data = JSON.parse(e.data);
-              alert(`Error: ${data.message}`);
-            }
-            eventSource.close();
-            closeProgressModal(progressModal);
-          });
-
-          eventSource.onerror = () => {
-            if (!finalResult) {
-              eventSource.close();
-              closeProgressModal(progressModal);
-              alert('Connection lost. Please try again.');
-            }
-          };
+            alert('Connection closed unexpectedly. Please check results and try again if needed.');
+          }
 
         } catch (error) {
           closeProgressModal(progressModal);
