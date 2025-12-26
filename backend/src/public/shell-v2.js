@@ -657,10 +657,9 @@
             <div class="shell-user-btn" id="shell-user-btn">
               <div class="shell-avatar" id="shell-avatar">${me && me.avatar
                 ? `<img src="${me.avatar}" alt="Avatar">`
-                : (me ? (me.email || 'U').charAt(0).toUpperCase() : 'U')}</div>
+                : (me ? (me.firstName || me.email || 'U').charAt(0).toUpperCase() : 'U')}</div>
               <div class="shell-user-info">
-                <div class="shell-user-email">${me ? me.email : ''}</div>
-                <div class="shell-user-role">${me ? me.role : ''}</div>
+                <div class="shell-user-email">${me ? (me.firstName || me.email) : ''}</div>
               </div>
             </div>
             <div class="shell-user-dropdown" id="shell-user-dropdown">
