@@ -148,10 +148,16 @@ router.post('/logout', requireSession, async (req, res) => {
 
 router.get('/me', requireSession, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('email firstName lastName role avatar').lean();
-    res.json({ id: req.user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role, avatar: user.avatar });
+    const user = await User.findById(req.user.id).select('email firstName lastName role roleId avatar').lean();
+    // Get role name if roleId exists
+    let roleName = user.role;
+    if (user.roleId) {
+      const role = await Role.findById(user.roleId).select('name').lean();
+      if (role) roleName = role.name;
+    }
+    res.json({ id: req.user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role, roleId: user.roleId, roleName, avatar: user.avatar });
   } catch (e) {
-    res.json({ id: req.user.id, email: req.user.email, firstName: null, lastName: null, role: req.user.role, avatar: null });
+    res.json({ id: req.user.id, email: req.user.email, firstName: null, lastName: null, role: req.user.role, roleId: null, roleName: req.user.role, avatar: null });
   }
 });
 
@@ -203,7 +209,12 @@ router.delete('/me/avatar', requireSession, async (req, res) => {
 // Get modules user has access to
 router.get('/me/modules', requireSession, async (req, res) => {
   try {
-    const modules = await getModuleAccessForUser(req.user);
+    // Fetch full user from DB to get roleId (not in JWT)
+    const user = await User.findById(req.user.id).select('role roleId').lean();
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    const modules = await getModuleAccessForUser(user);
     res.json({ modules });
   } catch (e) {
     console.error('get modules error', e);
