@@ -92,8 +92,14 @@
     </div>
   </div>
   <script>
-    const MARKETPLACE_FLAGS = { DE: '\u{1F1E9}\u{1F1EA}', FR: '\u{1F1EB}\u{1F1F7}', IT: '\u{1F1EE}\u{1F1F9}', ES: '\u{1F1EA}\u{1F1F8}', NL: '\u{1F1F3}\u{1F1F1}', BE: '\u{1F1E7}\u{1F1EA}', PL: '\u{1F1F5}\u{1F1F1}', SE: '\u{1F1F8}\u{1F1EA}', UK: '\u{1F1EC}\u{1F1E7}' };
-    const PAYMENT_TERMS_DAYS = 60; // Amazon Vendor standard terms (adjust if different)
+    const MARKETPLACE_FLAGS = { DE: 'de', FR: 'fr', IT: 'it', ES: 'es', NL: 'nl', BE: 'be', PL: 'pl', SE: 'se', UK: 'gb' };
+    const PAYMENT_TERMS_DAYS = 45; // Amazon Vendor payment terms
+
+    function getFlagImg(mp) {
+      var code = MARKETPLACE_FLAGS[mp];
+      if (!code) return mp;
+      return '<img src="https://flagcdn.com/w40/' + code + '.png" alt="' + mp + '" style="width:24px;height:16px;object-fit:cover;border-radius:2px;vertical-align:middle;">';
+    }
 
     let invoices = [];
     async function init() { await Promise.all([loadStats(), loadInvoices()]); }
@@ -130,7 +136,7 @@
       if (invoices.length === 0) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">description</span><div class="empty-state-title">No invoices found</div></div></td></tr>'; return; }
       tbody.innerHTML = invoices.map(function(inv) {
         var mp = inv.marketplaceId || '-';
-        var mpDisplay = MARKETPLACE_FLAGS[mp] ? MARKETPLACE_FLAGS[mp] + ' ' + mp : mp;
+        var mpDisplay = getFlagImg(mp) + ' ' + mp;
         var expectedPayment = calcExpectedPayment(inv.submittedAt);
         var isOverdue = expectedPayment.overdue;
         return '<tr>' +

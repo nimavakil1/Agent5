@@ -188,7 +188,19 @@
   <script>
     const MARKETPLACES = ['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'PL', 'SE', 'UK'];
     const MARKETPLACE_NAMES = { DE: 'Germany', FR: 'France', IT: 'Italy', ES: 'Spain', NL: 'Netherlands', BE: 'Belgium', PL: 'Poland', SE: 'Sweden', UK: 'United Kingdom' };
-    const MARKETPLACE_FLAGS = { DE: '\u{1F1E9}\u{1F1EA}', FR: '\u{1F1EB}\u{1F1F7}', IT: '\u{1F1EE}\u{1F1F9}', ES: '\u{1F1EA}\u{1F1F8}', NL: '\u{1F1F3}\u{1F1F1}', BE: '\u{1F1E7}\u{1F1EA}', PL: '\u{1F1F5}\u{1F1F1}', SE: '\u{1F1F8}\u{1F1EA}', UK: '\u{1F1EC}\u{1F1E7}' };
+    const MARKETPLACE_CODES = { DE: 'de', FR: 'fr', IT: 'it', ES: 'es', NL: 'nl', BE: 'be', PL: 'pl', SE: 'se', UK: 'gb' };
+
+    function getFlagUrl(mp) {
+      var code = MARKETPLACE_CODES[mp];
+      return code ? 'https://flagcdn.com/w80/' + code + '.png' : null;
+    }
+    function getFlagImg(mp, size) {
+      var code = MARKETPLACE_CODES[mp];
+      if (!code) return mp;
+      var w = size || 24;
+      var h = Math.round(w * 0.67);
+      return '<img src="https://flagcdn.com/w80/' + code + '.png" alt="' + mp + '" style="width:' + w + 'px;height:' + h + 'px;object-fit:cover;border-radius:3px;vertical-align:middle;">';
+    }
 
     async function init() {
       await Promise.all([loadConfig(), loadMappings(), loadUnmapped(), loadMappingStats()]);
@@ -203,8 +215,9 @@
         const grid = document.getElementById('marketplace-grid');
         grid.innerHTML = MARKETPLACES.map(mp => {
           const active = configured.includes(mp);
+          const flagUrl = getFlagUrl(mp);
           return '<div class="marketplace-card">' +
-            '<div class="marketplace-icon ' + (active ? 'active' : '') + '" style="font-size: 24px;">' + MARKETPLACE_FLAGS[mp] + '</div>' +
+            '<div class="marketplace-icon ' + (active ? 'active' : '') + '" style="background-image: url(' + flagUrl + '); background-size: cover; background-position: center;"></div>' +
             '<div class="marketplace-info">' +
               '<div class="marketplace-name">' + MARKETPLACE_NAMES[mp] + '</div>' +
               '<div class="marketplace-status ' + (active ? 'active' : '') + '">' + (active ? 'Configured' : 'Not configured') + '</div>' +
@@ -245,7 +258,7 @@
           return '<tr>' +
             '<td><code>' + pid + '</code></td>' +
             '<td>' + (m.partyName || m.odooPartnerName || '-') + '</td>' +
-            '<td>' + (MARKETPLACE_FLAGS[mp] ? MARKETPLACE_FLAGS[mp] + ' ' + mp : mp) + '</td>' +
+            '<td>' + getFlagImg(mp) + ' ' + mp + '</td>' +
             '<td>' + (m.odooPartnerId ? (m.odooPartnerName || '') + ' (' + m.odooPartnerId + ')' : '<span class="badge badge-warning">Not linked</span>') + '</td>' +
             '<td>' +
               '<button class="action-btn" onclick="editMapping(\'' + pid + '\')" title="Edit"><span class="material-symbols-outlined">edit</span></button>' +
@@ -273,7 +286,7 @@
           return '<tr>' +
             '<td><code>' + pid + '</code></td>' +
             '<td>' + (u.partyName || '-') + '</td>' +
-            '<td>' + (MARKETPLACE_FLAGS[mp] ? MARKETPLACE_FLAGS[mp] + ' ' + mp : mp) + '</td>' +
+            '<td>' + getFlagImg(mp) + ' ' + mp + '</td>' +
             '<td>' + formatDate(u.lastSeen) + '</td>' +
             '<td><button class="action-btn" onclick="mapParty(\'' + pid + '\', \'' + (u.partyName || '').replace(/'/g, "\\'") + '\', \'' + mp + '\')" title="Map"><span class="material-symbols-outlined">link</span></button></td>' +
           '</tr>';
