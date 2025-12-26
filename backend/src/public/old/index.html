@@ -666,7 +666,7 @@
         const meRes = await fetch('/api/auth/me', { credentials: 'include' });
         if (meRes.ok) {
           const me = await meRes.json();
-          const name = me.email ? me.email.split('@')[0] : '';
+          const name = me.firstName || (me.email ? me.email.split('@')[0] : '');
           document.querySelector('.dashboard-title').textContent = `${greeting}, ${name}`;
         }
       } catch (e) {}

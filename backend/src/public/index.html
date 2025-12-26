@@ -487,7 +487,7 @@
       let greeting = 'Good morning';
       if (hour >= 12 && hour < 17) greeting = 'Good afternoon';
       else if (hour >= 17) greeting = 'Good evening';
-      const name = currentUser?.email?.split('@')[0] || 'there';
+      const name = currentUser?.firstName || currentUser?.email?.split('@')[0] || 'there';
       document.getElementById('greeting').textContent = `${greeting}, ${name}`;
 
       // Filter modules based on API response
