@@ -19,12 +19,12 @@ function requireSession(req, res, next) {
   const token = readJwtFromCookies(req);
   const isHtml = (req.headers.accept || '').includes('text/html') || /\.html($|\?)/.test(req.originalUrl || '');
   if (!token) {
-    if (isHtml) return res.redirect(302, `/app/login?next=${encodeURIComponent(req.originalUrl || '/')}`);
+    if (isHtml) return res.redirect(302, `/old/login?next=${encodeURIComponent(req.originalUrl || '/')}`);
     return res.status(401).json({ message: 'Unauthorized' });
   }
   const data = verifyJwt(token);
   if (!data) {
-    if (isHtml) return res.redirect(302, `/app/login?next=${encodeURIComponent(req.originalUrl || '/')}`);
+    if (isHtml) return res.redirect(302, `/old/login?next=${encodeURIComponent(req.originalUrl || '/')}`);
     return res.status(401).json({ message: 'Unauthorized' });
   }
   req.user = { id: data.sub, email: data.email, role: data.role };
