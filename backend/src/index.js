@@ -119,9 +119,8 @@ if (!fs.existsSync('uploads')) {
 }
 
 const app = express();
-if (process.env.TRUST_PROXY === '1') {
-  app.set('trust proxy', 1);
-}
+// Trust first proxy (nginx) - required for express-rate-limit behind reverse proxy
+app.set('trust proxy', 1);
 app.use(
   helmet({
     contentSecurityPolicy: false,
