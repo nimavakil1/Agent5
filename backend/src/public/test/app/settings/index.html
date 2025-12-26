@@ -194,6 +194,15 @@
       color: #fbbf24;
     }
 
+    .action-btn.delete {
+      color: #f87171;
+    }
+
+    .action-btn.delete:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+    }
+
     /* Modal */
     .modal-overlay {
       position: fixed;
@@ -659,6 +668,9 @@
                   <button class="action-btn resend" onclick="resendInvitation('${user._id}', '${user.email}')" title="Resend Invitation">
                     <span class="material-symbols-outlined">forward_to_inbox</span>
                   </button>
+                  <button class="action-btn delete" onclick="deleteUser('${user._id}', '${user.email}')" title="Delete">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
                 ` : `
                   <button class="action-btn" onclick="editUser('${user._id}')" title="Edit">
                     <span class="material-symbols-outlined">edit</span>
@@ -762,6 +774,25 @@
         if (!res.ok) throw new Error(data.message || 'Failed to resend invitation');
 
         window.Agent5Shell.showToast('Invitation resent successfully', 'success');
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function deleteUser(userId, email) {
+      if (!confirm(`Delete pending user ${email}? This cannot be undone.`)) return;
+
+      try {
+        const res = await fetch(`/api/auth/users/${userId}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to delete user');
+
+        window.Agent5Shell.showToast('User deleted', 'success');
+        await loadUsers();
       } catch (e) {
         alert(e.message);
       }

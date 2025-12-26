@@ -309,6 +309,43 @@ router.post('/users', requireSession, requirePrivilege('users.manage'), async (r
   }
 });
 
+// Delete user (admin only)
+router.delete('/users/:id', requireSession, requirePrivilege('users.manage'), async (req, res) => {
+  try {
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'User not found' });
+
+    // Prevent deleting superadmin
+    if (target.role === 'superadmin') {
+      return res.status(403).json({ message: 'Cannot delete superadmin' });
+    }
+
+    // Prevent self-deletion
+    if (String(target._id) === String(req.user.id)) {
+      return res.status(403).json({ message: 'Cannot delete yourself' });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    // Log audit event
+    await logAuditEvent(
+      req.user.id,
+      req.user.email,
+      'user_delete',
+      'user',
+      req.params.id,
+      { deletedEmail: target.email, status: target.status },
+      req,
+      true
+    );
+
+    res.json({ success: true, message: 'User deleted' });
+  } catch (e) {
+    console.error('Delete user error:', e);
+    res.status(500).json({ message: 'Failed to delete user' });
+  }
+});
+
 // --- Invitation endpoints ---
 
 // Multer config for invite avatar uploads (no req.user available)
