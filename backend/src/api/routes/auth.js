@@ -10,6 +10,13 @@ const { requireSession } = require('../../middleware/sessionAuth');
 const { requirePrivilege } = require('../../middleware/priv');
 const Role = require('../../models/Role');
 const { getModuleAccessForUser, listAllModules } = require('../../util/privileges');
+const {
+  createInvitation,
+  resendInvitation,
+  sendInvitationEmail,
+  validateInviteToken,
+  completeRegistration
+} = require('../services/invitationService');
 
 // Configure multer for avatar uploads
 const avatarDir = path.join(__dirname, '..', '..', 'public', 'uploads', 'avatars');
@@ -82,9 +89,20 @@ router.post('/login', async (req, res) => {
         await logAuditEvent(anyUser._id.toString(), anyUser.email, 'login', 'auth', null, { reason: 'account_disabled' }, req, false);
         return res.status(403).json({ message: 'Account disabled' });
       }
+      if (anyUser && anyUser.status === 'pending') {
+        console.warn('login: user-pending', lower);
+        await logAuditEvent(anyUser._id.toString(), anyUser.email, 'login', 'auth', null, { reason: 'account_pending' }, req, false);
+        return res.status(403).json({ message: 'Please complete your registration using the invitation link sent to your email' });
+      }
       console.warn('login: user-not-found', lower);
       await logAuditEvent('unknown', lower, 'login', 'auth', null, { reason: 'user_not_found' }, req, false);
       return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    // Check if user status is pending
+    if (user.status === 'pending') {
+      console.warn('login: user-pending', lower);
+      await logAuditEvent(user._id.toString(), user.email, 'login', 'auth', null, { reason: 'account_pending' }, req, false);
+      return res.status(403).json({ message: 'Please complete your registration using the invitation link sent to your email' });
     }
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) {
@@ -201,7 +219,7 @@ router.get('/modules/list', requireSession, requirePrivilege('roles.view'), asyn
 // --- Admin user management ---
 router.get('/users', requireSession, requirePrivilege('users.view'), async (req, res) => {
   try {
-    const users = await User.find({}).select('_id email role roleId active createdAt updatedAt').sort({ createdAt: -1 }).lean();
+    const users = await User.find({}).select('_id email role roleId active status createdAt updatedAt').sort({ createdAt: -1 }).lean();
     // attach role names if ref present
     const ids = users.map(u=>u.roleId).filter(Boolean);
     const roleMap = new Map((await Role.find({ _id: { $in: ids } }).lean()).map(r=>[String(r._id), r.name]));
@@ -288,6 +306,155 @@ router.post('/users', requireSession, requirePrivilege('users.manage'), async (r
   } catch (e) {
     console.error('create user error', e);
     res.status(500).json({ message: 'error' });
+  }
+});
+
+// --- Invitation endpoints ---
+
+// Multer config for invite avatar uploads (no req.user available)
+const inviteAvatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, avatarDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const filename = `invite-${Date.now()}-${Math.random().toString(36).substring(7)}${ext}`;
+    cb(null, filename);
+  }
+});
+
+const inviteAvatarUpload = multer({
+  storage: inviteAvatarStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images are allowed'));
+    }
+  }
+});
+
+// Create invitation (admin only)
+router.post('/invite', requireSession, requirePrivilege('users.manage'), async (req, res) => {
+  try {
+    const { email, roleId, role } = req.body || {};
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+
+    const { user, inviteToken } = await createInvitation(email, roleId, role);
+
+    // Send invitation email
+    await sendInvitationEmail(user.email, inviteToken);
+
+    // Log audit event
+    await logAuditEvent(
+      req.user.id,
+      req.user.email,
+      'user_invite',
+      'user',
+      user._id.toString(),
+      { invitedEmail: user.email, role: user.role },
+      req,
+      true
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Invitation sent successfully',
+      user: { id: user._id, email: user.email, status: user.status }
+    });
+  } catch (e) {
+    console.error('Create invitation error:', e);
+    res.status(400).json({ message: e.message || 'Failed to create invitation' });
+  }
+});
+
+// Resend invitation (admin only)
+router.post('/invite/resend', requireSession, requirePrivilege('users.manage'), async (req, res) => {
+  try {
+    const { userId } = req.body || {};
+    if (!userId) return res.status(400).json({ message: 'User ID is required' });
+
+    const { user, inviteToken } = await resendInvitation(userId);
+
+    // Send invitation email
+    await sendInvitationEmail(user.email, inviteToken);
+
+    // Log audit event
+    await logAuditEvent(
+      req.user.id,
+      req.user.email,
+      'user_invite_resend',
+      'user',
+      user._id.toString(),
+      { invitedEmail: user.email },
+      req,
+      true
+    );
+
+    res.json({
+      success: true,
+      message: 'Invitation resent successfully'
+    });
+  } catch (e) {
+    console.error('Resend invitation error:', e);
+    res.status(400).json({ message: e.message || 'Failed to resend invitation' });
+  }
+});
+
+// Validate invite token (public)
+router.get('/invite/:token', async (req, res) => {
+  try {
+    const result = await validateInviteToken(req.params.token);
+    res.json(result);
+  } catch (e) {
+    console.error('Validate invite token error:', e);
+    res.status(500).json({ valid: false, message: 'Error validating invitation' });
+  }
+});
+
+// Complete registration (public)
+router.post('/invite/:token/complete', inviteAvatarUpload.single('avatar'), async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required' });
+    }
+
+    // Get avatar URL if uploaded
+    let avatarUrl = null;
+    if (req.file) {
+      avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    }
+
+    const user = await completeRegistration(req.params.token, password, avatarUrl);
+
+    // Log audit event
+    await logAuditEvent(
+      user._id.toString(),
+      user.email,
+      'user_registration_complete',
+      'user',
+      user._id.toString(),
+      {},
+      req,
+      true
+    );
+
+    res.json({
+      success: true,
+      message: 'Registration completed successfully'
+    });
+  } catch (e) {
+    console.error('Complete registration error:', e);
+    // Clean up uploaded file if registration fails
+    if (req.file) {
+      const filePath = path.join(avatarDir, req.file.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+    res.status(400).json({ message: e.message || 'Failed to complete registration' });
   }
 });
 

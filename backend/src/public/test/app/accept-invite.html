@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complete Registration - ACROPAQ AI</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0a0a0f;
+      color: #e4e4e7;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo-text {
+      font-size: 20px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 20px;
+      padding: 32px;
+    }
+
+    .card-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .card-subtitle {
+      font-size: 14px;
+      color: #71717a;
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    /* States */
+    .state {
+      display: none;
+    }
+
+    .state.active {
+      display: block;
+    }
+
+    .loading-state, .error-state, .expired-state {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .state-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+
+    .loading-state .state-icon {
+      color: #6366f1;
+      animation: pulse 1.5s infinite;
+    }
+
+    .error-state .state-icon {
+      color: #ef4444;
+    }
+
+    .expired-state .state-icon {
+      color: #f59e0b;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .state-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #e4e4e7;
+      margin-bottom: 8px;
+    }
+
+    .state-text {
+      font-size: 14px;
+      color: #71717a;
+      line-height: 1.6;
+    }
+
+    /* Avatar Upload */
+    .avatar-upload {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 28px;
+    }
+
+    .avatar-preview {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: #12121a;
+      border: 3px dashed #3f3f50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .avatar-preview:hover {
+      border-color: #6366f1;
+    }
+
+    .avatar-preview.has-image {
+      border-style: solid;
+      border-color: #6366f1;
+    }
+
+    .avatar-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .avatar-preview .placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: #71717a;
+    }
+
+    .avatar-preview .placeholder .material-symbols-outlined {
+      font-size: 36px;
+    }
+
+    .avatar-preview .placeholder span:last-child {
+      font-size: 12px;
+    }
+
+    .avatar-preview.has-image .placeholder {
+      display: none;
+    }
+
+    .avatar-hint {
+      font-size: 12px;
+      color: #71717a;
+      margin-top: 12px;
+    }
+
+    #avatar-input {
+      display: none;
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #a1a1aa;
+      margin-bottom: 8px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 14px 16px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 12px;
+      color: #e4e4e7;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .form-input:focus {
+      border-color: #6366f1;
+    }
+
+    .form-input:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .form-input.error {
+      border-color: #ef4444;
+    }
+
+    .form-hint {
+      font-size: 12px;
+      color: #71717a;
+      margin-top: 8px;
+    }
+
+    .form-error {
+      font-size: 12px;
+      color: #ef4444;
+      margin-top: 8px;
+      display: none;
+    }
+
+    .form-error.show {
+      display: block;
+    }
+
+    /* Password strength indicator */
+    .password-strength {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .strength-bar {
+      flex: 1;
+      height: 4px;
+      background: #252532;
+      border-radius: 2px;
+      transition: background 0.2s;
+    }
+
+    .password-strength.weak .strength-bar:nth-child(1) {
+      background: #ef4444;
+    }
+
+    .password-strength.medium .strength-bar:nth-child(1),
+    .password-strength.medium .strength-bar:nth-child(2) {
+      background: #f59e0b;
+    }
+
+    .password-strength.strong .strength-bar {
+      background: #22c55e;
+    }
+
+    .strength-text {
+      font-size: 11px;
+      color: #71717a;
+      margin-top: 6px;
+    }
+
+    /* Button */
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn .material-symbols-outlined {
+      font-size: 20px;
+    }
+
+    /* Requirements checklist */
+    .requirements {
+      background: #12121a;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .requirements-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .requirement {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #71717a;
+      margin-bottom: 8px;
+    }
+
+    .requirement:last-child {
+      margin-bottom: 0;
+    }
+
+    .requirement .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    .requirement.met {
+      color: #22c55e;
+    }
+
+    .requirement.met .material-symbols-outlined {
+      color: #22c55e;
+    }
+
+    /* Success state */
+    .success-state {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .success-state .state-icon {
+      color: #22c55e;
+    }
+
+    .success-state .btn {
+      margin-top: 24px;
+      width: auto;
+      display: inline-flex;
+      padding: 14px 32px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <span class="logo-text">ACROPAQ AI platform</span>
+    </div>
+
+    <div class="card">
+      <!-- Loading State -->
+      <div class="state loading-state active" id="loading-state">
+        <span class="material-symbols-outlined state-icon">hourglass_empty</span>
+        <div class="state-title">Validating Invitation</div>
+        <div class="state-text">Please wait while we verify your invitation link...</div>
+      </div>
+
+      <!-- Error State -->
+      <div class="state error-state" id="error-state">
+        <span class="material-symbols-outlined state-icon">error</span>
+        <div class="state-title">Invalid Invitation</div>
+        <div class="state-text" id="error-message">This invitation link is invalid or has already been used.</div>
+      </div>
+
+      <!-- Expired State -->
+      <div class="state expired-state" id="expired-state">
+        <span class="material-symbols-outlined state-icon">schedule</span>
+        <div class="state-title">Invitation Expired</div>
+        <div class="state-text">This invitation has expired. Please contact your administrator to request a new invitation.</div>
+      </div>
+
+      <!-- Registration Form -->
+      <div class="state" id="form-state">
+        <h1 class="card-title">Complete Your Registration</h1>
+        <p class="card-subtitle">Set up your account to get started</p>
+
+        <form id="registration-form" onsubmit="submitRegistration(event)">
+          <!-- Avatar Upload -->
+          <div class="avatar-upload">
+            <div class="avatar-preview" id="avatar-preview" onclick="document.getElementById('avatar-input').click()">
+              <div class="placeholder">
+                <span class="material-symbols-outlined">add_a_photo</span>
+                <span>Upload Photo</span>
+              </div>
+            </div>
+            <input type="file" id="avatar-input" accept="image/*" onchange="previewAvatar(event)" required>
+            <div class="avatar-hint">Click to upload your profile photo (required)</div>
+          </div>
+
+          <!-- Email -->
+          <div class="form-group">
+            <label class="form-label">Email Address</label>
+            <input type="email" class="form-input" id="user-email" disabled>
+          </div>
+
+          <!-- Password -->
+          <div class="form-group">
+            <label class="form-label">Create Password</label>
+            <input type="password" class="form-input" id="password" required minlength="8" oninput="checkPassword()">
+            <div class="password-strength" id="password-strength">
+              <div class="strength-bar"></div>
+              <div class="strength-bar"></div>
+              <div class="strength-bar"></div>
+            </div>
+            <div class="strength-text" id="strength-text"></div>
+          </div>
+
+          <!-- Confirm Password -->
+          <div class="form-group">
+            <label class="form-label">Confirm Password</label>
+            <input type="password" class="form-input" id="confirm-password" required oninput="checkPasswordMatch()">
+            <div class="form-error" id="password-match-error">Passwords do not match</div>
+          </div>
+
+          <!-- Requirements -->
+          <div class="requirements">
+            <div class="requirements-title">Password Requirements</div>
+            <div class="requirement" id="req-length">
+              <span class="material-symbols-outlined">circle</span>
+              At least 8 characters
+            </div>
+            <div class="requirement" id="req-letter">
+              <span class="material-symbols-outlined">circle</span>
+              Contains a letter
+            </div>
+            <div class="requirement" id="req-number">
+              <span class="material-symbols-outlined">circle</span>
+              Contains a number
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="submit-btn">
+            <span class="material-symbols-outlined">check_circle</span>
+            Complete Registration
+          </button>
+        </form>
+      </div>
+
+      <!-- Success State -->
+      <div class="state success-state" id="success-state">
+        <span class="material-symbols-outlined state-icon">check_circle</span>
+        <div class="state-title">Registration Complete!</div>
+        <div class="state-text">Your account has been set up successfully. You can now log in with your credentials.</div>
+        <a href="/app/login" class="btn btn-primary">
+          <span class="material-symbols-outlined">login</span>
+          Go to Login
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let inviteToken = null;
+    let avatarFile = null;
+
+    async function init() {
+      // Get token from URL
+      const params = new URLSearchParams(window.location.search);
+      inviteToken = params.get('token');
+
+      if (!inviteToken) {
+        showState('error-state');
+        document.getElementById('error-message').textContent = 'No invitation token provided.';
+        return;
+      }
+
+      // Validate token
+      try {
+        const res = await fetch(`/api/auth/invite/${inviteToken}`);
+        const data = await res.json();
+
+        if (!data.valid) {
+          if (data.expired) {
+            showState('expired-state');
+          } else {
+            showState('error-state');
+            document.getElementById('error-message').textContent = data.message || 'This invitation link is invalid.';
+          }
+          return;
+        }
+
+        // Show form
+        document.getElementById('user-email').value = data.email;
+        showState('form-state');
+      } catch (e) {
+        console.error('Error validating token:', e);
+        showState('error-state');
+        document.getElementById('error-message').textContent = 'Failed to validate invitation. Please try again.';
+      }
+    }
+
+    function showState(stateId) {
+      document.querySelectorAll('.state').forEach(el => el.classList.remove('active'));
+      document.getElementById(stateId).classList.add('active');
+    }
+
+    function previewAvatar(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Validate file size (2MB max)
+      if (file.size > 2 * 1024 * 1024) {
+        alert('File is too large. Maximum size is 2MB.');
+        event.target.value = '';
+        return;
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file.');
+        event.target.value = '';
+        return;
+      }
+
+      avatarFile = file;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const preview = document.getElementById('avatar-preview');
+        preview.innerHTML = `<img src="${e.target.result}" alt="Avatar">`;
+        preview.classList.add('has-image');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function checkPassword() {
+      const password = document.getElementById('password').value;
+      const strengthEl = document.getElementById('password-strength');
+      const strengthText = document.getElementById('strength-text');
+
+      const hasLength = password.length >= 8;
+      const hasLetter = /[a-zA-Z]/.test(password);
+      const hasNumber = /[0-9]/.test(password);
+
+      // Update requirements
+      updateRequirement('req-length', hasLength);
+      updateRequirement('req-letter', hasLetter);
+      updateRequirement('req-number', hasNumber);
+
+      // Calculate strength
+      const score = (hasLength ? 1 : 0) + (hasLetter ? 1 : 0) + (hasNumber ? 1 : 0);
+
+      strengthEl.classList.remove('weak', 'medium', 'strong');
+      if (password.length === 0) {
+        strengthText.textContent = '';
+      } else if (score === 1) {
+        strengthEl.classList.add('weak');
+        strengthText.textContent = 'Weak password';
+      } else if (score === 2) {
+        strengthEl.classList.add('medium');
+        strengthText.textContent = 'Medium strength';
+      } else if (score === 3) {
+        strengthEl.classList.add('strong');
+        strengthText.textContent = 'Strong password';
+      }
+
+      checkPasswordMatch();
+    }
+
+    function updateRequirement(id, met) {
+      const el = document.getElementById(id);
+      if (met) {
+        el.classList.add('met');
+        el.querySelector('.material-symbols-outlined').textContent = 'check_circle';
+      } else {
+        el.classList.remove('met');
+        el.querySelector('.material-symbols-outlined').textContent = 'circle';
+      }
+    }
+
+    function checkPasswordMatch() {
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm-password').value;
+      const errorEl = document.getElementById('password-match-error');
+      const confirmInput = document.getElementById('confirm-password');
+
+      if (confirm.length > 0 && password !== confirm) {
+        errorEl.classList.add('show');
+        confirmInput.classList.add('error');
+      } else {
+        errorEl.classList.remove('show');
+        confirmInput.classList.remove('error');
+      }
+    }
+
+    async function submitRegistration(e) {
+      e.preventDefault();
+
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm-password').value;
+      const btn = document.getElementById('submit-btn');
+
+      // Validate avatar
+      if (!avatarFile) {
+        alert('Please upload a profile photo.');
+        return;
+      }
+
+      // Validate password requirements
+      if (password.length < 8) {
+        alert('Password must be at least 8 characters.');
+        return;
+      }
+      if (!/[a-zA-Z]/.test(password)) {
+        alert('Password must contain at least one letter.');
+        return;
+      }
+      if (!/[0-9]/.test(password)) {
+        alert('Password must contain at least one number.');
+        return;
+      }
+      if (password !== confirm) {
+        alert('Passwords do not match.');
+        return;
+      }
+
+      // Submit
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> Creating Account...';
+
+      try {
+        const formData = new FormData();
+        formData.append('password', password);
+        formData.append('avatar', avatarFile);
+
+        const res = await fetch(`/api/auth/invite/${inviteToken}/complete`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.message || 'Failed to complete registration');
+        }
+
+        showState('success-state');
+      } catch (e) {
+        alert(e.message);
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Complete Registration';
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
