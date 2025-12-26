@@ -85,13 +85,16 @@
     <div class="card">
       <div class="table-container">
         <table>
-          <thead><tr><th>Invoice Number</th><th>PO Number</th><th>Marketplace</th><th>Status</th><th>Amount</th><th>Submitted</th><th>Actions</th></tr></thead>
-          <tbody id="invoices-table"><tr><td colspan="7"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading invoices...</div></div></td></tr></tbody>
+          <thead><tr><th>Invoice Number</th><th>PO Number</th><th>Marketplace</th><th>Status</th><th>Amount</th><th>Submitted</th><th>Expected Payment</th><th>Actions</th></tr></thead>
+          <tbody id="invoices-table"><tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading invoices...</div></div></td></tr></tbody>
         </table>
       </div>
     </div>
   </div>
   <script>
+    const MARKETPLACE_FLAGS = { DE: '\u{1F1E9}\u{1F1EA}', FR: '\u{1F1EB}\u{1F1F7}', IT: '\u{1F1EE}\u{1F1F9}', ES: '\u{1F1EA}\u{1F1F8}', NL: '\u{1F1F3}\u{1F1F1}', BE: '\u{1F1E7}\u{1F1EA}', PL: '\u{1F1F5}\u{1F1F1}', SE: '\u{1F1F8}\u{1F1EA}', UK: '\u{1F1EC}\u{1F1E7}' };
+    const PAYMENT_TERMS_DAYS = 60; // Amazon Vendor standard terms (adjust if different)
+
     let invoices = [];
     async function init() { await Promise.all([loadStats(), loadInvoices()]); }
     async function loadStats() {
@@ -119,16 +122,46 @@
         invoices = data.invoices || [];
         renderInvoices();
       } catch (e) {
-        document.getElementById('invoices-table').innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>';
+        document.getElementById('invoices-table').innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>';
       }
     }
     function renderInvoices() {
       const tbody = document.getElementById('invoices-table');
-      if (invoices.length === 0) { tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-symbols-outlined">description</span><div class="empty-state-title">No invoices found</div></div></td></tr>'; return; }
-      tbody.innerHTML = invoices.map(inv => '<tr><td>' + (inv.invoiceNumber || '-') + '</td><td>' + (inv.purchaseOrderNumber || '-') + '</td><td><span class="marketplace-badge">' + (inv.marketplaceId || '-') + '</span></td><td><span class="badge badge-' + (inv.status || 'draft') + '">' + (inv.status || 'draft') + '</span></td><td>' + formatCurrency(inv.invoiceTotal?.amount, inv.invoiceTotal?.currencyCode) + '</td><td>' + formatDate(inv.submittedAt) + '</td><td><button class="action-btn" onclick="submitInvoice(\'' + inv.purchaseOrderNumber + '\')" title="Submit" ' + (inv.status === 'submitted' || inv.status === 'accepted' ? 'disabled' : '') + '><span class="material-symbols-outlined">send</span></button></td></tr>').join('');
+      if (invoices.length === 0) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">description</span><div class="empty-state-title">No invoices found</div></div></td></tr>'; return; }
+      tbody.innerHTML = invoices.map(function(inv) {
+        var mp = inv.marketplaceId || '-';
+        var mpDisplay = MARKETPLACE_FLAGS[mp] ? MARKETPLACE_FLAGS[mp] + ' ' + mp : mp;
+        var expectedPayment = calcExpectedPayment(inv.submittedAt);
+        var isOverdue = expectedPayment.overdue;
+        return '<tr>' +
+          '<td>' + (inv.invoiceNumber || '-') + '</td>' +
+          '<td>' + (inv.purchaseOrderNumber || '-') + '</td>' +
+          '<td><span class="marketplace-badge">' + mpDisplay + '</span></td>' +
+          '<td><span class="badge badge-' + (inv.status || 'draft') + '">' + (inv.status || 'draft') + '</span></td>' +
+          '<td>' + formatCurrency(inv.invoiceTotal?.amount, inv.invoiceTotal?.currencyCode) + '</td>' +
+          '<td>' + formatDate(inv.submittedAt) + '</td>' +
+          '<td style="' + (isOverdue ? 'color: #f87171;' : '') + '">' + expectedPayment.display + '</td>' +
+          '<td><button class="action-btn" onclick="submitInvoice(\'' + inv.purchaseOrderNumber + '\')" title="Submit" ' + (inv.status === 'submitted' || inv.status === 'accepted' ? 'disabled' : '') + '><span class="material-symbols-outlined">send</span></button></td>' +
+        '</tr>';
+      }).join('');
     }
     function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-GB') : '-'; }
     function formatCurrency(a, c) { return a != null ? new Intl.NumberFormat('en-EU', { style: 'currency', currency: c || 'EUR' }).format(a) : '-'; }
+    function calcExpectedPayment(submittedAt) {
+      if (!submittedAt) return { display: '-', overdue: false };
+      var submitted = new Date(submittedAt);
+      var expected = new Date(submitted.getTime() + PAYMENT_TERMS_DAYS * 24 * 60 * 60 * 1000);
+      var now = new Date();
+      var overdue = now > expected;
+      var daysLeft = Math.ceil((expected - now) / (24 * 60 * 60 * 1000));
+      var display = expected.toLocaleDateString('en-GB');
+      if (overdue) {
+        display += ' (overdue)';
+      } else if (daysLeft <= 7) {
+        display += ' (' + daysLeft + 'd)';
+      }
+      return { display: display, overdue: overdue };
+    }
     async function submitInvoice(po) {
       if (!confirm('Submit invoice for ' + po + '?')) return;
       try {
