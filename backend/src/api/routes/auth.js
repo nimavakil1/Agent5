@@ -453,7 +453,7 @@ router.get('/invite/:token', async (req, res) => {
 // Complete registration (public)
 router.post('/invite/:token/complete', inviteAvatarUpload.single('avatar'), async (req, res) => {
   try {
-    const { password } = req.body || {};
+    const { password, firstName, lastName } = req.body || {};
     if (!password) {
       return res.status(400).json({ message: 'Password is required' });
     }
@@ -464,7 +464,7 @@ router.post('/invite/:token/complete', inviteAvatarUpload.single('avatar'), asyn
       avatarUrl = `/uploads/avatars/${req.file.filename}`;
     }
 
-    const user = await completeRegistration(req.params.token, password, avatarUrl);
+    const user = await completeRegistration(req.params.token, password, avatarUrl, firstName, lastName);
 
     // Log audit event
     await logAuditEvent(

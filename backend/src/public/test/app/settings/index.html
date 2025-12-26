@@ -452,6 +452,7 @@
           <thead>
             <tr>
               <th>Email</th>
+              <th>Name</th>
               <th>Role</th>
               <th>Status</th>
               <th>Created</th>
@@ -460,7 +461,7 @@
           </thead>
           <tbody id="users-table">
             <tr>
-              <td colspan="5">
+              <td colspan="6">
                 <div class="loading">Loading users...</div>
               </td>
             </tr>
@@ -652,9 +653,12 @@
         const statusBadge = isPending ? 'badge-pending' : (user.active ? 'badge-active' : 'badge-inactive');
         const statusText = isPending ? 'Pending' : (user.active ? 'Active' : 'Inactive');
 
+        const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || '-';
+
         return `
           <tr>
             <td class="user-email">${user.email}</td>
+            <td>${fullName}</td>
             <td>
               <span class="badge badge-${getBadgeClass(user.roleName || user.role)}">${user.roleName || user.role}</span>
             </td>

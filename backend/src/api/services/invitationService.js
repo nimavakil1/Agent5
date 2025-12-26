@@ -267,9 +267,11 @@ async function validateInviteToken(token) {
  * @param {string} token - Invite token
  * @param {string} password - User's chosen password
  * @param {string} avatarUrl - URL to user's avatar (optional)
+ * @param {string} firstName - User's first name (optional)
+ * @param {string} lastName - User's last name (optional)
  * @returns {Object} - Updated user
  */
-async function completeRegistration(token, password, avatarUrl = null) {
+async function completeRegistration(token, password, avatarUrl = null, firstName = null, lastName = null) {
   // Validate token
   const validation = await validateInviteToken(token);
   if (!validation.valid) {
@@ -294,6 +296,12 @@ async function completeRegistration(token, password, avatarUrl = null) {
   user.inviteTokenExpires = null;
   if (avatarUrl) {
     user.avatar = avatarUrl;
+  }
+  if (firstName) {
+    user.firstName = firstName;
+  }
+  if (lastName) {
+    user.lastName = lastName;
   }
 
   await user.save();

@@ -416,6 +416,18 @@
             <div class="avatar-hint">Click to upload your profile photo (required)</div>
           </div>
 
+          <!-- Name -->
+          <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label class="form-label">First Name</label>
+              <input type="text" class="form-input" id="first-name" required placeholder="John">
+            </div>
+            <div>
+              <label class="form-label">Last Name</label>
+              <input type="text" class="form-input" id="last-name" required placeholder="Doe">
+            </div>
+          </div>
+
           <!-- Email -->
           <div class="form-group">
             <label class="form-label">Email Address</label>
@@ -615,9 +627,17 @@
     async function submitRegistration(e) {
       e.preventDefault();
 
+      const firstName = document.getElementById('first-name').value.trim();
+      const lastName = document.getElementById('last-name').value.trim();
       const password = document.getElementById('password').value;
       const confirm = document.getElementById('confirm-password').value;
       const btn = document.getElementById('submit-btn');
+
+      // Validate name
+      if (!firstName || !lastName) {
+        alert('Please enter your first and last name.');
+        return;
+      }
 
       // Validate avatar
       if (!avatarFile) {
@@ -649,6 +669,8 @@
 
       try {
         const formData = new FormData();
+        formData.append('firstName', firstName);
+        formData.append('lastName', lastName);
         formData.append('password', password);
         formData.append('avatar', avatarFile);
 

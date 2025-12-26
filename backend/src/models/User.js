@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, unique: true, index: true },
+    firstName: { type: String, default: null },
+    lastName: { type: String, default: null },
     passwordHash: { type: String, default: null }, // Null for pending invited users
     role: { type: String, enum: ['superadmin', 'admin', 'manager', 'user'], default: 'user' },
     roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' },
