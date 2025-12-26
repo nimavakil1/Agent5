@@ -1728,4 +1728,136 @@ router.get('/party-mappings/search-odoo', async (req, res) => {
   }
 });
 
+// ==================== REMITTANCE / PAYMENTS ====================
+
+const { VendorRemittanceImporter } = require('../../services/amazon/vendor/VendorRemittanceImporter');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configure multer for file uploads
+const remittanceUpload = multer({
+  dest: '/tmp/remittance-uploads/',
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (['.xlsx', '.xls', '.csv'].includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only Excel (.xlsx, .xls) and CSV files are allowed'));
+    }
+  }
+});
+
+/**
+ * @route POST /api/vendor/remittance/upload
+ * @desc Upload and import a remittance file
+ */
+router.post('/remittance/upload', remittanceUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const importer = new VendorRemittanceImporter();
+    await importer.init();
+
+    const result = await importer.importRemittance(req.file.path);
+
+    // Clean up temp file
+    fs.unlink(req.file.path, () => {});
+
+    res.json({
+      success: true,
+      fileName: req.file.originalname,
+      ...result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /remittance/upload error:', error);
+    if (req.file?.path) fs.unlink(req.file.path, () => {});
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/remittance/import-local
+ * @desc Import remittance from a local file path (admin only)
+ * @body filePath - Path to the remittance file
+ */
+router.post('/remittance/import-local', async (req, res) => {
+  try {
+    const { filePath } = req.body;
+    if (!filePath) {
+      return res.status(400).json({ success: false, error: 'filePath is required' });
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(400).json({ success: false, error: 'File not found: ' + filePath });
+    }
+
+    const importer = new VendorRemittanceImporter();
+    await importer.init();
+
+    const result = await importer.importRemittance(filePath);
+
+    res.json({
+      success: true,
+      filePath,
+      ...result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /remittance/import-local error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/remittance/summary
+ * @desc Get remittance import summary and statistics
+ */
+router.get('/remittance/summary', async (req, res) => {
+  try {
+    const importer = new VendorRemittanceImporter();
+    await importer.init();
+
+    const summary = await importer.getImportSummary();
+
+    res.json({
+      success: true,
+      ...summary
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /remittance/summary error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/invoices/payment-status
+ * @desc Get payment status for invoices from remittance data
+ * @query invoiceIds - Comma-separated list of Odoo invoice IDs
+ */
+router.get('/invoices/payment-status', async (req, res) => {
+  try {
+    if (!req.query.invoiceIds) {
+      return res.status(400).json({ success: false, error: 'invoiceIds query parameter required' });
+    }
+
+    const invoiceIds = req.query.invoiceIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
+
+    const importer = new VendorRemittanceImporter();
+    await importer.init();
+
+    const statusMap = await importer.getInvoicePaymentStatus(invoiceIds);
+
+    res.json({
+      success: true,
+      statusMap
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /invoices/payment-status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

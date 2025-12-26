@@ -1,10 +1,94 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const User = require('../../models/User');
-const { sendEmail } = require('./brevoService');
 
 const INVITE_EXPIRY_HOURS = 6;
 const BASE_URL = process.env.BASE_URL || 'https://ai.acropaq.com';
+const INVITE_SENDER_EMAIL = process.env.INVITE_SENDER_EMAIL || 'info@acropaq.com';
+
+// MS Graph token cache
+let msAccessToken = null;
+let msTokenExpiry = null;
+
+/**
+ * Get MS Graph access token using client credentials flow
+ */
+async function getMsAccessToken() {
+  const tenantId = process.env.MS_TENANT_ID;
+  const clientId = process.env.MS_CLIENT_ID;
+  const clientSecret = process.env.MS_CLIENT_SECRET;
+
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error('Microsoft 365 credentials not configured');
+  }
+
+  // Check if we have a valid cached token
+  if (msAccessToken && msTokenExpiry && Date.now() < msTokenExpiry) {
+    return msAccessToken;
+  }
+
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+
+  const params = new URLSearchParams();
+  params.append('client_id', clientId);
+  params.append('client_secret', clientSecret);
+  params.append('scope', 'https://graph.microsoft.com/.default');
+  params.append('grant_type', 'client_credentials');
+
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Failed to get MS access token: ${error.error_description || error.error}`);
+  }
+
+  const data = await response.json();
+  msAccessToken = data.access_token;
+  msTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+
+  return msAccessToken;
+}
+
+/**
+ * Send email via Microsoft Graph API
+ */
+async function sendEmailViaMs365(toEmail, subject, htmlContent) {
+  const token = await getMsAccessToken();
+
+  const message = {
+    message: {
+      subject,
+      body: {
+        contentType: 'HTML',
+        content: htmlContent
+      },
+      toRecipients: [
+        { emailAddress: { address: toEmail } }
+      ]
+    },
+    saveToSentItems: true
+  };
+
+  const response = await fetch(`https://graph.microsoft.com/v1.0/users/${INVITE_SENDER_EMAIL}/sendMail`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(message)
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: response.statusText } }));
+    throw new Error(`Failed to send email: ${error.error?.message || response.statusText}`);
+  }
+
+  return { success: true };
+}
 
 /**
  * Generate a secure random token for invitation
@@ -149,7 +233,7 @@ async function sendInvitationEmail(email, token) {
 </html>
   `.trim();
 
-  await sendEmail(email, 'You\'ve been invited to ACROPAQ AI', htmlContent);
+  await sendEmailViaMs365(email, 'You\'ve been invited to ACROPAQ AI', htmlContent);
 }
 
 /**
