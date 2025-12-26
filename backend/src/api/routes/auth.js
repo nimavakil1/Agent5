@@ -1,12 +1,44 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const User = require('../../models/User');
 const AuditLog = require('../../models/AuditLog');
 const { requireSession } = require('../../middleware/sessionAuth');
 const { requirePrivilege } = require('../../middleware/priv');
 const Role = require('../../models/Role');
 const { getModuleAccessForUser, listAllModules } = require('../../util/privileges');
+
+// Configure multer for avatar uploads
+const avatarDir = path.join(__dirname, '..', '..', 'public', 'uploads', 'avatars');
+if (!fs.existsSync(avatarDir)) {
+  fs.mkdirSync(avatarDir, { recursive: true });
+}
+
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, avatarDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const filename = `${req.user.id}-${Date.now()}${ext}`;
+    cb(null, filename);
+  }
+});
+
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images are allowed'));
+    }
+  }
+});
 
 const router = express.Router();
 
@@ -96,8 +128,58 @@ router.post('/logout', requireSession, async (req, res) => {
   }
 });
 
-router.get('/me', requireSession, (req, res) => {
-  res.json({ id: req.user.id, email: req.user.email, role: req.user.role });
+router.get('/me', requireSession, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('email role avatar').lean();
+    res.json({ id: req.user.id, email: user.email, role: user.role, avatar: user.avatar });
+  } catch (e) {
+    res.json({ id: req.user.id, email: req.user.email, role: req.user.role, avatar: null });
+  }
+});
+
+// Upload avatar
+router.post('/me/avatar', requireSession, avatarUpload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Delete old avatar if exists
+    const user = await User.findById(req.user.id);
+    if (user.avatar) {
+      const oldPath = path.join(avatarDir, path.basename(user.avatar));
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
+      }
+    }
+
+    // Save new avatar URL
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    await User.findByIdAndUpdate(req.user.id, { avatar: avatarUrl });
+
+    res.json({ avatar: avatarUrl });
+  } catch (e) {
+    console.error('Avatar upload error:', e);
+    res.status(500).json({ message: 'Upload failed' });
+  }
+});
+
+// Delete avatar
+router.delete('/me/avatar', requireSession, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (user.avatar) {
+      const oldPath = path.join(avatarDir, path.basename(user.avatar));
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
+      }
+      await User.findByIdAndUpdate(req.user.id, { avatar: null });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Avatar delete error:', e);
+    res.status(500).json({ message: 'Delete failed' });
+  }
 });
 
 // Get modules user has access to

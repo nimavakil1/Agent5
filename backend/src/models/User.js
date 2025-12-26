@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: ['superadmin', 'admin', 'manager', 'user'], default: 'user' },
     roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' },
     active: { type: Boolean, default: true },
+    avatar: { type: String, default: null }, // URL to profile picture
   },
   { timestamps: true }
 );

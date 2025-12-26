@@ -417,6 +417,13 @@
           font-size: 13px;
           font-weight: 600;
           color: white;
+          overflow: hidden;
+        }
+
+        .shell-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
 
         .shell-user-info {
@@ -543,6 +550,63 @@
           font-size: 20px;
         }
 
+        /* Toast Notifications */
+        .shell-toast-container {
+          position: fixed;
+          top: 80px;
+          right: 24px;
+          z-index: 9999;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .shell-toast {
+          padding: 12px 16px;
+          border-radius: 10px;
+          font-size: 14px;
+          font-weight: 500;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+          animation: toast-in 0.3s ease-out;
+          max-width: 320px;
+        }
+
+        .shell-toast.success {
+          background: rgba(34, 197, 94, 0.15);
+          border: 1px solid rgba(34, 197, 94, 0.3);
+          color: #4ade80;
+        }
+
+        .shell-toast.error {
+          background: rgba(239, 68, 68, 0.15);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          color: #f87171;
+        }
+
+        .shell-toast.info {
+          background: rgba(59, 130, 246, 0.15);
+          border: 1px solid rgba(59, 130, 246, 0.3);
+          color: #60a5fa;
+        }
+
+        .shell-toast .material-symbols-outlined {
+          font-size: 20px;
+        }
+
+        @keyframes toast-in {
+          from {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
           .shell-topbar {
@@ -590,7 +654,9 @@
 
           <div class="shell-user-menu">
             <div class="shell-user-btn" id="shell-user-btn">
-              <div class="shell-avatar">${me ? (me.email || 'U').charAt(0).toUpperCase() : 'U'}</div>
+              <div class="shell-avatar" id="shell-avatar">${me && me.avatar
+                ? `<img src="${me.avatar}" alt="Avatar">`
+                : (me ? (me.email || 'U').charAt(0).toUpperCase() : 'U')}</div>
               <div class="shell-user-info">
                 <div class="shell-user-email">${me ? me.email : ''}</div>
                 <div class="shell-user-role">${me ? me.role : ''}</div>
@@ -629,6 +695,12 @@
     `;
 
     document.body.appendChild(shell);
+
+    // Toast container
+    const toastContainer = document.createElement('div');
+    toastContainer.className = 'shell-toast-container';
+    toastContainer.id = 'shell-toast-container';
+    document.body.appendChild(toastContainer);
 
     // User menu toggle
     const userBtn = document.getElementById('shell-user-btn');
@@ -697,6 +769,34 @@
     injectShell(u);
   })();
 
+  // Show toast notification
+  function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('shell-toast-container');
+    if (!container) return;
+
+    const icons = {
+      success: 'check_circle',
+      error: 'error',
+      info: 'info'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `shell-toast ${type}`;
+    toast.innerHTML = `
+      <span class="material-symbols-outlined">${icons[type] || 'info'}</span>
+      <span>${message}</span>
+    `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(20px)';
+      toast.style.transition = 'all 0.3s ease-out';
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
+  }
+
   // Export for use in pages
   window.Agent5Shell = {
     MODULES,
@@ -704,6 +804,7 @@
     getCurrentPage: () => currentPage,
     getCurrentUser: () => currentUser,
     getAccessibleModules: () => accessibleModules,
-    hasModuleAccess
+    hasModuleAccess,
+    showToast
   };
 })();

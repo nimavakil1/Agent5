@@ -221,6 +221,7 @@ app.use('/test/app', requireSession, express.static(path.join(__dirname, 'public
 }));
 
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 const protectedPages = ['dashboard.html', 'call-review.html', 'admin.html', 'monitor.html'];
 protectedPages.forEach(page => {
