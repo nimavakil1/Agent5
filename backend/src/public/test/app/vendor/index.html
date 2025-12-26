@@ -4,791 +4,297 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Purchase Orders - Amazon Vendor</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
   <script src="/test/app/shell-v2.js"></script>
   <style>
-    .page {
-      max-width: 1600px;
-      margin: 0 auto;
-      padding: 32px;
-    }
-
-    .page-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-
-    .page-title {
-      font-size: 24px;
-      font-weight: 700;
-      color: #fff;
-      margin: 0;
-    }
-
-    .page-actions {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-    }
-
-    /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 18px;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s;
-      border: none;
-      text-decoration: none;
-    }
-
-    .btn .material-symbols-outlined {
-      font-size: 20px;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-    }
-
-    .btn-secondary {
-      background: #252536;
-      color: #e4e4e7;
-      border: 1px solid #3f3f5a;
-    }
-
-    .btn-secondary:hover {
-      background: #2a2a40;
-      border-color: #6366f1;
-    }
-
-    .btn-success {
-      background: linear-gradient(135deg, #22c55e, #16a34a);
-      color: white;
-    }
-
-    .btn-warning {
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      color: white;
-    }
-
-    /* Filters */
-    .filters {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-    }
-
-    .filter-group {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .filter-label {
-      font-size: 13px;
-      color: #71717a;
-      font-weight: 500;
-    }
-
-    .filter-select, .filter-input {
-      background: #18181f;
-      border: 1px solid #252532;
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 14px;
-      color: #e4e4e7;
-      min-width: 140px;
-    }
-
-    .filter-select:focus, .filter-input:focus {
-      outline: none;
-      border-color: #6366f1;
-    }
-
-    /* Stats Cards */
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    @media (max-width: 1000px) {
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    .stat-card {
-      background: #18181f;
-      border: 1px solid #252532;
-      border-radius: 12px;
-      padding: 20px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: var(--stat-color, #6366f1);
-    }
-
-    .stat-value {
-      font-size: 28px;
-      font-weight: 700;
-      color: #fff;
-      margin-bottom: 4px;
-    }
-
-    .stat-label {
-      font-size: 13px;
-      color: #71717a;
-    }
-
-    /* Table */
-    .table-container {
-      background: #18181f;
-      border: 1px solid #252532;
-      border-radius: 16px;
-      overflow: hidden;
-    }
-
-    .table-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 20px;
-      border-bottom: 1px solid #252532;
-    }
-
-    .table-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #fff;
-    }
-
-    .table-count {
-      font-size: 13px;
-      color: #71717a;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    th {
-      text-align: left;
-      padding: 12px 16px;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #71717a;
-      background: #1a1a24;
-      border-bottom: 1px solid #252532;
-    }
-
-    td {
-      padding: 16px;
-      font-size: 14px;
-      color: #e4e4e7;
-      border-bottom: 1px solid #252532;
-    }
-
-    tr:last-child td {
-      border-bottom: none;
-    }
-
-    tr:hover {
-      background: #1a1a28;
-    }
-
-    .po-number {
-      font-weight: 600;
-      color: #fff;
-    }
-
-    .po-number a {
-      color: #6366f1;
-      text-decoration: none;
-    }
-
-    .po-number a:hover {
-      text-decoration: underline;
-    }
-
-    /* Status Badge */
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .status-badge.new {
-      background: rgba(59, 130, 246, 0.15);
-      color: #3b82f6;
-    }
-
-    .status-badge.acknowledged {
-      background: rgba(34, 197, 94, 0.15);
-      color: #22c55e;
-    }
-
-    .status-badge.closed {
-      background: rgba(113, 113, 122, 0.15);
-      color: #71717a;
-    }
-
-    .status-badge.shipped {
-      background: rgba(139, 92, 246, 0.15);
-      color: #8b5cf6;
-    }
-
-    /* Marketplace Badge */
-    .marketplace-badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      background: #252532;
-      color: #a1a1aa;
-    }
-
-    /* Actions */
-    .row-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .row-action {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: #252536;
-      border: 1px solid #3f3f5a;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      color: #a1a1aa;
-      transition: all 0.15s;
-    }
-
-    .row-action:hover {
-      background: #6366f1;
-      border-color: #6366f1;
-      color: white;
-    }
-
-    .row-action .material-symbols-outlined {
-      font-size: 18px;
-    }
-
-    /* Empty State */
-    .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-    }
-
-    .empty-icon {
-      width: 64px;
-      height: 64px;
-      border-radius: 16px;
-      background: rgba(99, 102, 241, 0.1);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-    }
-
-    .empty-icon .material-symbols-outlined {
-      font-size: 32px;
-      color: #6366f1;
-    }
-
-    .empty-title {
-      font-size: 18px;
-      font-weight: 600;
-      color: #fff;
-      margin-bottom: 8px;
-    }
-
-    .empty-text {
-      font-size: 14px;
-      color: #71717a;
-    }
-
-    /* Pagination */
-    .pagination {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 20px;
-      border-top: 1px solid #252532;
-    }
-
-    .pagination-info {
-      font-size: 13px;
-      color: #71717a;
-    }
-
-    .pagination-buttons {
-      display: flex;
-      gap: 8px;
-    }
-
-    .pagination-btn {
-      padding: 8px 16px;
-      border-radius: 8px;
-      background: #252536;
-      border: 1px solid #3f3f5a;
-      color: #e4e4e7;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .pagination-btn:hover:not(:disabled) {
-      background: #2a2a40;
-      border-color: #6366f1;
-    }
-
-    .pagination-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    /* Loading */
-    .loading-row td {
-      padding: 20px;
-    }
-
-    .skeleton {
-      background: linear-gradient(90deg, #252532 25%, #2a2a38 50%, #252532 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.5s infinite;
-      border-radius: 4px;
-      height: 20px;
-    }
-
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
-
-    /* Toast */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      padding: 16px 20px;
-      background: #18181f;
-      border: 1px solid #252532;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-      z-index: 1000;
-      transform: translateY(100px);
-      opacity: 0;
-      transition: all 0.3s;
-    }
-
-    .toast.show {
-      transform: translateY(0);
-      opacity: 1;
-    }
-
-    .toast.success {
-      border-color: #22c55e;
-    }
-
-    .toast.error {
-      border-color: #ef4444;
-    }
-
-    .toast-icon {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .toast.success .toast-icon {
-      background: rgba(34, 197, 94, 0.15);
-      color: #22c55e;
-    }
-
-    .toast.error .toast-icon {
-      background: rgba(239, 68, 68, 0.15);
-      color: #ef4444;
-    }
-
-    .toast-message {
-      font-size: 14px;
-      color: #e4e4e7;
-    }
+    .page { max-width: 1600px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .page-title { font-size: 24px; font-weight: 700; color: #fff; margin: 0; }
+    .header-actions { display: flex; gap: 12px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #f97316; color: white; }
+    .btn-primary:hover { background: #ea580c; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn .material-symbols-outlined { font-size: 20px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 768px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+    .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.15s; }
+    .stat-card:hover { border-color: #f97316; }
+    .stat-card.active { border-color: #f97316; background: rgba(249, 115, 22, 0.1); }
+    .stat-value { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .stat-label { font-size: 13px; color: #71717a; }
+    .stat-card.warning .stat-value { color: #fbbf24; }
+    .stat-card.success .stat-value { color: #4ade80; }
+    .filters-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .filter-select, .filter-input { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; }
+    .filter-select:focus, .filter-input:focus { outline: none; border-color: #f97316; }
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid #252532; }
+    th { background: #12121a; font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { font-size: 14px; color: #e4e4e7; }
+    tr:hover td { background: #1a1a28; }
+    .po-number { font-weight: 600; color: #f97316; text-decoration: none; }
+    .po-number:hover { text-decoration: underline; }
+    .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    .badge-new { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .badge-acknowledged { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .badge-closed { background: rgba(113, 113, 122, 0.15); color: #a1a1aa; }
+    .marketplace-badge { display: inline-flex; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #252532; color: #a1a1aa; }
+    .odoo-link { color: #818cf8; text-decoration: none; }
+    .odoo-link:hover { text-decoration: underline; }
+    .actions { display: flex; gap: 6px; }
+    .action-btn { width: 32px; height: 32px; border-radius: 8px; background: #252532; border: none; color: #71717a; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+    .action-btn:hover { background: #3f3f50; color: #e4e4e7; }
+    .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .action-btn .material-symbols-outlined { font-size: 18px; }
+    .empty-state { padding: 60px 20px; text-align: center; }
+    .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
+    .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
+    .empty-state-text { font-size: 14px; color: #71717a; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 2000; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #18181f; border: 1px solid #252532; border-radius: 20px; width: 100%; max-width: 900px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { padding: 20px 24px; border-bottom: 1px solid #252532; display: flex; align-items: center; justify-content: space-between; }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; margin: 0; }
+    .modal-close { width: 32px; height: 32px; border-radius: 8px; background: transparent; border: none; color: #71717a; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .modal-close:hover { background: #252532; color: #e4e4e7; }
+    .modal-body { padding: 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid #252532; display: flex; justify-content: flex-end; gap: 12px; }
+    .po-detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+    .po-detail-info h3 { font-size: 20px; font-weight: 600; color: #fff; margin: 0 0 8px 0; }
+    .po-detail-meta { display: flex; gap: 16px; color: #71717a; font-size: 13px; }
+    .po-items-table { margin-top: 20px; }
+    .po-items-table th { background: #1a1a28; }
+    .totals-row { background: #12121a; font-weight: 600; }
+    .totals-row td { border-bottom: none; }
+    .pagination { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-top: 1px solid #252532; }
+    .pagination-info { font-size: 13px; color: #71717a; }
+    .pagination-buttons { display: flex; gap: 8px; }
   </style>
 </head>
 <body>
   <div class="page">
     <header class="page-header">
       <h1 class="page-title">Purchase Orders</h1>
-      <div class="page-actions">
-        <button class="btn btn-secondary" id="btn-refresh">
-          <span class="material-symbols-outlined">refresh</span>
-          Refresh
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="pollOrders()" id="poll-btn">
+          <span class="material-symbols-outlined">sync</span>Poll Amazon
         </button>
-        <button class="btn btn-primary" id="btn-poll">
-          <span class="material-symbols-outlined">cloud_download</span>
-          Poll Amazon
+        <button class="btn btn-success" onclick="createPendingOdooOrders()" id="create-odoo-btn">
+          <span class="material-symbols-outlined">add_shopping_cart</span>Create Odoo Orders
+        </button>
+        <button class="btn btn-primary" onclick="acknowledgePending()" id="ack-btn">
+          <span class="material-symbols-outlined">check_circle</span>Acknowledge All
         </button>
       </div>
     </header>
-
-    <!-- Stats -->
     <div class="stats-row">
-      <div class="stat-card" style="--stat-color: #3b82f6;">
-        <div class="stat-value" id="stat-new">--</div>
-        <div class="stat-label">New Orders</div>
-      </div>
-      <div class="stat-card" style="--stat-color: #22c55e;">
-        <div class="stat-value" id="stat-ack">--</div>
-        <div class="stat-label">Acknowledged</div>
-      </div>
-      <div class="stat-card" style="--stat-color: #8b5cf6;">
-        <div class="stat-value" id="stat-shipped">--</div>
-        <div class="stat-label">Shipped</div>
-      </div>
-      <div class="stat-card" style="--stat-color: #71717a;">
-        <div class="stat-value" id="stat-total">--</div>
-        <div class="stat-label">Total Orders</div>
-      </div>
+      <div class="stat-card" onclick="filterByStat('new')" id="stat-new"><div class="stat-value" id="stat-new-value">--</div><div class="stat-label">New Orders</div></div>
+      <div class="stat-card warning" onclick="filterByStat('action-required')" id="stat-action"><div class="stat-value" id="stat-action-value">--</div><div class="stat-label">Action Required</div></div>
+      <div class="stat-card" onclick="filterByStat('not-shipped')" id="stat-notshipped"><div class="stat-value" id="stat-ship-value">--</div><div class="stat-label">Not Shipped</div></div>
+      <div class="stat-card" onclick="filterByStat('invoice-pending')" id="stat-invoicepending"><div class="stat-value" id="stat-invoice-value">--</div><div class="stat-label">Invoice Pending</div></div>
+      <div class="stat-card success" onclick="filterByStat('closed')" id="stat-closed"><div class="stat-value" id="stat-closed-value">--</div><div class="stat-label">Closed</div></div>
     </div>
-
-    <!-- Filters -->
-    <div class="filters">
-      <div class="filter-group">
-        <span class="filter-label">Status:</span>
-        <select class="filter-select" id="filter-status">
-          <option value="">All</option>
-          <option value="New">New</option>
-          <option value="Acknowledged">Acknowledged</option>
-          <option value="Shipped">Shipped</option>
-          <option value="Closed">Closed</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <span class="filter-label">Marketplace:</span>
-        <select class="filter-select" id="filter-marketplace">
-          <option value="">All</option>
-          <option value="DE">Germany</option>
-          <option value="FR">France</option>
-          <option value="NL">Netherlands</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <span class="filter-label">Search:</span>
-        <input type="text" class="filter-input" id="filter-search" placeholder="PO number...">
-      </div>
+    <div class="filters-bar">
+      <select class="filter-select" id="filter-marketplace" onchange="loadOrders()">
+        <option value="">All Marketplaces</option>
+        <option value="DE">Germany (DE)</option>
+        <option value="FR">France (FR)</option>
+        <option value="IT">Italy (IT)</option>
+        <option value="ES">Spain (ES)</option>
+        <option value="NL">Netherlands (NL)</option>
+        <option value="BE">Belgium (BE)</option>
+        <option value="PL">Poland (PL)</option>
+        <option value="SE">Sweden (SE)</option>
+      </select>
+      <select class="filter-select" id="filter-state" onchange="loadOrders()">
+        <option value="">All States</option>
+        <option value="New">New</option>
+        <option value="Acknowledged">Acknowledged</option>
+        <option value="Closed">Closed</option>
+      </select>
+      <input type="date" class="filter-input" id="filter-date-from" onchange="loadOrders()">
+      <input type="date" class="filter-input" id="filter-date-to" onchange="loadOrders()">
+      <button class="btn btn-secondary btn-sm" onclick="clearFilters()"><span class="material-symbols-outlined">clear</span>Clear</button>
     </div>
-
-    <!-- Table -->
-    <div class="table-container">
-      <div class="table-header">
-        <div class="table-title">Orders</div>
-        <div class="table-count" id="table-count">Loading...</div>
+    <div class="card">
+      <div class="table-container">
+        <table>
+          <thead><tr><th>PO Number</th><th>Marketplace</th><th>Date</th><th>State</th><th>Items</th><th>Total</th><th>Odoo Order</th><th>Actions</th></tr></thead>
+          <tbody id="orders-table"><tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading orders...</div></div></td></tr></tbody>
+        </table>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>PO Number</th>
-            <th>Marketplace</th>
-            <th>Status</th>
-            <th>Ship To</th>
-            <th>Items</th>
-            <th>Order Date</th>
-            <th>Delivery Window</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="orders-tbody">
-          <tr class="loading-row">
-            <td colspan="8">
-              <div class="skeleton" style="width: 100%;"></div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
       <div class="pagination">
-        <div class="pagination-info" id="pagination-info">Showing 0 of 0</div>
+        <div class="pagination-info" id="pagination-info">Showing 0 of 0 orders</div>
         <div class="pagination-buttons">
-          <button class="pagination-btn" id="btn-prev" disabled>Previous</button>
-          <button class="pagination-btn" id="btn-next" disabled>Next</button>
+          <button class="btn btn-secondary btn-sm" onclick="prevPage()" id="prev-btn" disabled><span class="material-symbols-outlined">chevron_left</span></button>
+          <button class="btn btn-secondary btn-sm" onclick="nextPage()" id="next-btn" disabled><span class="material-symbols-outlined">chevron_right</span></button>
         </div>
       </div>
     </div>
   </div>
-
-  <!-- Toast -->
-  <div class="toast" id="toast">
-    <div class="toast-icon">
-      <span class="material-symbols-outlined">check_circle</span>
+  <div class="modal-overlay" id="po-modal">
+    <div class="modal">
+      <div class="modal-header"><h2 class="modal-title">Purchase Order Details</h2><button class="modal-close" onclick="closeModal()"><span class="material-symbols-outlined">close</span></button></div>
+      <div class="modal-body" id="po-modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+        <button class="btn btn-success" onclick="createOdooOrder(currentPO)" id="modal-create-odoo"><span class="material-symbols-outlined">add_shopping_cart</span>Create Odoo Order</button>
+        <button class="btn btn-primary" onclick="acknowledgePO(currentPO)" id="modal-ack"><span class="material-symbols-outlined">check_circle</span>Acknowledge</button>
+      </div>
     </div>
-    <div class="toast-message" id="toast-message"></div>
   </div>
-
   <script>
-    let orders = [];
-    let page = 1;
-    const limit = 20;
-    let total = 0;
-
-    async function loadOrders() {
-      const tbody = document.getElementById('orders-tbody');
-      tbody.innerHTML = `
-        <tr class="loading-row">
-          <td colspan="8"><div class="skeleton" style="width: 100%;"></div></td>
-        </tr>
-        <tr class="loading-row">
-          <td colspan="8"><div class="skeleton" style="width: 80%;"></div></td>
-        </tr>
-        <tr class="loading-row">
-          <td colspan="8"><div class="skeleton" style="width: 90%;"></div></td>
-        </tr>
-      `;
-
-      const status = document.getElementById('filter-status').value;
-      const marketplace = document.getElementById('filter-marketplace').value;
-      const search = document.getElementById('filter-search').value;
-
-      let url = `/api/vendor/orders?page=${page}&limit=${limit}`;
-      if (status) url += `&status=${status}`;
-      if (marketplace) url += `&marketplace=${marketplace}`;
-      if (search) url += `&search=${search}`;
-
-      try {
-        const res = await fetch(url, { credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to load orders');
-
-        const data = await res.json();
-        orders = data.orders || [];
-        total = data.total || 0;
-
-        renderOrders();
-        updatePagination();
-        loadStats();
-      } catch (e) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="8">
-              <div class="empty-state">
-                <div class="empty-icon">
-                  <span class="material-symbols-outlined">error</span>
-                </div>
-                <div class="empty-title">Failed to load orders</div>
-                <div class="empty-text">${e.message}</div>
-              </div>
-            </td>
-          </tr>
-        `;
-      }
-    }
-
-    function renderOrders() {
-      const tbody = document.getElementById('orders-tbody');
-
-      if (orders.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="8">
-              <div class="empty-state">
-                <div class="empty-icon">
-                  <span class="material-symbols-outlined">inbox</span>
-                </div>
-                <div class="empty-title">No orders found</div>
-                <div class="empty-text">Try adjusting your filters or poll Amazon for new orders.</div>
-              </div>
-            </td>
-          </tr>
-        `;
-        return;
-      }
-
-      tbody.innerHTML = orders.map(o => `
-        <tr>
-          <td class="po-number">
-            <a href="/test/app/vendor/order?id=${o.purchaseOrderNumber}">${o.purchaseOrderNumber}</a>
-          </td>
-          <td><span class="marketplace-badge">${o.marketplace || 'EU'}</span></td>
-          <td><span class="status-badge ${(o.purchaseOrderState || '').toLowerCase()}">${o.purchaseOrderState}</span></td>
-          <td>${o.shipToParty?.partyId || '--'}</td>
-          <td>${o.items?.length || 0} items</td>
-          <td>${formatDate(o.purchaseOrderDate)}</td>
-          <td>${formatDate(o.deliveryWindow?.startDate)} - ${formatDate(o.deliveryWindow?.endDate)}</td>
-          <td>
-            <div class="row-actions">
-              ${o.purchaseOrderState === 'New' ? `
-                <button class="row-action" title="Acknowledge" onclick="acknowledgePO('${o.purchaseOrderNumber}')">
-                  <span class="material-symbols-outlined">check_circle</span>
-                </button>
-              ` : ''}
-              ${!o.odoo?.saleOrderId ? `
-                <button class="row-action" title="Create Odoo Order" onclick="createOdooOrder('${o.purchaseOrderNumber}')">
-                  <span class="material-symbols-outlined">add_shopping_cart</span>
-                </button>
-              ` : `
-                <button class="row-action" title="View in Odoo" onclick="openOdoo(${o.odoo.saleOrderId})">
-                  <span class="material-symbols-outlined">open_in_new</span>
-                </button>
-              `}
-            </div>
-          </td>
-        </tr>
-      `).join('');
-    }
-
+    let orders = [], stats = {}, currentPage = 0, pageSize = 50, totalOrders = 0, currentPO = null, currentStatFilter = null;
+    async function init() { await Promise.all([loadStats(), loadOrders()]); }
     async function loadStats() {
       try {
         const res = await fetch('/api/vendor/stats', { credentials: 'include' });
-        if (res.ok) {
-          const stats = await res.json();
-          document.getElementById('stat-new').textContent = stats.new || 0;
-          document.getElementById('stat-ack').textContent = stats.acknowledged || 0;
-          document.getElementById('stat-shipped').textContent = stats.shipped || 0;
-          document.getElementById('stat-total').textContent = stats.total || 0;
-        }
-      } catch (e) {}
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        stats = data.stats || {};
+        document.getElementById('stat-new-value').textContent = stats.newOrders || 0;
+        document.getElementById('stat-action-value').textContent = stats.actionRequired || 0;
+        document.getElementById('stat-ship-value').textContent = stats.notShipped || 0;
+        document.getElementById('stat-invoice-value').textContent = stats.invoicePending || 0;
+        document.getElementById('stat-closed-value').textContent = stats.closed || 0;
+      } catch (e) { console.error('Error loading stats:', e); }
     }
-
+    async function loadOrders() {
+      try {
+        const params = new URLSearchParams();
+        params.append('limit', pageSize);
+        params.append('skip', currentPage * pageSize);
+        if (currentStatFilter) { params.append('statFilter', currentStatFilter); }
+        else {
+          const mp = document.getElementById('filter-marketplace').value;
+          const st = document.getElementById('filter-state').value;
+          const df = document.getElementById('filter-date-from').value;
+          const dt = document.getElementById('filter-date-to').value;
+          if (mp) params.append('marketplace', mp);
+          if (st) params.append('state', st);
+          if (df) params.append('dateFrom', df);
+          if (dt) params.append('dateTo', dt);
+        }
+        const res = await fetch('/api/vendor/orders?' + params, { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        orders = data.orders || [];
+        totalOrders = data.total || 0;
+        renderOrders();
+        updatePagination();
+      } catch (e) {
+        console.error('Error:', e);
+        document.getElementById('orders-table').innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>';
+      }
+    }
+    function renderOrders() {
+      const tbody = document.getElementById('orders-table');
+      if (orders.length === 0) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span><div class="empty-state-title">No orders found</div></div></td></tr>'; return; }
+      tbody.innerHTML = orders.map(o => '<tr><td><a href="#" class="po-number" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\'); return false;">' + o.purchaseOrderNumber + '</a></td><td><span class="marketplace-badge">' + o.marketplaceId + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></td><td>' + o.itemCount + ' items</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td><td>' + (o.odoo?.saleOrderName ? '<a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link">' + o.odoo.saleOrderName + '</a>' : '-') + '</td><td><div class="actions"><button class="action-btn" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\')" title="View"><span class="material-symbols-outlined">visibility</span></button><button class="action-btn" onclick="createOdooOrder(\'' + o.purchaseOrderNumber + '\')" title="Create Odoo" ' + (o.odoo?.saleOrderId ? 'disabled' : '') + '><span class="material-symbols-outlined">add_shopping_cart</span></button><button class="action-btn" onclick="acknowledgePO(\'' + o.purchaseOrderNumber + '\')" title="Acknowledge" ' + (o.acknowledgment?.acknowledged ? 'disabled' : '') + '><span class="material-symbols-outlined">check_circle</span></button></div></td></tr>').join('');
+    }
+    function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'; }
+    function formatCurrency(a, c) { return a != null ? new Intl.NumberFormat('en-EU', { style: 'currency', currency: c || 'EUR' }).format(a) : '-'; }
     function updatePagination() {
-      const start = (page - 1) * limit + 1;
-      const end = Math.min(page * limit, total);
-      document.getElementById('table-count').textContent = `${total} orders`;
-      document.getElementById('pagination-info').textContent = `Showing ${start}-${end} of ${total}`;
-      document.getElementById('btn-prev').disabled = page <= 1;
-      document.getElementById('btn-next').disabled = page * limit >= total;
+      const s = currentPage * pageSize + 1, e = Math.min((currentPage + 1) * pageSize, totalOrders);
+      document.getElementById('pagination-info').textContent = totalOrders > 0 ? 'Showing ' + s + '-' + e + ' of ' + totalOrders : 'No orders';
+      document.getElementById('prev-btn').disabled = currentPage === 0;
+      document.getElementById('next-btn').disabled = e >= totalOrders;
     }
-
-    function formatDate(dateStr) {
-      if (!dateStr) return '--';
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    function prevPage() { if (currentPage > 0) { currentPage--; loadOrders(); } }
+    function nextPage() { if ((currentPage + 1) * pageSize < totalOrders) { currentPage++; loadOrders(); } }
+    function filterByStat(s) {
+      document.querySelectorAll('.stat-card').forEach(el => el.classList.remove('active'));
+      if (currentStatFilter === s) { currentStatFilter = null; } else { currentStatFilter = s; const id = s.replace(/-/g, ''); document.getElementById('stat-' + id)?.classList.add('active'); }
+      currentPage = 0; loadOrders();
     }
-
-    async function pollAmazon() {
-      showToast('Polling Amazon for new orders...', 'success');
+    function clearFilters() {
+      document.getElementById('filter-marketplace').value = '';
+      document.getElementById('filter-state').value = '';
+      document.getElementById('filter-date-from').value = '';
+      document.getElementById('filter-date-to').value = '';
+      document.querySelectorAll('.stat-card').forEach(el => el.classList.remove('active'));
+      currentStatFilter = null; currentPage = 0; loadOrders();
+    }
+    async function viewOrder(po) {
       try {
-        const res = await fetch('/api/vendor/orders/poll', {
-          method: 'POST',
-          credentials: 'include'
-        });
-        if (res.ok) {
-          const data = await res.json();
-          showToast(`Found ${data.newOrders || 0} new orders`, 'success');
-          loadOrders();
-        } else {
-          throw new Error('Poll failed');
-        }
-      } catch (e) {
-        showToast('Failed to poll Amazon', 'error');
-      }
+        const res = await fetch('/api/vendor/orders/' + po, { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        const o = data.order;
+        currentPO = po;
+        document.getElementById('po-modal-body').innerHTML = '<div class="po-detail-header"><div class="po-detail-info"><h3>' + o.purchaseOrderNumber + '</h3><div class="po-detail-meta"><span class="marketplace-badge">' + o.marketplaceId + '</span><span>Date: ' + formatDate(o.purchaseOrderDate) + '</span><span>Type: ' + (o.purchaseOrderType || 'Regular') + '</span></div></div><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></div>' + (o.deliveryWindow ? '<div style="margin-bottom:20px;padding:16px;background:#12121a;border-radius:10px;"><strong style="color:#a1a1aa;">Delivery Window:</strong><span style="color:#e4e4e7;margin-left:8px;">' + formatDate(o.deliveryWindow.startDate) + ' - ' + formatDate(o.deliveryWindow.endDate) + '</span></div>' : '') + '<div class="po-items-table"><table><thead><tr><th>#</th><th>ASIN</th><th>EAN/SKU</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>' + (o.items || []).map((it, i) => '<tr><td>' + (i+1) + '</td><td>' + (it.amazonProductIdentifier || '-') + '</td><td>' + (it.vendorProductIdentifier || '-') + '</td><td>' + (it.orderedQuantity?.amount || 0) + '</td><td>' + formatCurrency(it.netCost?.amount, it.netCost?.currencyCode) + '</td><td>' + formatCurrency((it.orderedQuantity?.amount || 0) * (it.netCost?.amount || 0), it.netCost?.currencyCode) + '</td></tr>').join('') + '<tr class="totals-row"><td colspan="5" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td></tr></tbody></table></div>' + (o.odoo?.saleOrderId ? '<div style="margin-top:20px;padding:16px;background:rgba(99,102,241,0.1);border-radius:10px;border:1px solid rgba(99,102,241,0.3);"><strong style="color:#818cf8;">Odoo Order:</strong><a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link" style="margin-left:8px;">' + o.odoo.saleOrderName + '</a></div>' : '');
+        document.getElementById('modal-create-odoo').disabled = !!o.odoo?.saleOrderId;
+        document.getElementById('modal-ack').disabled = !!o.acknowledgment?.acknowledged;
+        document.getElementById('po-modal').classList.add('open');
+      } catch (e) { alert('Error: ' + e.message); }
     }
-
-    async function acknowledgePO(poNumber) {
+    function closeModal() { document.getElementById('po-modal').classList.remove('open'); currentPO = null; }
+    async function pollOrders() {
+      const btn = document.getElementById('poll-btn');
+      btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined">sync</span>Polling...';
       try {
-        const res = await fetch(`/api/vendor/orders/${poNumber}/acknowledge`, {
-          method: 'POST',
-          credentials: 'include'
-        });
-        if (res.ok) {
-          showToast(`PO ${poNumber} acknowledged`, 'success');
-          loadOrders();
-        } else {
-          throw new Error('Failed to acknowledge');
-        }
-      } catch (e) {
-        showToast(`Failed to acknowledge ${poNumber}`, 'error');
-      }
+        const res = await fetch('/api/vendor/orders/poll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ daysBack: 7 }) });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        window.Agent5Shell?.showToast?.('Polled: ' + (data.result?.totalNew || 0) + ' new, ' + (data.result?.totalUpdated || 0) + ' updated', 'success');
+        await Promise.all([loadStats(), loadOrders()]);
+      } catch (e) { window.Agent5Shell?.showToast?.('Poll failed: ' + e.message, 'error'); }
+      finally { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">sync</span>Poll Amazon'; }
     }
-
-    async function createOdooOrder(poNumber) {
+    async function createOdooOrder(po) {
+      if (!confirm('Create Odoo order for ' + po + '?')) return;
       try {
-        const res = await fetch(`/api/vendor/orders/${poNumber}/create-odoo`, {
-          method: 'POST',
-          credentials: 'include'
-        });
-        if (res.ok) {
-          const data = await res.json();
-          showToast(`Created Odoo order ${data.saleOrderName}`, 'success');
-          loadOrders();
-        } else {
-          const err = await res.json();
-          throw new Error(err.error || 'Failed to create order');
-        }
-      } catch (e) {
-        showToast(e.message, 'error');
-      }
+        const res = await fetch('/api/vendor/orders/' + po + '/create-odoo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ confirm: true }) });
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || d.errors?.join(', ') || 'Failed'); }
+        const data = await res.json();
+        window.Agent5Shell?.showToast?.(data.skipped ? 'Skipped: ' + data.skipReason : 'Created: ' + data.odooOrderName, data.skipped ? 'info' : 'success');
+        await Promise.all([loadStats(), loadOrders()]); closeModal();
+      } catch (e) { window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error'); }
     }
-
-    function openOdoo(orderId) {
-      window.open(`https://acropaq.odoo.com/web#id=${orderId}&model=sale.order&view_type=form`, '_blank');
+    async function createPendingOdooOrders() {
+      if (!confirm('Create Odoo orders for all pending POs?')) return;
+      const btn = document.getElementById('create-odoo-btn'); btn.disabled = true;
+      try {
+        const res = await fetch('/api/vendor/orders/create-pending', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ confirm: true }) });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        window.Agent5Shell?.showToast?.('Created ' + (data.created || 0) + ', skipped ' + (data.skipped || 0), 'success');
+        await Promise.all([loadStats(), loadOrders()]);
+      } catch (e) { window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error'); }
+      finally { btn.disabled = false; }
     }
-
-    function showToast(message, type = 'success') {
-      const toast = document.getElementById('toast');
-      const icon = toast.querySelector('.toast-icon .material-symbols-outlined');
-      document.getElementById('toast-message').textContent = message;
-      toast.className = `toast ${type}`;
-      icon.textContent = type === 'success' ? 'check_circle' : 'error';
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 3000);
+    async function acknowledgePO(po) {
+      if (!confirm('Acknowledge ' + po + '?')) return;
+      try {
+        const res = await fetch('/api/vendor/orders/' + po + '/acknowledge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status: 'Accepted' }) });
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || d.errors?.join(', ') || 'Failed'); }
+        const data = await res.json();
+        window.Agent5Shell?.showToast?.(data.skipped ? 'Skipped: ' + data.skipReason : 'Acknowledged', data.skipped ? 'info' : 'success');
+        await Promise.all([loadStats(), loadOrders()]); closeModal();
+      } catch (e) { window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error'); }
     }
-
-    // Event listeners
-    document.getElementById('btn-refresh').onclick = loadOrders;
-    document.getElementById('btn-poll').onclick = pollAmazon;
-    document.getElementById('btn-prev').onclick = () => { page--; loadOrders(); };
-    document.getElementById('btn-next').onclick = () => { page++; loadOrders(); };
-    document.getElementById('filter-status').onchange = () => { page = 1; loadOrders(); };
-    document.getElementById('filter-marketplace').onchange = () => { page = 1; loadOrders(); };
-
-    let searchTimeout;
-    document.getElementById('filter-search').oninput = () => {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => { page = 1; loadOrders(); }, 300);
-    };
-
-    // Initial load
-    loadOrders();
+    async function acknowledgePending() {
+      if (!confirm('Acknowledge all pending POs?')) return;
+      const btn = document.getElementById('ack-btn'); btn.disabled = true;
+      try {
+        const res = await fetch('/api/vendor/orders/acknowledge-pending', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status: 'Accepted' }) });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        window.Agent5Shell?.showToast?.('Acknowledged ' + (data.acknowledged || 0) + ', skipped ' + (data.skipped || 0), 'success');
+        await Promise.all([loadStats(), loadOrders()]);
+      } catch (e) { window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error'); }
+      finally { btn.disabled = false; }
+    }
+    init();
   </script>
 </body>
 </html>
