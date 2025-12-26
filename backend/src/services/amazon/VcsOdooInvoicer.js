@@ -19,6 +19,50 @@
 const { getDb } = require('../../db');
 const { ObjectId } = require('mongodb');
 
+// Retry configuration for MongoDB operations
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 10000,
+};
+
+/**
+ * Retry wrapper with exponential backoff for MongoDB operations
+ * @param {Function} operation - Async function to retry
+ * @param {string} operationName - Name for logging
+ * @param {object} config - Retry configuration
+ * @returns {Promise<any>}
+ */
+async function withRetry(operation, operationName = 'operation', config = RETRY_CONFIG) {
+  let lastError;
+  for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const isRetryable = error.message?.includes('timeout') ||
+                          error.message?.includes('MongoNetworkError') ||
+                          error.message?.includes('MongoNetworkTimeoutError') ||
+                          error.code === 'ETIMEDOUT' ||
+                          error.code === 'ECONNRESET';
+
+      if (!isRetryable || attempt === config.maxRetries) {
+        console.error(`[VcsOdooInvoicer] ${operationName} failed after ${attempt} attempt(s):`, error.message);
+        throw error;
+      }
+
+      // Exponential backoff with jitter
+      const delay = Math.min(
+        config.baseDelayMs * Math.pow(2, attempt - 1) + Math.random() * 500,
+        config.maxDelayMs
+      );
+      console.warn(`[VcsOdooInvoicer] ${operationName} failed (attempt ${attempt}/${config.maxRetries}), retrying in ${Math.round(delay)}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+
 // SKU transformation patterns - used to match VCS SKU to Odoo order line
 const SKU_TRANSFORMATIONS = [
   // Strip -FBM suffix (Fulfilled by Merchant)
@@ -557,10 +601,13 @@ class VcsOdooInvoicer {
       return { ...result, message: 'No orders selected' };
     }
 
-    // Get selected orders by their MongoDB IDs
-    const orders = await db.collection('amazon_vcs_orders')
-      .find({ _id: { $in: orderIds.map(id => new ObjectId(id)) } })
-      .toArray();
+    // Get selected orders by their MongoDB IDs with retry logic
+    const orders = await withRetry(
+      () => db.collection('amazon_vcs_orders')
+        .find({ _id: { $in: orderIds.map(id => new ObjectId(id)) } })
+        .toArray(),
+      'Fetching VCS orders from MongoDB'
+    );
 
     if (orders.length === 0) {
       return { ...result, message: 'No orders found for the given IDs' };
@@ -658,19 +705,22 @@ class VcsOdooInvoicer {
         result.created++;
         result.invoices.push(invoice);
 
-        // Mark order as invoiced
-        await db.collection('amazon_vcs_orders').updateOne(
-          { _id: order._id },
-          {
-            $set: {
-              status: 'invoiced',
-              odooInvoiceId: invoice.id,
-              odooInvoiceName: invoice.name,
-              odooSaleOrderId: saleOrder.id,
-              odooSaleOrderName: saleOrder.name,
-              invoicedAt: new Date(),
+        // Mark order as invoiced (with retry logic)
+        await withRetry(
+          () => db.collection('amazon_vcs_orders').updateOne(
+            { _id: order._id },
+            {
+              $set: {
+                status: 'invoiced',
+                odooInvoiceId: invoice.id,
+                odooInvoiceName: invoice.name,
+                odooSaleOrderId: saleOrder.id,
+                odooSaleOrderName: saleOrder.name,
+                invoicedAt: new Date(),
+              }
             }
-          }
+          ),
+          `markOrderInvoiced(${order.orderId})`
         );
 
         // Rate limiting
@@ -885,21 +935,24 @@ class VcsOdooInvoicer {
   }
 
   /**
-   * Mark order as skipped
+   * Mark order as skipped (with retry logic)
    * @param {ObjectId} orderId
    * @param {string} reason
    */
   async markOrderSkipped(orderId, reason) {
     const db = getDb();
-    await db.collection('amazon_vcs_orders').updateOne(
-      { _id: orderId },
-      {
-        $set: {
-          status: 'skipped',
-          skipReason: reason,
-          skippedAt: new Date(),
+    await withRetry(
+      () => db.collection('amazon_vcs_orders').updateOne(
+        { _id: orderId },
+        {
+          $set: {
+            status: 'skipped',
+            skipReason: reason,
+            skippedAt: new Date(),
+          }
         }
-      }
+      ),
+      `markOrderSkipped(${orderId})`
     );
   }
 

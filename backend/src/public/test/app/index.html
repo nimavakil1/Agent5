@@ -102,6 +102,12 @@
       color: var(--module-color);
     }
 
+    .module-icon img {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+    }
+
     .module-name {
       font-size: 18px;
       font-weight: 600;
@@ -356,9 +362,11 @@
 
   <script>
     // Module definitions (should match shell-v2.js)
+    // Use 'logo' for PNG image URL, or 'icon' for Material Symbol name
     const MODULES = [
       {
         id: 'ai-agents', name: 'AI Agents', icon: 'smart_toy', color: '#6366f1',
+        // logo: '/assets/logos/ai-agents.png',  // Optional: use PNG instead of icon
         description: 'Chat with AI agents, train models, orchestrate workflows',
         path: '/test/app/ai/',
         notificationEndpoint: '/api/ai/notifications'
@@ -471,7 +479,10 @@
       grid.innerHTML = userModules.map(m => `
         <a href="${m.path}" class="module-tile" style="--module-color: ${m.color};">
           <div class="module-icon">
-            <span class="material-symbols-outlined">${m.icon}</span>
+            ${m.logo
+              ? `<img src="${m.logo}" alt="${m.name}">`
+              : `<span class="material-symbols-outlined">${m.icon}</span>`
+            }
           </div>
           <div class="module-name">${m.name}</div>
           <div class="module-desc">${m.description}</div>
