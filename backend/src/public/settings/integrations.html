@@ -304,12 +304,12 @@
           </div>
         </div>
         <div class="integration-status disconnected" id="bolcom-status">
-          <span class="material-symbols-outlined">radio_button_unchecked</span>
-          Not configured
+          <span class="material-symbols-outlined">hourglass_empty</span>
+          Checking...
         </div>
         <dl class="integration-details">
-          <dt>Status</dt>
-          <dd>Awaiting API credentials</dd>
+          <dt>Client ID</dt>
+          <dd id="bolcom-client">Loading...</dd>
         </dl>
         <button class="btn btn-secondary" disabled>
           <span class="material-symbols-outlined">settings</span>
@@ -321,7 +321,10 @@
 
   <script>
     async function init() {
-      await loadOdooStatus();
+      await Promise.all([
+        loadOdooStatus(),
+        loadBolcomStatus()
+      ]);
     }
 
     async function loadOdooStatus() {
@@ -335,6 +338,34 @@
       } catch (e) {
         document.getElementById('odoo-url').textContent = 'Error loading';
         document.getElementById('odoo-db').textContent = 'Error loading';
+      }
+    }
+
+    async function loadBolcomStatus() {
+      try {
+        const res = await fetch('/api/bolcom/status', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          const statusEl = document.getElementById('bolcom-status');
+          const clientEl = document.getElementById('bolcom-client');
+
+          if (data.connected) {
+            statusEl.className = 'integration-status connected';
+            statusEl.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Connected';
+            clientEl.textContent = data.clientId || 'Configured';
+          } else if (data.configured) {
+            statusEl.className = 'integration-status disconnected';
+            statusEl.innerHTML = '<span class="material-symbols-outlined">error</span> Auth Error';
+            clientEl.textContent = data.error || 'Connection failed';
+          } else {
+            statusEl.className = 'integration-status disconnected';
+            statusEl.innerHTML = '<span class="material-symbols-outlined">radio_button_unchecked</span> Not configured';
+            clientEl.textContent = 'Not set';
+          }
+        }
+      } catch (e) {
+        document.getElementById('bolcom-status').innerHTML = '<span class="material-symbols-outlined">error</span> Error';
+        document.getElementById('bolcom-client').textContent = 'Failed to load';
       }
     }
 
