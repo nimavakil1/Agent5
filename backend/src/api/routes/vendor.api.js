@@ -616,6 +616,156 @@ router.post('/invoices/submit-pending', async (req, res) => {
 });
 
 /**
+ * @route GET /api/vendor/invoices/odoo
+ * @desc Get Amazon invoices from Odoo with submission status
+ * @query limit - Max results (default 100)
+ * @query offset - Skip N results
+ * @query dateFrom - Filter by date from
+ * @query dateTo - Filter by date to
+ */
+router.get('/invoices/odoo', async (req, res) => {
+  try {
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+
+    const limit = parseInt(req.query.limit) || 100;
+    const offset = parseInt(req.query.offset) || 0;
+
+    // Build date filter
+    const dateFilter = [];
+    if (req.query.dateFrom) {
+      dateFilter.push(['invoice_date', '>=', req.query.dateFrom]);
+    }
+    if (req.query.dateTo) {
+      dateFilter.push(['invoice_date', '<=', req.query.dateTo]);
+    }
+
+    // Get Amazon partner IDs first
+    const amazonPartners = await odoo.searchRead('res.partner',
+      [['name', 'ilike', 'amazon eu']],
+      ['id', 'name'],
+      { limit: 30 }
+    );
+    const amazonPartnerIds = amazonPartners.map(p => p.id);
+    const partnerNameMap = {};
+    amazonPartners.forEach(p => { partnerNameMap[p.id] = p.name; });
+
+    if (amazonPartnerIds.length === 0) {
+      return res.json({ success: true, count: 0, invoices: [] });
+    }
+
+    // Get VBE invoices to Amazon partners
+    const invoiceFilter = [
+      ['move_type', '=', 'out_invoice'],
+      ['state', '=', 'posted'],
+      ['name', 'like', 'VBE%'],
+      ['partner_id', 'in', amazonPartnerIds],
+      ...dateFilter
+    ];
+
+    const invoices = await odoo.searchRead('account.move',
+      invoiceFilter,
+      ['id', 'name', 'partner_id', 'amount_total', 'amount_untaxed', 'invoice_date', 'invoice_date_due', 'invoice_origin', 'ref', 'payment_state'],
+      { limit, offset, order: 'invoice_date desc' }
+    );
+
+    // Get invoice transaction history to check submission status
+    const invoiceIds = invoices.map(i => i.id);
+    const transactionHistory = await odoo.searchRead('amazon.vendor.transaction.history',
+      [['transaction_type', '=', 'invoice'], ['account_move_id', 'in', invoiceIds]],
+      ['account_move_id', 'response_data', 'create_date', 'transaction_id'],
+      { limit: 500 }
+    );
+
+    // Build a map of invoice ID -> submission info
+    const submissionMap = {};
+    transactionHistory.forEach(tx => {
+      const invoiceId = tx.account_move_id ? tx.account_move_id[0] : null;
+      if (invoiceId) {
+        let status = 'submitted';
+        let errorMessage = null;
+        if (tx.response_data) {
+          try {
+            const resp = JSON.parse(tx.response_data);
+            if (resp.transactionStatus?.status === 'Failure') {
+              status = 'failed';
+              errorMessage = resp.transactionStatus?.errors?.[0]?.message || 'Submission failed';
+            } else if (resp.transactionStatus?.status === 'Success') {
+              status = 'accepted';
+            }
+          } catch (e) {}
+        }
+        submissionMap[invoiceId] = {
+          status,
+          submittedAt: tx.create_date,
+          transactionId: tx.transaction_id,
+          errorMessage
+        };
+      }
+    });
+
+    // Get total count for pagination
+    const totalCount = await odoo.execute('account.move', 'search_count', [invoiceFilter]);
+
+    // Format response
+    const formattedInvoices = invoices.map(inv => {
+      const submission = submissionMap[inv.id];
+      const partnerId = inv.partner_id ? inv.partner_id[0] : null;
+      const partnerName = inv.partner_id ? inv.partner_id[1] : null;
+
+      // Extract marketplace from partner name (e.g., "Amazon EU SARL Deutschland" -> "DE")
+      let marketplace = null;
+      if (partnerName) {
+        const lower = partnerName.toLowerCase();
+        if (lower.includes('deutschland') || lower.includes('germany')) marketplace = 'DE';
+        else if (lower.includes('france')) marketplace = 'FR';
+        else if (lower.includes('italy') || lower.includes('itali')) marketplace = 'IT';
+        else if (lower.includes('spain') || lower.includes('espa')) marketplace = 'ES';
+        else if (lower.includes('netherlands') || lower.includes(' nl')) marketplace = 'NL';
+        else if (lower.includes('belgium') || lower.includes('belgi')) marketplace = 'BE';
+        else if (lower.includes('poland') || lower.includes('pologne')) marketplace = 'PL';
+        else if (lower.includes('sweden') || lower.includes('suède')) marketplace = 'SE';
+        else if (lower.includes('uk') || lower.includes('kingdom')) marketplace = 'UK';
+      }
+
+      return {
+        id: inv.id,
+        invoiceNumber: inv.name,
+        partnerId,
+        partnerName,
+        marketplace,
+        amountTotal: inv.amount_total,
+        amountUntaxed: inv.amount_untaxed,
+        invoiceDate: inv.invoice_date,
+        invoiceDateDue: inv.invoice_date_due,
+        origin: inv.invoice_origin || inv.ref,
+        paymentState: inv.payment_state,
+        amazonSubmission: submission ? {
+          status: submission.status,
+          submittedAt: submission.submittedAt,
+          transactionId: submission.transactionId,
+          errorMessage: submission.errorMessage
+        } : {
+          status: 'not_submitted'
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      count: formattedInvoices.length,
+      total: totalCount,
+      offset,
+      limit,
+      invoices: formattedInvoices
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /invoices/odoo error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route GET /api/vendor/invoices/stats
  * @desc Get invoice submission statistics
  */
