@@ -640,26 +640,24 @@ router.get('/invoices/odoo', async (req, res) => {
       dateFilter.push(['invoice_date', '<=', req.query.dateTo]);
     }
 
-    // Get Amazon partner IDs first
-    const amazonPartners = await odoo.searchRead('res.partner',
-      [['name', 'ilike', 'amazon eu']],
+    // Find the Amazon Vendor sales team
+    const vendorTeams = await odoo.searchRead('crm.team',
+      [['name', 'ilike', 'vendor']],
       ['id', 'name'],
-      { limit: 30 }
+      { limit: 5 }
     );
-    const amazonPartnerIds = amazonPartners.map(p => p.id);
-    const partnerNameMap = {};
-    amazonPartners.forEach(p => { partnerNameMap[p.id] = p.name; });
 
-    if (amazonPartnerIds.length === 0) {
-      return res.json({ success: true, count: 0, invoices: [] });
+    if (vendorTeams.length === 0) {
+      return res.json({ success: true, count: 0, invoices: [], error: 'No vendor sales team found' });
     }
 
-    // Get VBE invoices to Amazon partners
+    const vendorTeamIds = vendorTeams.map(t => t.id);
+
+    // Get invoices with Sales Team = Amazon Vendor
     const invoiceFilter = [
       ['move_type', '=', 'out_invoice'],
       ['state', '=', 'posted'],
-      ['name', 'like', 'VBE%'],
-      ['partner_id', 'in', amazonPartnerIds],
+      ['team_id', 'in', vendorTeamIds],
       ...dateFilter
     ];
 
@@ -726,6 +724,7 @@ router.get('/invoices/odoo', async (req, res) => {
         else if (lower.includes('poland') || lower.includes('pologne')) marketplace = 'PL';
         else if (lower.includes('sweden') || lower.includes('suède')) marketplace = 'SE';
         else if (lower.includes('uk') || lower.includes('kingdom')) marketplace = 'UK';
+        else if (lower.includes('czech')) marketplace = 'CZ';
       }
 
       return {
