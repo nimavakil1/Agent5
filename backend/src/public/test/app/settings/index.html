@@ -672,9 +672,6 @@
                   <button class="action-btn resend" onclick="resendInvitation('${user._id}', '${user.email}')" title="Resend Invitation">
                     <span class="material-symbols-outlined">forward_to_inbox</span>
                   </button>
-                  <button class="action-btn delete" onclick="deleteUser('${user._id}', '${user.email}')" title="Delete">
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
                 ` : `
                   <button class="action-btn" onclick="editUser('${user._id}')" title="Edit">
                     <span class="material-symbols-outlined">edit</span>
@@ -683,6 +680,11 @@
                     <span class="material-symbols-outlined">key</span>
                   </button>
                 `}
+                ${user.role !== 'superadmin' ? `
+                  <button class="action-btn delete" onclick="deleteUser('${user._id}', '${user.email}')" title="Delete">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                ` : ''}
               </div>
             </td>
           </tr>
