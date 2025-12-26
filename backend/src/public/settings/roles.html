@@ -667,6 +667,10 @@
     async function saveRole(e) {
       e.preventDefault();
 
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+
       const roleId = document.getElementById('role-id').value;
       const name = document.getElementById('role-name').value;
       const description = document.getElementById('role-description').value;
@@ -681,6 +685,8 @@
       const existingRole = roleId ? roles.find(r => r._id === roleId) : null;
       const privileges = existingRole?.privileges || [];
 
+      console.log('Saving role:', { roleId, name, description, moduleAccess, privileges });
+
       try {
         if (roleId) {
           // Update existing role
@@ -690,7 +696,9 @@
             credentials: 'include',
             body: JSON.stringify({ description, moduleAccess, privileges })
           });
-          if (!res.ok) throw new Error('Failed to update role');
+          const data = await res.json();
+          console.log('Update response:', res.status, data);
+          if (!res.ok) throw new Error(data.message || 'Failed to update role');
         } else {
           // Create new role
           const res = await fetch('/api/admin/roles', {
@@ -699,8 +707,9 @@
             credentials: 'include',
             body: JSON.stringify({ name, description, moduleAccess, privileges: [] })
           });
+          const data = await res.json();
+          console.log('Create response:', res.status, data);
           if (!res.ok) {
-            const data = await res.json();
             throw new Error(data.message || 'Failed to create role');
           }
         }
@@ -708,7 +717,11 @@
         closeModal();
         await loadRoles();
       } catch (e) {
-        alert(e.message);
+        console.error('Save error:', e);
+        alert('Error: ' + e.message);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = roleId ? 'Save Changes' : 'Create Role';
       }
     }
 
