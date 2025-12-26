@@ -76,6 +76,17 @@
         </p>
       </div>
 
+      <!-- Report Selector -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">Select VCS Report</h2>
+        <p class="text-slate-400 text-sm mb-4">Choose a report to view its pending orders and returns. Select "All Reports" to see pending items from all uploaded reports.</p>
+        <div class="grid grid-cols-1 gap-4">
+          <div id="reports-list" class="space-y-2">
+            <div class="text-slate-400 text-sm">Loading reports...</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Summary Stats - Hidden as all stats are shown in Upload History -->
       <div id="summary-section" class="hidden bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
         <h2 class="text-white font-semibold text-lg mb-4">Summary</h2>
@@ -123,6 +134,10 @@
             <button id="create-orders-btn" class="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors">
               <span class="material-symbols-outlined text-sm">add_shopping_cart</span>
               Create Orders in Odoo
+            </button>
+            <button id="check-odoo-btn" class="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">sync</span>
+              Check Odoo Orders
             </button>
           </div>
         </div>
@@ -367,19 +382,14 @@
         </div>
       </div>
 
-      <!-- Upload History -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-        <h2 class="text-white font-semibold text-lg mb-4">Upload History</h2>
-        <div id="uploads-list" class="space-y-3">
-          <div class="text-slate-500 text-sm">Loading...</div>
-        </div>
-      </div>
     </main>
 
     <script>
       // State
       let pendingOrders = [];
       let pendingReturns = [];
+      let vcsReports = [];
+      let selectedReportId = null;
       let odooOrders = {}; // Map of orderId -> Odoo order info
       let currentPage = 1;
       let pageSize = 50;
@@ -409,10 +419,10 @@
 
       // Initialize
       document.addEventListener('DOMContentLoaded', () => {
+        loadReports();
         loadSummary();
         loadPendingOrders();
         loadPendingReturns();
-        loadUploadHistory();
         setupEventListeners();
       });
 
@@ -452,6 +462,23 @@
 
         // Create orders button
         document.getElementById('create-orders-btn').addEventListener('click', () => createOdooOrders());
+
+        // Check Odoo orders button - clears cache and fetches fresh data
+        document.getElementById('check-odoo-btn').addEventListener('click', async () => {
+          const btn = document.getElementById('check-odoo-btn');
+          const originalHtml = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">sync</span> Checking...';
+
+          // Clear the cache to force fresh data
+          odooOrders = {};
+
+          // Re-check all orders from Odoo
+          await checkOdooOrders();
+
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+        });
 
         // Select all checkbox (header checkbox - only affects current page)
         document.getElementById('select-all').addEventListener('change', (e) => {
@@ -831,7 +858,7 @@
             `;
             loadSummary();
             loadPendingOrders();
-            loadUploadHistory();
+            loadReports();
           } else {
             uploadError.classList.remove('hidden');
             document.getElementById('error-message').textContent = result.error || 'Unknown error';
@@ -866,7 +893,10 @@
 
       async function loadPendingOrders() {
         try {
-          const response = await fetch('/api/amazon/vcs/orders/pending');
+          const url = selectedReportId
+            ? `/api/amazon/vcs/orders/pending?reportId=${selectedReportId}`
+            : '/api/amazon/vcs/orders/pending';
+          const response = await fetch(url);
           const data = await response.json();
           pendingOrders = data.orders || [];
           renderOrders();
@@ -899,6 +929,11 @@
           if (data.success && data.orders) {
             odooOrders = data.orders;
             renderOrders(); // Re-render with order data
+
+            // Count matched orders
+            const matchedCount = Object.keys(data.orders).length;
+            const totalCount = pendingOrders.length;
+            console.log(`Odoo check complete: ${matchedCount}/${totalCount} orders found in Odoo`);
           }
         } catch (error) {
           console.error('Error checking Odoo:', error);
@@ -907,7 +942,10 @@
 
       async function loadPendingReturns() {
         try {
-          const response = await fetch('/api/amazon/vcs/returns/pending');
+          const url = selectedReportId
+            ? `/api/amazon/vcs/returns/pending?reportId=${selectedReportId}`
+            : '/api/amazon/vcs/returns/pending';
+          const response = await fetch(url);
           const data = await response.json();
           pendingReturns = data.orders || [];
 
@@ -922,6 +960,103 @@
         } catch (error) {
           console.error('Error loading returns:', error);
         }
+      }
+
+      async function loadReports() {
+        try {
+          const response = await fetch('/api/amazon/vcs/reports');
+          const data = await response.json();
+          vcsReports = data.reports || [];
+          renderReports();
+        } catch (error) {
+          console.error('Error loading reports:', error);
+          document.getElementById('reports-list').innerHTML = '<div class="text-red-400 text-sm">Error loading reports</div>';
+        }
+      }
+
+      function renderReports() {
+        const container = document.getElementById('reports-list');
+
+        // Filter out reports with all zero counts (deleted uploads)
+        const activeReports = vcsReports.filter(r =>
+          (r.pendingOrders || 0) > 0 || (r.pendingReturns || 0) > 0 || (r.invoicedCount || 0) > 0
+        );
+
+        if (activeReports.length === 0) {
+          container.innerHTML = '<div class="text-slate-400 text-sm">No reports uploaded yet. Upload a VCS Tax Report above to get started.</div>';
+          return;
+        }
+
+        // Create "All Reports" option + individual report cards
+        const allReportsHtml = `
+          <div onclick="selectReport(null)" class="cursor-pointer p-4 rounded-lg border transition-all ${selectedReportId === null ? 'border-green-500 bg-green-900/20' : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'}">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined ${selectedReportId === null ? 'text-green-400' : 'text-slate-400'}">select_all</span>
+                <div>
+                  <div class="text-white font-medium">All Reports</div>
+                  <div class="text-slate-400 text-sm">View pending items from all uploaded reports</div>
+                </div>
+              </div>
+              <div class="flex gap-4 text-sm">
+                <span class="text-yellow-400">${activeReports.reduce((sum, r) => sum + (r.pendingOrders || 0), 0)} pending orders</span>
+                <span class="text-orange-400">${activeReports.reduce((sum, r) => sum + (r.pendingReturns || 0), 0)} pending returns</span>
+              </div>
+            </div>
+          </div>
+        `;
+
+        const reportsHtml = activeReports.map(report => {
+          const isSelected = selectedReportId === report._id;
+          const uploadDate = new Date(report.uploadedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          const uploadTime = new Date(report.uploadedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+          return `
+            <div class="p-4 rounded-lg border transition-all ${isSelected ? 'border-green-500 bg-green-900/20' : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'}">
+              <div class="flex items-center justify-between">
+                <div onclick="selectReport('${report._id}')" class="flex items-center gap-3 cursor-pointer flex-1">
+                  <span class="material-symbols-outlined ${isSelected ? 'text-green-400' : 'text-slate-400'}">description</span>
+                  <div>
+                    <div class="text-white font-medium">${report.filename || 'VCS Report'}</div>
+                    <div class="text-slate-400 text-sm">Uploaded ${uploadDate} at ${uploadTime}</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-4">
+                  <div class="flex gap-4 text-sm">
+                    <span class="text-yellow-400">${report.pendingOrders || 0} pending</span>
+                    <span class="text-orange-400">${report.pendingReturns || 0} returns</span>
+                    <span class="text-green-400">${report.invoicedCount || 0} invoiced</span>
+                  </div>
+                  <button onclick="event.stopPropagation(); downloadReportCsv('${report.uploadId || report._id}')" class="flex items-center gap-1 px-3 py-1 bg-slate-600 text-slate-300 rounded hover:bg-slate-500 transition-colors text-sm">
+                    <span class="material-symbols-outlined text-sm">download</span>
+                    CSV
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        container.innerHTML = allReportsHtml + reportsHtml;
+      }
+
+      function downloadReportCsv(uploadId) {
+        window.location.href = `/api/amazon/vcs/uploads/${uploadId}/download`;
+      }
+
+      function selectReport(reportId) {
+        selectedReportId = reportId;
+        // Clear selections when switching reports
+        selectedOrderIds.clear();
+        selectedReturnIds.clear();
+        allFilteredSelected = false;
+        currentPage = 1;
+        returnsPage = 1;
+        // Re-render reports to show selection
+        renderReports();
+        // Reload orders and returns for the selected report
+        loadPendingOrders();
+        loadPendingReturns();
       }
 
       function renderReturns() {

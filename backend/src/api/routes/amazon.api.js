@@ -1731,40 +1731,48 @@ router.post('/import/vcs-invoice/:amazonOrderId', async (req, res) => {
 
 /**
  * @route GET /api/amazon/vcs/reports
- * @desc Get list of VCS reports
+ * @desc Get list of VCS reports with pending counts for UI report selector
  */
 router.get('/vcs/reports', async (req, res) => {
   try {
     const db = getDb();
-    const { status, limit = 20, skip = 0 } = req.query;
-
-    const query = {};
-    if (status) {
-      query.importStatus = status;
-    }
-
     const reports = await db.collection('amazon_vcs_reports')
-      .find(query, {
-        projection: {
-          reportId: 1,
-          reportType: 1,
-          startDate: 1,
-          endDate: 1,
-          importStatus: 1,
-          importedAt: 1,
-          createdAt: 1,
-          'importResult.imported': 1,
-          'importResult.failed': 1
-        }
-      })
-      .sort({ createdAt: -1 })
-      .skip(parseInt(skip))
-      .limit(parseInt(limit))
+      .find({})
+      .sort({ uploadedAt: -1 })
+      .limit(50)
       .toArray();
 
-    const total = await db.collection('amazon_vcs_reports').countDocuments(query);
+    // Get pending counts per report
+    const reportsWithCounts = await Promise.all(reports.map(async (report) => {
+      const pendingOrders = await db.collection('amazon_vcs_orders').countDocuments({
+        reportId: report._id,
+        status: 'pending',
+        $or: [
+          { transactionType: 'SHIPMENT' },
+          { transactionType: { $exists: false } }
+        ]
+      });
 
-    res.json({ reports, total, limit: parseInt(limit), skip: parseInt(skip) });
+      const pendingReturns = await db.collection('amazon_vcs_orders').countDocuments({
+        reportId: report._id,
+        status: 'pending',
+        transactionType: 'RETURN'
+      });
+
+      const invoicedCount = await db.collection('amazon_vcs_orders').countDocuments({
+        reportId: report._id,
+        status: 'invoiced'
+      });
+
+      return {
+        ...report,
+        pendingOrders,
+        pendingReturns,
+        invoicedCount
+      };
+    }));
+
+    res.json({ reports: reportsWithCounts });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2805,13 +2813,32 @@ router.post('/vcs/check-odoo', async (req, res) => {
     // Odoo stores Amazon order IDs in the 'client_order_ref' field
     const matchedOrders = {};
 
+    // Generate all possible variations of order IDs (raw, FBA, FBM)
+    // VCS provides raw IDs like "205-1829787-5409110" but Odoo stores them as "FBA205-1829787-5409110"
+    const allSearchIds = [];
+    const rawToVariations = {}; // Map raw ID to all its variations for result mapping
+
+    for (const orderId of orderIds) {
+      const variations = [orderId];
+      // Add with FBA prefix if not already present
+      if (!orderId.startsWith('FBA')) {
+        variations.push('FBA' + orderId);
+      }
+      // Add with FBM prefix if not already present
+      if (!orderId.startsWith('FBM')) {
+        variations.push('FBM' + orderId);
+      }
+      allSearchIds.push(...variations);
+      rawToVariations[orderId] = variations;
+    }
+
     // Use 'in' operator with larger batches for much better performance
     // The 'in' operator is far more efficient than building OR domains
     const batchSize = 500;
-    console.log(`[VCS Check Odoo] Checking ${orderIds.length} order IDs in batches of ${batchSize}...`);
+    console.log(`[VCS Check Odoo] Checking ${orderIds.length} order IDs (${allSearchIds.length} with variations) in batches of ${batchSize}...`);
 
-    for (let i = 0; i < orderIds.length; i += batchSize) {
-      const batch = orderIds.slice(i, i + batchSize);
+    for (let i = 0; i < allSearchIds.length; i += batchSize) {
+      const batch = allSearchIds.slice(i, i + batchSize);
 
       // Use 'in' operator - much simpler and faster than OR domain
       const domain = [['client_order_ref', 'in', batch]];
@@ -2821,6 +2848,16 @@ router.post('/vcs/check-odoo', async (req, res) => {
       // Map orders back to Amazon order IDs
       for (const order of orders) {
         const ref = order.client_order_ref || '';
+        // Extract the raw order ID without FBA/FBM prefix for consistent mapping
+        const rawOrderId = ref.replace(/^(FBA|FBM)/, '');
+
+        // Store by raw ID so the UI can match it back
+        matchedOrders[rawOrderId] = {
+          orderNumber: order.name,
+          state: order.state,
+          amount: order.amount_total
+        };
+        // Also store by the full ref in case the VCS data has the prefix
         matchedOrders[ref] = {
           orderNumber: order.name,
           state: order.state,
@@ -2989,26 +3026,6 @@ router.delete('/vcs/uploads/:uploadId', async (req, res) => {
 });
 
 /**
- * @route GET /api/amazon/vcs/reports
- * @desc Get list of uploaded VCS reports
- */
-router.get('/vcs/reports', async (req, res) => {
-  try {
-    const db = getDb();
-    const reports = await db.collection('amazon_vcs_reports')
-      .find({})
-      .sort({ uploadedAt: -1 })
-      .limit(50)
-      .toArray();
-
-    res.json({ reports });
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
  * @route GET /api/amazon/vcs/reports/:reportId/orders
  * @desc Get orders from a specific VCS report
  */
@@ -3036,20 +3053,30 @@ router.get('/vcs/reports/:reportId/orders', async (req, res) => {
 /**
  * @route GET /api/amazon/vcs/orders/pending
  * @desc Get VCS shipment orders pending invoice creation in Odoo
+ * @query reportId - Optional: filter by specific VCS report
  */
 router.get('/vcs/orders/pending', async (req, res) => {
   try {
     const db = getDb();
+    const { reportId } = req.query;
+
+    // Build query
+    const query = {
+      status: 'pending',
+      $or: [
+        { transactionType: 'SHIPMENT' },
+        { transactionType: { $exists: false } } // Legacy orders without transactionType
+      ]
+    };
+
+    // Filter by reportId if provided
+    if (reportId) {
+      query.reportId = new ObjectId(reportId);
+    }
 
     // Only return SHIPMENT orders (not RETURN)
     const orders = await db.collection('amazon_vcs_orders')
-      .find({
-        status: 'pending',
-        $or: [
-          { transactionType: 'SHIPMENT' },
-          { transactionType: { $exists: false } } // Legacy orders without transactionType
-        ]
-      })
+      .find(query)
       .sort({ orderDate: -1 })
       .toArray();
 
@@ -3073,17 +3100,27 @@ router.get('/vcs/orders/pending', async (req, res) => {
 /**
  * @route GET /api/amazon/vcs/returns/pending
  * @desc Get VCS return orders pending credit note creation in Odoo
+ * @query reportId - Optional: filter by specific VCS report
  */
 router.get('/vcs/returns/pending', async (req, res) => {
   try {
     const db = getDb();
+    const { reportId } = req.query;
+
+    // Build query
+    const query = {
+      status: 'pending',
+      transactionType: 'RETURN'
+    };
+
+    // Filter by reportId if provided
+    if (reportId) {
+      query.reportId = new ObjectId(reportId);
+    }
 
     // Only return RETURN orders
     const orders = await db.collection('amazon_vcs_orders')
-      .find({
-        status: 'pending',
-        transactionType: 'RETURN'
-      })
+      .find(query)
       .sort({ returnDate: -1, orderDate: -1 })
       .toArray();
 
