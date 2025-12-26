@@ -1208,7 +1208,7 @@ class VcsOdooInvoicer {
    * @returns {object}
    */
   buildInvoiceData(order, partnerId, saleOrder, orderLines) {
-    const invoiceDate = order.shipmentDate || order.orderDate;
+    const invoiceDate = getEffectiveInvoiceDate(order.shipmentDate || order.orderDate);
     const fiscalPosition = this.determineFiscalPosition(order);
     const journalId = this.determineJournal(order);
 
@@ -1468,7 +1468,7 @@ class VcsOdooInvoicer {
     const journalId = this.determineJournal(order);
     const teamId = this.determineSalesTeam(order);
     const vcsInvoiceNumber = order.vatInvoiceNumber || null;
-    const invoiceDate = order.shipmentDate || order.orderDate;
+    const invoiceDate = getEffectiveInvoiceDate(order.shipmentDate || order.orderDate);
 
     // Update invoice header
     const headerUpdate = {
@@ -1993,7 +1993,7 @@ class VcsOdooInvoicer {
     const fiscalPositionId = this.determineFiscalPosition(order);
     const journalId = this.determineJournal(order);
     const teamId = this.determineSalesTeam(order);
-    const returnDate = order.returnDate || order.shipmentDate || new Date();
+    const returnDate = getEffectiveInvoiceDate(order.returnDate || order.shipmentDate || new Date());
 
     // Create the credit note
     const creditNoteId = await this.odoo.create('account.move', {
