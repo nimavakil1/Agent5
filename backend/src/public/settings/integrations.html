@@ -161,7 +161,7 @@
       <div class="integration-card">
         <div class="integration-header">
           <div class="integration-logo">
-            <span class="material-symbols-outlined">deployed_code</span>
+            <img src="/assets/logos/odoo.png" alt="Odoo">
           </div>
           <div class="integration-info">
             <h3>Odoo ERP</h3>
@@ -215,7 +215,7 @@
       <div class="integration-card">
         <div class="integration-header">
           <div class="integration-logo">
-            <span class="material-symbols-outlined">psychology</span>
+            <img src="/assets/logos/openai.webp" alt="OpenAI">
           </div>
           <div class="integration-info">
             <h3>OpenAI</h3>
@@ -242,7 +242,7 @@
       <div class="integration-card">
         <div class="integration-header">
           <div class="integration-logo">
-            <span class="material-symbols-outlined">phone</span>
+            <img src="/assets/logos/telnyx.png" alt="Telnyx">
           </div>
           <div class="integration-info">
             <h3>Telnyx</h3>
@@ -262,6 +262,58 @@
         <button class="btn btn-secondary" disabled>
           <span class="material-symbols-outlined">settings</span>
           Manage
+        </button>
+      </div>
+
+      <!-- Microsoft 365 -->
+      <div class="integration-card">
+        <div class="integration-header">
+          <div class="integration-logo" style="background: linear-gradient(135deg, #0078d4, #00bcf2);">
+            <span class="material-symbols-outlined" style="color: #fff;">mail</span>
+          </div>
+          <div class="integration-info">
+            <h3>Microsoft 365</h3>
+            <p>Email, Calendar, Teams</p>
+          </div>
+        </div>
+        <div class="integration-status connected" id="ms365-status">
+          <span class="material-symbols-outlined">check_circle</span>
+          Connected
+        </div>
+        <dl class="integration-details">
+          <dt>Services</dt>
+          <dd>Outlook, Calendar, Teams</dd>
+          <dt>Tenant</dt>
+          <dd>ACROPAQ</dd>
+        </dl>
+        <button class="btn btn-secondary" disabled>
+          <span class="material-symbols-outlined">settings</span>
+          Manage
+        </button>
+      </div>
+
+      <!-- Bol.com -->
+      <div class="integration-card">
+        <div class="integration-header">
+          <div class="integration-logo" style="background: linear-gradient(135deg, #0066ff, #003399);">
+            <span style="color: #fff; font-weight: 700; font-size: 14px;">Bol</span>
+          </div>
+          <div class="integration-info">
+            <h3>Bol.com</h3>
+            <p>Marketplace integration</p>
+          </div>
+        </div>
+        <div class="integration-status disconnected" id="bolcom-status">
+          <span class="material-symbols-outlined">radio_button_unchecked</span>
+          Not configured
+        </div>
+        <dl class="integration-details">
+          <dt>Status</dt>
+          <dd>Awaiting API credentials</dd>
+        </dl>
+        <button class="btn btn-secondary" disabled>
+          <span class="material-symbols-outlined">settings</span>
+          Configure
         </button>
       </div>
     </div>
