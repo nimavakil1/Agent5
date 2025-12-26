@@ -1517,9 +1517,10 @@ class VcsOdooInvoicer {
       productSkuMap[p.id] = p.default_code || '';
     }
 
-    // Get the correct tax for OSS orders
-    const isOSS = order.taxReportingScheme === 'VCS_EU_OSS';
-    const ossTaxId = isOSS ? this.getOssTaxId(order) : null;
+    // Get the correct tax ID from VCS data - this handles OSS, domestic, and export scenarios
+    // VCS is authoritative for tax rates!
+    const correctTaxId = this.getTaxIdFromVCS(order);
+    console.log(`[VcsOdooInvoicer] Using tax ID ${correctTaxId} for order (shipFrom=${order.shipFromCountry}, shipTo=${order.shipToCountry}, scheme=${order.taxReportingScheme})`);
 
     // Match VCS items to invoice lines and update
     for (const vcsItem of order.items) {
@@ -1553,13 +1554,13 @@ class VcsOdooInvoicer {
           price_unit: vcsItem.priceExclusive / vcsItem.quantity,
         };
 
-        // Set correct OSS tax
-        if (isOSS && ossTaxId) {
-          lineUpdate.tax_ids = [[6, 0, [ossTaxId]]];
+        // ALWAYS set the correct tax from VCS data (OSS, domestic, or export)
+        if (correctTaxId) {
+          lineUpdate.tax_ids = [[6, 0, [correctTaxId]]];
         }
 
         await this.odoo.execute('account.move.line', 'write', [[matchingLine.id], lineUpdate]);
-        console.log(`[VcsOdooInvoicer] Updated line ${matchingLine.id}: qty=${vcsItem.quantity}, price=${lineUpdate.price_unit}`);
+        console.log(`[VcsOdooInvoicer] Updated line ${matchingLine.id}: qty=${vcsItem.quantity}, price=${lineUpdate.price_unit}, tax_id=${correctTaxId}`);
       } else {
         console.warn(`[VcsOdooInvoicer] No matching invoice line for VCS SKU ${vcsItem.sku} (transformed: ${transformedSku})`);
         console.warn(`[VcsOdooInvoicer] Available invoice lines:`, invoiceLines.map(l => ({ id: l.id, name: l.name, sku: productSkuMap[l.product_id[0]] })));
@@ -1578,11 +1579,12 @@ class VcsOdooInvoicer {
 
       if (shippingLine) {
         const shippingUpdate = { price_unit: order.totalShipping };
-        if (isOSS && ossTaxId) {
-          shippingUpdate.tax_ids = [[6, 0, [ossTaxId]]];
+        // ALWAYS apply correct tax from VCS (OSS, domestic, or export)
+        if (correctTaxId) {
+          shippingUpdate.tax_ids = [[6, 0, [correctTaxId]]];
         }
         await this.odoo.execute('account.move.line', 'write', [[shippingLine.id], shippingUpdate]);
-        console.log(`[VcsOdooInvoicer] Updated shipping line: price=${order.totalShipping}`);
+        console.log(`[VcsOdooInvoicer] Updated shipping line: price=${order.totalShipping}, tax_id=${correctTaxId}`);
       }
     }
 
@@ -1596,11 +1598,12 @@ class VcsOdooInvoicer {
 
       if (shippingDiscountLine) {
         const discountUpdate = { price_unit: -Math.abs(order.totalShippingPromo) };
-        if (isOSS && ossTaxId) {
-          discountUpdate.tax_ids = [[6, 0, [ossTaxId]]];
+        // ALWAYS apply correct tax from VCS (OSS, domestic, or export)
+        if (correctTaxId) {
+          discountUpdate.tax_ids = [[6, 0, [correctTaxId]]];
         }
         await this.odoo.execute('account.move.line', 'write', [[shippingDiscountLine.id], discountUpdate]);
-        console.log(`[VcsOdooInvoicer] Updated shipping discount line: price=-${Math.abs(order.totalShippingPromo)}`);
+        console.log(`[VcsOdooInvoicer] Updated shipping discount line: price=-${Math.abs(order.totalShippingPromo)}, tax_id=${correctTaxId}`);
       }
     }
 
