@@ -185,7 +185,7 @@ async function resendInvitation(userId) {
  * @param {string} token - Invite token
  */
 async function sendInvitationEmail(email, token) {
-  const inviteUrl = `${BASE_URL}/test/app/accept-invite.html?token=${token}`;
+  const inviteUrl = `${BASE_URL}/accept-invite.html?token=${token}`;
 
   const htmlContent = `
 <!DOCTYPE html>

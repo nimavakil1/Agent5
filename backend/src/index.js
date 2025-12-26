@@ -186,13 +186,14 @@ function signRecordingPath(u, ts){
   const h = crypto.createHmac('sha256', secret).update(String(u)+'|'+String(ts)).digest('hex');
   return h;
 }
-app.get('/app/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'app', 'login.html'));
+// Legacy UI at /old/
+app.get('/old/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'old', 'login.html'));
 });
-app.get('/app/shell.js', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'app', 'shell.js'));
+app.get('/old/shell.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'old', 'shell.js'));
 });
-app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'app'), {
+app.use('/old', requireSession, express.static(path.join(__dirname, 'public', 'old'), {
   etag: false,
   maxAge: 0,
   setHeaders: (res, filePath) => {
@@ -204,25 +205,34 @@ app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'a
   }
 }));
 
-// New modular UI at /test/app/ (v2)
-app.get('/test/app/shell-v2.js', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'test', 'app', 'shell-v2.js'));
+// New platform UI (v2) - public files
+app.get('/shell-v2.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'shell-v2.js'));
 });
-// Public page for accepting invitations (no auth required)
-app.get('/test/app/accept-invite.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'test', 'app', 'accept-invite.html'));
+app.get('/accept-invite.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'accept-invite.html'));
 });
-app.use('/test/app', requireSession, express.static(path.join(__dirname, 'public', 'test', 'app'), {
-  etag: false,
-  maxAge: 0,
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
+
+// New platform UI (v2) - protected sections
+const protectedSections = ['vendor', 'settings', 'seller', 'inventory', 'accounting', 'analytics', 'ai', 'calls'];
+protectedSections.forEach(section => {
+  app.use(`/${section}`, requireSession, express.static(path.join(__dirname, 'public', section), {
+    etag: false,
+    maxAge: 0,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
     }
-  }
-}));
+  }));
+});
+
+// New platform index (protected)
+app.get('/index.html', requireSession, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
@@ -235,7 +245,7 @@ protectedPages.forEach(page => {
 });
 
 app.get('/customers.html', requireSession, (req, res) => {
-  res.redirect(302, '/app/prospects.html');
+  res.redirect(302, '/old/prospects.html');
 });
 
 app.get('/monitor.js', requireSession, (req, res) => {

@@ -14,10 +14,10 @@ const MODULES = {
     description: 'Chat with AI agents, train models, orchestrate workflows',
     order: 1,
     pages: [
-      { id: 'console', path: '/test/app/ai/console', name: 'Agent Console', icon: 'chat', default: true },
-      { id: 'studio', path: '/test/app/ai/studio', name: 'Agent Studio', icon: 'psychology' },
-      { id: 'training', path: '/test/app/ai/training', name: 'AI Training', icon: 'school' },
-      { id: 'orchestrator', path: '/test/app/ai/orchestrator', name: 'Orchestrator', icon: 'account_tree' }
+      { id: 'console', path: '/ai/console', name: 'Agent Console', icon: 'chat', default: true },
+      { id: 'studio', path: '/ai/studio', name: 'Agent Studio', icon: 'psychology' },
+      { id: 'training', path: '/ai/training', name: 'AI Training', icon: 'school' },
+      { id: 'orchestrator', path: '/ai/orchestrator', name: 'Orchestrator', icon: 'account_tree' }
     ],
     notifications: {
       endpoint: '/api/ai/notifications',
@@ -39,10 +39,10 @@ const MODULES = {
     description: 'Voice AI calls, campaigns, and contact management',
     order: 2,
     pages: [
-      { id: 'calls', path: '/test/app/calls/', name: 'Call Center', icon: 'call', default: true },
-      { id: 'campaigns', path: '/test/app/calls/campaigns', name: 'Campaigns', icon: 'campaign' },
-      { id: 'contacts', path: '/test/app/calls/contacts', name: 'Contacts', icon: 'contacts' },
-      { id: 'review', path: '/test/app/calls/review', name: 'Call Review', icon: 'rate_review' }
+      { id: 'calls', path: '/calls/', name: 'Call Center', icon: 'call', default: true },
+      { id: 'campaigns', path: '/calls/campaigns', name: 'Campaigns', icon: 'campaign' },
+      { id: 'contacts', path: '/calls/contacts', name: 'Contacts', icon: 'contacts' },
+      { id: 'review', path: '/calls/review', name: 'Call Review', icon: 'rate_review' }
     ],
     notifications: {
       endpoint: '/api/calls/notifications',
@@ -64,10 +64,10 @@ const MODULES = {
     description: 'Seller Central orders, settlements, and reports',
     order: 3,
     pages: [
-      { id: 'orders', path: '/test/app/seller/', name: 'Orders', icon: 'shopping_cart', default: true },
-      { id: 'settlements', path: '/test/app/seller/settlements', name: 'Settlements', icon: 'account_balance' },
-      { id: 'vcs', path: '/test/app/seller/vcs', name: 'VCS Reports', icon: 'receipt_long' },
-      { id: 'reports', path: '/test/app/seller/reports', name: 'Upload Reports', icon: 'upload_file' }
+      { id: 'orders', path: '/seller/', name: 'Orders', icon: 'shopping_cart', default: true },
+      { id: 'settlements', path: '/seller/settlements', name: 'Settlements', icon: 'account_balance' },
+      { id: 'vcs', path: '/seller/vcs', name: 'VCS Reports', icon: 'receipt_long' },
+      { id: 'reports', path: '/seller/reports', name: 'Upload Reports', icon: 'upload_file' }
     ],
     notifications: {
       endpoint: '/api/amazon/notifications',
@@ -88,10 +88,10 @@ const MODULES = {
     description: 'Vendor Central purchase orders, invoices, and shipments',
     order: 4,
     pages: [
-      { id: 'orders', path: '/test/app/vendor/', name: 'Purchase Orders', icon: 'receipt_long', default: true },
-      { id: 'invoices', path: '/test/app/vendor/invoices', name: 'Invoices', icon: 'description' },
-      { id: 'shipments', path: '/test/app/vendor/shipments', name: 'Shipments', icon: 'local_shipping' },
-      { id: 'settings', path: '/test/app/vendor/settings', name: 'Settings', icon: 'settings' }
+      { id: 'orders', path: '/vendor/', name: 'Purchase Orders', icon: 'receipt_long', default: true },
+      { id: 'invoices', path: '/vendor/invoices', name: 'Invoices', icon: 'description' },
+      { id: 'shipments', path: '/vendor/shipments', name: 'Shipments', icon: 'local_shipping' },
+      { id: 'settings', path: '/vendor/settings', name: 'Settings', icon: 'settings' }
     ],
     notifications: {
       endpoint: '/api/vendor/notifications',
@@ -115,9 +115,9 @@ const MODULES = {
     description: 'Products, purchasing intelligence, and stock optimization',
     order: 5,
     pages: [
-      { id: 'products', path: '/test/app/inventory/', name: 'Products', icon: 'category', default: true },
-      { id: 'purchasing', path: '/test/app/inventory/purchasing', name: 'Purchasing', icon: 'shopping_cart' },
-      { id: 'optimization', path: '/test/app/inventory/optimization', name: 'Stock Optimization', icon: 'trending_up' }
+      { id: 'products', path: '/inventory/', name: 'Products', icon: 'category', default: true },
+      { id: 'purchasing', path: '/inventory/purchasing', name: 'Purchasing', icon: 'shopping_cart' },
+      { id: 'optimization', path: '/inventory/optimization', name: 'Stock Optimization', icon: 'trending_up' }
     ],
     notifications: {
       endpoint: '/api/inventory/notifications',
@@ -138,9 +138,9 @@ const MODULES = {
     description: 'VCS invoicing, remittances, and chargebacks',
     order: 6,
     pages: [
-      { id: 'invoicing', path: '/test/app/accounting/', name: 'VCS Invoicing', icon: 'receipt', default: true },
-      { id: 'remittances', path: '/test/app/accounting/remittances', name: 'Remittances', icon: 'payments' },
-      { id: 'chargebacks', path: '/test/app/accounting/chargebacks', name: 'Chargebacks', icon: 'money_off' }
+      { id: 'invoicing', path: '/accounting/', name: 'VCS Invoicing', icon: 'receipt', default: true },
+      { id: 'remittances', path: '/accounting/remittances', name: 'Remittances', icon: 'payments' },
+      { id: 'chargebacks', path: '/accounting/chargebacks', name: 'Chargebacks', icon: 'money_off' }
     ],
     notifications: {
       endpoint: '/api/accounting/notifications',
@@ -161,9 +161,9 @@ const MODULES = {
     description: 'Dashboards, reports, and KPIs',
     order: 7,
     pages: [
-      { id: 'dashboard', path: '/test/app/analytics/', name: 'Dashboard', icon: 'dashboard', default: true },
-      { id: 'reports', path: '/test/app/analytics/reports', name: 'Reports', icon: 'summarize' },
-      { id: 'kpis', path: '/test/app/analytics/kpis', name: 'KPIs', icon: 'speed' }
+      { id: 'dashboard', path: '/analytics/', name: 'Dashboard', icon: 'dashboard', default: true },
+      { id: 'reports', path: '/analytics/reports', name: 'Reports', icon: 'summarize' },
+      { id: 'kpis', path: '/analytics/kpis', name: 'KPIs', icon: 'speed' }
     ],
     notifications: null, // No notifications for analytics
     actions: [
@@ -180,11 +180,11 @@ const MODULES = {
     description: 'Users, roles, integrations, and system configuration',
     order: 8,
     pages: [
-      { id: 'users', path: '/test/app/settings/users', name: 'Users', icon: 'group', default: true },
-      { id: 'roles', path: '/test/app/settings/roles', name: 'Roles & Permissions', icon: 'admin_panel_settings' },
-      { id: 'integrations', path: '/test/app/settings/integrations', name: 'Integrations', icon: 'hub' },
-      { id: 'mcp', path: '/test/app/settings/mcp', name: 'MCP Tools', icon: 'build' },
-      { id: 'profile', path: '/test/app/settings/profile', name: 'My Profile', icon: 'person' }
+      { id: 'users', path: '/settings/users', name: 'Users', icon: 'group', default: true },
+      { id: 'roles', path: '/settings/roles', name: 'Roles & Permissions', icon: 'admin_panel_settings' },
+      { id: 'integrations', path: '/settings/integrations', name: 'Integrations', icon: 'hub' },
+      { id: 'mcp', path: '/settings/mcp', name: 'MCP Tools', icon: 'build' },
+      { id: 'profile', path: '/settings/profile', name: 'My Profile', icon: 'person' }
     ],
     notifications: null,
     actions: [

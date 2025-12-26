@@ -18,80 +18,80 @@
   const MODULES = {
     'ai-agents': {
       id: 'ai-agents', name: 'AI Agents', icon: 'smart_toy', color: '#6366f1',
-      basePath: '/test/app/ai',
+      basePath: '/ai',
       pages: [
-        { id: 'console', path: '/test/app/ai/', name: 'Console', icon: 'chat' },
-        { id: 'studio', path: '/test/app/ai/studio', name: 'Studio', icon: 'psychology' },
-        { id: 'training', path: '/test/app/ai/training', name: 'Training', icon: 'school' },
-        { id: 'orchestrator', path: '/test/app/ai/orchestrator', name: 'Orchestrator', icon: 'account_tree' }
+        { id: 'console', path: '/ai/', name: 'Console', icon: 'chat' },
+        { id: 'studio', path: '/ai/studio', name: 'Studio', icon: 'psychology' },
+        { id: 'training', path: '/ai/training', name: 'Training', icon: 'school' },
+        { id: 'orchestrator', path: '/ai/orchestrator', name: 'Orchestrator', icon: 'account_tree' }
       ]
     },
     'call-center': {
       id: 'call-center', name: 'Call Center', icon: 'headset_mic', color: '#22c55e',
-      basePath: '/test/app/calls',
+      basePath: '/calls',
       pages: [
-        { id: 'calls', path: '/test/app/calls/', name: 'Calls', icon: 'call' },
-        { id: 'campaigns', path: '/test/app/calls/campaigns', name: 'Campaigns', icon: 'campaign' },
-        { id: 'contacts', path: '/test/app/calls/contacts', name: 'Contacts', icon: 'contacts' },
-        { id: 'review', path: '/test/app/calls/review', name: 'Review', icon: 'rate_review' }
+        { id: 'calls', path: '/calls/', name: 'Calls', icon: 'call' },
+        { id: 'campaigns', path: '/calls/campaigns', name: 'Campaigns', icon: 'campaign' },
+        { id: 'contacts', path: '/calls/contacts', name: 'Contacts', icon: 'contacts' },
+        { id: 'review', path: '/calls/review', name: 'Review', icon: 'rate_review' }
       ]
     },
     'amazon-seller': {
       id: 'amazon-seller', name: 'Amazon Seller', icon: 'storefront', color: '#f59e0b',
-      basePath: '/test/app/seller',
+      basePath: '/seller',
       pages: [
-        { id: 'orders', path: '/test/app/seller/', name: 'Orders', icon: 'shopping_cart' },
-        { id: 'settlements', path: '/test/app/seller/settlements', name: 'Settlements', icon: 'account_balance' },
-        { id: 'vcs', path: '/test/app/seller/vcs', name: 'VCS Reports', icon: 'receipt_long' },
-        { id: 'reports', path: '/test/app/seller/reports', name: 'Reports', icon: 'upload_file' }
+        { id: 'orders', path: '/seller/', name: 'Orders', icon: 'shopping_cart' },
+        { id: 'settlements', path: '/seller/settlements', name: 'Settlements', icon: 'account_balance' },
+        { id: 'vcs', path: '/seller/vcs', name: 'VCS Reports', icon: 'receipt_long' },
+        { id: 'reports', path: '/seller/reports', name: 'Reports', icon: 'upload_file' }
       ]
     },
     'amazon-vendor': {
       id: 'amazon-vendor', name: 'Amazon Vendor', icon: 'local_shipping', color: '#f97316',
-      basePath: '/test/app/vendor',
+      basePath: '/vendor',
       pages: [
-        { id: 'orders', path: '/test/app/vendor/', name: 'Purchase Orders', icon: 'receipt_long' },
-        { id: 'invoices', path: '/test/app/vendor/invoices.html', name: 'Invoices', icon: 'description' },
-        { id: 'remittances', path: '/test/app/vendor/remittances.html', name: 'Remittances', icon: 'payments' },
-        { id: 'shipments', path: '/test/app/vendor/shipments.html', name: 'Shipments', icon: 'local_shipping' },
-        { id: 'settings', path: '/test/app/vendor/settings.html', name: 'Settings', icon: 'settings' }
+        { id: 'orders', path: '/vendor/', name: 'Purchase Orders', icon: 'receipt_long' },
+        { id: 'invoices', path: '/vendor/invoices.html', name: 'Invoices', icon: 'description' },
+        { id: 'remittances', path: '/vendor/remittances.html', name: 'Remittances', icon: 'payments' },
+        { id: 'shipments', path: '/vendor/shipments.html', name: 'Shipments', icon: 'local_shipping' },
+        { id: 'settings', path: '/vendor/settings.html', name: 'Settings', icon: 'settings' }
       ]
     },
     'inventory': {
       id: 'inventory', name: 'Inventory', icon: 'inventory_2', color: '#8b5cf6',
-      basePath: '/test/app/inventory',
+      basePath: '/inventory',
       pages: [
-        { id: 'products', path: '/test/app/inventory/', name: 'Products', icon: 'category' },
-        { id: 'purchasing', path: '/test/app/inventory/purchasing', name: 'Purchasing', icon: 'shopping_cart' },
-        { id: 'optimization', path: '/test/app/inventory/optimization', name: 'Optimization', icon: 'trending_up' }
+        { id: 'products', path: '/inventory/', name: 'Products', icon: 'category' },
+        { id: 'purchasing', path: '/inventory/purchasing', name: 'Purchasing', icon: 'shopping_cart' },
+        { id: 'optimization', path: '/inventory/optimization', name: 'Optimization', icon: 'trending_up' }
       ]
     },
     'accounting': {
       id: 'accounting', name: 'Accounting', icon: 'account_balance', color: '#14b8a6',
-      basePath: '/test/app/accounting',
+      basePath: '/accounting',
       pages: [
-        { id: 'invoicing', path: '/test/app/accounting/', name: 'VCS Invoicing', icon: 'receipt' },
-        { id: 'remittances', path: '/test/app/accounting/remittances', name: 'Remittances', icon: 'payments' },
-        { id: 'chargebacks', path: '/test/app/accounting/chargebacks', name: 'Chargebacks', icon: 'money_off' }
+        { id: 'invoicing', path: '/accounting/', name: 'VCS Invoicing', icon: 'receipt' },
+        { id: 'remittances', path: '/accounting/remittances', name: 'Remittances', icon: 'payments' },
+        { id: 'chargebacks', path: '/accounting/chargebacks', name: 'Chargebacks', icon: 'money_off' }
       ]
     },
     'analytics': {
       id: 'analytics', name: 'Analytics', icon: 'analytics', color: '#ec4899',
-      basePath: '/test/app/analytics',
+      basePath: '/analytics',
       pages: [
-        { id: 'dashboard', path: '/test/app/analytics/', name: 'Dashboard', icon: 'dashboard' },
-        { id: 'reports', path: '/test/app/analytics/reports', name: 'Reports', icon: 'summarize' },
-        { id: 'kpis', path: '/test/app/analytics/kpis', name: 'KPIs', icon: 'speed' }
+        { id: 'dashboard', path: '/analytics/', name: 'Dashboard', icon: 'dashboard' },
+        { id: 'reports', path: '/analytics/reports', name: 'Reports', icon: 'summarize' },
+        { id: 'kpis', path: '/analytics/kpis', name: 'KPIs', icon: 'speed' }
       ]
     },
     'settings': {
       id: 'settings', name: 'Settings', icon: 'settings', color: '#64748b',
-      basePath: '/test/app/settings',
+      basePath: '/settings',
       pages: [
-        { id: 'users', path: '/test/app/settings/', name: 'Users', icon: 'group' },
-        { id: 'roles', path: '/test/app/settings/roles.html', name: 'Roles', icon: 'admin_panel_settings' },
-        { id: 'integrations', path: '/test/app/settings/integrations.html', name: 'Integrations', icon: 'hub' },
-        { id: 'profile', path: '/test/app/settings/profile.html', name: 'Profile', icon: 'person' }
+        { id: 'users', path: '/settings/', name: 'Users', icon: 'group' },
+        { id: 'roles', path: '/settings/roles.html', name: 'Roles', icon: 'admin_panel_settings' },
+        { id: 'integrations', path: '/settings/integrations.html', name: 'Integrations', icon: 'hub' },
+        { id: 'profile', path: '/settings/profile.html', name: 'Profile', icon: 'person' }
       ],
       adminOnly: true
     }
@@ -178,7 +178,7 @@
       }
     }
     // Home page
-    if (path === '/test/app/' || path === '/test/app/index.html') {
+    if (path === '/' || path === '/index.html') {
       currentModule = null;
       currentPage = null;
     }
@@ -630,13 +630,13 @@
 
       <!-- Top Bar -->
       <header class="shell-topbar">
-        <a href="/test/app/" class="shell-logo">
+        <a href="/" class="shell-logo">
           ${isHome ? `<span class="shell-logo-text">ACROPAQ AI platform</span>` : ''}
         </a>
 
         <div class="shell-breadcrumb">
           ${currentModule ? `
-            <a href="/test/app/" class="shell-breadcrumb-item">
+            <a href="/" class="shell-breadcrumb-item">
               <span class="material-symbols-outlined">home</span>
               <span>Home</span>
             </a>
@@ -664,11 +664,11 @@
               </div>
             </div>
             <div class="shell-user-dropdown" id="shell-user-dropdown">
-              <a href="/test/app/settings/profile" class="shell-dropdown-item">
+              <a href="/settings/profile" class="shell-dropdown-item">
                 <span class="material-symbols-outlined">person</span>
                 My Profile
               </a>
-              <a href="/test/app/settings/" class="shell-dropdown-item">
+              <a href="/settings/" class="shell-dropdown-item">
                 <span class="material-symbols-outlined">settings</span>
                 Settings
               </a>
@@ -762,7 +762,7 @@
       if (path.startsWith(module.basePath) && !hasModuleAccess(id)) {
         // Redirect to home with access denied message
         sessionStorage.setItem('access_denied', module.name);
-        location.href = '/test/app/';
+        location.href = '/';
         return;
       }
     }

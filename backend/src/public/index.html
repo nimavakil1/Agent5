@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agent5</title>
-  <script src="/test/app/shell-v2.js"></script>
+  <script src="/shell-v2.js"></script>
   <style>
     .home {
       max-width: 1400px;
@@ -405,51 +405,51 @@
         id: 'ai-agents', name: 'AI Agents', icon: 'smart_toy', color: '#6366f1',
         // logo: '/assets/logos/ai-agents.png',  // Optional: use PNG instead of icon
         description: 'Chat with AI agents, train models, orchestrate workflows',
-        path: '/test/app/ai/',
+        path: '/ai/',
         notificationEndpoint: '/api/ai/notifications'
       },
       {
         id: 'call-center', name: 'Call Center', icon: 'headset_mic', color: '#22c55e',
         description: 'Voice AI calls, campaigns, and contact management',
-        path: '/test/app/calls/',
+        path: '/calls/',
         notificationEndpoint: '/api/calls/notifications'
       },
       {
         id: 'amazon-seller', name: 'Amazon Seller', icon: 'storefront', color: '#f59e0b',
         logo: '/assets/logos/amazon-seller-central.png',
         description: 'Seller Central orders, settlements, and reports',
-        path: '/test/app/seller/',
+        path: '/seller/',
         notificationEndpoint: '/api/amazon/notifications'
       },
       {
         id: 'amazon-vendor', name: 'Amazon Vendor', icon: 'local_shipping', color: '#f97316',
         logo: '/assets/logos/amazon_vendor.png',
         description: 'Vendor Central purchase orders, invoices, shipments',
-        path: '/test/app/vendor/',
+        path: '/vendor/',
         notificationEndpoint: '/api/vendor/notifications'
       },
       {
         id: 'inventory', name: 'Inventory', icon: 'inventory_2', color: '#8b5cf6',
         description: 'Products, purchasing intelligence, stock optimization',
-        path: '/test/app/inventory/',
+        path: '/inventory/',
         notificationEndpoint: '/api/inventory/notifications'
       },
       {
         id: 'accounting', name: 'Accounting', icon: 'account_balance', color: '#14b8a6',
         description: 'VCS invoicing, remittances, and chargebacks',
-        path: '/test/app/accounting/',
+        path: '/accounting/',
         notificationEndpoint: '/api/accounting/notifications'
       },
       {
         id: 'analytics', name: 'Analytics', icon: 'analytics', color: '#ec4899',
         description: 'Dashboards, reports, and KPIs',
-        path: '/test/app/analytics/',
+        path: '/analytics/',
         notificationEndpoint: null
       },
       {
         id: 'settings', name: 'Settings', icon: 'settings', color: '#64748b',
         description: 'Users, roles, integrations, and configuration',
-        path: '/test/app/settings/',
+        path: '/settings/',
         notificationEndpoint: null,
         adminOnly: true
       }
