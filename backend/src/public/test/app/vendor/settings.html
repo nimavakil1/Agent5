@@ -188,6 +188,7 @@
   <script>
     const MARKETPLACES = ['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'PL', 'SE', 'UK'];
     const MARKETPLACE_NAMES = { DE: 'Germany', FR: 'France', IT: 'Italy', ES: 'Spain', NL: 'Netherlands', BE: 'Belgium', PL: 'Poland', SE: 'Sweden', UK: 'United Kingdom' };
+    const MARKETPLACE_FLAGS = { DE: '\u{1F1E9}\u{1F1EA}', FR: '\u{1F1EB}\u{1F1F7}', IT: '\u{1F1EE}\u{1F1F9}', ES: '\u{1F1EA}\u{1F1F8}', NL: '\u{1F1F3}\u{1F1F1}', BE: '\u{1F1E7}\u{1F1EA}', PL: '\u{1F1F5}\u{1F1F1}', SE: '\u{1F1F8}\u{1F1EA}', UK: '\u{1F1EC}\u{1F1E7}' };
 
     async function init() {
       await Promise.all([loadConfig(), loadMappings(), loadUnmapped(), loadMappingStats()]);
@@ -203,7 +204,7 @@
         grid.innerHTML = MARKETPLACES.map(mp => {
           const active = configured.includes(mp);
           return '<div class="marketplace-card">' +
-            '<div class="marketplace-icon ' + (active ? 'active' : '') + '">' + mp + '</div>' +
+            '<div class="marketplace-icon ' + (active ? 'active' : '') + '" style="font-size: 24px;">' + MARKETPLACE_FLAGS[mp] + '</div>' +
             '<div class="marketplace-info">' +
               '<div class="marketplace-name">' + MARKETPLACE_NAMES[mp] + '</div>' +
               '<div class="marketplace-status ' + (active ? 'active' : '') + '">' + (active ? 'Configured' : 'Not configured') + '</div>' +
@@ -239,14 +240,16 @@
           return;
         }
         tbody.innerHTML = mappings.map(function(m) {
+          var pid = m.partyId || m.amazonPartyId || '-';
+          var mp = m.marketplace || m.marketplaceId || '-';
           return '<tr>' +
-            '<td><code>' + m.amazonPartyId + '</code></td>' +
-            '<td>' + (m.partyName || '-') + '</td>' +
-            '<td>' + (m.marketplaceId || '-') + '</td>' +
-            '<td>' + (m.odooPartnerId ? m.odooPartnerName + ' (' + m.odooPartnerId + ')' : '<span class="badge badge-warning">Not linked</span>') + '</td>' +
+            '<td><code>' + pid + '</code></td>' +
+            '<td>' + (m.partyName || m.odooPartnerName || '-') + '</td>' +
+            '<td>' + (MARKETPLACE_FLAGS[mp] ? MARKETPLACE_FLAGS[mp] + ' ' + mp : mp) + '</td>' +
+            '<td>' + (m.odooPartnerId ? (m.odooPartnerName || '') + ' (' + m.odooPartnerId + ')' : '<span class="badge badge-warning">Not linked</span>') + '</td>' +
             '<td>' +
-              '<button class="action-btn" onclick="editMapping(\'' + m.amazonPartyId + '\')" title="Edit"><span class="material-symbols-outlined">edit</span></button>' +
-              '<button class="action-btn danger" onclick="deleteMapping(\'' + m.amazonPartyId + '\')" title="Delete"><span class="material-symbols-outlined">delete</span></button>' +
+              '<button class="action-btn" onclick="editMapping(\'' + pid + '\')" title="Edit"><span class="material-symbols-outlined">edit</span></button>' +
+              '<button class="action-btn danger" onclick="deleteMapping(\'' + pid + '\')" title="Delete"><span class="material-symbols-outlined">delete</span></button>' +
             '</td>' +
           '</tr>';
         }).join('');
@@ -265,12 +268,14 @@
         if (unmapped.length === 0) { section.style.display = 'none'; return; }
         section.style.display = 'block';
         document.getElementById('unmapped-table').innerHTML = unmapped.map(function(u) {
+          var pid = u.partyId || u.amazonPartyId || '-';
+          var mp = u.marketplace || u.marketplaceId || '-';
           return '<tr>' +
-            '<td><code>' + u.amazonPartyId + '</code></td>' +
+            '<td><code>' + pid + '</code></td>' +
             '<td>' + (u.partyName || '-') + '</td>' +
-            '<td>' + (u.marketplaceId || '-') + '</td>' +
+            '<td>' + (MARKETPLACE_FLAGS[mp] ? MARKETPLACE_FLAGS[mp] + ' ' + mp : mp) + '</td>' +
             '<td>' + formatDate(u.lastSeen) + '</td>' +
-            '<td><button class="action-btn" onclick="mapParty(\'' + u.amazonPartyId + '\', \'' + (u.partyName || '').replace(/'/g, "\\'") + '\', \'' + (u.marketplaceId || '') + '\')" title="Map"><span class="material-symbols-outlined">link</span></button></td>' +
+            '<td><button class="action-btn" onclick="mapParty(\'' + pid + '\', \'' + (u.partyName || '').replace(/'/g, "\\'") + '\', \'' + mp + '\')" title="Map"><span class="material-symbols-outlined">link</span></button></td>' +
           '</tr>';
         }).join('');
       } catch (e) { console.error(e); }
@@ -304,9 +309,9 @@
         const data = await res.json();
         const m = data.mapping;
         document.getElementById('modal-title').textContent = 'Edit Party Mapping';
-        document.getElementById('party-id').value = m.amazonPartyId;
-        document.getElementById('party-name').value = m.partyName || '';
-        document.getElementById('party-marketplace').value = m.marketplaceId || '';
+        document.getElementById('party-id').value = m.partyId || m.amazonPartyId || '';
+        document.getElementById('party-name').value = m.partyName || m.odooPartnerName || '';
+        document.getElementById('party-marketplace').value = m.marketplace || m.marketplaceId || '';
         document.getElementById('odoo-partner-id').value = m.odooPartnerId || '';
         document.getElementById('odoo-search').value = m.odooPartnerName || '';
         document.getElementById('mapping-modal').classList.add('show');
@@ -356,9 +361,9 @@
       e.preventDefault();
       var partyId = document.getElementById('party-id').value;
       var payload = {
-        amazonPartyId: partyId,
+        partyId: partyId,
         partyName: document.getElementById('party-name').value || null,
-        marketplaceId: document.getElementById('party-marketplace').value || null,
+        marketplace: document.getElementById('party-marketplace').value || null,
         odooPartnerId: parseInt(document.getElementById('odoo-partner-id').value) || null,
         odooPartnerName: document.getElementById('odoo-search').value || null
       };
