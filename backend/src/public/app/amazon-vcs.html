@@ -1351,9 +1351,11 @@
         const pageOrders = filtered.slice(start, start + pageSize);
 
         ordersTableBody.innerHTML = pageOrders.map(order => {
+          // First check cached odooOrderNumber from MongoDB, then fall back to odooOrders map
           const odooOrder = odooOrders[order.orderId];
-          const odooOrderCell = odooOrder
-            ? `<span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-xs">${odooOrder.orderNumber}</span>`
+          const displayOrderNumber = order.odooOrderNumber || (odooOrder && odooOrder.orderNumber);
+          const odooOrderCell = displayOrderNumber
+            ? `<span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-xs">${displayOrderNumber}</span>`
             : `<span class="flex items-center gap-1 text-amber-400 text-xs" title="No Odoo order found - needs to be created"><span class="material-symbols-outlined text-sm">warning</span> Missing</span>`;
           const isChecked = selectedOrderIds.has(order._id) ? 'checked' : '';
 

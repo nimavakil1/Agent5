@@ -58,9 +58,7 @@ async function importMappings() {
         address: addressParts.join(', ') || null,
         country: p.country_id ? p.country_id[1] : null,
         notes: 'Imported from Emipro vendor partner',
-        active: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        active: true
       });
     } else {
       // Skipped - no party ID in name (parent companies like "Amazon EU SARL France")
