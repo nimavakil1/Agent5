@@ -172,7 +172,7 @@ if (process.env.CORS_ORIGIN) {
 app.use(express.json({ limit: process.env.BODY_LIMIT || '1mb' }));
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'app', 'login.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/healthz', (req, res) => res.status(200).send('ok'));

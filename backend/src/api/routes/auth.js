@@ -148,10 +148,10 @@ router.post('/logout', requireSession, async (req, res) => {
 
 router.get('/me', requireSession, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('email role avatar').lean();
-    res.json({ id: req.user.id, email: user.email, role: user.role, avatar: user.avatar });
+    const user = await User.findById(req.user.id).select('email firstName lastName role avatar').lean();
+    res.json({ id: req.user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role, avatar: user.avatar });
   } catch (e) {
-    res.json({ id: req.user.id, email: req.user.email, role: req.user.role, avatar: null });
+    res.json({ id: req.user.id, email: req.user.email, firstName: null, lastName: null, role: req.user.role, avatar: null });
   }
 });
 
