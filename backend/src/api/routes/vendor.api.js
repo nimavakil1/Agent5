@@ -23,6 +23,7 @@ const {
   getVendorASNCreator,
   getVendorChargebackTracker,
   getVendorRemittanceParser,
+  getVendorPartyMapping,
   MARKETPLACE_IDS,
   VENDOR_ACCOUNTS,
   PO_STATES,
@@ -30,7 +31,8 @@ const {
   MARKETPLACE_WAREHOUSE,
   CHARGEBACK_TYPES,
   DISPUTE_STATUS,
-  PAYMENT_STATUS
+  PAYMENT_STATUS,
+  PARTY_TYPES
 } = require('../../services/amazon/vendor');
 
 // ==================== PURCHASE ORDERS ====================
@@ -1367,6 +1369,213 @@ router.post('/test-connection', async (req, res) => {
       marketplace: req.body.marketplace,
       error: error.message
     });
+  }
+});
+
+// ==================== PARTY MAPPING ====================
+
+/**
+ * @route GET /api/vendor/party-mappings
+ * @desc Get all party mappings
+ * @query partyType - Filter by party type (shipTo, billTo, buying, selling)
+ * @query marketplace - Filter by marketplace
+ * @query active - Filter by active status (true/false)
+ */
+router.get('/party-mappings', async (req, res) => {
+  try {
+    const mapping = await getVendorPartyMapping();
+
+    const filters = {};
+    if (req.query.partyType) filters.partyType = req.query.partyType;
+    if (req.query.marketplace) filters.marketplace = req.query.marketplace.toUpperCase();
+    if (req.query.active !== undefined) filters.active = req.query.active === 'true';
+
+    const mappings = await mapping.getAllMappings(filters);
+
+    res.json({
+      success: true,
+      count: mappings.length,
+      mappings
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /party-mappings error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/party-mappings/stats
+ * @desc Get party mapping statistics
+ */
+router.get('/party-mappings/stats', async (req, res) => {
+  try {
+    const mapping = await getVendorPartyMapping();
+    const stats = await mapping.getStats();
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /party-mappings/stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/party-mappings/unmapped
+ * @desc Get unmapped party IDs from existing orders
+ */
+router.get('/party-mappings/unmapped', async (req, res) => {
+  try {
+    const mapping = await getVendorPartyMapping();
+    const unmapped = await mapping.getUnmappedPartyIds();
+
+    res.json({
+      success: true,
+      count: unmapped.length,
+      unmapped
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /party-mappings/unmapped error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/party-mappings/:partyId
+ * @desc Get a specific party mapping
+ */
+router.get('/party-mappings/:partyId', async (req, res) => {
+  try {
+    const mapping = await getVendorPartyMapping();
+    const result = mapping.getMapping(req.params.partyId.toUpperCase());
+
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Party mapping not found' });
+    }
+
+    res.json({
+      success: true,
+      mapping: result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /party-mappings/:partyId error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/party-mappings
+ * @desc Create or update a party mapping
+ * @body partyId - Amazon party code (required)
+ * @body partyType - Party type: shipTo, billTo, buying, selling
+ * @body odooPartnerId - Odoo res.partner ID (required)
+ * @body odooPartnerName - Odoo partner name
+ * @body vatNumber - VAT number
+ * @body address - Address string
+ * @body country - Country
+ * @body marketplace - Optional marketplace filter
+ * @body notes - Optional notes
+ */
+router.post('/party-mappings', async (req, res) => {
+  try {
+    if (!req.body.partyId) {
+      return res.status(400).json({ success: false, error: 'partyId is required' });
+    }
+    if (!req.body.odooPartnerId) {
+      return res.status(400).json({ success: false, error: 'odooPartnerId is required' });
+    }
+
+    const mapping = await getVendorPartyMapping();
+    const result = await mapping.upsertMapping({
+      partyId: req.body.partyId.toUpperCase(),
+      partyType: req.body.partyType || PARTY_TYPES.SHIP_TO,
+      odooPartnerId: parseInt(req.body.odooPartnerId),
+      odooPartnerName: req.body.odooPartnerName || null,
+      vatNumber: req.body.vatNumber || null,
+      address: req.body.address || null,
+      country: req.body.country || null,
+      marketplace: req.body.marketplace ? req.body.marketplace.toUpperCase() : null,
+      notes: req.body.notes || null,
+      active: req.body.active !== false
+    });
+
+    res.json({
+      success: true,
+      mapping: result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /party-mappings error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route DELETE /api/vendor/party-mappings/:partyId
+ * @desc Delete a party mapping
+ */
+router.delete('/party-mappings/:partyId', async (req, res) => {
+  try {
+    const mapping = await getVendorPartyMapping();
+    await mapping.deleteMapping(req.params.partyId.toUpperCase());
+
+    res.json({
+      success: true,
+      deleted: true
+    });
+  } catch (error) {
+    console.error('[VendorAPI] DELETE /party-mappings/:partyId error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/party-mappings/import-odoo
+ * @desc Import party mappings from existing Odoo partners
+ * @body dryRun - If true, show what would be imported without saving
+ * @body overwrite - If true, overwrite existing mappings
+ */
+router.post('/party-mappings/import-odoo', async (req, res) => {
+  try {
+    const mapping = await getVendorPartyMapping();
+    const result = await mapping.importFromOdoo({
+      dryRun: req.body.dryRun || false,
+      overwrite: req.body.overwrite || false
+    });
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /party-mappings/import-odoo error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/party-mappings/search-odoo
+ * @desc Search Odoo partners for potential mapping matches
+ * @query q - Search term
+ */
+router.get('/party-mappings/search-odoo', async (req, res) => {
+  try {
+    if (!req.query.q || req.query.q.length < 2) {
+      return res.status(400).json({ success: false, error: 'Search term (q) must be at least 2 characters' });
+    }
+
+    const mapping = await getVendorPartyMapping();
+    const partners = await mapping.searchOdooPartners(req.query.q);
+
+    res.json({
+      success: true,
+      count: partners.length,
+      partners
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /party-mappings/search-odoo error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

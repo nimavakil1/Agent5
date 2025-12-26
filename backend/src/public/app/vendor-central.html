@@ -44,6 +44,9 @@
         <button class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors text-slate-400 hover:text-white" data-tab="payments">
           Payments
         </button>
+        <button class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors text-slate-400 hover:text-white" data-tab="settings">
+          <span class="material-symbols-outlined text-sm align-middle">settings</span> Settings
+        </button>
       </div>
 
       <!-- Orders Tab Content -->
@@ -403,6 +406,93 @@
           </div>
         </div>
       </div><!-- End Payments Tab -->
+
+      <!-- Settings Tab Content -->
+      <div id="tab-settings" class="tab-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Party Mapping Stats -->
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+            <h3 class="text-white font-semibold mb-4 flex items-center gap-2">
+              <span class="material-symbols-outlined text-blue-400">analytics</span>
+              Party Mapping Status
+            </h3>
+            <div class="space-y-3">
+              <div class="flex justify-between">
+                <span class="text-slate-400">Total Mappings</span>
+                <span id="mapping-total" class="text-white font-medium">-</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Active</span>
+                <span id="mapping-active" class="text-green-400 font-medium">-</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">With VAT</span>
+                <span id="mapping-with-vat" class="text-blue-400 font-medium">-</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Unmapped Parties</span>
+                <span id="mapping-unmapped" class="text-orange-400 font-medium">-</span>
+              </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-slate-700">
+              <button id="import-odoo-btn" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                <span class="material-symbols-outlined text-sm">cloud_download</span>
+                Import from Odoo
+              </button>
+              <p class="text-slate-500 text-xs mt-2 text-center">Imports existing Amazon partners from Odoo</p>
+            </div>
+          </div>
+
+          <!-- Unmapped Party IDs -->
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 lg:col-span-2">
+            <h3 class="text-white font-semibold mb-4 flex items-center gap-2">
+              <span class="material-symbols-outlined text-orange-400">warning</span>
+              Unmapped Party IDs
+            </h3>
+            <p class="text-slate-400 text-sm mb-4">These party IDs appear in orders but have no Odoo partner mapping. Orders with unmapped parties cannot be created in Odoo.</p>
+            <div id="unmapped-list" class="space-y-2 max-h-48 overflow-y-auto">
+              <div class="text-slate-500 text-sm">Loading...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Party Mappings Table -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl mt-6">
+          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+            <h3 class="text-white font-semibold flex items-center gap-2">
+              <span class="material-symbols-outlined text-green-400">link</span>
+              Party Mappings
+            </h3>
+            <button id="add-mapping-btn" class="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">add</span>
+              Add Mapping
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-slate-700/50">
+                <tr>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Party ID</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Type</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Odoo Partner</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">VAT</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Address</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Status</th>
+                  <th class="text-left text-slate-400 font-medium text-sm px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="mappings-table-body" class="divide-y divide-slate-700">
+                <tr>
+                  <td colspan="7" class="px-4 py-8 text-center text-slate-400">
+                    <span class="material-symbols-outlined text-4xl mb-2 block">link</span>
+                    Loading party mappings...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- End Settings Tab -->
     </main>
 
     <!-- PO Detail Modal -->
@@ -1552,6 +1642,192 @@
           btn.disabled = false;
           btn.innerHTML = '<span class="material-symbols-outlined text-sm">sync</span> Reconcile Payments';
         }
+      });
+
+      // ==================== PARTY MAPPING ====================
+      async function loadPartyMappings() {
+        try {
+          const [mappingsRes, statsRes, unmappedRes] = await Promise.all([
+            fetch('/api/vendor/party-mappings'),
+            fetch('/api/vendor/party-mappings/stats'),
+            fetch('/api/vendor/party-mappings/unmapped')
+          ]);
+          const mappingsData = await mappingsRes.json();
+          const statsData = await statsRes.json();
+          const unmappedData = await unmappedRes.json();
+
+          // Update stats
+          if (statsData.success && statsData.stats) {
+            const s = statsData.stats;
+            document.getElementById('mapping-total').textContent = s.total || 0;
+            document.getElementById('mapping-active').textContent = s.active || 0;
+            document.getElementById('mapping-with-vat').textContent = s.withVat || 0;
+            document.getElementById('mapping-unmapped').textContent = s.unmappedCount || 0;
+          }
+
+          // Render unmapped list
+          renderUnmappedParties(unmappedData.unmapped || []);
+
+          // Render mappings table
+          renderMappings(mappingsData.mappings || []);
+        } catch (err) {
+          console.error('Failed to load party mappings:', err);
+          showToast('Failed to load party mappings', 'error');
+        }
+      }
+
+      function renderUnmappedParties(unmapped) {
+        const container = document.getElementById('unmapped-list');
+        if (unmapped.length === 0) {
+          container.innerHTML = '<div class="text-green-400 text-sm flex items-center gap-2"><span class="material-symbols-outlined text-sm">check_circle</span> All party IDs are mapped!</div>';
+          return;
+        }
+
+        container.innerHTML = unmapped.slice(0, 20).map(u => `
+          <div class="flex items-center justify-between bg-slate-700/50 rounded px-3 py-2">
+            <div class="flex items-center gap-2">
+              <span class="text-orange-400 font-mono font-medium">${u.partyId}</span>
+              <span class="text-slate-500 text-xs">(${u.usageCount} orders)</span>
+            </div>
+            <button onclick="promptAddMapping('${u.partyId}')" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
+              <span class="material-symbols-outlined text-sm">add_link</span>
+              Map
+            </button>
+          </div>
+        `).join('');
+      }
+
+      function renderMappings(mappings) {
+        const tbody = document.getElementById('mappings-table-body');
+        if (mappings.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" class="px-4 py-8 text-center text-slate-400">
+                <span class="material-symbols-outlined text-4xl mb-2 block">link</span>
+                <div class="font-medium text-white mb-1">No party mappings yet</div>
+                <div class="text-sm">Click "Import from Odoo" to import existing Amazon partners, or add mappings manually.</div>
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = mappings.map(m => {
+          const statusClass = m.active ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/20 text-slate-400';
+          const statusText = m.active ? 'Active' : 'Inactive';
+          const address = m.address ? (m.address.length > 30 ? m.address.substring(0, 30) + '...' : m.address) : '-';
+
+          return `
+            <tr class="hover:bg-slate-700/30">
+              <td class="px-4 py-3"><span class="text-orange-400 font-mono font-medium">${m.partyId}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-300 text-sm">${m.partyType || 'shipTo'}</span></td>
+              <td class="px-4 py-3">
+                <span class="text-white">${m.odooPartnerName || '-'}</span>
+                <span class="text-slate-500 text-xs block">ID: ${m.odooPartnerId}</span>
+              </td>
+              <td class="px-4 py-3"><span class="text-slate-300 text-sm font-mono">${m.vatNumber || '-'}</span></td>
+              <td class="px-4 py-3"><span class="text-slate-400 text-sm">${address}</span></td>
+              <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-medium ${statusClass}">${statusText}</span></td>
+              <td class="px-4 py-3">
+                <button onclick="deleteMapping('${m.partyId}')" class="text-red-400 hover:text-red-300">
+                  <span class="material-symbols-outlined text-sm">delete</span>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      async function importFromOdoo() {
+        const btn = document.getElementById('import-odoo-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm loader">progress_activity</span> Importing...';
+        try {
+          const res = await fetch('/api/vendor/party-mappings/import-odoo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dryRun: false, overwrite: false })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(`Imported ${data.imported} mappings (${data.skipped} skipped)`, 'success');
+            loadPartyMappings();
+          } else {
+            showToast('Failed to import: ' + (data.error || 'Unknown error'), 'error');
+          }
+        } catch (err) {
+          showToast('Failed to import from Odoo', 'error');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm">cloud_download</span> Import from Odoo';
+        }
+      }
+
+      async function promptAddMapping(partyId = '') {
+        const id = partyId || prompt('Enter Party ID (e.g., BRE4):');
+        if (!id) return;
+
+        const partnerId = prompt('Enter Odoo Partner ID:');
+        if (!partnerId) return;
+
+        const partnerName = prompt('Enter Partner Name (optional):') || '';
+        const vatNumber = prompt('Enter VAT Number (optional):') || '';
+
+        try {
+          const res = await fetch('/api/vendor/party-mappings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              partyId: id.toUpperCase(),
+              odooPartnerId: parseInt(partnerId),
+              odooPartnerName: partnerName,
+              vatNumber: vatNumber,
+              partyType: 'shipTo',
+              active: true
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(`Mapping added for ${id}`, 'success');
+            loadPartyMappings();
+          } else {
+            showToast('Failed to add mapping: ' + (data.error || 'Unknown error'), 'error');
+          }
+        } catch (err) {
+          showToast('Failed to add mapping', 'error');
+        }
+      }
+
+      async function deleteMapping(partyId) {
+        if (!confirm(`Delete mapping for ${partyId}?`)) return;
+
+        try {
+          const res = await fetch(`/api/vendor/party-mappings/${partyId}`, {
+            method: 'DELETE'
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(`Mapping deleted for ${partyId}`, 'success');
+            loadPartyMappings();
+          } else {
+            showToast('Failed to delete mapping', 'error');
+          }
+        } catch (err) {
+          showToast('Failed to delete mapping', 'error');
+        }
+      }
+
+      // Setup event listeners for settings tab
+      document.getElementById('import-odoo-btn')?.addEventListener('click', importFromOdoo);
+      document.getElementById('add-mapping-btn')?.addEventListener('click', () => promptAddMapping());
+
+      // Load party mappings when settings tab is selected
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.dataset.tab === 'settings') {
+            loadPartyMappings();
+          }
+        });
       });
     </script>
   </body>

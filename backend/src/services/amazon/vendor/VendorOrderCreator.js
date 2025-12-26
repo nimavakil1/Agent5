@@ -18,6 +18,7 @@
 const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { getVendorPOImporter, COLLECTION_NAME } = require('./VendorPOImporter');
+const { getVendorPartyMapping } = require('./VendorPartyMapping');
 const { skuResolver } = require('../SkuResolver');
 
 /**
@@ -71,6 +72,7 @@ class VendorOrderCreator {
     this.odoo = odooClient || new OdooDirectClient();
     this.db = null;
     this.importer = null;
+    this.partyMapping = null;
     this.warehouseCache = {};
     this.productCache = {};
     this.partnerCache = {};
@@ -82,6 +84,7 @@ class VendorOrderCreator {
   async init() {
     this.db = getDb();
     this.importer = await getVendorPOImporter();
+    this.partyMapping = await getVendorPartyMapping();
 
     // Authenticate with Odoo
     if (!this.odoo.authenticated) {
@@ -194,17 +197,22 @@ class VendorOrderCreator {
 
       result.warnings.push(...orderLines.warnings);
 
-      // Step 4: Find or create Amazon Vendor partner
-      const partnerId = await this.findOrCreateVendorPartner(po.marketplaceId, po.buyingParty);
+      // Step 4: Look up partner mappings from party IDs
+      const partnerIds = await this.resolvePartnerMappings(po);
+      if (partnerIds.errors.length > 0) {
+        result.errors.push(...partnerIds.errors);
+        return result;
+      }
+      result.warnings.push(...partnerIds.warnings);
 
       // Step 5: Find warehouse
       const warehouseId = await this.findWarehouse(po.marketplaceId);
 
       // Step 6: Prepare order data
       const orderData = {
-        partner_id: partnerId,
-        partner_invoice_id: partnerId,
-        partner_shipping_id: partnerId,
+        partner_id: partnerIds.customerId,          // Main customer (buying party)
+        partner_invoice_id: partnerIds.invoiceId,   // Invoice address (billTo party)
+        partner_shipping_id: partnerIds.shippingId, // Shipping address (shipTo party)
         client_order_ref: poNumber,  // CRITICAL: Store PO number for duplicate detection
         date_order: this.formatDate(po.purchaseOrderDate),
         warehouse_id: warehouseId,
@@ -418,47 +426,84 @@ class VendorOrderCreator {
   }
 
   /**
-   * Find or create Amazon Vendor partner
+   * Resolve partner IDs from party mapping table
+   * NEVER creates new partners - fails if mapping not found
+   *
+   * @param {object} po - Purchase order with party info
+   * @returns {object} { customerId, invoiceId, shippingId, errors, warnings }
    */
-  async findOrCreateVendorPartner(marketplace, buyingParty = null) {
-    const partnerName = `Amazon Vendor | ${marketplace}`;
-
-    // Check cache
-    if (this.partnerCache[marketplace]) {
-      return this.partnerCache[marketplace];
-    }
-
-    // Search for existing partner
-    const existing = await this.odoo.search('res.partner',
-      [['name', '=', partnerName]],
-      { limit: 1 }
-    );
-
-    if (existing.length > 0) {
-      this.partnerCache[marketplace] = existing[0];
-      return existing[0];
-    }
-
-    // Create new partner for Amazon Vendor
-    const partnerData = {
-      name: partnerName,
-      company_type: 'company',
-      is_company: true,
-      customer_rank: 1,
-      supplier_rank: 0,
-      comment: `Amazon Vendor Central customer for ${marketplace} marketplace`,
+  async resolvePartnerMappings(po) {
+    const result = {
+      customerId: null,
+      invoiceId: null,
+      shippingId: null,
+      errors: [],
+      warnings: []
     };
 
-    // Add buying party info if available
-    if (buyingParty?.partyId) {
-      partnerData.ref = buyingParty.partyId;
+    // Get party IDs from PO
+    const buyingPartyId = po.buyingParty?.partyId;
+    const billToPartyId = po.billToParty?.partyId;
+    const shipToPartyId = po.shipToParty?.partyId;
+
+    // Buying party -> Main customer
+    if (buyingPartyId) {
+      const mapping = this.partyMapping.getMapping(buyingPartyId);
+      if (mapping) {
+        result.customerId = mapping.odooPartnerId;
+      } else {
+        result.errors.push(`Unmapped buying party: ${buyingPartyId}. Please add mapping in Party Mapping settings.`);
+      }
+    } else {
+      result.errors.push('No buying party ID in PO');
     }
 
-    const partnerId = await this.odoo.create('res.partner', partnerData);
-    this.partnerCache[marketplace] = partnerId;
+    // BillTo party -> Invoice address
+    if (billToPartyId) {
+      const mapping = this.partyMapping.getMapping(billToPartyId);
+      if (mapping) {
+        result.invoiceId = mapping.odooPartnerId;
+      } else {
+        // Warning only, fall back to customer
+        result.warnings.push(`Unmapped billTo party: ${billToPartyId}. Using buying party for invoice.`);
+        result.invoiceId = result.customerId;
+      }
+    } else {
+      result.invoiceId = result.customerId;
+    }
 
-    console.log(`[VendorOrderCreator] Created Amazon Vendor partner for ${marketplace}: ID ${partnerId}`);
-    return partnerId;
+    // ShipTo party -> Shipping address
+    if (shipToPartyId) {
+      const mapping = this.partyMapping.getMapping(shipToPartyId);
+      if (mapping) {
+        result.shippingId = mapping.odooPartnerId;
+      } else {
+        // Warning only, fall back to customer
+        result.warnings.push(`Unmapped shipTo party: ${shipToPartyId}. Using buying party for shipping.`);
+        result.shippingId = result.customerId;
+      }
+    } else {
+      result.shippingId = result.customerId;
+    }
+
+    return result;
+  }
+
+  /**
+   * Get VAT number for a party from mapping
+   * Used for invoice submission
+   */
+  getPartyVatNumber(partyId) {
+    const mapping = this.partyMapping.getMapping(partyId);
+    return mapping?.vatNumber || null;
+  }
+
+  /**
+   * Get full party info from mapping
+   * Used for invoice submission
+   */
+  getPartyInfo(partyId) {
+    return this.partyMapping.getMapping(partyId);
   }
 
   /**

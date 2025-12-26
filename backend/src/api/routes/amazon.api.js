@@ -2796,86 +2796,144 @@ router.post('/vcs/upload', upload.single('file'), async (req, res) => {
 /**
  * @route POST /api/amazon/vcs/check-odoo
  * @desc Check Odoo for existing sales orders matching Amazon order IDs
- * @body { orderIds: string[] } - Array of Amazon order IDs to check
+ * @body { orderIds: string[], forceRefresh?: boolean } - Array of Amazon order IDs to check
+ *
+ * Caching: Results are saved to MongoDB VCS documents (odooOrderNumber, odooOrderId, odooOrderCheckedAt).
+ * On subsequent calls, cached data is returned unless forceRefresh=true.
  */
 router.post('/vcs/check-odoo', async (req, res) => {
   try {
-    const { orderIds } = req.body;
+    const { orderIds, forceRefresh = false } = req.body;
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
       return res.status(400).json({ error: 'orderIds array required' });
     }
 
-    // Initialize Odoo client
-    const odooClient = new OdooDirectClient();
-    await odooClient.authenticate();
-
-    // Search for sales orders with matching client_order_ref
-    // Odoo stores Amazon order IDs in the 'client_order_ref' field
+    const db = await getDb();
+    const vcsCollection = db.collection('amazon_vcs_orders');
     const matchedOrders = {};
 
-    // Generate all possible variations of order IDs (raw, FBA, FBM)
-    // VCS provides raw IDs like "205-1829787-5409110" but Odoo stores them as "FBA205-1829787-5409110"
-    const allSearchIds = [];
-    const rawToVariations = {}; // Map raw ID to all its variations for result mapping
+    // Step 1: Check for cached data in MongoDB (unless forceRefresh)
+    let orderIdsToCheck = [...orderIds];
+    let cachedCount = 0;
 
-    for (const orderId of orderIds) {
-      const variations = [orderId];
-      // Add with FBA prefix if not already present
-      if (!orderId.startsWith('FBA')) {
-        variations.push('FBA' + orderId);
+    if (!forceRefresh) {
+      // Find VCS orders that already have odooOrderNumber cached
+      const cachedVcsOrders = await vcsCollection.find({
+        orderId: { $in: orderIds },
+        odooOrderNumber: { $exists: true, $ne: null }
+      }).toArray();
+
+      // Build result from cache
+      for (const vcs of cachedVcsOrders) {
+        matchedOrders[vcs.orderId] = {
+          orderNumber: vcs.odooOrderNumber,
+          orderId: vcs.odooOrderId,
+          state: vcs.odooOrderState,
+          amount: vcs.odooOrderAmount,
+          cached: true
+        };
+        cachedCount++;
       }
-      // Add with FBM prefix if not already present
-      if (!orderId.startsWith('FBM')) {
-        variations.push('FBM' + orderId);
-      }
-      allSearchIds.push(...variations);
-      rawToVariations[orderId] = variations;
+
+      // Only query Odoo for orders not in cache
+      const cachedOrderIds = new Set(cachedVcsOrders.map(v => v.orderId));
+      orderIdsToCheck = orderIds.filter(id => !cachedOrderIds.has(id));
+
+      console.log(`[VCS Check Odoo] Found ${cachedCount} cached, ${orderIdsToCheck.length} to check in Odoo`);
     }
 
-    // Use 'in' operator with larger batches for much better performance
-    // The 'in' operator is far more efficient than building OR domains
-    const batchSize = 500;
-    console.log(`[VCS Check Odoo] Checking ${orderIds.length} order IDs (${allSearchIds.length} with variations) in batches of ${batchSize}...`);
+    // Step 2: Query Odoo for uncached orders
+    if (orderIdsToCheck.length > 0) {
+      const odooClient = new OdooDirectClient();
+      await odooClient.authenticate();
 
-    for (let i = 0; i < allSearchIds.length; i += batchSize) {
-      const batch = allSearchIds.slice(i, i + batchSize);
+      // Generate all possible variations of order IDs (raw, FBA, FBM)
+      const allSearchIds = [];
+      const rawToVariations = {};
 
-      // Use 'in' operator - much simpler and faster than OR domain
-      const domain = [['client_order_ref', 'in', batch]];
-
-      const orders = await odooClient.searchRead('sale.order', domain, ['name', 'client_order_ref', 'state', 'amount_total']);
-
-      // Map orders back to Amazon order IDs
-      for (const order of orders) {
-        const ref = order.client_order_ref || '';
-        // Extract the raw order ID without FBA/FBM prefix for consistent mapping
-        const rawOrderId = ref.replace(/^(FBA|FBM)/, '');
-
-        // Store by raw ID so the UI can match it back
-        matchedOrders[rawOrderId] = {
-          orderNumber: order.name,
-          state: order.state,
-          amount: order.amount_total
-        };
-        // Also store by the full ref in case the VCS data has the prefix
-        matchedOrders[ref] = {
-          orderNumber: order.name,
-          state: order.state,
-          amount: order.amount_total
-        };
+      for (const orderId of orderIdsToCheck) {
+        const variations = [orderId];
+        if (!orderId.startsWith('FBA')) {
+          variations.push('FBA' + orderId);
+        }
+        if (!orderId.startsWith('FBM')) {
+          variations.push('FBM' + orderId);
+        }
+        allSearchIds.push(...variations);
+        rawToVariations[orderId] = variations;
       }
 
-      // Log progress for large batches
-      if (orderIds.length > 1000 && (i + batchSize) % 2000 === 0) {
-        console.log(`[VCS Check Odoo] Processed ${Math.min(i + batchSize, orderIds.length)}/${orderIds.length} order IDs...`);
+      const batchSize = 500;
+      console.log(`[VCS Check Odoo] Checking ${orderIdsToCheck.length} order IDs (${allSearchIds.length} with variations) in Odoo...`);
+
+      const newMatches = {}; // Track newly found matches for MongoDB update
+
+      for (let i = 0; i < allSearchIds.length; i += batchSize) {
+        const batch = allSearchIds.slice(i, i + batchSize);
+        const domain = [['client_order_ref', 'in', batch]];
+        const orders = await odooClient.searchRead('sale.order', domain, ['id', 'name', 'client_order_ref', 'state', 'amount_total']);
+
+        for (const order of orders) {
+          const ref = order.client_order_ref || '';
+          const rawOrderId = ref.replace(/^(FBA|FBM)/, '');
+
+          const orderInfo = {
+            orderNumber: order.name,
+            orderId: order.id,
+            state: order.state,
+            amount: order.amount_total,
+            cached: false
+          };
+
+          matchedOrders[rawOrderId] = orderInfo;
+          matchedOrders[ref] = orderInfo;
+          newMatches[rawOrderId] = orderInfo;
+        }
+
+        if (orderIdsToCheck.length > 1000 && (i + batchSize) % 2000 === 0) {
+          console.log(`[VCS Check Odoo] Processed ${Math.min(i + batchSize, orderIdsToCheck.length)}/${orderIdsToCheck.length} order IDs...`);
+        }
       }
+
+      // Step 3: Save newly found matches to MongoDB VCS documents
+      const newMatchCount = Object.keys(newMatches).length;
+      if (newMatchCount > 0) {
+        console.log(`[VCS Check Odoo] Saving ${newMatchCount} new matches to MongoDB...`);
+        const bulkOps = [];
+
+        for (const [orderId, info] of Object.entries(newMatches)) {
+          bulkOps.push({
+            updateMany: {
+              filter: { orderId: orderId },
+              update: {
+                $set: {
+                  odooOrderNumber: info.orderNumber,
+                  odooOrderId: info.orderId,
+                  odooOrderState: info.state,
+                  odooOrderAmount: info.amount,
+                  odooOrderCheckedAt: new Date()
+                }
+              }
+            }
+          });
+        }
+
+        if (bulkOps.length > 0) {
+          await vcsCollection.bulkWrite(bulkOps, { ordered: false });
+        }
+      }
+
+      console.log(`[VCS Check Odoo] Found ${newMatchCount} new matches in Odoo`);
     }
 
-    console.log(`[VCS Check Odoo] Found ${Object.keys(matchedOrders).length} matching orders out of ${orderIds.length} checked`);
+    const uniqueMatches = new Set(Object.values(matchedOrders).map(o => o.orderNumber)).size;
+    console.log(`[VCS Check Odoo] Total: ${uniqueMatches} unique matches (${cachedCount} cached, ${uniqueMatches - cachedCount} from Odoo)`);
 
     res.json({
       success: true,
-      matchedCount: Object.keys(matchedOrders).length,
+      matchedCount: uniqueMatches,
+      cachedCount: cachedCount,
+      freshCount: uniqueMatches - cachedCount,
       totalChecked: orderIds.length,
       orders: matchedOrders
     });

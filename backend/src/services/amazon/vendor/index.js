@@ -14,6 +14,7 @@ const { VendorInvoiceSubmitter, getVendorInvoiceSubmitter, INVOICE_TYPES, ACROPA
 const { VendorASNCreator, getVendorASNCreator, SHIPMENT_TYPES, TRANSPORTATION_METHODS } = require('./VendorASNCreator');
 const { VendorChargebackTracker, getVendorChargebackTracker, CHARGEBACK_TYPES, DISPUTE_STATUS } = require('./VendorChargebackTracker');
 const { VendorRemittanceParser, getVendorRemittanceParser, PAYMENT_STATUS, PAYMENT_TYPES } = require('./VendorRemittanceParser');
+const { VendorPartyMapping, getVendorPartyMapping, COLLECTION_NAME: PARTY_MAPPING_COLLECTION, PARTY_TYPES } = require('./VendorPartyMapping');
 
 module.exports = {
   // Client
@@ -48,6 +49,10 @@ module.exports = {
   VendorRemittanceParser,
   getVendorRemittanceParser,
 
+  // Party Mapping
+  VendorPartyMapping,
+  getVendorPartyMapping,
+
   // Constants
   MARKETPLACE_IDS,
   VENDOR_TOKEN_MAP,
@@ -68,5 +73,7 @@ module.exports = {
   CHARGEBACK_TYPES,
   DISPUTE_STATUS,
   PAYMENT_STATUS,
-  PAYMENT_TYPES
+  PAYMENT_TYPES,
+  PARTY_TYPES,
+  PARTY_MAPPING_COLLECTION
 };
