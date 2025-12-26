@@ -320,6 +320,36 @@
       0% { background-position: 200% 0; }
       100% { background-position: -200% 0; }
     }
+
+    /* Access Denied Toast */
+    .access-denied-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #7f1d1d;
+      border: 1px solid #dc2626;
+      color: #fecaca;
+      padding: 12px 20px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+      transition: transform 0.3s ease;
+      z-index: 2000;
+    }
+
+    .access-denied-toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .access-denied-toast .material-symbols-outlined {
+      font-size: 20px;
+      color: #ef4444;
+    }
   </style>
 </head>
 <body>
@@ -427,12 +457,13 @@
 
     let currentUser = null;
     let userModules = []; // Modules user has access to
+    let accessibleModuleIds = []; // Module IDs from API
 
     async function init() {
-      // Wait for shell to load user
+      // Wait for shell to load user and modules
       await new Promise(resolve => {
         const check = () => {
-          if (window.Agent5Shell && window.Agent5Shell.getCurrentUser()) {
+          if (window.Agent5Shell && window.Agent5Shell.getCurrentUser() && window.Agent5Shell.getAccessibleModules) {
             resolve();
           } else {
             setTimeout(check, 100);
@@ -442,6 +473,14 @@
       });
 
       currentUser = window.Agent5Shell.getCurrentUser();
+      accessibleModuleIds = window.Agent5Shell.getAccessibleModules();
+
+      // Check for access denied message
+      const accessDenied = sessionStorage.getItem('access_denied');
+      if (accessDenied) {
+        sessionStorage.removeItem('access_denied');
+        showAccessDeniedToast(accessDenied);
+      }
 
       // Set greeting
       const hour = new Date().getHours();
@@ -451,20 +490,28 @@
       const name = currentUser?.email?.split('@')[0] || 'there';
       document.getElementById('greeting').textContent = `${greeting}, ${name}`;
 
-      // For now, show all modules (permissions will be added later)
-      // In the future, this will filter based on user permissions
-      userModules = MODULES.filter(m => {
-        // Hide admin-only modules for non-admins
-        if (m.adminOnly && !['admin', 'superadmin'].includes(currentUser?.role)) {
-          return false;
-        }
-        return true;
-      });
+      // Filter modules based on API response
+      userModules = MODULES.filter(m => accessibleModuleIds.includes(m.id));
 
       renderModules();
       loadStats();
       loadActivity();
       loadNotifications();
+    }
+
+    function showAccessDeniedToast(moduleName) {
+      const toast = document.createElement('div');
+      toast.className = 'access-denied-toast';
+      toast.innerHTML = `
+        <span class="material-symbols-outlined">lock</span>
+        <span>You don't have access to ${moduleName}</span>
+      `;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.classList.add('show'), 100);
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
     }
 
     function renderModules() {

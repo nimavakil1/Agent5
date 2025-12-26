@@ -6,6 +6,7 @@ const AuditLog = require('../../models/AuditLog');
 const { requireSession } = require('../../middleware/sessionAuth');
 const { requirePrivilege } = require('../../middleware/priv');
 const Role = require('../../models/Role');
+const { getModuleAccessForUser, listAllModules } = require('../../util/privileges');
 
 const router = express.Router();
 
@@ -97,6 +98,22 @@ router.post('/logout', requireSession, async (req, res) => {
 
 router.get('/me', requireSession, (req, res) => {
   res.json({ id: req.user.id, email: req.user.email, role: req.user.role });
+});
+
+// Get modules user has access to
+router.get('/me/modules', requireSession, async (req, res) => {
+  try {
+    const modules = await getModuleAccessForUser(req.user);
+    res.json({ modules });
+  } catch (e) {
+    console.error('get modules error', e);
+    res.status(500).json({ message: 'error' });
+  }
+});
+
+// Get all available modules (admin only)
+router.get('/modules/list', requireSession, requirePrivilege('roles.view'), async (req, res) => {
+  res.json({ modules: listAllModules() });
 });
 
 // --- Admin user management ---

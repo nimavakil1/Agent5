@@ -77,6 +77,34 @@ const SKU_TRANSFORMATIONS = [
 // Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM → 10050K
 const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
 
+// VAT cut-off date - invoices cannot be created in closed VAT periods
+// Any shipment date before this date will use today's date instead
+// Format: YYYY-MM-DD (configurable via env variable)
+const VAT_CUTOFF_DATE = process.env.VAT_CUTOFF_DATE || '2024-11-30';
+
+/**
+ * Get effective invoice date, respecting VAT period closure
+ * If the original date is before the VAT cut-off, use today's date instead
+ * @param {Date|string} originalDate - The shipment/return date from VCS
+ * @returns {Date} The effective date to use for the invoice
+ */
+function getEffectiveInvoiceDate(originalDate) {
+  if (!originalDate) return new Date();
+
+  const date = new Date(originalDate);
+  const cutoff = new Date(VAT_CUTOFF_DATE);
+
+  // Set cutoff to end of day to include the cutoff date itself in the closed period
+  cutoff.setHours(23, 59, 59, 999);
+
+  if (date <= cutoff) {
+    console.log(`[VcsOdooInvoicer] Date ${date.toISOString().split('T')[0]} is before VAT cut-off ${VAT_CUTOFF_DATE}, using today's date`);
+    return new Date();
+  }
+
+  return date;
+}
+
 // Marketplace to Sales Team ID mapping (Odoo crm.team IDs)
 // Based on marketplaceId - the Amazon marketplace where the order was placed
 const MARKETPLACE_SALES_TEAMS = {

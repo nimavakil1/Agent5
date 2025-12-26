@@ -1,4 +1,5 @@
 const Role = require('../models/Role');
+const { AVAILABLE_MODULES } = require('../models/Role');
 
 // Canonical privilege list grouped by module for UI; backend uses flat strings
 const PRIVILEGES = [
@@ -54,5 +55,58 @@ async function getPrivilegesForUser(user) {
 
 function listAllPrivileges() { return PRIVILEGES.slice(); }
 
-module.exports = { getPrivilegesForUser, listAllPrivileges, PRIVILEGES };
+// Module access cache
+const moduleCache = new Map(); // roleId -> {modules:string[], at:number}
+
+/**
+ * Get modules a user has access to
+ * @param {Object} user - User object with role and roleId
+ * @returns {Promise<string[]>} Array of module IDs
+ */
+async function getModuleAccessForUser(user) {
+  // Superadmin has access to all modules
+  if (user?.role === 'superadmin') return AVAILABLE_MODULES.slice();
+
+  // If roleId present, load role's moduleAccess with cache
+  if (user?.roleId) {
+    const key = String(user.roleId);
+    const now = Date.now();
+    const cached = moduleCache.get(key);
+    if (cached && (now - cached.at) < TTL_MS) return cached.modules;
+
+    const role = await Role.findById(user.roleId).lean();
+    const modules = role?.moduleAccess || [];
+    moduleCache.set(key, { modules, at: now });
+    return modules;
+  }
+
+  // Legacy role mapping - admin gets all, others get none
+  if (user?.role === 'admin') return AVAILABLE_MODULES.slice();
+
+  // Default: no access (must be explicitly granted)
+  return [];
+}
+
+/**
+ * Check if user has access to a specific module
+ * @param {Object} user - User object
+ * @param {string} moduleId - Module ID to check
+ * @returns {Promise<boolean>}
+ */
+async function hasModuleAccess(user, moduleId) {
+  const modules = await getModuleAccessForUser(user);
+  return modules.includes(moduleId);
+}
+
+function listAllModules() { return AVAILABLE_MODULES.slice(); }
+
+module.exports = {
+  getPrivilegesForUser,
+  listAllPrivileges,
+  PRIVILEGES,
+  getModuleAccessForUser,
+  hasModuleAccess,
+  listAllModules,
+  AVAILABLE_MODULES
+};
 

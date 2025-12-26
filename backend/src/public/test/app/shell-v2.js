@@ -99,6 +99,7 @@
   let currentUser = null;
   let currentModule = null;
   let currentPage = null;
+  let accessibleModules = []; // Module IDs user has access to
 
   async function getMe() {
     try {
@@ -108,6 +109,21 @@
     } catch (_) {
       return null;
     }
+  }
+
+  async function getMyModules() {
+    try {
+      const r = await fetch('/api/auth/me/modules', { credentials: 'include' });
+      if (!r.ok) return [];
+      const data = await r.json();
+      return data.modules || [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function hasModuleAccess(moduleId) {
+    return accessibleModules.includes(moduleId);
   }
 
   function redirectToLogin(nextUrl) {
@@ -655,21 +671,39 @@
   }
 
   // Initialize
-  getMe().then(u => {
+  (async () => {
+    const u = await getMe();
     if (!u) {
       if (!location.pathname.includes('/login')) {
         redirectToLogin(location.pathname + location.search + location.hash);
       }
       return;
     }
+
+    // Fetch accessible modules
+    accessibleModules = await getMyModules();
+
+    // Check if user is trying to access a module they don't have access to
+    const path = location.pathname;
+    for (const [id, module] of Object.entries(MODULES)) {
+      if (path.startsWith(module.basePath) && !hasModuleAccess(id)) {
+        // Redirect to home with access denied message
+        sessionStorage.setItem('access_denied', module.name);
+        location.href = '/test/app/';
+        return;
+      }
+    }
+
     injectShell(u);
-  });
+  })();
 
   // Export for use in pages
   window.Agent5Shell = {
     MODULES,
     getCurrentModule: () => currentModule,
     getCurrentPage: () => currentPage,
-    getCurrentUser: () => currentUser
+    getCurrentUser: () => currentUser,
+    getAccessibleModules: () => accessibleModules,
+    hasModuleAccess
   };
 })();

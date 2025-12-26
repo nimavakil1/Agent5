@@ -24,9 +24,15 @@ router.get('/privileges/list', requirePrivilege('roles.view'), async (req, res) 
 // Create role
 router.post('/', requirePrivilege('roles.manage'), async (req, res) => {
   try {
-    const { name, description, privileges } = req.body || {};
+    const { name, description, privileges, moduleAccess } = req.body || {};
     if (!name || !Array.isArray(privileges)) return res.status(400).json({ message: 'name and privileges required' });
-    const role = await Role.create({ name: String(name).trim(), description: description||'', privileges: privileges.filter(Boolean) });
+    const roleData = {
+      name: String(name).trim(),
+      description: description || '',
+      privileges: privileges.filter(Boolean),
+      moduleAccess: Array.isArray(moduleAccess) ? moduleAccess.filter(Boolean) : []
+    };
+    const role = await Role.create(roleData);
     res.status(201).json(role);
   } catch (e) {
     if (String(e.message||'').includes('duplicate key')) return res.status(409).json({ message: 'role exists' });
@@ -45,6 +51,7 @@ router.put('/:id', requirePrivilege('roles.manage'), async (req, res) => {
     const update = {};
     if (req.body.description !== undefined) update.description = String(req.body.description);
     if (Array.isArray(req.body.privileges)) update.privileges = req.body.privileges.filter(Boolean);
+    if (Array.isArray(req.body.moduleAccess)) update.moduleAccess = req.body.moduleAccess.filter(Boolean);
     await Role.findByIdAndUpdate(role._id, update);
     const fresh = await Role.findById(role._id);
     res.json(fresh);
