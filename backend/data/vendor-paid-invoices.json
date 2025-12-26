@@ -1,0 +1,6955 @@
+{
+  "generatedAt": "2025-12-26T16:57:52.001Z",
+  "totalPaidInvoices": 1158,
+  "totalAmountPaid": 490101.09000000183,
+  "paidInvoices": {
+    "152955": {
+      "amazonInvoice": "VBE20240200017",
+      "amazonAmount": 101.31,
+      "netPaid": 101.31,
+      "status": "paid"
+    },
+    "155660": {
+      "amazonInvoice": "VBE20240200060",
+      "amazonAmount": 106.88,
+      "netPaid": 106.88,
+      "status": "paid"
+    },
+    "155661": {
+      "amazonInvoice": "VBE20240200061",
+      "amazonAmount": 115.36,
+      "netPaid": 115.36,
+      "status": "paid"
+    },
+    "155672": {
+      "amazonInvoice": "VBE20240200018",
+      "amazonAmount": 101.31,
+      "netPaid": 101.31,
+      "status": "paid"
+    },
+    "155673": {
+      "amazonInvoice": "VBE20240200021",
+      "amazonAmount": 167.03,
+      "netPaid": 167.03,
+      "status": "paid"
+    },
+    "155696": {
+      "amazonInvoice": "VBE20240200046",
+      "amazonAmount": 109.78,
+      "netPaid": 109.78,
+      "status": "paid"
+    },
+    "155697": {
+      "amazonInvoice": "VBE20240200028",
+      "amazonAmount": 107.04,
+      "netPaid": 107.04,
+      "status": "paid"
+    },
+    "155698": {
+      "amazonInvoice": "VBE20240200027",
+      "amazonAmount": 142.74,
+      "netPaid": 142.74,
+      "status": "paid"
+    },
+    "155699": {
+      "amazonInvoice": "VBE20240200029",
+      "amazonAmount": 195.94,
+      "netPaid": 195.94,
+      "status": "paid"
+    },
+    "155700": {
+      "amazonInvoice": "VBE20240200012",
+      "amazonAmount": 175.68,
+      "netPaid": 175.68,
+      "status": "paid"
+    },
+    "155701": {
+      "amazonInvoice": "VBE20240200013",
+      "amazonAmount": 252.54,
+      "netPaid": 252.54,
+      "status": "paid"
+    },
+    "155703": {
+      "amazonInvoice": "VBE20240100150",
+      "amazonAmount": 559.36,
+      "netPaid": 559.36,
+      "status": "paid"
+    },
+    "155718": {
+      "amazonInvoice": "VBE20240100139",
+      "amazonAmount": 112.32,
+      "netPaid": 112.32,
+      "status": "paid"
+    },
+    "155719": {
+      "amazonInvoice": "VBE20240100138",
+      "amazonAmount": 299.52,
+      "netPaid": 299.52,
+      "status": "paid"
+    },
+    "155724": {
+      "amazonInvoice": "VBE20240100135",
+      "amazonAmount": 135,
+      "netPaid": 135,
+      "status": "paid"
+    },
+    "155729": {
+      "amazonInvoice": "VBE20240100129",
+      "amazonAmount": 115.36,
+      "netPaid": 115.36,
+      "status": "paid"
+    },
+    "155730": {
+      "amazonInvoice": "VBE20240100128",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "155731": {
+      "amazonInvoice": "VBE20240100122",
+      "amazonAmount": 4335.04,
+      "netPaid": 4335.04,
+      "status": "paid"
+    },
+    "155743": {
+      "amazonInvoice": "VBE20240100107",
+      "amazonAmount": 4155,
+      "netPaid": 4155,
+      "status": "paid"
+    },
+    "155744": {
+      "amazonInvoice": "VBE20240100114",
+      "amazonAmount": 7050,
+      "netPaid": 7050,
+      "status": "paid"
+    },
+    "155745": {
+      "amazonInvoice": "VBE20240100115",
+      "amazonAmount": 6660,
+      "netPaid": 6660,
+      "status": "paid"
+    },
+    "155746": {
+      "amazonInvoice": "VBE20240100116",
+      "amazonAmount": 167.92,
+      "netPaid": 167.92,
+      "status": "paid"
+    },
+    "155755": {
+      "amazonInvoice": "VBE20240100103",
+      "amazonAmount": 135,
+      "netPaid": 135,
+      "status": "paid"
+    },
+    "155760": {
+      "amazonInvoice": "VBE20240100098",
+      "amazonAmount": 3210,
+      "netPaid": 3210,
+      "status": "paid"
+    },
+    "155761": {
+      "amazonInvoice": "VBE20240100099",
+      "amazonAmount": 630,
+      "netPaid": 630,
+      "status": "paid"
+    },
+    "155772": {
+      "amazonInvoice": "VBE20240100088",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "155774": {
+      "amazonInvoice": "VBE20240100086",
+      "amazonAmount": 98.88,
+      "netPaid": 98.88,
+      "status": "paid"
+    },
+    "155783": {
+      "amazonInvoice": "VBE20240100075",
+      "amazonAmount": 167.92,
+      "netPaid": 167.92,
+      "status": "paid"
+    },
+    "155784": {
+      "amazonInvoice": "VBE20240100074",
+      "amazonAmount": 2250,
+      "netPaid": 2250,
+      "status": "paid"
+    },
+    "155785": {
+      "amazonInvoice": "VBE20240100073",
+      "amazonAmount": 7065,
+      "netPaid": 7065,
+      "status": "paid"
+    },
+    "155786": {
+      "amazonInvoice": "VBE20240100070",
+      "amazonAmount": 107.46,
+      "netPaid": 107.46,
+      "status": "paid"
+    },
+    "155795": {
+      "amazonInvoice": "VBE20240100064",
+      "amazonAmount": 179.2,
+      "netPaid": 179.2,
+      "status": "paid"
+    },
+    "155796": {
+      "amazonInvoice": "VBE20240100066",
+      "amazonAmount": 112.88,
+      "netPaid": 112.88,
+      "status": "paid"
+    },
+    "155797": {
+      "amazonInvoice": "VBE20240100065",
+      "amazonAmount": 233,
+      "netPaid": 233,
+      "status": "paid"
+    },
+    "155798": {
+      "amazonInvoice": "VBE20240100067",
+      "amazonAmount": 70,
+      "netPaid": 70,
+      "status": "paid"
+    },
+    "156001": {
+      "amazonInvoice": "VBE20240100218",
+      "amazonAmount": 3080.98,
+      "netPaid": 3080.98,
+      "status": "paid"
+    },
+    "156066": {
+      "amazonInvoice": "VBE20240200106",
+      "amazonAmount": 244.72,
+      "netPaid": 244.72,
+      "status": "paid"
+    },
+    "156074": {
+      "amazonInvoice": "VBE20240200107",
+      "amazonAmount": 395.36,
+      "netPaid": 395.36,
+      "status": "paid"
+    },
+    "156077": {
+      "amazonInvoice": "VBE20240200111",
+      "amazonAmount": 159.84,
+      "netPaid": 159.84,
+      "status": "paid"
+    },
+    "156078": {
+      "amazonInvoice": "VBE20240200112",
+      "amazonAmount": 219.6,
+      "netPaid": 219.6,
+      "status": "paid"
+    },
+    "156079": {
+      "amazonInvoice": "VBE20240200110",
+      "amazonAmount": 1104.34,
+      "netPaid": 1104.34,
+      "status": "paid"
+    },
+    "156080": {
+      "amazonInvoice": "VBE20240200113",
+      "amazonAmount": 586.5,
+      "netPaid": 586.5,
+      "status": "paid"
+    },
+    "156081": {
+      "amazonInvoice": "VBE20240200115",
+      "amazonAmount": 808.38,
+      "netPaid": 808.38,
+      "status": "paid"
+    },
+    "156082": {
+      "amazonInvoice": "VBE20240200114",
+      "amazonAmount": 107.04,
+      "netPaid": 107.04,
+      "status": "paid"
+    },
+    "156083": {
+      "amazonInvoice": "VBE20240200108",
+      "amazonAmount": 614.4,
+      "netPaid": 614.4,
+      "status": "paid"
+    },
+    "156090": {
+      "amazonInvoice": "VBE20240100263",
+      "amazonAmount": 359.91,
+      "netPaid": 359.91,
+      "status": "paid"
+    },
+    "156092": {
+      "amazonInvoice": "VBE20240200116",
+      "amazonAmount": 282.32,
+      "netPaid": 282.32,
+      "status": "paid"
+    },
+    "158451": {
+      "amazonInvoice": "VBE20240200274",
+      "amazonAmount": 559.36,
+      "netPaid": 559.36,
+      "status": "paid"
+    },
+    "158452": {
+      "amazonInvoice": "VBE20240200275",
+      "amazonAmount": 147.68,
+      "netPaid": 147.68,
+      "status": "paid"
+    },
+    "158453": {
+      "amazonInvoice": "VBE20240200276",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "158454": {
+      "amazonInvoice": "VBE20240200288",
+      "amazonAmount": 2875.64,
+      "netPaid": 2875.64,
+      "status": "paid"
+    },
+    "158455": {
+      "amazonInvoice": "VBE20240200289",
+      "amazonAmount": 559.36,
+      "netPaid": 559.36,
+      "status": "paid"
+    },
+    "158462": {
+      "amazonInvoice": "VBE20240200270",
+      "amazonAmount": 639.64,
+      "netPaid": 639.64,
+      "status": "paid"
+    },
+    "158463": {
+      "amazonInvoice": "VBE20240200271",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "158464": {
+      "amazonInvoice": "VBE20240200272",
+      "amazonAmount": 108.63,
+      "netPaid": 108.63,
+      "status": "paid"
+    },
+    "158465": {
+      "amazonInvoice": "VBE20240200290",
+      "amazonAmount": 155.24,
+      "netPaid": 155.24,
+      "status": "paid"
+    },
+    "158466": {
+      "amazonInvoice": "VBE20240200273",
+      "amazonAmount": 5220,
+      "netPaid": 5220,
+      "status": "paid"
+    },
+    "158470": {
+      "amazonInvoice": "VBE20240200239",
+      "amazonAmount": 83.82,
+      "netPaid": 83.82,
+      "status": "paid"
+    },
+    "158471": {
+      "amazonInvoice": "VBE20240200241",
+      "amazonAmount": 55.33,
+      "netPaid": 55.33,
+      "status": "paid"
+    },
+    "158472": {
+      "amazonInvoice": "VBE20240200242",
+      "amazonAmount": 77.69,
+      "netPaid": 77.69,
+      "status": "paid"
+    },
+    "158473": {
+      "amazonInvoice": "VBE20240200247",
+      "amazonAmount": 93.66,
+      "netPaid": 93.66,
+      "status": "paid"
+    },
+    "158474": {
+      "amazonInvoice": "VBE20240200248",
+      "amazonAmount": 132.54,
+      "netPaid": 132.54,
+      "status": "paid"
+    },
+    "158475": {
+      "amazonInvoice": "VBE20240200249",
+      "amazonAmount": 527.04,
+      "netPaid": 527.04,
+      "status": "paid"
+    },
+    "158477": {
+      "amazonInvoice": "VBE20240200250",
+      "amazonAmount": 80.28,
+      "netPaid": 80.28,
+      "status": "paid"
+    },
+    "158478": {
+      "amazonInvoice": "VBE20240200245",
+      "amazonAmount": 266.99,
+      "netPaid": 266.99,
+      "status": "paid"
+    },
+    "158479": {
+      "amazonInvoice": "VBE20240200246",
+      "amazonAmount": 169.67,
+      "netPaid": 169.67,
+      "status": "paid"
+    },
+    "158852": {
+      "amazonInvoice": "VBE20240200302",
+      "amazonAmount": 106.56,
+      "netPaid": 106.56,
+      "status": "paid"
+    },
+    "158853": {
+      "amazonInvoice": "VBE20240200293",
+      "amazonAmount": 502.58,
+      "netPaid": 502.58,
+      "status": "paid"
+    },
+    "158854": {
+      "amazonInvoice": "VBE20240200301",
+      "amazonAmount": 570,
+      "netPaid": 570,
+      "status": "paid"
+    },
+    "159397": {
+      "amazonInvoice": "VBE20240200323",
+      "amazonAmount": 140.1,
+      "netPaid": 140.1,
+      "status": "paid"
+    },
+    "159398": {
+      "amazonInvoice": "VBE20240200322",
+      "amazonAmount": 1398.4,
+      "netPaid": 1398.4,
+      "status": "paid"
+    },
+    "159399": {
+      "amazonInvoice": "VBE20240200317",
+      "amazonAmount": 54.6,
+      "netPaid": 54.6,
+      "status": "paid"
+    },
+    "159400": {
+      "amazonInvoice": "VBE20240200312",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "159404": {
+      "amazonInvoice": "VBE20240200324",
+      "amazonAmount": 625.98,
+      "netPaid": 625.98,
+      "status": "paid"
+    },
+    "159405": {
+      "amazonInvoice": "VBE20240200319",
+      "amazonAmount": 133.56,
+      "netPaid": 133.56,
+      "status": "paid"
+    },
+    "159416": {
+      "amazonInvoice": "VBE20240200316",
+      "amazonAmount": 1402.92,
+      "netPaid": 1402.92,
+      "status": "paid"
+    },
+    "159419": {
+      "amazonInvoice": "VBE20240200321",
+      "amazonAmount": 335.56,
+      "netPaid": 335.56,
+      "status": "paid"
+    },
+    "159420": {
+      "amazonInvoice": "VBE20240200318",
+      "amazonAmount": 107.94,
+      "netPaid": 107.94,
+      "status": "paid"
+    },
+    "159558": {
+      "amazonInvoice": "VBE20240200387",
+      "amazonAmount": 100.35,
+      "netPaid": 100.35,
+      "status": "paid"
+    },
+    "160103": {
+      "amazonInvoice": "VBE20240200354",
+      "amazonAmount": 877.6,
+      "netPaid": 877.6,
+      "status": "paid"
+    },
+    "160104": {
+      "amazonInvoice": "VBE20240200353",
+      "amazonAmount": 108,
+      "netPaid": 108,
+      "status": "paid"
+    },
+    "160105": {
+      "amazonInvoice": "VBE20240200367",
+      "amazonAmount": 89.3,
+      "netPaid": 89.3,
+      "status": "paid"
+    },
+    "160106": {
+      "amazonInvoice": "VBE20240200366",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "160107": {
+      "amazonInvoice": "VBE20240200365",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "160108": {
+      "amazonInvoice": "VBE20240200364",
+      "amazonAmount": 109.2,
+      "netPaid": 109.2,
+      "status": "paid"
+    },
+    "160109": {
+      "amazonInvoice": "VBE20240200352",
+      "amazonAmount": 147.58,
+      "netPaid": 147.58,
+      "status": "paid"
+    },
+    "160121": {
+      "amazonInvoice": "VBE20240200346",
+      "amazonAmount": 352.71,
+      "netPaid": 352.71,
+      "status": "paid"
+    },
+    "160122": {
+      "amazonInvoice": "VBE20240200345",
+      "amazonAmount": 306.88,
+      "netPaid": 306.88,
+      "status": "paid"
+    },
+    "160123": {
+      "amazonInvoice": "VBE20240200360",
+      "amazonAmount": 780,
+      "netPaid": 780,
+      "status": "paid"
+    },
+    "160124": {
+      "amazonInvoice": "VBE20240200344",
+      "amazonAmount": 1391.6,
+      "netPaid": 1391.6,
+      "status": "paid"
+    },
+    "160125": {
+      "amazonInvoice": "VBE20240200359",
+      "amazonAmount": 260.64,
+      "netPaid": 260.64,
+      "status": "paid"
+    },
+    "160126": {
+      "amazonInvoice": "VBE20240200358",
+      "amazonAmount": 1813.72,
+      "netPaid": 1813.72,
+      "status": "paid"
+    },
+    "160127": {
+      "amazonInvoice": "VBE20240200357",
+      "amazonAmount": 1755,
+      "netPaid": 1755,
+      "status": "paid"
+    },
+    "160128": {
+      "amazonInvoice": "VBE20240200356",
+      "amazonAmount": 118.56,
+      "netPaid": 118.56,
+      "status": "paid"
+    },
+    "161192": {
+      "amazonInvoice": "VBE20240300043",
+      "amazonAmount": 753.49,
+      "netPaid": 753.49,
+      "status": "paid"
+    },
+    "161193": {
+      "amazonInvoice": "VBE20240300047",
+      "amazonAmount": 153,
+      "netPaid": 153,
+      "status": "paid"
+    },
+    "161194": {
+      "amazonInvoice": "VBE20240300042",
+      "amazonAmount": 104.79,
+      "netPaid": 104.79,
+      "status": "paid"
+    },
+    "161195": {
+      "amazonInvoice": "VBE20240300040",
+      "amazonAmount": 104.79,
+      "netPaid": 104.79,
+      "status": "paid"
+    },
+    "161196": {
+      "amazonInvoice": "VBE20240300036",
+      "amazonAmount": 360,
+      "netPaid": 360,
+      "status": "paid"
+    },
+    "161197": {
+      "amazonInvoice": "VBE20240300034",
+      "amazonAmount": 139.72,
+      "netPaid": 139.72,
+      "status": "paid"
+    },
+    "161272": {
+      "amazonInvoice": "VBE20240300056",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "161278": {
+      "amazonInvoice": "VBE20240300055",
+      "amazonAmount": 1530,
+      "netPaid": 1530,
+      "status": "paid"
+    },
+    "161721": {
+      "amazonInvoice": "VBE20240300090",
+      "amazonAmount": 267.6,
+      "netPaid": 267.6,
+      "status": "paid"
+    },
+    "161722": {
+      "amazonInvoice": "VBE20240300091",
+      "amazonAmount": 107.04,
+      "netPaid": 107.04,
+      "status": "paid"
+    },
+    "161723": {
+      "amazonInvoice": "VBE20240300086",
+      "amazonAmount": 107.04,
+      "netPaid": 107.04,
+      "status": "paid"
+    },
+    "161724": {
+      "amazonInvoice": "VBE20240300088",
+      "amazonAmount": 108.5,
+      "netPaid": 108.5,
+      "status": "paid"
+    },
+    "161725": {
+      "amazonInvoice": "VBE20240300087",
+      "amazonAmount": 100.78,
+      "netPaid": 100.78,
+      "status": "paid"
+    },
+    "161726": {
+      "amazonInvoice": "VBE20240300089",
+      "amazonAmount": 305.9,
+      "netPaid": 305.9,
+      "status": "paid"
+    },
+    "161727": {
+      "amazonInvoice": "VBE20240300093",
+      "amazonAmount": 1582.06,
+      "netPaid": 1582.06,
+      "status": "paid"
+    },
+    "161728": {
+      "amazonInvoice": "VBE20240300092",
+      "amazonAmount": 160.56,
+      "netPaid": 160.56,
+      "status": "paid"
+    },
+    "161742": {
+      "amazonInvoice": "VBE20240300084",
+      "amazonAmount": 2070,
+      "netPaid": 2070,
+      "status": "paid"
+    },
+    "161743": {
+      "amazonInvoice": "VBE20240300085",
+      "amazonAmount": 129.74,
+      "netPaid": 129.74,
+      "status": "paid"
+    },
+    "162349": {
+      "amazonInvoice": "VBE20240300098",
+      "amazonAmount": 118.62,
+      "netPaid": 118.62,
+      "status": "paid"
+    },
+    "162513": {
+      "amazonInvoice": "VBE20240300097",
+      "amazonAmount": 160.56,
+      "netPaid": 160.56,
+      "status": "paid"
+    },
+    "162514": {
+      "amazonInvoice": "VBE20240300099",
+      "amazonAmount": 105.32,
+      "netPaid": 105.32,
+      "status": "paid"
+    },
+    "162520": {
+      "amazonInvoice": "VBE20240300094",
+      "amazonAmount": 125.2,
+      "netPaid": 125.2,
+      "status": "paid"
+    },
+    "162521": {
+      "amazonInvoice": "VBE20240300095",
+      "amazonAmount": 107.6,
+      "netPaid": 107.6,
+      "status": "paid"
+    },
+    "162542": {
+      "amazonInvoice": "VBE20240300096",
+      "amazonAmount": 239.4,
+      "netPaid": 239.4,
+      "status": "paid"
+    },
+    "162737": {
+      "amazonInvoice": "VBE20240300235",
+      "amazonAmount": 108.66,
+      "netPaid": 108.66,
+      "status": "paid"
+    },
+    "162738": {
+      "amazonInvoice": "VBE20240300236",
+      "amazonAmount": 216.09,
+      "netPaid": 216.09,
+      "status": "paid"
+    },
+    "162739": {
+      "amazonInvoice": "VBE20240300232",
+      "amazonAmount": 100,
+      "netPaid": 100,
+      "status": "paid"
+    },
+    "162740": {
+      "amazonInvoice": "VBE20240300110",
+      "amazonAmount": 507.64,
+      "netPaid": 507.64,
+      "status": "paid"
+    },
+    "162741": {
+      "amazonInvoice": "VBE20240300109",
+      "amazonAmount": 4095,
+      "netPaid": 4095,
+      "status": "paid"
+    },
+    "162742": {
+      "amazonInvoice": "VBE20240300237",
+      "amazonAmount": 874.65,
+      "netPaid": 874.65,
+      "status": "paid"
+    },
+    "162750": {
+      "amazonInvoice": "VBE20240300107",
+      "amazonAmount": 107.28,
+      "netPaid": 107.28,
+      "status": "paid"
+    },
+    "162751": {
+      "amazonInvoice": "VBE20240300108",
+      "amazonAmount": 201.9,
+      "netPaid": 201.9,
+      "status": "paid"
+    },
+    "162757": {
+      "amazonInvoice": "VBE20240300106",
+      "amazonAmount": 131,
+      "netPaid": 131,
+      "status": "paid"
+    },
+    "163258": {
+      "amazonInvoice": "VBE20240300169",
+      "amazonAmount": 657.52,
+      "netPaid": 657.52,
+      "status": "paid"
+    },
+    "163259": {
+      "amazonInvoice": "VBE20240300168",
+      "amazonAmount": 1310.94,
+      "netPaid": 1310.94,
+      "status": "paid"
+    },
+    "163400": {
+      "amazonInvoice": "VBE20240300173",
+      "amazonAmount": 542.28,
+      "netPaid": 542.28,
+      "status": "paid"
+    },
+    "163401": {
+      "amazonInvoice": "VBE20240300170",
+      "amazonAmount": 188.44,
+      "netPaid": 188.44,
+      "status": "paid"
+    },
+    "163482": {
+      "amazonInvoice": "VBE20240300184",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "163483": {
+      "amazonInvoice": "VBE20240300180",
+      "amazonAmount": 125.86,
+      "netPaid": 125.86,
+      "status": "paid"
+    },
+    "163484": {
+      "amazonInvoice": "VBE20240300185",
+      "amazonAmount": 240.84,
+      "netPaid": 240.84,
+      "status": "paid"
+    },
+    "163488": {
+      "amazonInvoice": "VBE20240300183",
+      "amazonAmount": 989.54,
+      "netPaid": 989.54,
+      "status": "paid"
+    },
+    "163823": {
+      "amazonInvoice": "VBE20240300273",
+      "amazonAmount": 572.74,
+      "netPaid": 572.74,
+      "status": "paid"
+    },
+    "163824": {
+      "amazonInvoice": "VBE20240300263",
+      "amazonAmount": 161.1,
+      "netPaid": 161.1,
+      "status": "paid"
+    },
+    "163825": {
+      "amazonInvoice": "VBE20240300269",
+      "amazonAmount": 112.32,
+      "netPaid": 112.32,
+      "status": "paid"
+    },
+    "163826": {
+      "amazonInvoice": "VBE20240300268",
+      "amazonAmount": 101.2,
+      "netPaid": 101.2,
+      "status": "paid"
+    },
+    "163827": {
+      "amazonInvoice": "VBE20240300274",
+      "amazonAmount": 7530,
+      "netPaid": 7530,
+      "status": "paid"
+    },
+    "163828": {
+      "amazonInvoice": "VBE20240300264",
+      "amazonAmount": 115.21,
+      "netPaid": 115.21,
+      "status": "paid"
+    },
+    "164014": {
+      "amazonInvoice": "VBE20240300289",
+      "amazonAmount": 133.8,
+      "netPaid": 133.8,
+      "status": "paid"
+    },
+    "164015": {
+      "amazonInvoice": "VBE20240300288",
+      "amazonAmount": 132.76,
+      "netPaid": 132.76,
+      "status": "paid"
+    },
+    "164016": {
+      "amazonInvoice": "VBE20240300281",
+      "amazonAmount": 251.9,
+      "netPaid": 251.9,
+      "status": "paid"
+    },
+    "164445": {
+      "amazonInvoice": "VBE20240300358",
+      "amazonAmount": 137.2,
+      "netPaid": 137.2,
+      "status": "paid"
+    },
+    "164446": {
+      "amazonInvoice": "VBE20240300355",
+      "amazonAmount": 125.2,
+      "netPaid": 125.2,
+      "status": "paid"
+    },
+    "164447": {
+      "amazonInvoice": "VBE20240300354",
+      "amazonAmount": 111.69,
+      "netPaid": 111.69,
+      "status": "paid"
+    },
+    "164448": {
+      "amazonInvoice": "VBE20240300353",
+      "amazonAmount": 116.62,
+      "netPaid": 116.62,
+      "status": "paid"
+    },
+    "164449": {
+      "amazonInvoice": "VBE20240300352",
+      "amazonAmount": 765,
+      "netPaid": 765,
+      "status": "paid"
+    },
+    "164942": {
+      "amazonInvoice": "VBE20240300404",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "164943": {
+      "amazonInvoice": "VBE20240300403",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "164944": {
+      "amazonInvoice": "VBE20240300402",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "164945": {
+      "amazonInvoice": "VBE20240300394",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "164946": {
+      "amazonInvoice": "VBE20240300414",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "164947": {
+      "amazonInvoice": "VBE20240300413",
+      "amazonAmount": 108.68,
+      "netPaid": 108.68,
+      "status": "paid"
+    },
+    "164948": {
+      "amazonInvoice": "VBE20240300399",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "164949": {
+      "amazonInvoice": "VBE20240300398",
+      "amazonAmount": 105.16,
+      "netPaid": 105.16,
+      "status": "paid"
+    },
+    "164950": {
+      "amazonInvoice": "VBE20240300397",
+      "amazonAmount": 109.14,
+      "netPaid": 109.14,
+      "status": "paid"
+    },
+    "164951": {
+      "amazonInvoice": "VBE20240300396",
+      "amazonAmount": 105.16,
+      "netPaid": 105.16,
+      "status": "paid"
+    },
+    "164952": {
+      "amazonInvoice": "VBE20240300395",
+      "amazonAmount": 146.3,
+      "netPaid": 146.3,
+      "status": "paid"
+    },
+    "164953": {
+      "amazonInvoice": "VBE20240300392",
+      "amazonAmount": 365.24,
+      "netPaid": 365.24,
+      "status": "paid"
+    },
+    "164954": {
+      "amazonInvoice": "VBE20240300412",
+      "amazonAmount": 815.84,
+      "netPaid": 815.84,
+      "status": "paid"
+    },
+    "164955": {
+      "amazonInvoice": "VBE20240300408",
+      "amazonAmount": 705,
+      "netPaid": 705,
+      "status": "paid"
+    },
+    "164956": {
+      "amazonInvoice": "VBE20240300407",
+      "amazonAmount": 109.76,
+      "netPaid": 109.76,
+      "status": "paid"
+    },
+    "164968": {
+      "amazonInvoice": "VBE20240300371",
+      "amazonAmount": 108.12,
+      "netPaid": 108.12,
+      "status": "paid"
+    },
+    "164969": {
+      "amazonInvoice": "VBE20240300383",
+      "amazonAmount": 134.34,
+      "netPaid": 134.34,
+      "status": "paid"
+    },
+    "164970": {
+      "amazonInvoice": "VBE20240300385",
+      "amazonAmount": 100.32,
+      "netPaid": 100.32,
+      "status": "paid"
+    },
+    "164971": {
+      "amazonInvoice": "VBE20240300370",
+      "amazonAmount": 102.92,
+      "netPaid": 102.92,
+      "status": "paid"
+    },
+    "164972": {
+      "amazonInvoice": "VBE20240300384",
+      "amazonAmount": 160.56,
+      "netPaid": 160.56,
+      "status": "paid"
+    },
+    "164973": {
+      "amazonInvoice": "VBE20240300373",
+      "amazonAmount": 107.58,
+      "netPaid": 107.58,
+      "status": "paid"
+    },
+    "164974": {
+      "amazonInvoice": "VBE20240300387",
+      "amazonAmount": 357,
+      "netPaid": 357,
+      "status": "paid"
+    },
+    "164975": {
+      "amazonInvoice": "VBE20240300386",
+      "amazonAmount": 113.34,
+      "netPaid": 113.34,
+      "status": "paid"
+    },
+    "164976": {
+      "amazonInvoice": "VBE20240300369",
+      "amazonAmount": 266.53,
+      "netPaid": 266.53,
+      "status": "paid"
+    },
+    "164977": {
+      "amazonInvoice": "VBE20240300379",
+      "amazonAmount": 445.38,
+      "netPaid": 445.38,
+      "status": "paid"
+    },
+    "164978": {
+      "amazonInvoice": "VBE20240300377",
+      "amazonAmount": 1470,
+      "netPaid": 1470,
+      "status": "paid"
+    },
+    "164979": {
+      "amazonInvoice": "VBE20240300364",
+      "amazonAmount": 129.06,
+      "netPaid": 129.06,
+      "status": "paid"
+    },
+    "164980": {
+      "amazonInvoice": "VBE20240300363",
+      "amazonAmount": 179.57,
+      "netPaid": 179.57,
+      "status": "paid"
+    },
+    "164981": {
+      "amazonInvoice": "VBE20240300376",
+      "amazonAmount": 173.38,
+      "netPaid": 173.38,
+      "status": "paid"
+    },
+    "164982": {
+      "amazonInvoice": "VBE20240300372",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "166015": {
+      "amazonInvoice": "VBE20240400025",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "166016": {
+      "amazonInvoice": "VBE20240400024",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "166017": {
+      "amazonInvoice": "VBE20240400026",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "166018": {
+      "amazonInvoice": "VBE20240400033",
+      "amazonAmount": 101.88,
+      "netPaid": 101.88,
+      "status": "paid"
+    },
+    "166019": {
+      "amazonInvoice": "VBE20240400028",
+      "amazonAmount": 111.02,
+      "netPaid": 111.02,
+      "status": "paid"
+    },
+    "166020": {
+      "amazonInvoice": "VBE20240400027",
+      "amazonAmount": 102.78,
+      "netPaid": 102.78,
+      "status": "paid"
+    },
+    "166021": {
+      "amazonInvoice": "VBE20240400032",
+      "amazonAmount": 153.22,
+      "netPaid": 153.22,
+      "status": "paid"
+    },
+    "166022": {
+      "amazonInvoice": "VBE20240400029",
+      "amazonAmount": 111.02,
+      "netPaid": 111.02,
+      "status": "paid"
+    },
+    "166023": {
+      "amazonInvoice": "VBE20240400030",
+      "amazonAmount": 411.48,
+      "netPaid": 411.48,
+      "status": "paid"
+    },
+    "166024": {
+      "amazonInvoice": "VBE20240400031",
+      "amazonAmount": 3040.26,
+      "netPaid": 3040.26,
+      "status": "paid"
+    },
+    "166025": {
+      "amazonInvoice": "VBE20240400021",
+      "amazonAmount": 332.25,
+      "netPaid": 332.25,
+      "status": "paid"
+    },
+    "166026": {
+      "amazonInvoice": "VBE20240400022",
+      "amazonAmount": 124.83,
+      "netPaid": 124.83,
+      "status": "paid"
+    },
+    "166027": {
+      "amazonInvoice": "VBE20240400023",
+      "amazonAmount": 420.28,
+      "netPaid": 420.28,
+      "status": "paid"
+    },
+    "166035": {
+      "amazonInvoice": "VBE20240400020",
+      "amazonAmount": 1020,
+      "netPaid": 1020,
+      "status": "paid"
+    },
+    "166539": {
+      "amazonInvoice": "VBE20240400053",
+      "amazonAmount": 315.26,
+      "netPaid": 315.26,
+      "status": "paid"
+    },
+    "166540": {
+      "amazonInvoice": "VBE20240400051",
+      "amazonAmount": 103.28,
+      "netPaid": 103.28,
+      "status": "paid"
+    },
+    "168367": {
+      "amazonInvoice": "VBE20240400067",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "168368": {
+      "amazonInvoice": "VBE20240400063",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "168369": {
+      "amazonInvoice": "VBE20240400062",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "168370": {
+      "amazonInvoice": "VBE20240400066",
+      "amazonAmount": 175.68,
+      "netPaid": 175.68,
+      "status": "paid"
+    },
+    "168371": {
+      "amazonInvoice": "VBE20240400065",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "168372": {
+      "amazonInvoice": "VBE20240400060",
+      "amazonAmount": 494.1,
+      "netPaid": 494.1,
+      "status": "paid"
+    },
+    "168540": {
+      "amazonInvoice": "VBE20240400074",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "168541": {
+      "amazonInvoice": "VBE20240400075",
+      "amazonAmount": 317.52,
+      "netPaid": 317.52,
+      "status": "paid"
+    },
+    "168542": {
+      "amazonInvoice": "VBE20240400076",
+      "amazonAmount": 3972.42,
+      "netPaid": 3972.42,
+      "status": "paid"
+    },
+    "168543": {
+      "amazonInvoice": "VBE20240400072",
+      "amazonAmount": 310.35,
+      "netPaid": 310.35,
+      "status": "paid"
+    },
+    "168544": {
+      "amazonInvoice": "VBE20240400071",
+      "amazonAmount": 110.3,
+      "netPaid": 110.3,
+      "status": "paid"
+    },
+    "168545": {
+      "amazonInvoice": "VBE20240400070",
+      "amazonAmount": 124.91,
+      "netPaid": 124.91,
+      "status": "paid"
+    },
+    "168546": {
+      "amazonInvoice": "VBE20240400073",
+      "amazonAmount": 121.88,
+      "netPaid": 121.88,
+      "status": "paid"
+    },
+    "169034": {
+      "amazonInvoice": "VBE20240400100",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "169035": {
+      "amazonInvoice": "VBE20240400099",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "169036": {
+      "amazonInvoice": "VBE20240400098",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "169037": {
+      "amazonInvoice": "VBE20240400097",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "169038": {
+      "amazonInvoice": "VBE20240400110",
+      "amazonAmount": 913.04,
+      "netPaid": 913.04,
+      "status": "paid"
+    },
+    "169039": {
+      "amazonInvoice": "VBE20240400106",
+      "amazonAmount": 116.38,
+      "netPaid": 116.38,
+      "status": "paid"
+    },
+    "169040": {
+      "amazonInvoice": "VBE20240400090",
+      "amazonAmount": 131.8,
+      "netPaid": 131.8,
+      "status": "paid"
+    },
+    "169041": {
+      "amazonInvoice": "VBE20240400089",
+      "amazonAmount": 159.84,
+      "netPaid": 159.84,
+      "status": "paid"
+    },
+    "169042": {
+      "amazonInvoice": "VBE20240400088",
+      "amazonAmount": 301.87,
+      "netPaid": 301.87,
+      "status": "paid"
+    },
+    "169043": {
+      "amazonInvoice": "VBE20240400087",
+      "amazonAmount": 124.94,
+      "netPaid": 124.94,
+      "status": "paid"
+    },
+    "169450": {
+      "amazonInvoice": "VBE20240400132",
+      "amazonAmount": 292.6,
+      "netPaid": 292.6,
+      "status": "paid"
+    },
+    "169451": {
+      "amazonInvoice": "VBE20240400128",
+      "amazonAmount": 419.52,
+      "netPaid": 419.52,
+      "status": "paid"
+    },
+    "169452": {
+      "amazonInvoice": "VBE20240400130",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "169453": {
+      "amazonInvoice": "VBE20240400131",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "169454": {
+      "amazonInvoice": "VBE20240400126",
+      "amazonAmount": 419.52,
+      "netPaid": 419.52,
+      "status": "paid"
+    },
+    "169455": {
+      "amazonInvoice": "VBE20240400127",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "169456": {
+      "amazonInvoice": "VBE20240400129",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "169829": {
+      "amazonInvoice": "VBE20240400162",
+      "amazonAmount": 360,
+      "netPaid": 360,
+      "status": "paid"
+    },
+    "169830": {
+      "amazonInvoice": "VBE20240400167",
+      "amazonAmount": 419.52,
+      "netPaid": 419.52,
+      "status": "paid"
+    },
+    "169831": {
+      "amazonInvoice": "VBE20240400163",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "169832": {
+      "amazonInvoice": "VBE20240400161",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "169970": {
+      "amazonInvoice": "VBE20240400177",
+      "amazonAmount": 605.46,
+      "netPaid": 605.46,
+      "status": "paid"
+    },
+    "169971": {
+      "amazonInvoice": "VBE20240400173",
+      "amazonAmount": 106.06,
+      "netPaid": 106.06,
+      "status": "paid"
+    },
+    "169972": {
+      "amazonInvoice": "VBE20240400171",
+      "amazonAmount": 2439.62,
+      "netPaid": 2439.62,
+      "status": "paid"
+    },
+    "170472": {
+      "amazonInvoice": "VBE20240400194",
+      "amazonAmount": 978.88,
+      "netPaid": 978.88,
+      "status": "paid"
+    },
+    "170473": {
+      "amazonInvoice": "VBE20240400193",
+      "amazonAmount": 7.5,
+      "netPaid": 7.5,
+      "status": "paid"
+    },
+    "170474": {
+      "amazonInvoice": "VBE20240400195",
+      "amazonAmount": 250.9,
+      "netPaid": 250.9,
+      "status": "paid"
+    },
+    "170475": {
+      "amazonInvoice": "VBE20240400192",
+      "amazonAmount": 754.6,
+      "netPaid": 754.6,
+      "status": "paid"
+    },
+    "170476": {
+      "amazonInvoice": "VBE20240400208",
+      "amazonAmount": 104.79,
+      "netPaid": 104.79,
+      "status": "paid"
+    },
+    "170477": {
+      "amazonInvoice": "VBE20240400200",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "170478": {
+      "amazonInvoice": "VBE20240400197",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "170479": {
+      "amazonInvoice": "VBE20240400196",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "170480": {
+      "amazonInvoice": "VBE20240400205",
+      "amazonAmount": 280,
+      "netPaid": 280,
+      "status": "paid"
+    },
+    "170481": {
+      "amazonInvoice": "VBE20240400203",
+      "amazonAmount": 138.4,
+      "netPaid": 138.4,
+      "status": "paid"
+    },
+    "170482": {
+      "amazonInvoice": "VBE20240400207",
+      "amazonAmount": 576.24,
+      "netPaid": 576.24,
+      "status": "paid"
+    },
+    "170616": {
+      "amazonInvoice": "VBE20240400217",
+      "amazonAmount": 190.72,
+      "netPaid": 190.72,
+      "status": "paid"
+    },
+    "170617": {
+      "amazonInvoice": "VBE20240400213",
+      "amazonAmount": 140.74,
+      "netPaid": 140.74,
+      "status": "paid"
+    },
+    "170618": {
+      "amazonInvoice": "VBE20240400221",
+      "amazonAmount": 139.72,
+      "netPaid": 139.72,
+      "status": "paid"
+    },
+    "170619": {
+      "amazonInvoice": "VBE20240400220",
+      "amazonAmount": 419.52,
+      "netPaid": 419.52,
+      "status": "paid"
+    },
+    "170620": {
+      "amazonInvoice": "VBE20240400214",
+      "amazonAmount": 1162.67,
+      "netPaid": 1162.67,
+      "status": "paid"
+    },
+    "170621": {
+      "amazonInvoice": "VBE20240400222",
+      "amazonAmount": 106.4,
+      "netPaid": 106.4,
+      "status": "paid"
+    },
+    "170622": {
+      "amazonInvoice": "VBE20240400219",
+      "amazonAmount": 309.35,
+      "netPaid": 309.35,
+      "status": "paid"
+    },
+    "170623": {
+      "amazonInvoice": "VBE20240400216",
+      "amazonAmount": 1538.7,
+      "netPaid": 1538.7,
+      "status": "paid"
+    },
+    "171110": {
+      "amazonInvoice": "VBE20240400277",
+      "amazonAmount": 104.79,
+      "netPaid": 104.79,
+      "status": "paid"
+    },
+    "171111": {
+      "amazonInvoice": "VBE20240400275",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "171112": {
+      "amazonInvoice": "VBE20240400265",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "171113": {
+      "amazonInvoice": "VBE20240400264",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "171114": {
+      "amazonInvoice": "VBE20240400263",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "171115": {
+      "amazonInvoice": "VBE20240400281",
+      "amazonAmount": 604.27,
+      "netPaid": 604.27,
+      "status": "paid"
+    },
+    "171116": {
+      "amazonInvoice": "VBE20240400254",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "171117": {
+      "amazonInvoice": "VBE20240400267",
+      "amazonAmount": 419.52,
+      "netPaid": 419.52,
+      "status": "paid"
+    },
+    "171118": {
+      "amazonInvoice": "VBE20240400253",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "171119": {
+      "amazonInvoice": "VBE20240400279",
+      "amazonAmount": 2484.78,
+      "netPaid": 2484.78,
+      "status": "paid"
+    },
+    "171120": {
+      "amazonInvoice": "VBE20240400273",
+      "amazonAmount": 343.42,
+      "netPaid": 343.42,
+      "status": "paid"
+    },
+    "171121": {
+      "amazonInvoice": "VBE20240400261",
+      "amazonAmount": 156.4,
+      "netPaid": 156.4,
+      "status": "paid"
+    },
+    "171122": {
+      "amazonInvoice": "VBE20240400260",
+      "amazonAmount": 171.92,
+      "netPaid": 171.92,
+      "status": "paid"
+    },
+    "171123": {
+      "amazonInvoice": "VBE20240400271",
+      "amazonAmount": 439.26,
+      "netPaid": 439.26,
+      "status": "paid"
+    },
+    "171124": {
+      "amazonInvoice": "VBE20240400283",
+      "amazonAmount": 121.03,
+      "netPaid": 121.03,
+      "status": "paid"
+    },
+    "171125": {
+      "amazonInvoice": "VBE20240400259",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "171126": {
+      "amazonInvoice": "VBE20240400280",
+      "amazonAmount": 2124.35,
+      "netPaid": 2124.35,
+      "status": "paid"
+    },
+    "171127": {
+      "amazonInvoice": "VBE20240400272",
+      "amazonAmount": 260.64,
+      "netPaid": 260.64,
+      "status": "paid"
+    },
+    "171128": {
+      "amazonInvoice": "VBE20240400269",
+      "amazonAmount": 483.22,
+      "netPaid": 483.22,
+      "status": "paid"
+    },
+    "171411": {
+      "amazonInvoice": "VBE20240400315",
+      "amazonAmount": 318.96,
+      "netPaid": 318.96,
+      "status": "paid"
+    },
+    "171412": {
+      "amazonInvoice": "VBE20240400313",
+      "amazonAmount": 3396.64,
+      "netPaid": 3396.64,
+      "status": "paid"
+    },
+    "171413": {
+      "amazonInvoice": "VBE20240400311",
+      "amazonAmount": 198.46,
+      "netPaid": 198.46,
+      "status": "paid"
+    },
+    "171414": {
+      "amazonInvoice": "VBE20240400310",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "171415": {
+      "amazonInvoice": "VBE20240400299",
+      "amazonAmount": 1910.84,
+      "netPaid": 1910.84,
+      "status": "paid"
+    },
+    "171417": {
+      "amazonInvoice": "VBE20240400308",
+      "amazonAmount": 130.5,
+      "netPaid": 130.5,
+      "status": "paid"
+    },
+    "171418": {
+      "amazonInvoice": "VBE20240400309",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "171419": {
+      "amazonInvoice": "VBE20240400301",
+      "amazonAmount": 106.4,
+      "netPaid": 106.4,
+      "status": "paid"
+    },
+    "171420": {
+      "amazonInvoice": "VBE20240400300",
+      "amazonAmount": 169.5,
+      "netPaid": 169.5,
+      "status": "paid"
+    },
+    "171421": {
+      "amazonInvoice": "VBE20240400297",
+      "amazonAmount": 103,
+      "netPaid": 103,
+      "status": "paid"
+    },
+    "172096": {
+      "amazonInvoice": "VBE20240500022",
+      "amazonAmount": 42.6,
+      "netPaid": 42.6,
+      "status": "paid"
+    },
+    "172099": {
+      "amazonInvoice": "VBE20240500026",
+      "amazonAmount": 100,
+      "netPaid": 100,
+      "status": "paid"
+    },
+    "172100": {
+      "amazonInvoice": "VBE20240500023",
+      "amazonAmount": 35.48,
+      "netPaid": 35.48,
+      "status": "paid"
+    },
+    "172101": {
+      "amazonInvoice": "VBE20240500012",
+      "amazonAmount": 110.94,
+      "netPaid": 110.94,
+      "status": "paid"
+    },
+    "172102": {
+      "amazonInvoice": "VBE20240500010",
+      "amazonAmount": 102.84,
+      "netPaid": 102.84,
+      "status": "paid"
+    },
+    "172103": {
+      "amazonInvoice": "VBE20240500009",
+      "amazonAmount": 123.96,
+      "netPaid": 123.96,
+      "status": "paid"
+    },
+    "172104": {
+      "amazonInvoice": "VBE20240500006",
+      "amazonAmount": 276.22,
+      "netPaid": 276.22,
+      "status": "paid"
+    },
+    "172105": {
+      "amazonInvoice": "VBE20240500005",
+      "amazonAmount": 74.24,
+      "netPaid": 74.24,
+      "status": "paid"
+    },
+    "172106": {
+      "amazonInvoice": "VBE20240500025",
+      "amazonAmount": 82.2,
+      "netPaid": 82.2,
+      "status": "paid"
+    },
+    "172107": {
+      "amazonInvoice": "VBE20240500021",
+      "amazonAmount": 336.48,
+      "netPaid": 336.48,
+      "status": "paid"
+    },
+    "172108": {
+      "amazonInvoice": "VBE20240500019",
+      "amazonAmount": 225.19,
+      "netPaid": 225.19,
+      "status": "paid"
+    },
+    "172109": {
+      "amazonInvoice": "VBE20240500018",
+      "amazonAmount": 86.88,
+      "netPaid": 86.88,
+      "status": "paid"
+    },
+    "172110": {
+      "amazonInvoice": "VBE20240500017",
+      "amazonAmount": 126.91,
+      "netPaid": 126.91,
+      "status": "paid"
+    },
+    "172111": {
+      "amazonInvoice": "VBE20240500011",
+      "amazonAmount": 103.34,
+      "netPaid": 103.34,
+      "status": "paid"
+    },
+    "172281": {
+      "amazonInvoice": "VBE20240500039",
+      "amazonAmount": 1666.66,
+      "netPaid": 1666.66,
+      "status": "paid"
+    },
+    "172282": {
+      "amazonInvoice": "VBE20240500038",
+      "amazonAmount": 1130.77,
+      "netPaid": 1130.77,
+      "status": "paid"
+    },
+    "174617": {
+      "amazonInvoice": "VBE20240500054",
+      "amazonAmount": 167.92,
+      "netPaid": 167.92,
+      "status": "paid"
+    },
+    "174618": {
+      "amazonInvoice": "VBE20240500053",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "174619": {
+      "amazonInvoice": "VBE20240500052",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "174620": {
+      "amazonInvoice": "VBE20240500047",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "174621": {
+      "amazonInvoice": "VBE20240500044",
+      "amazonAmount": 281.88,
+      "netPaid": 281.88,
+      "status": "paid"
+    },
+    "174622": {
+      "amazonInvoice": "VBE20240500061",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "174648": {
+      "amazonInvoice": "VBE20240500060",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "174649": {
+      "amazonInvoice": "VBE20240500050",
+      "amazonAmount": 172.42,
+      "netPaid": 172.42,
+      "status": "paid"
+    },
+    "174650": {
+      "amazonInvoice": "VBE20240500048",
+      "amazonAmount": 224.01,
+      "netPaid": 224.01,
+      "status": "paid"
+    },
+    "174651": {
+      "amazonInvoice": "VBE20240500063",
+      "amazonAmount": 82.32,
+      "netPaid": 82.32,
+      "status": "paid"
+    },
+    "174652": {
+      "amazonInvoice": "VBE20240500057",
+      "amazonAmount": 58,
+      "netPaid": 58,
+      "status": "paid"
+    },
+    "174653": {
+      "amazonInvoice": "VBE20240500051",
+      "amazonAmount": 105.17,
+      "netPaid": 105.17,
+      "status": "paid"
+    },
+    "174654": {
+      "amazonInvoice": "VBE20240500049",
+      "amazonAmount": 252.66,
+      "netPaid": 252.66,
+      "status": "paid"
+    },
+    "174794": {
+      "amazonInvoice": "VBE20240500083",
+      "amazonAmount": 959.16,
+      "netPaid": 959.16,
+      "status": "paid"
+    },
+    "174795": {
+      "amazonInvoice": "VBE20240500082",
+      "amazonAmount": 4315.44,
+      "netPaid": 4315.44,
+      "status": "paid"
+    },
+    "174796": {
+      "amazonInvoice": "VBE20240500081",
+      "amazonAmount": 167.92,
+      "netPaid": 167.92,
+      "status": "paid"
+    },
+    "174797": {
+      "amazonInvoice": "VBE20240500084",
+      "amazonAmount": 1658.77,
+      "netPaid": 1658.77,
+      "status": "paid"
+    },
+    "174798": {
+      "amazonInvoice": "VBE20240500077",
+      "amazonAmount": 30,
+      "netPaid": 30,
+      "status": "paid"
+    },
+    "174799": {
+      "amazonInvoice": "VBE20240500080",
+      "amazonAmount": 687.19,
+      "netPaid": 687.19,
+      "status": "paid"
+    },
+    "174800": {
+      "amazonInvoice": "VBE20240500079",
+      "amazonAmount": 1457.22,
+      "netPaid": 1457.22,
+      "status": "paid"
+    },
+    "174801": {
+      "amazonInvoice": "VBE20240500078",
+      "amazonAmount": 166.84,
+      "netPaid": 166.84,
+      "status": "paid"
+    },
+    "174876": {
+      "amazonInvoice": "VBE20240500106",
+      "amazonAmount": 104.88,
+      "netPaid": 104.88,
+      "status": "paid"
+    },
+    "174877": {
+      "amazonInvoice": "VBE20240500097",
+      "amazonAmount": 111.79,
+      "netPaid": 111.79,
+      "status": "paid"
+    },
+    "174878": {
+      "amazonInvoice": "VBE20240500096",
+      "amazonAmount": 104.88,
+      "netPaid": 104.88,
+      "status": "paid"
+    },
+    "174879": {
+      "amazonInvoice": "VBE20240500098",
+      "amazonAmount": 101.98,
+      "netPaid": 101.98,
+      "status": "paid"
+    },
+    "174880": {
+      "amazonInvoice": "VBE20240500085",
+      "amazonAmount": 80,
+      "netPaid": 80,
+      "status": "paid"
+    },
+    "175020": {
+      "amazonInvoice": "VBE20240500095",
+      "amazonAmount": 2216.76,
+      "netPaid": 2216.76,
+      "status": "paid"
+    },
+    "175021": {
+      "amazonInvoice": "VBE20240500107",
+      "amazonAmount": 170.29,
+      "netPaid": 170.29,
+      "status": "paid"
+    },
+    "175362": {
+      "amazonInvoice": "VBE20240500132",
+      "amazonAmount": 173.02,
+      "netPaid": 173.02,
+      "status": "paid"
+    },
+    "175363": {
+      "amazonInvoice": "VBE20240500133",
+      "amazonAmount": 160.54,
+      "netPaid": 160.54,
+      "status": "paid"
+    },
+    "175470": {
+      "amazonInvoice": "VBE20240500131",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "175717": {
+      "amazonInvoice": "VBE20240500149",
+      "amazonAmount": 13.96,
+      "netPaid": 13.96,
+      "status": "paid"
+    },
+    "175755": {
+      "amazonInvoice": "VBE20240500165",
+      "amazonAmount": 122.36,
+      "netPaid": 122.36,
+      "status": "paid"
+    },
+    "175756": {
+      "amazonInvoice": "VBE20240500160",
+      "amazonAmount": 1061.77,
+      "netPaid": 1061.77,
+      "status": "paid"
+    },
+    "175757": {
+      "amazonInvoice": "VBE20240500166",
+      "amazonAmount": 117.36,
+      "netPaid": 117.36,
+      "status": "paid"
+    },
+    "175758": {
+      "amazonInvoice": "VBE20240500164",
+      "amazonAmount": 846.52,
+      "netPaid": 846.52,
+      "status": "paid"
+    },
+    "175759": {
+      "amazonInvoice": "VBE20240500163",
+      "amazonAmount": 861.73,
+      "netPaid": 861.73,
+      "status": "paid"
+    },
+    "175760": {
+      "amazonInvoice": "VBE20240500162",
+      "amazonAmount": 528.33,
+      "netPaid": 528.33,
+      "status": "paid"
+    },
+    "175761": {
+      "amazonInvoice": "VBE20240500161",
+      "amazonAmount": 244.72,
+      "netPaid": 244.72,
+      "status": "paid"
+    },
+    "175762": {
+      "amazonInvoice": "VBE20240500159",
+      "amazonAmount": 187.44,
+      "netPaid": 187.44,
+      "status": "paid"
+    },
+    "175763": {
+      "amazonInvoice": "VBE20240500158",
+      "amazonAmount": 788.64,
+      "netPaid": 788.64,
+      "status": "paid"
+    },
+    "175764": {
+      "amazonInvoice": "VBE20240500156",
+      "amazonAmount": 144,
+      "netPaid": 144,
+      "status": "paid"
+    },
+    "175765": {
+      "amazonInvoice": "VBE20240500157",
+      "amazonAmount": 108,
+      "netPaid": 108,
+      "status": "paid"
+    },
+    "177109": {
+      "amazonInvoice": "VBE20240500196",
+      "amazonAmount": 122.36,
+      "netPaid": 122.36,
+      "status": "paid"
+    },
+    "177110": {
+      "amazonInvoice": "VBE20240500195",
+      "amazonAmount": 207.24,
+      "netPaid": 207.24,
+      "status": "paid"
+    },
+    "177113": {
+      "amazonInvoice": "VBE20240500191",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "177114": {
+      "amazonInvoice": "VBE20240500192",
+      "amazonAmount": 46.86,
+      "netPaid": 46.86,
+      "status": "paid"
+    },
+    "177115": {
+      "amazonInvoice": "VBE20240500193",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "177116": {
+      "amazonInvoice": "VBE20240500194",
+      "amazonAmount": 288,
+      "netPaid": 288,
+      "status": "paid"
+    },
+    "177419": {
+      "amazonInvoice": "VBE20240500223",
+      "amazonAmount": 102.98,
+      "netPaid": 102.98,
+      "status": "paid"
+    },
+    "177420": {
+      "amazonInvoice": "VBE20240500222",
+      "amazonAmount": 262.2,
+      "netPaid": 262.2,
+      "status": "paid"
+    },
+    "177421": {
+      "amazonInvoice": "VBE20240500218",
+      "amazonAmount": 159.94,
+      "netPaid": 159.94,
+      "status": "paid"
+    },
+    "177422": {
+      "amazonInvoice": "VBE20240500221",
+      "amazonAmount": 240.88,
+      "netPaid": 240.88,
+      "status": "paid"
+    },
+    "177423": {
+      "amazonInvoice": "VBE20240500215",
+      "amazonAmount": 147.9,
+      "netPaid": 147.9,
+      "status": "paid"
+    },
+    "177641": {
+      "amazonInvoice": "VBE20240500219",
+      "amazonAmount": 3187.68,
+      "netPaid": 3187.68,
+      "status": "paid"
+    },
+    "177642": {
+      "amazonInvoice": "VBE20240500224",
+      "amazonAmount": 104.88,
+      "netPaid": 104.88,
+      "status": "paid"
+    },
+    "177643": {
+      "amazonInvoice": "VBE20240500220",
+      "amazonAmount": 274.66,
+      "netPaid": 274.66,
+      "status": "paid"
+    },
+    "177644": {
+      "amazonInvoice": "VBE20240500216",
+      "amazonAmount": 104.01,
+      "netPaid": 104.01,
+      "status": "paid"
+    },
+    "177645": {
+      "amazonInvoice": "VBE20240500211",
+      "amazonAmount": 150.89,
+      "netPaid": 150.89,
+      "status": "paid"
+    },
+    "177646": {
+      "amazonInvoice": "VBE20240500217",
+      "amazonAmount": 140.58,
+      "netPaid": 140.58,
+      "status": "paid"
+    },
+    "177647": {
+      "amazonInvoice": "VBE20240500212",
+      "amazonAmount": 763.97,
+      "netPaid": 763.97,
+      "status": "paid"
+    },
+    "177648": {
+      "amazonInvoice": "VBE20240500214",
+      "amazonAmount": 227.89,
+      "netPaid": 227.89,
+      "status": "paid"
+    },
+    "177649": {
+      "amazonInvoice": "VBE20240500213",
+      "amazonAmount": 121.8,
+      "netPaid": 121.8,
+      "status": "paid"
+    },
+    "177757": {
+      "amazonInvoice": "VBE20240500244",
+      "amazonAmount": 102.9,
+      "netPaid": 102.9,
+      "status": "paid"
+    },
+    "177758": {
+      "amazonInvoice": "VBE20240500245",
+      "amazonAmount": 396.06,
+      "netPaid": 396.06,
+      "status": "paid"
+    },
+    "177759": {
+      "amazonInvoice": "VBE20240500246",
+      "amazonAmount": 104.59,
+      "netPaid": 104.59,
+      "status": "paid"
+    },
+    "178478": {
+      "amazonInvoice": "VBE20240500260",
+      "amazonAmount": 176.13,
+      "netPaid": 176.13,
+      "status": "paid"
+    },
+    "178479": {
+      "amazonInvoice": "VBE20240500261",
+      "amazonAmount": 158.59,
+      "netPaid": 158.59,
+      "status": "paid"
+    },
+    "178480": {
+      "amazonInvoice": "VBE20240500262",
+      "amazonAmount": 182.01,
+      "netPaid": 182.01,
+      "status": "paid"
+    },
+    "178481": {
+      "amazonInvoice": "VBE20240500257",
+      "amazonAmount": 277.75,
+      "netPaid": 277.75,
+      "status": "paid"
+    },
+    "178482": {
+      "amazonInvoice": "VBE20240500258",
+      "amazonAmount": 219.52,
+      "netPaid": 219.52,
+      "status": "paid"
+    },
+    "178483": {
+      "amazonInvoice": "VBE20240500259",
+      "amazonAmount": 102.9,
+      "netPaid": 102.9,
+      "status": "paid"
+    },
+    "179325": {
+      "amazonInvoice": "VBE20240600013",
+      "amazonAmount": 150.78,
+      "netPaid": 150.78,
+      "status": "paid"
+    },
+    "179326": {
+      "amazonInvoice": "VBE20240600012",
+      "amazonAmount": 155.92,
+      "netPaid": 155.92,
+      "status": "paid"
+    },
+    "179327": {
+      "amazonInvoice": "VBE20240600014",
+      "amazonAmount": 540.61,
+      "netPaid": 540.61,
+      "status": "paid"
+    },
+    "179335": {
+      "amazonInvoice": "VBE20240600010",
+      "amazonAmount": 413.5,
+      "netPaid": 413.5,
+      "status": "paid"
+    },
+    "179336": {
+      "amazonInvoice": "VBE20240600009",
+      "amazonAmount": 102.9,
+      "netPaid": 102.9,
+      "status": "paid"
+    },
+    "179337": {
+      "amazonInvoice": "VBE20240600011",
+      "amazonAmount": 101.18,
+      "netPaid": 101.18,
+      "status": "paid"
+    },
+    "179485": {
+      "amazonInvoice": "VBE20240600039",
+      "amazonAmount": 110.95,
+      "netPaid": 110.95,
+      "status": "paid"
+    },
+    "179486": {
+      "amazonInvoice": "VBE20240600037",
+      "amazonAmount": 110.36,
+      "netPaid": 110.36,
+      "status": "paid"
+    },
+    "179487": {
+      "amazonInvoice": "VBE20240600035",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "179488": {
+      "amazonInvoice": "VBE20240600036",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "179710": {
+      "amazonInvoice": "VBE20240600038",
+      "amazonAmount": 431.87,
+      "netPaid": 431.87,
+      "status": "paid"
+    },
+    "179711": {
+      "amazonInvoice": "VBE20240600033",
+      "amazonAmount": 192.96,
+      "netPaid": 192.96,
+      "status": "paid"
+    },
+    "179712": {
+      "amazonInvoice": "VBE20240600034",
+      "amazonAmount": 160,
+      "netPaid": 160,
+      "status": "paid"
+    },
+    "180045": {
+      "amazonInvoice": "VBE20240600082",
+      "amazonAmount": 158.07,
+      "netPaid": 158.07,
+      "status": "paid"
+    },
+    "180339": {
+      "amazonInvoice": "VBE20240600081",
+      "amazonAmount": 263.68,
+      "netPaid": 263.68,
+      "status": "paid"
+    },
+    "180340": {
+      "amazonInvoice": "VBE20240600078",
+      "amazonAmount": 101.17,
+      "netPaid": 101.17,
+      "status": "paid"
+    },
+    "180341": {
+      "amazonInvoice": "VBE20240600080",
+      "amazonAmount": 110.94,
+      "netPaid": 110.94,
+      "status": "paid"
+    },
+    "180701": {
+      "amazonInvoice": "VBE20240600083",
+      "amazonAmount": 178.14,
+      "netPaid": 178.14,
+      "status": "paid"
+    },
+    "180702": {
+      "amazonInvoice": "VBE20240600079",
+      "amazonAmount": 452.04,
+      "netPaid": 452.04,
+      "status": "paid"
+    },
+    "180781": {
+      "amazonInvoice": "VBE20240600105",
+      "amazonAmount": 112.36,
+      "netPaid": 112.36,
+      "status": "paid"
+    },
+    "180783": {
+      "amazonInvoice": "VBE20240600084",
+      "amazonAmount": 123.48,
+      "netPaid": 123.48,
+      "status": "paid"
+    },
+    "180784": {
+      "amazonInvoice": "VBE20240600085",
+      "amazonAmount": 102.8,
+      "netPaid": 102.8,
+      "status": "paid"
+    },
+    "180785": {
+      "amazonInvoice": "VBE20240600086",
+      "amazonAmount": 102.23,
+      "netPaid": 102.23,
+      "status": "paid"
+    },
+    "180804": {
+      "amazonInvoice": "VBE20240600107",
+      "amazonAmount": 104.28,
+      "netPaid": 104.28,
+      "status": "paid"
+    },
+    "180805": {
+      "amazonInvoice": "VBE20240600101",
+      "amazonAmount": 618.98,
+      "netPaid": 618.98,
+      "status": "paid"
+    },
+    "180840": {
+      "amazonInvoice": "VBE20240600106",
+      "amazonAmount": 103.25,
+      "netPaid": 103.25,
+      "status": "paid"
+    },
+    "180841": {
+      "amazonInvoice": "VBE20240600087",
+      "amazonAmount": 108.6,
+      "netPaid": 108.6,
+      "status": "paid"
+    },
+    "180962": {
+      "amazonInvoice": "VBE20240600104",
+      "amazonAmount": 707.09,
+      "netPaid": 707.09,
+      "status": "paid"
+    },
+    "180968": {
+      "amazonInvoice": "VBE20240600102",
+      "amazonAmount": 200,
+      "netPaid": 200,
+      "status": "paid"
+    },
+    "181015": {
+      "amazonInvoice": "VBE20240600108",
+      "amazonAmount": 430,
+      "netPaid": 430,
+      "status": "paid"
+    },
+    "181018": {
+      "amazonInvoice": "VBE20240600103",
+      "amazonAmount": 100.29,
+      "netPaid": 100.29,
+      "status": "paid"
+    },
+    "184786": {
+      "amazonInvoice": "VBE20240600156",
+      "amazonAmount": 229.07,
+      "netPaid": 229.07,
+      "status": "paid"
+    },
+    "184787": {
+      "amazonInvoice": "VBE20240600155",
+      "amazonAmount": 157.73,
+      "netPaid": 157.73,
+      "status": "paid"
+    },
+    "185035": {
+      "amazonInvoice": "VBE20240600167",
+      "amazonAmount": 371,
+      "netPaid": 371,
+      "status": "paid"
+    },
+    "185039": {
+      "amazonInvoice": "VBE20240600166",
+      "amazonAmount": 361.4,
+      "netPaid": 361.4,
+      "status": "paid"
+    },
+    "185403": {
+      "amazonInvoice": "VBE20240600196",
+      "amazonAmount": 112.36,
+      "netPaid": 112.36,
+      "status": "paid"
+    },
+    "185404": {
+      "amazonInvoice": "VBE20240600197",
+      "amazonAmount": 256.9,
+      "netPaid": 256.9,
+      "status": "paid"
+    },
+    "185405": {
+      "amazonInvoice": "VBE20240600198",
+      "amazonAmount": 103.15,
+      "netPaid": 103.15,
+      "status": "paid"
+    },
+    "185406": {
+      "amazonInvoice": "VBE20240600199",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "185407": {
+      "amazonInvoice": "VBE20240600195",
+      "amazonAmount": 1112.72,
+      "netPaid": 1112.72,
+      "status": "paid"
+    },
+    "185408": {
+      "amazonInvoice": "VBE20240600192",
+      "amazonAmount": 138.31,
+      "netPaid": 138.31,
+      "status": "paid"
+    },
+    "185409": {
+      "amazonInvoice": "VBE20240600191",
+      "amazonAmount": 160,
+      "netPaid": 160,
+      "status": "paid"
+    },
+    "185410": {
+      "amazonInvoice": "VBE20240600193",
+      "amazonAmount": 117.16,
+      "netPaid": 117.16,
+      "status": "paid"
+    },
+    "185411": {
+      "amazonInvoice": "VBE20240600190",
+      "amazonAmount": 101.74,
+      "netPaid": 101.74,
+      "status": "paid"
+    },
+    "185412": {
+      "amazonInvoice": "VBE20240600194",
+      "amazonAmount": 101.74,
+      "netPaid": 101.74,
+      "status": "paid"
+    },
+    "185834": {
+      "amazonInvoice": "VBE20240600228",
+      "amazonAmount": 169.73,
+      "netPaid": 169.73,
+      "status": "paid"
+    },
+    "185835": {
+      "amazonInvoice": "VBE20240600229",
+      "amazonAmount": 126.86,
+      "netPaid": 126.86,
+      "status": "paid"
+    },
+    "185836": {
+      "amazonInvoice": "VBE20240600227",
+      "amazonAmount": 167.02,
+      "netPaid": 167.02,
+      "status": "paid"
+    },
+    "185837": {
+      "amazonInvoice": "VBE20240600230",
+      "amazonAmount": 100.84,
+      "netPaid": 100.84,
+      "status": "paid"
+    },
+    "185838": {
+      "amazonInvoice": "VBE20240600231",
+      "amazonAmount": 528.83,
+      "netPaid": 528.83,
+      "status": "paid"
+    },
+    "186565": {
+      "amazonInvoice": "VBE20240600276",
+      "amazonAmount": 115.5,
+      "netPaid": 115.5,
+      "status": "paid"
+    },
+    "186566": {
+      "amazonInvoice": "VBE20240600275",
+      "amazonAmount": 247.45,
+      "netPaid": 247.45,
+      "status": "paid"
+    },
+    "186567": {
+      "amazonInvoice": "VBE20240600270",
+      "amazonAmount": 198,
+      "netPaid": 198,
+      "status": "paid"
+    },
+    "186568": {
+      "amazonInvoice": "VBE20240600268",
+      "amazonAmount": 273.22,
+      "netPaid": 273.22,
+      "status": "paid"
+    },
+    "186569": {
+      "amazonInvoice": "VBE20240600277",
+      "amazonAmount": 183.6,
+      "netPaid": 183.6,
+      "status": "paid"
+    },
+    "186570": {
+      "amazonInvoice": "VBE20240600271",
+      "amazonAmount": 176.48,
+      "netPaid": 176.48,
+      "status": "paid"
+    },
+    "186571": {
+      "amazonInvoice": "VBE20240600273",
+      "amazonAmount": 126.4,
+      "netPaid": 126.4,
+      "status": "paid"
+    },
+    "186572": {
+      "amazonInvoice": "VBE20240600272",
+      "amazonAmount": 402.95,
+      "netPaid": 402.95,
+      "status": "paid"
+    },
+    "186573": {
+      "amazonInvoice": "VBE20240600269",
+      "amazonAmount": 183.49,
+      "netPaid": 183.49,
+      "status": "paid"
+    },
+    "187067": {
+      "amazonInvoice": "VBE20240700020",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "187072": {
+      "amazonInvoice": "VBE20240700008",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "187073": {
+      "amazonInvoice": "VBE20240700006",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "187074": {
+      "amazonInvoice": "VBE20240700007",
+      "amazonAmount": 244.8,
+      "netPaid": 244.8,
+      "status": "paid"
+    },
+    "187075": {
+      "amazonInvoice": "VBE20240700009",
+      "amazonAmount": 135.7,
+      "netPaid": 135.7,
+      "status": "paid"
+    },
+    "187120": {
+      "amazonInvoice": "VBE20240700021",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "187121": {
+      "amazonInvoice": "VBE20240700013",
+      "amazonAmount": 216.68,
+      "netPaid": 216.68,
+      "status": "paid"
+    },
+    "187122": {
+      "amazonInvoice": "VBE20240700011",
+      "amazonAmount": 490.7,
+      "netPaid": 490.7,
+      "status": "paid"
+    },
+    "187123": {
+      "amazonInvoice": "VBE20240700010",
+      "amazonAmount": 210.3,
+      "netPaid": 210.3,
+      "status": "paid"
+    },
+    "187408": {
+      "amazonInvoice": "VBE20240700031",
+      "amazonAmount": 83.76,
+      "netPaid": 83.76,
+      "status": "paid"
+    },
+    "187411": {
+      "amazonInvoice": "VBE20240700028",
+      "amazonAmount": 496.36,
+      "netPaid": 496.36,
+      "status": "paid"
+    },
+    "187412": {
+      "amazonInvoice": "VBE20240700032",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "187413": {
+      "amazonInvoice": "VBE20240700029",
+      "amazonAmount": 136.5,
+      "netPaid": 136.5,
+      "status": "paid"
+    },
+    "187414": {
+      "amazonInvoice": "VBE20240700030",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "187417": {
+      "amazonInvoice": "VBE20240700024",
+      "amazonAmount": 240,
+      "netPaid": 240,
+      "status": "paid"
+    },
+    "187418": {
+      "amazonInvoice": "VBE20240700025",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "187419": {
+      "amazonInvoice": "VBE20240700026",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "187420": {
+      "amazonInvoice": "VBE20240700027",
+      "amazonAmount": 420.6,
+      "netPaid": 420.6,
+      "status": "paid"
+    },
+    "188692": {
+      "amazonInvoice": "VBE20240700043",
+      "amazonAmount": 350,
+      "netPaid": 350,
+      "status": "paid"
+    },
+    "188991": {
+      "amazonInvoice": "VBE20240700057",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "188994": {
+      "amazonInvoice": "VBE20240700065",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "189271": {
+      "amazonInvoice": "VBE20240700070",
+      "amazonAmount": 239.52,
+      "netPaid": 239.52,
+      "status": "paid"
+    },
+    "189274": {
+      "amazonInvoice": "VBE20240700069",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "189275": {
+      "amazonInvoice": "VBE20240700066",
+      "amazonAmount": 111.36,
+      "netPaid": 111.36,
+      "status": "paid"
+    },
+    "189276": {
+      "amazonInvoice": "VBE20240700059",
+      "amazonAmount": 163.2,
+      "netPaid": 163.2,
+      "status": "paid"
+    },
+    "189876": {
+      "amazonInvoice": "VBE20240700076",
+      "amazonAmount": 477.76,
+      "netPaid": 477.76,
+      "status": "paid"
+    },
+    "189879": {
+      "amazonInvoice": "VBE20240700075",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "189946": {
+      "amazonInvoice": "VBE20240700082",
+      "amazonAmount": 115,
+      "netPaid": 115,
+      "status": "paid"
+    },
+    "189947": {
+      "amazonInvoice": "VBE20240700085",
+      "amazonAmount": 335.04,
+      "netPaid": 335.04,
+      "status": "paid"
+    },
+    "189948": {
+      "amazonInvoice": "VBE20240700083",
+      "amazonAmount": 173.5,
+      "netPaid": 173.5,
+      "status": "paid"
+    },
+    "189949": {
+      "amazonInvoice": "VBE20240700084",
+      "amazonAmount": 173.5,
+      "netPaid": 173.5,
+      "status": "paid"
+    },
+    "189953": {
+      "amazonInvoice": "VBE20240700077",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "189954": {
+      "amazonInvoice": "VBE20240700080",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "189955": {
+      "amazonInvoice": "VBE20240700078",
+      "amazonAmount": 163.2,
+      "netPaid": 163.2,
+      "status": "paid"
+    },
+    "189956": {
+      "amazonInvoice": "VBE20240700079",
+      "amazonAmount": 531.6,
+      "netPaid": 531.6,
+      "status": "paid"
+    },
+    "189957": {
+      "amazonInvoice": "VBE20240700081",
+      "amazonAmount": 210.3,
+      "netPaid": 210.3,
+      "status": "paid"
+    },
+    "190080": {
+      "amazonInvoice": "VBE20240700095",
+      "amazonAmount": 239.64,
+      "netPaid": 239.64,
+      "status": "paid"
+    },
+    "190081": {
+      "amazonInvoice": "VBE20240700094",
+      "amazonAmount": 701,
+      "netPaid": 701,
+      "status": "paid"
+    },
+    "190085": {
+      "amazonInvoice": "VBE20240700104",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "190087": {
+      "amazonInvoice": "VBE20240700102",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "190088": {
+      "amazonInvoice": "VBE20240700103",
+      "amazonAmount": 560,
+      "netPaid": 560,
+      "status": "paid"
+    },
+    "190659": {
+      "amazonInvoice": "VBE20240700123",
+      "amazonAmount": 602,
+      "netPaid": 602,
+      "status": "paid"
+    },
+    "190660": {
+      "amazonInvoice": "VBE20240700118",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "190661": {
+      "amazonInvoice": "VBE20240700115",
+      "amazonAmount": 130.76,
+      "netPaid": 130.76,
+      "status": "paid"
+    },
+    "190664": {
+      "amazonInvoice": "VBE20240700117",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "190665": {
+      "amazonInvoice": "VBE20240700116",
+      "amazonAmount": 280.4,
+      "netPaid": 280.4,
+      "status": "paid"
+    },
+    "190666": {
+      "amazonInvoice": "VBE20240700122",
+      "amazonAmount": 259.76,
+      "netPaid": 259.76,
+      "status": "paid"
+    },
+    "190930": {
+      "amazonInvoice": "VBE20240700150",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "190931": {
+      "amazonInvoice": "VBE20240700154",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "190932": {
+      "amazonInvoice": "VBE20240700153",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "190933": {
+      "amazonInvoice": "VBE20240700152",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "190934": {
+      "amazonInvoice": "VBE20240700151",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "191037": {
+      "amazonInvoice": "VBE20240700166",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "191038": {
+      "amazonInvoice": "VBE20240700159",
+      "amazonAmount": 350.5,
+      "netPaid": 350.5,
+      "status": "paid"
+    },
+    "196647": {
+      "amazonInvoice": "VBE20240700197",
+      "amazonAmount": 153.84,
+      "netPaid": 153.84,
+      "status": "paid"
+    },
+    "196648": {
+      "amazonInvoice": "VBE20240700196",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "196653": {
+      "amazonInvoice": "VBE20240700195",
+      "amazonAmount": 424.38,
+      "netPaid": 424.38,
+      "status": "paid"
+    },
+    "196654": {
+      "amazonInvoice": "VBE20240700186",
+      "amazonAmount": 111.36,
+      "netPaid": 111.36,
+      "status": "paid"
+    },
+    "196655": {
+      "amazonInvoice": "VBE20240700189",
+      "amazonAmount": 163.2,
+      "netPaid": 163.2,
+      "status": "paid"
+    },
+    "196656": {
+      "amazonInvoice": "VBE20240700191",
+      "amazonAmount": 768.6,
+      "netPaid": 768.6,
+      "status": "paid"
+    },
+    "196657": {
+      "amazonInvoice": "VBE20240700190",
+      "amazonAmount": 439.2,
+      "netPaid": 439.2,
+      "status": "paid"
+    },
+    "196658": {
+      "amazonInvoice": "VBE20240700187",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "196659": {
+      "amazonInvoice": "VBE20240700188",
+      "amazonAmount": 1968.22,
+      "netPaid": 1968.22,
+      "status": "paid"
+    },
+    "196660": {
+      "amazonInvoice": "VBE20240700192",
+      "amazonAmount": 207.06,
+      "netPaid": 207.06,
+      "status": "paid"
+    },
+    "196661": {
+      "amazonInvoice": "VBE20240700193",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "196662": {
+      "amazonInvoice": "VBE20240700194",
+      "amazonAmount": 2964.68,
+      "netPaid": 2964.68,
+      "status": "paid"
+    },
+    "196809": {
+      "amazonInvoice": "VBE20240700215",
+      "amazonAmount": 120.2,
+      "netPaid": 120.2,
+      "status": "paid"
+    },
+    "196810": {
+      "amazonInvoice": "VBE20240700214",
+      "amazonAmount": 322.82,
+      "netPaid": 322.82,
+      "status": "paid"
+    },
+    "196816": {
+      "amazonInvoice": "VBE20240700212",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "196817": {
+      "amazonInvoice": "VBE20240700213",
+      "amazonAmount": 210.3,
+      "netPaid": 210.3,
+      "status": "paid"
+    },
+    "196818": {
+      "amazonInvoice": "VBE20240700211",
+      "amazonAmount": 239.52,
+      "netPaid": 239.52,
+      "status": "paid"
+    },
+    "196819": {
+      "amazonInvoice": "VBE20240700209",
+      "amazonAmount": 411.6,
+      "netPaid": 411.6,
+      "status": "paid"
+    },
+    "196820": {
+      "amazonInvoice": "VBE20240700210",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "196959": {
+      "amazonInvoice": "VBE20240700233",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "196960": {
+      "amazonInvoice": "VBE20240700246",
+      "amazonAmount": 220,
+      "netPaid": 220,
+      "status": "paid"
+    },
+    "196961": {
+      "amazonInvoice": "VBE20240700234",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "196962": {
+      "amazonInvoice": "VBE20240700244",
+      "amazonAmount": 219.6,
+      "netPaid": 219.6,
+      "status": "paid"
+    },
+    "196963": {
+      "amazonInvoice": "VBE20240700228",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "196964": {
+      "amazonInvoice": "VBE20240700243",
+      "amazonAmount": 186.66,
+      "netPaid": 186.66,
+      "status": "paid"
+    },
+    "196965": {
+      "amazonInvoice": "VBE20240700242",
+      "amazonAmount": 1540,
+      "netPaid": 1540,
+      "status": "paid"
+    },
+    "196966": {
+      "amazonInvoice": "VBE20240700227",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "196967": {
+      "amazonInvoice": "VBE20240700226",
+      "amazonAmount": 284.64,
+      "netPaid": 284.64,
+      "status": "paid"
+    },
+    "196968": {
+      "amazonInvoice": "VBE20240700238",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "196969": {
+      "amazonInvoice": "VBE20240700235",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "197095": {
+      "amazonInvoice": "VBE20240700252",
+      "amazonAmount": 239.52,
+      "netPaid": 239.52,
+      "status": "paid"
+    },
+    "197096": {
+      "amazonInvoice": "VBE20240700251",
+      "amazonAmount": 142.72,
+      "netPaid": 142.72,
+      "status": "paid"
+    },
+    "197097": {
+      "amazonInvoice": "VBE20240700254",
+      "amazonAmount": 285.44,
+      "netPaid": 285.44,
+      "status": "paid"
+    },
+    "197098": {
+      "amazonInvoice": "VBE20240700253",
+      "amazonAmount": 239.52,
+      "netPaid": 239.52,
+      "status": "paid"
+    },
+    "197369": {
+      "amazonInvoice": "VBE20240700279",
+      "amazonAmount": 115.5,
+      "netPaid": 115.5,
+      "status": "paid"
+    },
+    "197375": {
+      "amazonInvoice": "VBE20240700278",
+      "amazonAmount": 420.6,
+      "netPaid": 420.6,
+      "status": "paid"
+    },
+    "197377": {
+      "amazonInvoice": "VBE20240700276",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "197715": {
+      "amazonInvoice": "VBE20240700302",
+      "amazonAmount": 142.72,
+      "netPaid": 142.72,
+      "status": "paid"
+    },
+    "197726": {
+      "amazonInvoice": "VBE20240700308",
+      "amazonAmount": 173.5,
+      "netPaid": 173.5,
+      "status": "paid"
+    },
+    "197727": {
+      "amazonInvoice": "VBE20240700309",
+      "amazonAmount": 213.88,
+      "netPaid": 213.88,
+      "status": "paid"
+    },
+    "197728": {
+      "amazonInvoice": "VBE20240700306",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "197730": {
+      "amazonInvoice": "VBE20240700305",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "197731": {
+      "amazonInvoice": "VBE20240700312",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "197732": {
+      "amazonInvoice": "VBE20240700311",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "197733": {
+      "amazonInvoice": "VBE20240700310",
+      "amazonAmount": 419.52,
+      "netPaid": 419.52,
+      "status": "paid"
+    },
+    "197734": {
+      "amazonInvoice": "VBE20240700300",
+      "amazonAmount": 428.16,
+      "netPaid": 428.16,
+      "status": "paid"
+    },
+    "197735": {
+      "amazonInvoice": "VBE20240700304",
+      "amazonAmount": 230.58,
+      "netPaid": 230.58,
+      "status": "paid"
+    },
+    "197736": {
+      "amazonInvoice": "VBE20240700301",
+      "amazonAmount": 472.14,
+      "netPaid": 472.14,
+      "status": "paid"
+    },
+    "197737": {
+      "amazonInvoice": "VBE20240700303",
+      "amazonAmount": 111.36,
+      "netPaid": 111.36,
+      "status": "paid"
+    },
+    "197814": {
+      "amazonInvoice": "VBE20240700325",
+      "amazonAmount": 839.04,
+      "netPaid": 839.04,
+      "status": "paid"
+    },
+    "198244": {
+      "amazonInvoice": "VBE20240800032",
+      "amazonAmount": 1005.12,
+      "netPaid": 1005.12,
+      "status": "paid"
+    },
+    "198245": {
+      "amazonInvoice": "VBE20240800035",
+      "amazonAmount": 419.52,
+      "netPaid": 419.52,
+      "status": "paid"
+    },
+    "198246": {
+      "amazonInvoice": "VBE20240800037",
+      "amazonAmount": 2579.03,
+      "netPaid": 2579.03,
+      "status": "paid"
+    },
+    "198247": {
+      "amazonInvoice": "VBE20240800033",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "198248": {
+      "amazonInvoice": "VBE20240800034",
+      "amazonAmount": 514.44,
+      "netPaid": 514.44,
+      "status": "paid"
+    },
+    "198249": {
+      "amazonInvoice": "VBE20240800036",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "198258": {
+      "amazonInvoice": "VBE20240800031",
+      "amazonAmount": 142.72,
+      "netPaid": 142.72,
+      "status": "paid"
+    },
+    "198259": {
+      "amazonInvoice": "VBE20240800029",
+      "amazonAmount": 605.44,
+      "netPaid": 605.44,
+      "status": "paid"
+    },
+    "198260": {
+      "amazonInvoice": "VBE20240800028",
+      "amazonAmount": 102.72,
+      "netPaid": 102.72,
+      "status": "paid"
+    },
+    "198261": {
+      "amazonInvoice": "VBE20240800030",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "198262": {
+      "amazonInvoice": "VBE20240800026",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "198263": {
+      "amazonInvoice": "VBE20240800027",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "198464": {
+      "amazonInvoice": "VBE20240800058",
+      "amazonAmount": 131.9,
+      "netPaid": 131.9,
+      "status": "paid"
+    },
+    "198465": {
+      "amazonInvoice": "VBE20240800071",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "198466": {
+      "amazonInvoice": "VBE20240800054",
+      "amazonAmount": 630,
+      "netPaid": 630,
+      "status": "paid"
+    },
+    "198467": {
+      "amazonInvoice": "VBE20240800072",
+      "amazonAmount": 142.72,
+      "netPaid": 142.72,
+      "status": "paid"
+    },
+    "198468": {
+      "amazonInvoice": "VBE20240800053",
+      "amazonAmount": 570.88,
+      "netPaid": 570.88,
+      "status": "paid"
+    },
+    "198794": {
+      "amazonInvoice": "VBE20240800073",
+      "amazonAmount": 136.8,
+      "netPaid": 136.8,
+      "status": "paid"
+    },
+    "198795": {
+      "amazonInvoice": "VBE20240800057",
+      "amazonAmount": 446.72,
+      "netPaid": 446.72,
+      "status": "paid"
+    },
+    "198796": {
+      "amazonInvoice": "VBE20240800067",
+      "amazonAmount": 445.44,
+      "netPaid": 445.44,
+      "status": "paid"
+    },
+    "198797": {
+      "amazonInvoice": "VBE20240800061",
+      "amazonAmount": 163.2,
+      "netPaid": 163.2,
+      "status": "paid"
+    },
+    "198798": {
+      "amazonInvoice": "VBE20240800068",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "199770": {
+      "amazonInvoice": "VBE20240800098",
+      "amazonAmount": 353.97,
+      "netPaid": 353.97,
+      "status": "paid"
+    },
+    "199772": {
+      "amazonInvoice": "VBE20240800089",
+      "amazonAmount": 163.2,
+      "netPaid": 163.2,
+      "status": "paid"
+    },
+    "199773": {
+      "amazonInvoice": "VBE20240800090",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "199774": {
+      "amazonInvoice": "VBE20240800096",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "200382": {
+      "amazonInvoice": "VBE20240800131",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "200383": {
+      "amazonInvoice": "VBE20240800130",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "200384": {
+      "amazonInvoice": "VBE20240800126",
+      "amazonAmount": 259.6,
+      "netPaid": 259.6,
+      "status": "paid"
+    },
+    "200385": {
+      "amazonInvoice": "VBE20240800134",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "200386": {
+      "amazonInvoice": "VBE20240800119",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "200387": {
+      "amazonInvoice": "VBE20240800118",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "200388": {
+      "amazonInvoice": "VBE20240800139",
+      "amazonAmount": 361.6,
+      "netPaid": 361.6,
+      "status": "paid"
+    },
+    "200389": {
+      "amazonInvoice": "VBE20240800138",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "200390": {
+      "amazonInvoice": "VBE20240800127",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "200391": {
+      "amazonInvoice": "VBE20240800121",
+      "amazonAmount": 326.4,
+      "netPaid": 326.4,
+      "status": "paid"
+    },
+    "201188": {
+      "amazonInvoice": "VBE20240800147",
+      "amazonAmount": 223.36,
+      "netPaid": 223.36,
+      "status": "paid"
+    },
+    "201189": {
+      "amazonInvoice": "VBE20240800146",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "201190": {
+      "amazonInvoice": "VBE20240800152",
+      "amazonAmount": 277.71,
+      "netPaid": 277.71,
+      "status": "paid"
+    },
+    "201191": {
+      "amazonInvoice": "VBE20240800151",
+      "amazonAmount": 419.52,
+      "netPaid": 419.52,
+      "status": "paid"
+    },
+    "201192": {
+      "amazonInvoice": "VBE20240800148",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "201193": {
+      "amazonInvoice": "VBE20240800153",
+      "amazonAmount": 115,
+      "netPaid": 115,
+      "status": "paid"
+    },
+    "201194": {
+      "amazonInvoice": "VBE20240800150",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "201195": {
+      "amazonInvoice": "VBE20240800149",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "201196": {
+      "amazonInvoice": "VBE20240800156",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "201197": {
+      "amazonInvoice": "VBE20240800155",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "201198": {
+      "amazonInvoice": "VBE20240800154",
+      "amazonAmount": 197.92,
+      "netPaid": 197.92,
+      "status": "paid"
+    },
+    "201200": {
+      "amazonInvoice": "VBE20240800145",
+      "amazonAmount": 163.2,
+      "netPaid": 163.2,
+      "status": "paid"
+    },
+    "201201": {
+      "amazonInvoice": "VBE20240800141",
+      "amazonAmount": 461.16,
+      "netPaid": 461.16,
+      "status": "paid"
+    },
+    "201202": {
+      "amazonInvoice": "VBE20240800142",
+      "amazonAmount": 360,
+      "netPaid": 360,
+      "status": "paid"
+    },
+    "201203": {
+      "amazonInvoice": "VBE20240800143",
+      "amazonAmount": 280,
+      "netPaid": 280,
+      "status": "paid"
+    },
+    "201204": {
+      "amazonInvoice": "VBE20240800144",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "201866": {
+      "amazonInvoice": "VBE20240800230",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "201867": {
+      "amazonInvoice": "VBE20240800229",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "201868": {
+      "amazonInvoice": "VBE20240800228",
+      "amazonAmount": 103.65,
+      "netPaid": 103.65,
+      "status": "paid"
+    },
+    "201869": {
+      "amazonInvoice": "VBE20240800222",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "201870": {
+      "amazonInvoice": "VBE20240800218",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "201872": {
+      "amazonInvoice": "VBE20240800212",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "201873": {
+      "amazonInvoice": "VBE20240800231",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "201874": {
+      "amazonInvoice": "VBE20240800207",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "201875": {
+      "amazonInvoice": "VBE20240800223",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "201876": {
+      "amazonInvoice": "VBE20240800205",
+      "amazonAmount": 163.2,
+      "netPaid": 163.2,
+      "status": "paid"
+    },
+    "201890": {
+      "amazonInvoice": "VBE20240800234",
+      "amazonAmount": 163.2,
+      "netPaid": 163.2,
+      "status": "paid"
+    },
+    "201891": {
+      "amazonInvoice": "VBE20240800227",
+      "amazonAmount": 244.8,
+      "netPaid": 244.8,
+      "status": "paid"
+    },
+    "201898": {
+      "amazonInvoice": "VBE20240800232",
+      "amazonAmount": 173.5,
+      "netPaid": 173.5,
+      "status": "paid"
+    },
+    "201899": {
+      "amazonInvoice": "VBE20240800219",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "201900": {
+      "amazonInvoice": "VBE20240800225",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "201901": {
+      "amazonInvoice": "VBE20240800224",
+      "amazonAmount": 801.6,
+      "netPaid": 801.6,
+      "status": "paid"
+    },
+    "203205": {
+      "amazonInvoice": "VBE20240800278",
+      "amazonAmount": 115,
+      "netPaid": 115,
+      "status": "paid"
+    },
+    "203206": {
+      "amazonInvoice": "VBE20240800259",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "203207": {
+      "amazonInvoice": "VBE20240800258",
+      "amazonAmount": 958.8,
+      "netPaid": 958.8,
+      "status": "paid"
+    },
+    "203208": {
+      "amazonInvoice": "VBE20240800257",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "203209": {
+      "amazonInvoice": "VBE20240800251",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "203210": {
+      "amazonInvoice": "VBE20240800277",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "203211": {
+      "amazonInvoice": "VBE20240800275",
+      "amazonAmount": 239.52,
+      "netPaid": 239.52,
+      "status": "paid"
+    },
+    "203212": {
+      "amazonInvoice": "VBE20240800265",
+      "amazonAmount": 223.36,
+      "netPaid": 223.36,
+      "status": "paid"
+    },
+    "203215": {
+      "amazonInvoice": "VBE20240800274",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "203216": {
+      "amazonInvoice": "VBE20240800273",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "203217": {
+      "amazonInvoice": "VBE20240800266",
+      "amazonAmount": 875.55,
+      "netPaid": 875.55,
+      "status": "paid"
+    },
+    "203218": {
+      "amazonInvoice": "VBE20240800264",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "203219": {
+      "amazonInvoice": "VBE20240800263",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "203220": {
+      "amazonInvoice": "VBE20240800261",
+      "amazonAmount": 768.6,
+      "netPaid": 768.6,
+      "status": "paid"
+    },
+    "203221": {
+      "amazonInvoice": "VBE20240800254",
+      "amazonAmount": 160,
+      "netPaid": 160,
+      "status": "paid"
+    },
+    "203869": {
+      "amazonInvoice": "VBE20240800313",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "203870": {
+      "amazonInvoice": "VBE20240800335",
+      "amazonAmount": 241.56,
+      "netPaid": 241.56,
+      "status": "paid"
+    },
+    "203874": {
+      "amazonInvoice": "VBE20240800311",
+      "amazonAmount": 115,
+      "netPaid": 115,
+      "status": "paid"
+    },
+    "203875": {
+      "amazonInvoice": "VBE20240800308",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "203876": {
+      "amazonInvoice": "VBE20240800307",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "203877": {
+      "amazonInvoice": "VBE20240800312",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "203878": {
+      "amazonInvoice": "VBE20240800310",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "203879": {
+      "amazonInvoice": "VBE20240800309",
+      "amazonAmount": 1124.88,
+      "netPaid": 1124.88,
+      "status": "paid"
+    },
+    "203880": {
+      "amazonInvoice": "VBE20240800330",
+      "amazonAmount": 280,
+      "netPaid": 280,
+      "status": "paid"
+    },
+    "203881": {
+      "amazonInvoice": "VBE20240800314",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "203882": {
+      "amazonInvoice": "VBE20240800329",
+      "amazonAmount": 229.09,
+      "netPaid": 229.09,
+      "status": "paid"
+    },
+    "205103": {
+      "amazonInvoice": "VBE20240900027",
+      "amazonAmount": 335,
+      "netPaid": 335,
+      "status": "paid"
+    },
+    "205104": {
+      "amazonInvoice": "VBE20240900026",
+      "amazonAmount": 450,
+      "netPaid": 450,
+      "status": "paid"
+    },
+    "205105": {
+      "amazonInvoice": "VBE20240900025",
+      "amazonAmount": 2217.6,
+      "netPaid": 2217.6,
+      "status": "paid"
+    },
+    "205106": {
+      "amazonInvoice": "VBE20240900028",
+      "amazonAmount": 115,
+      "netPaid": 115,
+      "status": "paid"
+    },
+    "205107": {
+      "amazonInvoice": "VBE20240900031",
+      "amazonAmount": 474.84,
+      "netPaid": 474.84,
+      "status": "paid"
+    },
+    "205108": {
+      "amazonInvoice": "VBE20240900030",
+      "amazonAmount": 720,
+      "netPaid": 720,
+      "status": "paid"
+    },
+    "205110": {
+      "amazonInvoice": "VBE20240900024",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "205111": {
+      "amazonInvoice": "VBE20240900032",
+      "amazonAmount": 1758.72,
+      "netPaid": 1758.72,
+      "status": "paid"
+    },
+    "205112": {
+      "amazonInvoice": "VBE20240900034",
+      "amazonAmount": 1563.52,
+      "netPaid": 1563.52,
+      "status": "paid"
+    },
+    "205113": {
+      "amazonInvoice": "VBE20240900033",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "205117": {
+      "amazonInvoice": "VBE20240900022",
+      "amazonAmount": 406.26,
+      "netPaid": 406.26,
+      "status": "paid"
+    },
+    "205118": {
+      "amazonInvoice": "VBE20240900019",
+      "amazonAmount": 200.2,
+      "netPaid": 200.2,
+      "status": "paid"
+    },
+    "205119": {
+      "amazonInvoice": "VBE20240900021",
+      "amazonAmount": 477.72,
+      "netPaid": 477.72,
+      "status": "paid"
+    },
+    "205120": {
+      "amazonInvoice": "VBE20240900020",
+      "amazonAmount": 208.62,
+      "netPaid": 208.62,
+      "status": "paid"
+    },
+    "205121": {
+      "amazonInvoice": "VBE20240900023",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "205122": {
+      "amazonInvoice": "VBE20240900018",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "205591": {
+      "amazonInvoice": "VBE20240900080",
+      "amazonAmount": 186.42,
+      "netPaid": 186.42,
+      "status": "paid"
+    },
+    "205592": {
+      "amazonInvoice": "VBE20240900078",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "205593": {
+      "amazonInvoice": "VBE20240900083",
+      "amazonAmount": 954.48,
+      "netPaid": 954.48,
+      "status": "paid"
+    },
+    "205594": {
+      "amazonInvoice": "VBE20240900081",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "205595": {
+      "amazonInvoice": "VBE20240900059",
+      "amazonAmount": 690.15,
+      "netPaid": 690.15,
+      "status": "paid"
+    },
+    "205596": {
+      "amazonInvoice": "VBE20240900072",
+      "amazonAmount": 314.96,
+      "netPaid": 314.96,
+      "status": "paid"
+    },
+    "205597": {
+      "amazonInvoice": "VBE20240900071",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "205598": {
+      "amazonInvoice": "VBE20240900063",
+      "amazonAmount": 389.09,
+      "netPaid": 389.09,
+      "status": "paid"
+    },
+    "205599": {
+      "amazonInvoice": "VBE20240900062",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "205600": {
+      "amazonInvoice": "VBE20240900073",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "206979": {
+      "amazonInvoice": "VBE20240900139",
+      "amazonAmount": 44,
+      "netPaid": 44,
+      "status": "paid"
+    },
+    "206982": {
+      "amazonInvoice": "VBE20240900138",
+      "amazonAmount": 142.72,
+      "netPaid": 142.72,
+      "status": "paid"
+    },
+    "206983": {
+      "amazonInvoice": "VBE20240900136",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "206984": {
+      "amazonInvoice": "VBE20240900137",
+      "amazonAmount": 106.32,
+      "netPaid": 106.32,
+      "status": "paid"
+    },
+    "208219": {
+      "amazonInvoice": "VBE20240900234",
+      "amazonAmount": 1134.7,
+      "netPaid": 1134.7,
+      "status": "paid"
+    },
+    "208220": {
+      "amazonInvoice": "VBE20240900238",
+      "amazonAmount": 183.92,
+      "netPaid": 183.92,
+      "status": "paid"
+    },
+    "208221": {
+      "amazonInvoice": "VBE20240900235",
+      "amazonAmount": 157.32,
+      "netPaid": 157.32,
+      "status": "paid"
+    },
+    "208222": {
+      "amazonInvoice": "VBE20240900232",
+      "amazonAmount": 183.92,
+      "netPaid": 183.92,
+      "status": "paid"
+    },
+    "212220": {
+      "amazonInvoice": "VBE20240900261",
+      "amazonAmount": 114.96,
+      "netPaid": 114.96,
+      "status": "paid"
+    },
+    "212221": {
+      "amazonInvoice": "VBE20240900262",
+      "amazonAmount": 201.75,
+      "netPaid": 201.75,
+      "status": "paid"
+    },
+    "212222": {
+      "amazonInvoice": "VBE20240900260",
+      "amazonAmount": 1914.72,
+      "netPaid": 1914.72,
+      "status": "paid"
+    },
+    "212223": {
+      "amazonInvoice": "VBE20240900259",
+      "amazonAmount": 223.36,
+      "netPaid": 223.36,
+      "status": "paid"
+    },
+    "212224": {
+      "amazonInvoice": "VBE20240900258",
+      "amazonAmount": 348.46,
+      "netPaid": 348.46,
+      "status": "paid"
+    },
+    "212225": {
+      "amazonInvoice": "VBE20240900257",
+      "amazonAmount": 336.63,
+      "netPaid": 336.63,
+      "status": "paid"
+    },
+    "212940": {
+      "amazonInvoice": "VBE20240900318",
+      "amazonAmount": 121.45,
+      "netPaid": 121.45,
+      "status": "paid"
+    },
+    "212941": {
+      "amazonInvoice": "VBE20240900304",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "212942": {
+      "amazonInvoice": "VBE20240900301",
+      "amazonAmount": 455.04,
+      "netPaid": 455.04,
+      "status": "paid"
+    },
+    "212943": {
+      "amazonInvoice": "VBE20240900321",
+      "amazonAmount": 153.56,
+      "netPaid": 153.56,
+      "status": "paid"
+    },
+    "212944": {
+      "amazonInvoice": "VBE20240900315",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "213809": {
+      "amazonInvoice": "VBE20240900334",
+      "amazonAmount": 125.44,
+      "netPaid": 125.44,
+      "status": "paid"
+    },
+    "213812": {
+      "amazonInvoice": "VBE20240900337",
+      "amazonAmount": 183.92,
+      "netPaid": 183.92,
+      "status": "paid"
+    },
+    "213813": {
+      "amazonInvoice": "VBE20240900335",
+      "amazonAmount": 160.4,
+      "netPaid": 160.4,
+      "status": "paid"
+    },
+    "214294": {
+      "amazonInvoice": "VBE20240900368",
+      "amazonAmount": 185.08,
+      "netPaid": 185.08,
+      "status": "paid"
+    },
+    "214295": {
+      "amazonInvoice": "VBE20240900354",
+      "amazonAmount": 157.32,
+      "netPaid": 157.32,
+      "status": "paid"
+    },
+    "214296": {
+      "amazonInvoice": "VBE20240900372",
+      "amazonAmount": 170.3,
+      "netPaid": 170.3,
+      "status": "paid"
+    },
+    "214297": {
+      "amazonInvoice": "VBE20240900374",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "214298": {
+      "amazonInvoice": "VBE20240900364",
+      "amazonAmount": 140.94,
+      "netPaid": 140.94,
+      "status": "paid"
+    },
+    "214299": {
+      "amazonInvoice": "VBE20240900369",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "214962": {
+      "amazonInvoice": "VBE20240900419",
+      "amazonAmount": 513.19,
+      "netPaid": 513.19,
+      "status": "paid"
+    },
+    "214963": {
+      "amazonInvoice": "VBE20240900403",
+      "amazonAmount": 158.76,
+      "netPaid": 158.76,
+      "status": "paid"
+    },
+    "214964": {
+      "amazonInvoice": "VBE20240900404",
+      "amazonAmount": 528.94,
+      "netPaid": 528.94,
+      "status": "paid"
+    },
+    "214965": {
+      "amazonInvoice": "VBE20240900421",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "214966": {
+      "amazonInvoice": "VBE20240900416",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "215606": {
+      "amazonInvoice": "VBE20241000018",
+      "amazonAmount": 759.28,
+      "netPaid": 759.28,
+      "status": "paid"
+    },
+    "215607": {
+      "amazonInvoice": "VBE20241000019",
+      "amazonAmount": 146.48,
+      "netPaid": 146.48,
+      "status": "paid"
+    },
+    "215608": {
+      "amazonInvoice": "VBE20241000020",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "215609": {
+      "amazonInvoice": "VBE20241000021",
+      "amazonAmount": 615.67,
+      "netPaid": 615.67,
+      "status": "paid"
+    },
+    "215610": {
+      "amazonInvoice": "VBE20241000013",
+      "amazonAmount": 129.98,
+      "netPaid": 129.98,
+      "status": "paid"
+    },
+    "215611": {
+      "amazonInvoice": "VBE20241000015",
+      "amazonAmount": 157.32,
+      "netPaid": 157.32,
+      "status": "paid"
+    },
+    "215612": {
+      "amazonInvoice": "VBE20241000014",
+      "amazonAmount": 125.44,
+      "netPaid": 125.44,
+      "status": "paid"
+    },
+    "215613": {
+      "amazonInvoice": "VBE20241000016",
+      "amazonAmount": 209.16,
+      "netPaid": 209.16,
+      "status": "paid"
+    },
+    "215614": {
+      "amazonInvoice": "VBE20241000017",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "216429": {
+      "amazonInvoice": "VBE20241000054",
+      "amazonAmount": 121.45,
+      "netPaid": 121.45,
+      "status": "paid"
+    },
+    "216430": {
+      "amazonInvoice": "VBE20241000050",
+      "amazonAmount": 8.83,
+      "netPaid": 8.83,
+      "status": "paid"
+    },
+    "216435": {
+      "amazonInvoice": "VBE20241000055",
+      "amazonAmount": 106.71,
+      "netPaid": 106.71,
+      "status": "paid"
+    },
+    "216436": {
+      "amazonInvoice": "VBE20241000052",
+      "amazonAmount": 195.44,
+      "netPaid": 195.44,
+      "status": "paid"
+    },
+    "216437": {
+      "amazonInvoice": "VBE20241000065",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "216438": {
+      "amazonInvoice": "VBE20241000051",
+      "amazonAmount": 183.92,
+      "netPaid": 183.92,
+      "status": "paid"
+    },
+    "220432": {
+      "amazonInvoice": "VBE20241000080",
+      "amazonAmount": 120,
+      "netPaid": 120,
+      "status": "paid"
+    },
+    "221443": {
+      "amazonInvoice": "VBE20241000138",
+      "amazonAmount": 200.9,
+      "netPaid": 200.9,
+      "status": "paid"
+    },
+    "221445": {
+      "amazonInvoice": "VBE20241000140",
+      "amazonAmount": 774.78,
+      "netPaid": 774.78,
+      "status": "paid"
+    },
+    "221447": {
+      "amazonInvoice": "VBE20241000141",
+      "amazonAmount": 2397.78,
+      "netPaid": 2397.78,
+      "status": "paid"
+    },
+    "221448": {
+      "amazonInvoice": "VBE20241000139",
+      "amazonAmount": 183.92,
+      "netPaid": 183.92,
+      "status": "paid"
+    },
+    "221449": {
+      "amazonInvoice": "VBE20241000137",
+      "amazonAmount": 210.3,
+      "netPaid": 210.3,
+      "status": "paid"
+    },
+    "225607": {
+      "amazonInvoice": "VBE20241100040",
+      "amazonAmount": 476.92,
+      "netPaid": 476.92,
+      "status": "paid"
+    },
+    "225620": {
+      "amazonInvoice": "VBE20241100036",
+      "amazonAmount": 194.53,
+      "netPaid": 194.53,
+      "status": "paid"
+    },
+    "226363": {
+      "amazonInvoice": "VBE20241101342",
+      "amazonAmount": 475.5,
+      "netPaid": 475.5,
+      "status": "paid"
+    },
+    "226369": {
+      "amazonInvoice": "VBE20241101339",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "226601": {
+      "amazonInvoice": "VBE20241101540",
+      "amazonAmount": 246.96,
+      "netPaid": 246.96,
+      "status": "paid"
+    },
+    "226602": {
+      "amazonInvoice": "VBE20241101546",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "226603": {
+      "amazonInvoice": "VBE20241101541",
+      "amazonAmount": 151.41,
+      "netPaid": 151.41,
+      "status": "paid"
+    },
+    "226716": {
+      "amazonInvoice": "VBE20241101602",
+      "amazonAmount": 5866,
+      "netPaid": 5866,
+      "status": "paid"
+    },
+    "226717": {
+      "amazonInvoice": "VBE20241101601",
+      "amazonAmount": 165,
+      "netPaid": 165,
+      "status": "paid"
+    },
+    "226718": {
+      "amazonInvoice": "VBE20241101603",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "226722": {
+      "amazonInvoice": "VBE20241101605",
+      "amazonAmount": 164.99,
+      "netPaid": 164.99,
+      "status": "paid"
+    },
+    "228536": {
+      "amazonInvoice": "VBE20241101681",
+      "amazonAmount": 224.95,
+      "netPaid": 224.95,
+      "status": "paid"
+    },
+    "228537": {
+      "amazonInvoice": "VBE20241101670",
+      "amazonAmount": 160,
+      "netPaid": 160,
+      "status": "paid"
+    },
+    "228538": {
+      "amazonInvoice": "VBE20241101682",
+      "amazonAmount": 174.72,
+      "netPaid": 174.72,
+      "status": "paid"
+    },
+    "228539": {
+      "amazonInvoice": "VBE20241101680",
+      "amazonAmount": 319.42,
+      "netPaid": 319.42,
+      "status": "paid"
+    },
+    "228540": {
+      "amazonInvoice": "VBE20241101676",
+      "amazonAmount": 4228.08,
+      "netPaid": 4228.08,
+      "status": "paid"
+    },
+    "228541": {
+      "amazonInvoice": "VBE20241101678",
+      "amazonAmount": 350.5,
+      "netPaid": 350.5,
+      "status": "paid"
+    },
+    "228542": {
+      "amazonInvoice": "VBE20241101674",
+      "amazonAmount": 250.88,
+      "netPaid": 250.88,
+      "status": "paid"
+    },
+    "228543": {
+      "amazonInvoice": "VBE20241101673",
+      "amazonAmount": 174.81,
+      "netPaid": 174.81,
+      "status": "paid"
+    },
+    "228544": {
+      "amazonInvoice": "VBE20241101617",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "228931": {
+      "amazonInvoice": "VBE20241102070",
+      "amazonAmount": 99.98,
+      "netPaid": 99.98,
+      "status": "paid"
+    },
+    "230321": {
+      "amazonInvoice": "VBE20241102121",
+      "amazonAmount": 1680,
+      "netPaid": 1680,
+      "status": "paid"
+    },
+    "230323": {
+      "amazonInvoice": "VBE20241102072",
+      "amazonAmount": 5040,
+      "netPaid": 5040,
+      "status": "paid"
+    },
+    "230328": {
+      "amazonInvoice": "VBE20241102122",
+      "amazonAmount": 1235,
+      "netPaid": 1235,
+      "status": "paid"
+    },
+    "230329": {
+      "amazonInvoice": "VBE20241102118",
+      "amazonAmount": 112.26,
+      "netPaid": 112.26,
+      "status": "paid"
+    },
+    "230330": {
+      "amazonInvoice": "VBE20241102117",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "230331": {
+      "amazonInvoice": "VBE20241102082",
+      "amazonAmount": 329.28,
+      "netPaid": 329.28,
+      "status": "paid"
+    },
+    "230339": {
+      "amazonInvoice": "VBE20241102125",
+      "amazonAmount": 120.55,
+      "netPaid": 120.55,
+      "status": "paid"
+    },
+    "230340": {
+      "amazonInvoice": "VBE20241102124",
+      "amazonAmount": 103.65,
+      "netPaid": 103.65,
+      "status": "paid"
+    },
+    "230341": {
+      "amazonInvoice": "VBE20241102123",
+      "amazonAmount": 103.65,
+      "netPaid": 103.65,
+      "status": "paid"
+    },
+    "230342": {
+      "amazonInvoice": "VBE20241102116",
+      "amazonAmount": 319.29,
+      "netPaid": 319.29,
+      "status": "paid"
+    },
+    "230343": {
+      "amazonInvoice": "VBE20241102081",
+      "amazonAmount": 103.65,
+      "netPaid": 103.65,
+      "status": "paid"
+    },
+    "230344": {
+      "amazonInvoice": "VBE20241102074",
+      "amazonAmount": 101.4,
+      "netPaid": 101.4,
+      "status": "paid"
+    },
+    "230345": {
+      "amazonInvoice": "VBE20241102080",
+      "amazonAmount": 171.39,
+      "netPaid": 171.39,
+      "status": "paid"
+    },
+    "230633": {
+      "amazonInvoice": "VBE20241102355",
+      "amazonAmount": 356.15,
+      "netPaid": 356.15,
+      "status": "paid"
+    },
+    "230634": {
+      "amazonInvoice": "VBE20241102356",
+      "amazonAmount": 563.01,
+      "netPaid": 563.01,
+      "status": "paid"
+    },
+    "230635": {
+      "amazonInvoice": "VBE20241102351",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "230636": {
+      "amazonInvoice": "VBE20241102352",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "230637": {
+      "amazonInvoice": "VBE20241102353",
+      "amazonAmount": 1973.49,
+      "netPaid": 1973.49,
+      "status": "paid"
+    },
+    "230638": {
+      "amazonInvoice": "VBE20241102354",
+      "amazonAmount": 780.38,
+      "netPaid": 780.38,
+      "status": "paid"
+    },
+    "231264": {
+      "amazonInvoice": "VBE20241102642",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "231266": {
+      "amazonInvoice": "VBE20241102641",
+      "amazonAmount": 160,
+      "netPaid": 160,
+      "status": "paid"
+    },
+    "231568": {
+      "amazonInvoice": "VBE20241102643",
+      "amazonAmount": 110.58,
+      "netPaid": 110.58,
+      "status": "paid"
+    },
+    "231570": {
+      "amazonInvoice": "VBE20241102640",
+      "amazonAmount": 402.8,
+      "netPaid": 402.8,
+      "status": "paid"
+    },
+    "231859": {
+      "amazonInvoice": "VBE20241102952",
+      "amazonAmount": 377.64,
+      "netPaid": 377.64,
+      "status": "paid"
+    },
+    "231860": {
+      "amazonInvoice": "VBE20241102951",
+      "amazonAmount": 406.28,
+      "netPaid": 406.28,
+      "status": "paid"
+    },
+    "231861": {
+      "amazonInvoice": "VBE20241102953",
+      "amazonAmount": 360,
+      "netPaid": 360,
+      "status": "paid"
+    },
+    "231862": {
+      "amazonInvoice": "VBE20241102954",
+      "amazonAmount": 314.62,
+      "netPaid": 314.62,
+      "status": "paid"
+    },
+    "233094": {
+      "amazonInvoice": "VBE20241200001",
+      "amazonAmount": 125.94,
+      "netPaid": 125.94,
+      "status": "paid"
+    },
+    "233970": {
+      "amazonInvoice": "VBE20241200325",
+      "amazonAmount": 700.32,
+      "netPaid": 700.32,
+      "status": "paid"
+    },
+    "233971": {
+      "amazonInvoice": "VBE20241200323",
+      "amazonAmount": 183.92,
+      "netPaid": 183.92,
+      "status": "paid"
+    },
+    "235878": {
+      "amazonInvoice": "VBE20241201062",
+      "amazonAmount": 419.52,
+      "netPaid": 419.52,
+      "status": "paid"
+    },
+    "236997": {
+      "amazonInvoice": "VBE20241201155",
+      "amazonAmount": 98.96,
+      "netPaid": 98.96,
+      "status": "paid"
+    },
+    "236998": {
+      "amazonInvoice": "VBE20241201154",
+      "amazonAmount": 257.64,
+      "netPaid": 257.64,
+      "status": "paid"
+    },
+    "237628": {
+      "amazonInvoice": "VBE20241201160",
+      "amazonAmount": 282.76,
+      "netPaid": 282.76,
+      "status": "paid"
+    },
+    "237629": {
+      "amazonInvoice": "VBE20241201156",
+      "amazonAmount": 102.22,
+      "netPaid": 102.22,
+      "status": "paid"
+    },
+    "237630": {
+      "amazonInvoice": "VBE20241201162",
+      "amazonAmount": 696.72,
+      "netPaid": 696.72,
+      "status": "paid"
+    },
+    "237631": {
+      "amazonInvoice": "VBE20241201161",
+      "amazonAmount": 1276.94,
+      "netPaid": 1276.94,
+      "status": "paid"
+    },
+    "239003": {
+      "amazonInvoice": "VBE20241202398",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "239009": {
+      "amazonInvoice": "VBE20241202395",
+      "amazonAmount": 1346.44,
+      "netPaid": 1346.44,
+      "status": "paid"
+    },
+    "239010": {
+      "amazonInvoice": "VBE20241202394",
+      "amazonAmount": 202.5,
+      "netPaid": 202.5,
+      "status": "paid"
+    },
+    "239011": {
+      "amazonInvoice": "VBE20241202393",
+      "amazonAmount": 125.44,
+      "netPaid": 125.44,
+      "status": "paid"
+    },
+    "239013": {
+      "amazonInvoice": "VBE20241202397",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "239014": {
+      "amazonInvoice": "VBE20241202402",
+      "amazonAmount": 391.46,
+      "netPaid": 391.46,
+      "status": "paid"
+    },
+    "239015": {
+      "amazonInvoice": "VBE20241202400",
+      "amazonAmount": 162.24,
+      "netPaid": 162.24,
+      "status": "paid"
+    },
+    "239016": {
+      "amazonInvoice": "VBE20241202399",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "239017": {
+      "amazonInvoice": "VBE20241202401",
+      "amazonAmount": 109.78,
+      "netPaid": 109.78,
+      "status": "paid"
+    },
+    "241926": {
+      "amazonInvoice": "VBE20241202528",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "242175": {
+      "amazonInvoice": "VBE20241202732",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "242178": {
+      "amazonInvoice": "VBE20241202733",
+      "amazonAmount": 297.76,
+      "netPaid": 297.76,
+      "status": "paid"
+    },
+    "242241": {
+      "amazonInvoice": "VBE20241202779",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "242982": {
+      "amazonInvoice": "VBE20241203272",
+      "amazonAmount": 83.96,
+      "netPaid": 83.96,
+      "status": "paid"
+    },
+    "242983": {
+      "amazonInvoice": "VBE20241203273",
+      "amazonAmount": 187.2,
+      "netPaid": 187.2,
+      "status": "paid"
+    },
+    "242984": {
+      "amazonInvoice": "VBE20241203274",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "242985": {
+      "amazonInvoice": "VBE20241203275",
+      "amazonAmount": 130.76,
+      "netPaid": 130.76,
+      "status": "paid"
+    },
+    "242986": {
+      "amazonInvoice": "VBE20241203278",
+      "amazonAmount": 125.22,
+      "netPaid": 125.22,
+      "status": "paid"
+    },
+    "242987": {
+      "amazonInvoice": "VBE20241203276",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "242988": {
+      "amazonInvoice": "VBE20241203279",
+      "amazonAmount": 137.72,
+      "netPaid": 137.72,
+      "status": "paid"
+    },
+    "242989": {
+      "amazonInvoice": "VBE20241203277",
+      "amazonAmount": 157.32,
+      "netPaid": 157.32,
+      "status": "paid"
+    },
+    "242990": {
+      "amazonInvoice": "VBE20241203271",
+      "amazonAmount": 350.5,
+      "netPaid": 350.5,
+      "status": "paid"
+    },
+    "243542": {
+      "amazonInvoice": "VBE20241203585",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "243543": {
+      "amazonInvoice": "VBE20241203593",
+      "amazonAmount": 197.92,
+      "netPaid": 197.92,
+      "status": "paid"
+    },
+    "243544": {
+      "amazonInvoice": "VBE20241203596",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "243545": {
+      "amazonInvoice": "VBE20241203595",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "243625": {
+      "amazonInvoice": "VBE20241203604",
+      "amazonAmount": 125.44,
+      "netPaid": 125.44,
+      "status": "paid"
+    },
+    "244136": {
+      "amazonInvoice": "VBE20241203945",
+      "amazonAmount": 420.6,
+      "netPaid": 420.6,
+      "status": "paid"
+    },
+    "244137": {
+      "amazonInvoice": "VBE20241203956",
+      "amazonAmount": 142.32,
+      "netPaid": 142.32,
+      "status": "paid"
+    },
+    "245017": {
+      "amazonInvoice": "VBE20250100039",
+      "amazonAmount": 724.68,
+      "netPaid": 724.68,
+      "status": "paid"
+    },
+    "245020": {
+      "amazonInvoice": "VBE20250100036",
+      "amazonAmount": 222.5,
+      "netPaid": 222.5,
+      "status": "paid"
+    },
+    "245021": {
+      "amazonInvoice": "VBE20250100020",
+      "amazonAmount": 215.44,
+      "netPaid": 215.44,
+      "status": "paid"
+    },
+    "245022": {
+      "amazonInvoice": "VBE20250100041",
+      "amazonAmount": 163.2,
+      "netPaid": 163.2,
+      "status": "paid"
+    },
+    "245023": {
+      "amazonInvoice": "VBE20250100037",
+      "amazonAmount": 570.96,
+      "netPaid": 570.96,
+      "status": "paid"
+    },
+    "245024": {
+      "amazonInvoice": "VBE20250100029",
+      "amazonAmount": 409.5,
+      "netPaid": 409.5,
+      "status": "paid"
+    },
+    "245025": {
+      "amazonInvoice": "VBE20250100022",
+      "amazonAmount": 136.5,
+      "netPaid": 136.5,
+      "status": "paid"
+    },
+    "245026": {
+      "amazonInvoice": "VBE20250100021",
+      "amazonAmount": 834.48,
+      "netPaid": 834.48,
+      "status": "paid"
+    },
+    "246942": {
+      "amazonInvoice": "VBE20250100089",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "246943": {
+      "amazonInvoice": "VBE20250100088",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "246944": {
+      "amazonInvoice": "VBE20250100087",
+      "amazonAmount": 1087.02,
+      "netPaid": 1087.02,
+      "status": "paid"
+    },
+    "246954": {
+      "amazonInvoice": "VBE20250100086",
+      "amazonAmount": 264.64,
+      "netPaid": 264.64,
+      "status": "paid"
+    },
+    "246955": {
+      "amazonInvoice": "VBE20250100084",
+      "amazonAmount": 304.48,
+      "netPaid": 304.48,
+      "status": "paid"
+    },
+    "246956": {
+      "amazonInvoice": "VBE20250100085",
+      "amazonAmount": 192.79,
+      "netPaid": 192.79,
+      "status": "paid"
+    },
+    "247303": {
+      "amazonInvoice": "VBE20250100099",
+      "amazonAmount": 241.56,
+      "netPaid": 241.56,
+      "status": "paid"
+    },
+    "247310": {
+      "amazonInvoice": "VBE20250100101",
+      "amazonAmount": 280,
+      "netPaid": 280,
+      "status": "paid"
+    },
+    "247311": {
+      "amazonInvoice": "VBE20250100102",
+      "amazonAmount": 2940,
+      "netPaid": 2940,
+      "status": "paid"
+    },
+    "247312": {
+      "amazonInvoice": "VBE20250100103",
+      "amazonAmount": 5040,
+      "netPaid": 5040,
+      "status": "paid"
+    },
+    "247313": {
+      "amazonInvoice": "VBE20250100100",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "248519": {
+      "amazonInvoice": "VBE20250100160",
+      "amazonAmount": 241.56,
+      "netPaid": 241.56,
+      "status": "paid"
+    },
+    "248524": {
+      "amazonInvoice": "VBE20250100157",
+      "amazonAmount": 350,
+      "netPaid": 350,
+      "status": "paid"
+    },
+    "248525": {
+      "amazonInvoice": "VBE20250100156",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "248526": {
+      "amazonInvoice": "VBE20250100154",
+      "amazonAmount": 234.86,
+      "netPaid": 234.86,
+      "status": "paid"
+    },
+    "248527": {
+      "amazonInvoice": "VBE20250100149",
+      "amazonAmount": 2870,
+      "netPaid": 2870,
+      "status": "paid"
+    },
+    "248921": {
+      "amazonInvoice": "VBE20250100167",
+      "amazonAmount": 104.82,
+      "netPaid": 104.82,
+      "status": "paid"
+    },
+    "248922": {
+      "amazonInvoice": "VBE20250100166",
+      "amazonAmount": 701,
+      "netPaid": 701,
+      "status": "paid"
+    },
+    "249430": {
+      "amazonInvoice": "VBE20250100190",
+      "amazonAmount": 104.88,
+      "netPaid": 104.88,
+      "status": "paid"
+    },
+    "249774": {
+      "amazonInvoice": "VBE20250100204",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "249777": {
+      "amazonInvoice": "VBE20250100205",
+      "amazonAmount": 104.88,
+      "netPaid": 104.88,
+      "status": "paid"
+    },
+    "249907": {
+      "amazonInvoice": "VBE20250100224",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "249908": {
+      "amazonInvoice": "VBE20250100233",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "250160": {
+      "amazonInvoice": "VBE20250100240",
+      "amazonAmount": 123.4,
+      "netPaid": 123.4,
+      "status": "paid"
+    },
+    "250178": {
+      "amazonInvoice": "VBE20250100269",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "250884": {
+      "amazonInvoice": "VBE20250100302",
+      "amazonAmount": 136.5,
+      "netPaid": 136.5,
+      "status": "paid"
+    },
+    "250885": {
+      "amazonInvoice": "VBE20250100291",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "250886": {
+      "amazonInvoice": "VBE20250100297",
+      "amazonAmount": 172.32,
+      "netPaid": 172.32,
+      "status": "paid"
+    },
+    "252767": {
+      "amazonInvoice": "VBE20250200040",
+      "amazonAmount": 115,
+      "netPaid": 115,
+      "status": "paid"
+    },
+    "255157": {
+      "amazonInvoice": "VBE20250200108",
+      "amazonAmount": 101.4,
+      "netPaid": 101.4,
+      "status": "paid"
+    },
+    "256223": {
+      "amazonInvoice": "VBE20250200144",
+      "amazonAmount": 101.4,
+      "netPaid": 101.4,
+      "status": "paid"
+    },
+    "258561": {
+      "amazonInvoice": "VBE20250300008",
+      "amazonAmount": 140.2,
+      "netPaid": 140.2,
+      "status": "paid"
+    },
+    "258562": {
+      "amazonInvoice": "VBE20250300004",
+      "amazonAmount": 212.5,
+      "netPaid": 212.5,
+      "status": "paid"
+    },
+    "258563": {
+      "amazonInvoice": "VBE20250300006",
+      "amazonAmount": 112.84,
+      "netPaid": 112.84,
+      "status": "paid"
+    },
+    "258564": {
+      "amazonInvoice": "VBE20250300007",
+      "amazonAmount": 106.7,
+      "netPaid": 106.7,
+      "status": "paid"
+    },
+    "258565": {
+      "amazonInvoice": "VBE20250300005",
+      "amazonAmount": 100.56,
+      "netPaid": 100.56,
+      "status": "paid"
+    },
+    "259212": {
+      "amazonInvoice": "VBE20250300023",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "259213": {
+      "amazonInvoice": "VBE20250300024",
+      "amazonAmount": 987.5,
+      "netPaid": 987.5,
+      "status": "paid"
+    },
+    "259214": {
+      "amazonInvoice": "VBE20250300025",
+      "amazonAmount": 3710,
+      "netPaid": 3710,
+      "status": "paid"
+    },
+    "259215": {
+      "amazonInvoice": "VBE20250300026",
+      "amazonAmount": 3080,
+      "netPaid": 3080,
+      "status": "paid"
+    },
+    "259216": {
+      "amazonInvoice": "VBE20250300027",
+      "amazonAmount": 2520,
+      "netPaid": 2520,
+      "status": "paid"
+    },
+    "261340": {
+      "amazonInvoice": "VBE20250300069",
+      "amazonAmount": 770,
+      "netPaid": 770,
+      "status": "paid"
+    },
+    "261341": {
+      "amazonInvoice": "VBE20250300070",
+      "amazonAmount": 633.92,
+      "netPaid": 633.92,
+      "status": "paid"
+    },
+    "261342": {
+      "amazonInvoice": "VBE20250300071",
+      "amazonAmount": 2250.9,
+      "netPaid": 2250.9,
+      "status": "paid"
+    },
+    "261343": {
+      "amazonInvoice": "VBE20250300072",
+      "amazonAmount": 702.72,
+      "netPaid": 702.72,
+      "status": "paid"
+    },
+    "261344": {
+      "amazonInvoice": "VBE20250300074",
+      "amazonAmount": 1559.16,
+      "netPaid": 1559.16,
+      "status": "paid"
+    },
+    "261345": {
+      "amazonInvoice": "VBE20250300073",
+      "amazonAmount": 889.92,
+      "netPaid": 889.92,
+      "status": "paid"
+    },
+    "261542": {
+      "amazonInvoice": "VBE20250300103",
+      "amazonAmount": 570.96,
+      "netPaid": 570.96,
+      "status": "paid"
+    },
+    "261543": {
+      "amazonInvoice": "VBE20250300102",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "261544": {
+      "amazonInvoice": "VBE20250300101",
+      "amazonAmount": 549,
+      "netPaid": 549,
+      "status": "paid"
+    },
+    "261743": {
+      "amazonInvoice": "VBE20250300109",
+      "amazonAmount": 588,
+      "netPaid": 588,
+      "status": "paid"
+    },
+    "262301": {
+      "amazonInvoice": "VBE20250300136",
+      "amazonAmount": 138.18,
+      "netPaid": 138.18,
+      "status": "paid"
+    },
+    "262304": {
+      "amazonInvoice": "VBE20250300137",
+      "amazonAmount": 139,
+      "netPaid": 139,
+      "status": "paid"
+    },
+    "262312": {
+      "amazonInvoice": "VBE20250300141",
+      "amazonAmount": 1610,
+      "netPaid": 1610,
+      "status": "paid"
+    },
+    "262313": {
+      "amazonInvoice": "VBE20250300142",
+      "amazonAmount": 1260,
+      "netPaid": 1260,
+      "status": "paid"
+    },
+    "262451": {
+      "amazonInvoice": "VBE20250300144",
+      "amazonAmount": 236.45,
+      "netPaid": 236.45,
+      "status": "paid"
+    },
+    "262452": {
+      "amazonInvoice": "VBE20250300145",
+      "amazonAmount": 392.18,
+      "netPaid": 392.18,
+      "status": "paid"
+    },
+    "262459": {
+      "amazonInvoice": "VBE20250300151",
+      "amazonAmount": 700,
+      "netPaid": 700,
+      "status": "paid"
+    },
+    "262460": {
+      "amazonInvoice": "VBE20250300148",
+      "amazonAmount": 490,
+      "netPaid": 490,
+      "status": "paid"
+    },
+    "262461": {
+      "amazonInvoice": "VBE20250300149",
+      "amazonAmount": 1890,
+      "netPaid": 1890,
+      "status": "paid"
+    },
+    "262462": {
+      "amazonInvoice": "VBE20250300147",
+      "amazonAmount": 111.2,
+      "netPaid": 111.2,
+      "status": "paid"
+    },
+    "262463": {
+      "amazonInvoice": "VBE20250300146",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "263303": {
+      "amazonInvoice": "VBE20250300210",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "263304": {
+      "amazonInvoice": "VBE20250300212",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "263309": {
+      "amazonInvoice": "VBE20250300214",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "263310": {
+      "amazonInvoice": "VBE20250300211",
+      "amazonAmount": 350,
+      "netPaid": 350,
+      "status": "paid"
+    },
+    "263311": {
+      "amazonInvoice": "VBE20250300204",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "263312": {
+      "amazonInvoice": "VBE20250300201",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "263313": {
+      "amazonInvoice": "VBE20250300213",
+      "amazonAmount": 198.9,
+      "netPaid": 198.9,
+      "status": "paid"
+    },
+    "263314": {
+      "amazonInvoice": "VBE20250300222",
+      "amazonAmount": 156.35,
+      "netPaid": 156.35,
+      "status": "paid"
+    },
+    "263315": {
+      "amazonInvoice": "VBE20250300220",
+      "amazonAmount": 354.5,
+      "netPaid": 354.5,
+      "status": "paid"
+    },
+    "263316": {
+      "amazonInvoice": "VBE20250300219",
+      "amazonAmount": 114.96,
+      "netPaid": 114.96,
+      "status": "paid"
+    },
+    "263317": {
+      "amazonInvoice": "VBE20250300218",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "263318": {
+      "amazonInvoice": "VBE20250300195",
+      "amazonAmount": 173.96,
+      "netPaid": 173.96,
+      "status": "paid"
+    },
+    "263319": {
+      "amazonInvoice": "VBE20250300221",
+      "amazonAmount": 205.9,
+      "netPaid": 205.9,
+      "status": "paid"
+    },
+    "263320": {
+      "amazonInvoice": "VBE20250300209",
+      "amazonAmount": 188.7,
+      "netPaid": 188.7,
+      "status": "paid"
+    },
+    "263321": {
+      "amazonInvoice": "VBE20250300207",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "264084": {
+      "amazonInvoice": "VBE20250300232",
+      "amazonAmount": 321.12,
+      "netPaid": 321.12,
+      "status": "paid"
+    },
+    "264085": {
+      "amazonInvoice": "VBE20250300229",
+      "amazonAmount": 198.16,
+      "netPaid": 198.16,
+      "status": "paid"
+    },
+    "264086": {
+      "amazonInvoice": "VBE20250300236",
+      "amazonAmount": 491.32,
+      "netPaid": 491.32,
+      "status": "paid"
+    },
+    "264087": {
+      "amazonInvoice": "VBE20250300234",
+      "amazonAmount": 1120,
+      "netPaid": 1120,
+      "status": "paid"
+    },
+    "264088": {
+      "amazonInvoice": "VBE20250300237",
+      "amazonAmount": 1330,
+      "netPaid": 1330,
+      "status": "paid"
+    },
+    "264089": {
+      "amazonInvoice": "VBE20250300233",
+      "amazonAmount": 1190,
+      "netPaid": 1190,
+      "status": "paid"
+    },
+    "264090": {
+      "amazonInvoice": "VBE20250300235",
+      "amazonAmount": 490,
+      "netPaid": 490,
+      "status": "paid"
+    },
+    "264091": {
+      "amazonInvoice": "VBE20250300239",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "264095": {
+      "amazonInvoice": "VBE20250300228",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "264135": {
+      "amazonInvoice": "VBE20250300231",
+      "amazonAmount": 461.16,
+      "netPaid": 461.16,
+      "status": "paid"
+    },
+    "264136": {
+      "amazonInvoice": "VBE20250300230",
+      "amazonAmount": 171.46,
+      "netPaid": 171.46,
+      "status": "paid"
+    },
+    "264137": {
+      "amazonInvoice": "VBE20250300238",
+      "amazonAmount": 632.48,
+      "netPaid": 632.48,
+      "status": "paid"
+    },
+    "264802": {
+      "amazonInvoice": "VBE20250400011",
+      "amazonAmount": 195,
+      "netPaid": 195,
+      "status": "paid"
+    },
+    "264803": {
+      "amazonInvoice": "VBE20250400012",
+      "amazonAmount": 230.1,
+      "netPaid": 230.1,
+      "status": "paid"
+    },
+    "265137": {
+      "amazonInvoice": "VBE20250400028",
+      "amazonAmount": 202.82,
+      "netPaid": 202.82,
+      "status": "paid"
+    },
+    "265138": {
+      "amazonInvoice": "VBE20250400027",
+      "amazonAmount": 604.29,
+      "netPaid": 604.29,
+      "status": "paid"
+    },
+    "265139": {
+      "amazonInvoice": "VBE20250400029",
+      "amazonAmount": 114.14,
+      "netPaid": 114.14,
+      "status": "paid"
+    },
+    "265140": {
+      "amazonInvoice": "VBE20250400030",
+      "amazonAmount": 105.76,
+      "netPaid": 105.76,
+      "status": "paid"
+    },
+    "265141": {
+      "amazonInvoice": "VBE20250400026",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "265948": {
+      "amazonInvoice": "VBE20250400054",
+      "amazonAmount": 115,
+      "netPaid": 115,
+      "status": "paid"
+    },
+    "265949": {
+      "amazonInvoice": "VBE20250400053",
+      "amazonAmount": 102.8,
+      "netPaid": 102.8,
+      "status": "paid"
+    },
+    "268216": {
+      "amazonInvoice": "VBE20250400056",
+      "amazonAmount": 560,
+      "netPaid": 560,
+      "status": "paid"
+    },
+    "268217": {
+      "amazonInvoice": "VBE20250400055",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "268307": {
+      "amazonInvoice": "VBE20250400073",
+      "amazonAmount": 139,
+      "netPaid": 139,
+      "status": "paid"
+    },
+    "268308": {
+      "amazonInvoice": "VBE20250400072",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "268309": {
+      "amazonInvoice": "VBE20250400079",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "269400": {
+      "amazonInvoice": "VBE20250400121",
+      "amazonAmount": 560,
+      "netPaid": 560,
+      "status": "paid"
+    },
+    "269401": {
+      "amazonInvoice": "VBE20250400122",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "270249": {
+      "amazonInvoice": "VBE20250400143",
+      "amazonAmount": 103.14,
+      "netPaid": 103.14,
+      "status": "paid"
+    },
+    "270250": {
+      "amazonInvoice": "VBE20250400142",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "271724": {
+      "amazonInvoice": "VBE20250400151",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "271725": {
+      "amazonInvoice": "VBE20250400152",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "272298": {
+      "amazonInvoice": "VBE20250400172",
+      "amazonAmount": 420,
+      "netPaid": 420,
+      "status": "paid"
+    },
+    "272299": {
+      "amazonInvoice": "VBE20250400173",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "272621": {
+      "amazonInvoice": "VBE20250400194",
+      "amazonAmount": 350,
+      "netPaid": 350,
+      "status": "paid"
+    },
+    "272622": {
+      "amazonInvoice": "VBE20250400193",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "272623": {
+      "amazonInvoice": "VBE20250400195",
+      "amazonAmount": 700,
+      "netPaid": 700,
+      "status": "paid"
+    },
+    "272624": {
+      "amazonInvoice": "VBE20250400196",
+      "amazonAmount": 138.18,
+      "netPaid": 138.18,
+      "status": "paid"
+    },
+    "272625": {
+      "amazonInvoice": "VBE20250400206",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "272626": {
+      "amazonInvoice": "VBE20250400198",
+      "amazonAmount": 104.88,
+      "netPaid": 104.88,
+      "status": "paid"
+    },
+    "272627": {
+      "amazonInvoice": "VBE20250400197",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "273115": {
+      "amazonInvoice": "VBE20250500002",
+      "amazonAmount": 209.88,
+      "netPaid": 209.88,
+      "status": "paid"
+    },
+    "273116": {
+      "amazonInvoice": "VBE20250500003",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "273389": {
+      "amazonInvoice": "VBE20250500032",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "273391": {
+      "amazonInvoice": "VBE20250500034",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "273394": {
+      "amazonInvoice": "VBE20250500033",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "276192": {
+      "amazonInvoice": "VBE20250500056",
+      "amazonAmount": 192.4,
+      "netPaid": 192.4,
+      "status": "paid"
+    },
+    "276193": {
+      "amazonInvoice": "VBE20250500059",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "276194": {
+      "amazonInvoice": "VBE20250500060",
+      "amazonAmount": 138.18,
+      "netPaid": 138.18,
+      "status": "paid"
+    },
+    "276195": {
+      "amazonInvoice": "VBE20250500057",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "276196": {
+      "amazonInvoice": "VBE20250500058",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "276580": {
+      "amazonInvoice": "VBE20250500102",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "276583": {
+      "amazonInvoice": "VBE20250500101",
+      "amazonAmount": 350,
+      "netPaid": 350,
+      "status": "paid"
+    },
+    "276584": {
+      "amazonInvoice": "VBE20250500100",
+      "amazonAmount": 280,
+      "netPaid": 280,
+      "status": "paid"
+    },
+    "276585": {
+      "amazonInvoice": "VBE20250500098",
+      "amazonAmount": 280,
+      "netPaid": 280,
+      "status": "paid"
+    },
+    "276586": {
+      "amazonInvoice": "VBE20250500099",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "276587": {
+      "amazonInvoice": "VBE20250500103",
+      "amazonAmount": 104.88,
+      "netPaid": 104.88,
+      "status": "paid"
+    },
+    "277101": {
+      "amazonInvoice": "VBE20250500127",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "277102": {
+      "amazonInvoice": "VBE20250500128",
+      "amazonAmount": 280,
+      "netPaid": 280,
+      "status": "paid"
+    },
+    "277103": {
+      "amazonInvoice": "VBE20250500129",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "277378": {
+      "amazonInvoice": "VBE20250500143",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "277379": {
+      "amazonInvoice": "VBE20250500145",
+      "amazonAmount": 420,
+      "netPaid": 420,
+      "status": "paid"
+    },
+    "277544": {
+      "amazonInvoice": "VBE20250500144",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "277548": {
+      "amazonInvoice": "VBE20250500142",
+      "amazonAmount": 1610,
+      "netPaid": 1610,
+      "status": "paid"
+    },
+    "277549": {
+      "amazonInvoice": "VBE20250500141",
+      "amazonAmount": 139.96,
+      "netPaid": 139.96,
+      "status": "paid"
+    },
+    "277617": {
+      "amazonInvoice": "VBE20250500174",
+      "amazonAmount": 104.88,
+      "netPaid": 104.88,
+      "status": "paid"
+    },
+    "277622": {
+      "amazonInvoice": "VBE20250500177",
+      "amazonAmount": 350,
+      "netPaid": 350,
+      "status": "paid"
+    },
+    "277623": {
+      "amazonInvoice": "VBE20250500186",
+      "amazonAmount": 420,
+      "netPaid": 420,
+      "status": "paid"
+    },
+    "278340": {
+      "amazonInvoice": "VBE20250500209",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "278341": {
+      "amazonInvoice": "VBE20250500211",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "278342": {
+      "amazonInvoice": "VBE20250500210",
+      "amazonAmount": 174.92,
+      "netPaid": 174.92,
+      "status": "paid"
+    },
+    "278343": {
+      "amazonInvoice": "VBE20250500212",
+      "amazonAmount": 56.15,
+      "netPaid": 56.15,
+      "status": "paid"
+    },
+    "280593": {
+      "amazonInvoice": "VBE20250600060",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "280594": {
+      "amazonInvoice": "VBE20250600059",
+      "amazonAmount": 3850,
+      "netPaid": 3850,
+      "status": "paid"
+    },
+    "280631": {
+      "amazonInvoice": "VBE20250600074",
+      "amazonAmount": 139.26,
+      "netPaid": 139.26,
+      "status": "paid"
+    },
+    "280632": {
+      "amazonInvoice": "VBE20250600075",
+      "amazonAmount": 125.94,
+      "netPaid": 125.94,
+      "status": "paid"
+    },
+    "280633": {
+      "amazonInvoice": "VBE20250600076",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "281226": {
+      "amazonInvoice": "VBE20250600116",
+      "amazonAmount": 183.92,
+      "netPaid": 183.92,
+      "status": "paid"
+    },
+    "281540": {
+      "amazonInvoice": "VBE20250600123",
+      "amazonAmount": 206.98,
+      "netPaid": 206.98,
+      "status": "paid"
+    },
+    "283619": {
+      "amazonInvoice": "VBE20250600135",
+      "amazonAmount": 1120,
+      "netPaid": 1120,
+      "status": "paid"
+    },
+    "283621": {
+      "amazonInvoice": "VBE20250600133",
+      "amazonAmount": 453.1,
+      "netPaid": 453.1,
+      "status": "paid"
+    },
+    "283622": {
+      "amazonInvoice": "VBE20250600134",
+      "amazonAmount": 105,
+      "netPaid": 105,
+      "status": "paid"
+    },
+    "283623": {
+      "amazonInvoice": "VBE20250600136",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "283624": {
+      "amazonInvoice": "VBE20250600137",
+      "amazonAmount": 420,
+      "netPaid": 420,
+      "status": "paid"
+    },
+    "283625": {
+      "amazonInvoice": "VBE20250600138",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "283829": {
+      "amazonInvoice": "VBE20250600151",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "283830": {
+      "amazonInvoice": "VBE20250600152",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "283831": {
+      "amazonInvoice": "VBE20250600153",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "283832": {
+      "amazonInvoice": "VBE20250600155",
+      "amazonAmount": 183.92,
+      "netPaid": 183.92,
+      "status": "paid"
+    },
+    "283833": {
+      "amazonInvoice": "VBE20250600154",
+      "amazonAmount": 1960,
+      "netPaid": 1960,
+      "status": "paid"
+    },
+    "284591": {
+      "amazonInvoice": "VBE20250600217",
+      "amazonAmount": 262.32,
+      "netPaid": 262.32,
+      "status": "paid"
+    },
+    "284592": {
+      "amazonInvoice": "VBE20250600218",
+      "amazonAmount": 112.5,
+      "netPaid": 112.5,
+      "status": "paid"
+    },
+    "284593": {
+      "amazonInvoice": "VBE20250600219",
+      "amazonAmount": 770,
+      "netPaid": 770,
+      "status": "paid"
+    },
+    "285379": {
+      "amazonInvoice": "VBE20250600271",
+      "amazonAmount": 1540,
+      "netPaid": 1540,
+      "status": "paid"
+    },
+    "285380": {
+      "amazonInvoice": "VBE20250600267",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "285381": {
+      "amazonInvoice": "VBE20250600278",
+      "amazonAmount": 116.34,
+      "netPaid": 116.34,
+      "status": "paid"
+    },
+    "285382": {
+      "amazonInvoice": "VBE20250600270",
+      "amazonAmount": 85.66,
+      "netPaid": 85.66,
+      "status": "paid"
+    },
+    "285383": {
+      "amazonInvoice": "VBE20250600269",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "285445": {
+      "amazonInvoice": "VBE20250700004",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "285446": {
+      "amazonInvoice": "VBE20250700005",
+      "amazonAmount": 279.68,
+      "netPaid": 279.68,
+      "status": "paid"
+    },
+    "285447": {
+      "amazonInvoice": "VBE20250700007",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "285448": {
+      "amazonInvoice": "VBE20250700006",
+      "amazonAmount": 490,
+      "netPaid": 490,
+      "status": "paid"
+    },
+    "285449": {
+      "amazonInvoice": "VBE20250700008",
+      "amazonAmount": 164.7,
+      "netPaid": 164.7,
+      "status": "paid"
+    },
+    "285450": {
+      "amazonInvoice": "VBE20250700009",
+      "amazonAmount": 104.88,
+      "netPaid": 104.88,
+      "status": "paid"
+    },
+    "286401": {
+      "amazonInvoice": "VBE20250700056",
+      "amazonAmount": 6720,
+      "netPaid": 6720,
+      "status": "paid"
+    },
+    "286402": {
+      "amazonInvoice": "VBE20250700058",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "286404": {
+      "amazonInvoice": "VBE20250700057",
+      "amazonAmount": 127.42,
+      "netPaid": 127.42,
+      "status": "paid"
+    },
+    "286405": {
+      "amazonInvoice": "VBE20250700055",
+      "amazonAmount": 280,
+      "netPaid": 280,
+      "status": "paid"
+    },
+    "286406": {
+      "amazonInvoice": "VBE20250700054",
+      "amazonAmount": 210,
+      "netPaid": 210,
+      "status": "paid"
+    },
+    "286407": {
+      "amazonInvoice": "VBE20250700059",
+      "amazonAmount": 57.96,
+      "netPaid": 57.96,
+      "status": "paid"
+    },
+    "286437": {
+      "amazonInvoice": "VBE20250700070",
+      "amazonAmount": 162.76,
+      "netPaid": 162.76,
+      "status": "paid"
+    },
+    "286445": {
+      "amazonInvoice": "VBE20250700067",
+      "amazonAmount": 100,
+      "netPaid": 100,
+      "status": "paid"
+    },
+    "286446": {
+      "amazonInvoice": "VBE20250700068",
+      "amazonAmount": 115.5,
+      "netPaid": 115.5,
+      "status": "paid"
+    },
+    "286447": {
+      "amazonInvoice": "VBE20250700069",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "286448": {
+      "amazonInvoice": "VBE20250700066",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "286459": {
+      "amazonInvoice": "VBE20250700071",
+      "amazonAmount": 444.46,
+      "netPaid": 444.46,
+      "status": "paid"
+    },
+    "287395": {
+      "amazonInvoice": "VBE20250700129",
+      "amazonAmount": 630,
+      "netPaid": 630,
+      "status": "paid"
+    },
+    "287396": {
+      "amazonInvoice": "VBE20250700130",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "287397": {
+      "amazonInvoice": "VBE20250700132",
+      "amazonAmount": 107.86,
+      "netPaid": 107.86,
+      "status": "paid"
+    },
+    "287398": {
+      "amazonInvoice": "VBE20250700131",
+      "amazonAmount": 478.6,
+      "netPaid": 478.6,
+      "status": "paid"
+    },
+    "287797": {
+      "amazonInvoice": "VBE20250700168",
+      "amazonAmount": 3360,
+      "netPaid": 3360,
+      "status": "paid"
+    },
+    "287798": {
+      "amazonInvoice": "VBE20250700169",
+      "amazonAmount": 115,
+      "netPaid": 115,
+      "status": "paid"
+    },
+    "287799": {
+      "amazonInvoice": "VBE20250700165",
+      "amazonAmount": 262.32,
+      "netPaid": 262.32,
+      "status": "paid"
+    },
+    "287800": {
+      "amazonInvoice": "VBE20250700166",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "287801": {
+      "amazonInvoice": "VBE20250700167",
+      "amazonAmount": 205.84,
+      "netPaid": 205.84,
+      "status": "paid"
+    },
+    "291993": {
+      "amazonInvoice": "VBE20250700188",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "291994": {
+      "amazonInvoice": "VBE20250700183",
+      "amazonAmount": 136.96,
+      "netPaid": 136.96,
+      "status": "paid"
+    },
+    "291995": {
+      "amazonInvoice": "VBE20250700184",
+      "amazonAmount": 127.47,
+      "netPaid": 127.47,
+      "status": "paid"
+    },
+    "291996": {
+      "amazonInvoice": "VBE20250700185",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "291997": {
+      "amazonInvoice": "VBE20250700186",
+      "amazonAmount": 241.38,
+      "netPaid": 241.38,
+      "status": "paid"
+    },
+    "291998": {
+      "amazonInvoice": "VBE20250700187",
+      "amazonAmount": 147.88,
+      "netPaid": 147.88,
+      "status": "paid"
+    },
+    "292097": {
+      "amazonInvoice": "VBE20250700205",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "292098": {
+      "amazonInvoice": "VBE20250700203",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "292102": {
+      "amazonInvoice": "VBE20250700200",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "292103": {
+      "amazonInvoice": "VBE20250700201",
+      "amazonAmount": 153.98,
+      "netPaid": 153.98,
+      "status": "paid"
+    },
+    "292104": {
+      "amazonInvoice": "VBE20250700204",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "292105": {
+      "amazonInvoice": "VBE20250700202",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "292106": {
+      "amazonInvoice": "VBE20250700206",
+      "amazonAmount": 557.64,
+      "netPaid": 557.64,
+      "status": "paid"
+    },
+    "292107": {
+      "amazonInvoice": "VBE20250700208",
+      "amazonAmount": 183.92,
+      "netPaid": 183.92,
+      "status": "paid"
+    },
+    "292108": {
+      "amazonInvoice": "VBE20250700207",
+      "amazonAmount": 157.32,
+      "netPaid": 157.32,
+      "status": "paid"
+    },
+    "293165": {
+      "amazonInvoice": "VBE20250700247",
+      "amazonAmount": 127.88,
+      "netPaid": 127.88,
+      "status": "paid"
+    },
+    "293166": {
+      "amazonInvoice": "VBE20250700248",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "293385": {
+      "amazonInvoice": "VBE20250700249",
+      "amazonAmount": 121.44,
+      "netPaid": 121.44,
+      "status": "paid"
+    },
+    "293386": {
+      "amazonInvoice": "VBE20250700250",
+      "amazonAmount": 1059.26,
+      "netPaid": 1059.26,
+      "status": "paid"
+    },
+    "293387": {
+      "amazonInvoice": "VBE20250700251",
+      "amazonAmount": 177.66,
+      "netPaid": 177.66,
+      "status": "paid"
+    },
+    "293404": {
+      "amazonInvoice": "VBE20250700262",
+      "amazonAmount": 340.38,
+      "netPaid": 340.38,
+      "status": "paid"
+    },
+    "293788": {
+      "amazonInvoice": "VBE20250800001",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "293789": {
+      "amazonInvoice": "VBE20250800005",
+      "amazonAmount": 525.52,
+      "netPaid": 525.52,
+      "status": "paid"
+    },
+    "293790": {
+      "amazonInvoice": "VBE20250800003",
+      "amazonAmount": 274.5,
+      "netPaid": 274.5,
+      "status": "paid"
+    },
+    "293791": {
+      "amazonInvoice": "VBE20250800006",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "293792": {
+      "amazonInvoice": "VBE20250800002",
+      "amazonAmount": 116.36,
+      "netPaid": 116.36,
+      "status": "paid"
+    },
+    "293793": {
+      "amazonInvoice": "VBE20250800004",
+      "amazonAmount": 193.5,
+      "netPaid": 193.5,
+      "status": "paid"
+    },
+    "293794": {
+      "amazonInvoice": "VBE20250800007",
+      "amazonAmount": 133.2,
+      "netPaid": 133.2,
+      "status": "paid"
+    },
+    "293871": {
+      "amazonInvoice": "VBE20250800017",
+      "amazonAmount": 280,
+      "netPaid": 280,
+      "status": "paid"
+    },
+    "293874": {
+      "amazonInvoice": "VBE20250800020",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "293876": {
+      "amazonInvoice": "VBE20250800018",
+      "amazonAmount": 100.58,
+      "netPaid": 100.58,
+      "status": "paid"
+    },
+    "293877": {
+      "amazonInvoice": "VBE20250800019",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "294787": {
+      "amazonInvoice": "VBE20250800064",
+      "amazonAmount": 204.55,
+      "netPaid": 204.55,
+      "status": "paid"
+    },
+    "294788": {
+      "amazonInvoice": "VBE20250800067",
+      "amazonAmount": 463.8,
+      "netPaid": 463.8,
+      "status": "paid"
+    },
+    "294789": {
+      "amazonInvoice": "VBE20250800068",
+      "amazonAmount": 163.2,
+      "netPaid": 163.2,
+      "status": "paid"
+    },
+    "294790": {
+      "amazonInvoice": "VBE20250800058",
+      "amazonAmount": 104.79,
+      "netPaid": 104.79,
+      "status": "paid"
+    },
+    "294791": {
+      "amazonInvoice": "VBE20250800059",
+      "amazonAmount": 124.47,
+      "netPaid": 124.47,
+      "status": "paid"
+    },
+    "294792": {
+      "amazonInvoice": "VBE20250800060",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "294793": {
+      "amazonInvoice": "VBE20250800061",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "294794": {
+      "amazonInvoice": "VBE20250800063",
+      "amazonAmount": 328.14,
+      "netPaid": 328.14,
+      "status": "paid"
+    },
+    "294795": {
+      "amazonInvoice": "VBE20250800062",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "294796": {
+      "amazonInvoice": "VBE20250800066",
+      "amazonAmount": 321.34,
+      "netPaid": 321.34,
+      "status": "paid"
+    },
+    "294797": {
+      "amazonInvoice": "VBE20250800065",
+      "amazonAmount": 1475.52,
+      "netPaid": 1475.52,
+      "status": "paid"
+    },
+    "295409": {
+      "amazonInvoice": "VBE20250800072",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "295410": {
+      "amazonInvoice": "VBE20250800071",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "295411": {
+      "amazonInvoice": "VBE20250800074",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "295412": {
+      "amazonInvoice": "VBE20250800073",
+      "amazonAmount": 115.66,
+      "netPaid": 115.66,
+      "status": "paid"
+    },
+    "295473": {
+      "amazonInvoice": "VBE20250800126",
+      "amazonAmount": 687.86,
+      "netPaid": 687.86,
+      "status": "paid"
+    },
+    "295474": {
+      "amazonInvoice": "VBE20250800128",
+      "amazonAmount": 84.2,
+      "netPaid": 84.2,
+      "status": "paid"
+    },
+    "295475": {
+      "amazonInvoice": "VBE20250800135",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "295476": {
+      "amazonInvoice": "VBE20250800132",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "295477": {
+      "amazonInvoice": "VBE20250800130",
+      "amazonAmount": 153.98,
+      "netPaid": 153.98,
+      "status": "paid"
+    },
+    "296220": {
+      "amazonInvoice": "VBE20250800137",
+      "amazonAmount": 168.91,
+      "netPaid": 168.91,
+      "status": "paid"
+    },
+    "296221": {
+      "amazonInvoice": "VBE20250800138",
+      "amazonAmount": 163.88,
+      "netPaid": 163.88,
+      "status": "paid"
+    },
+    "303702": {
+      "amazonInvoice": "VBE20250800143",
+      "amazonAmount": 298.5,
+      "netPaid": 298.5,
+      "status": "paid"
+    },
+    "303703": {
+      "amazonInvoice": "VBE20250800142",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "304801": {
+      "amazonInvoice": "VBE20250800222",
+      "amazonAmount": 359.13,
+      "netPaid": 359.13,
+      "status": "paid"
+    },
+    "304802": {
+      "amazonInvoice": "VBE20250800223",
+      "amazonAmount": 192.86,
+      "netPaid": 192.86,
+      "status": "paid"
+    },
+    "306600": {
+      "amazonInvoice": "VBE20250800234",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "306603": {
+      "amazonInvoice": "VBE20250800233",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "306604": {
+      "amazonInvoice": "VBE20250800235",
+      "amazonAmount": 114.76,
+      "netPaid": 114.76,
+      "status": "paid"
+    },
+    "306706": {
+      "amazonInvoice": "VBE20250800489",
+      "amazonAmount": 394.85,
+      "netPaid": 394.85,
+      "status": "paid"
+    },
+    "306707": {
+      "amazonInvoice": "VBE20250800491",
+      "amazonAmount": 136.5,
+      "netPaid": 136.5,
+      "status": "paid"
+    },
+    "306708": {
+      "amazonInvoice": "VBE20250800494",
+      "amazonAmount": 175.31,
+      "netPaid": 175.31,
+      "status": "paid"
+    },
+    "306709": {
+      "amazonInvoice": "VBE20250800492",
+      "amazonAmount": 109.8,
+      "netPaid": 109.8,
+      "status": "paid"
+    },
+    "310077": {
+      "amazonInvoice": "VBE20250900123",
+      "amazonAmount": 407.08,
+      "netPaid": 407.08,
+      "status": "paid"
+    },
+    "310078": {
+      "amazonInvoice": "VBE20250900121",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "310079": {
+      "amazonInvoice": "VBE20250900120",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "310081": {
+      "amazonInvoice": "VBE20250900122",
+      "amazonAmount": 544.18,
+      "netPaid": 544.18,
+      "status": "paid"
+    },
+    "310086": {
+      "amazonInvoice": "VBE20250900118",
+      "amazonAmount": 462.14,
+      "netPaid": 462.14,
+      "status": "paid"
+    },
+    "310087": {
+      "amazonInvoice": "VBE20250900119",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "310613": {
+      "amazonInvoice": "VBE20250900314",
+      "amazonAmount": 153.72,
+      "netPaid": 153.72,
+      "status": "paid"
+    },
+    "310614": {
+      "amazonInvoice": "VBE20250900313",
+      "amazonAmount": 111.68,
+      "netPaid": 111.68,
+      "status": "paid"
+    },
+    "310615": {
+      "amazonInvoice": "VBE20250900310",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "310616": {
+      "amazonInvoice": "VBE20250900308",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "310617": {
+      "amazonInvoice": "VBE20250900311",
+      "amazonAmount": 1066.1,
+      "netPaid": 1066.1,
+      "status": "paid"
+    },
+    "310618": {
+      "amazonInvoice": "VBE20250900309",
+      "amazonAmount": 464.12,
+      "netPaid": 464.12,
+      "status": "paid"
+    },
+    "310619": {
+      "amazonInvoice": "VBE20250900315",
+      "amazonAmount": 411.43,
+      "netPaid": 411.43,
+      "status": "paid"
+    },
+    "310888": {
+      "amazonInvoice": "VBE20250900321",
+      "amazonAmount": 208.62,
+      "netPaid": 208.62,
+      "status": "paid"
+    },
+    "311460": {
+      "amazonInvoice": "VBE20250900606",
+      "amazonAmount": 241.56,
+      "netPaid": 241.56,
+      "status": "paid"
+    },
+    "311461": {
+      "amazonInvoice": "VBE20250900607",
+      "amazonAmount": 104.75,
+      "netPaid": 104.75,
+      "status": "paid"
+    },
+    "311465": {
+      "amazonInvoice": "VBE20250900603",
+      "amazonAmount": 319.36,
+      "netPaid": 319.36,
+      "status": "paid"
+    },
+    "311466": {
+      "amazonInvoice": "VBE20250900604",
+      "amazonAmount": 157.32,
+      "netPaid": 157.32,
+      "status": "paid"
+    },
+    "311467": {
+      "amazonInvoice": "VBE20250900605",
+      "amazonAmount": 1186.52,
+      "netPaid": 1186.52,
+      "status": "paid"
+    },
+    "312305": {
+      "amazonInvoice": "VBE20250900646",
+      "amazonAmount": 241.56,
+      "netPaid": 241.56,
+      "status": "paid"
+    },
+    "312309": {
+      "amazonInvoice": "VBE20250900647",
+      "amazonAmount": 119.88,
+      "netPaid": 119.88,
+      "status": "paid"
+    },
+    "312310": {
+      "amazonInvoice": "VBE20250900648",
+      "amazonAmount": 1817.64,
+      "netPaid": 1817.64,
+      "status": "paid"
+    },
+    "312321": {
+      "amazonInvoice": "VBE20250900645",
+      "amazonAmount": 328.93,
+      "netPaid": 328.93,
+      "status": "paid"
+    },
+    "312322": {
+      "amazonInvoice": "VBE20250900644",
+      "amazonAmount": 370.11,
+      "netPaid": 370.11,
+      "status": "paid"
+    },
+    "313849": {
+      "amazonInvoice": "VBE20250900858",
+      "amazonAmount": 81.6,
+      "netPaid": 81.6,
+      "status": "paid"
+    },
+    "313853": {
+      "amazonInvoice": "VBE20250900860",
+      "amazonAmount": 120.78,
+      "netPaid": 120.78,
+      "status": "paid"
+    },
+    "313854": {
+      "amazonInvoice": "VBE20250900859",
+      "amazonAmount": 3043.58,
+      "netPaid": 3043.58,
+      "status": "paid"
+    },
+    "313855": {
+      "amazonInvoice": "VBE20250900857",
+      "amazonAmount": 693.52,
+      "netPaid": 693.52,
+      "status": "paid"
+    },
+    "314257": {
+      "amazonInvoice": "VBE20250900913",
+      "amazonAmount": 81.6,
+      "netPaid": 81.6,
+      "status": "paid"
+    },
+    "314258": {
+      "amazonInvoice": "VBE20250900912",
+      "amazonAmount": 1062.09,
+      "netPaid": 1062.09,
+      "status": "paid"
+    },
+    "314259": {
+      "amazonInvoice": "VBE20250900914",
+      "amazonAmount": 205.62,
+      "netPaid": 205.62,
+      "status": "paid"
+    },
+    "322971": {
+      "amazonInvoice": "VBE20250900988",
+      "amazonAmount": 111.01,
+      "netPaid": 111.01,
+      "status": "paid"
+    },
+    "322972": {
+      "amazonInvoice": "VBE20250900989",
+      "amazonAmount": 318.42,
+      "netPaid": 318.42,
+      "status": "paid"
+    },
+    "323069": {
+      "amazonInvoice": "VBE20250900993",
+      "amazonAmount": 99.53,
+      "netPaid": 99.53,
+      "status": "paid"
+    },
+    "323083": {
+      "amazonInvoice": "VBE20250900991",
+      "amazonAmount": 234.32,
+      "netPaid": 234.32,
+      "status": "paid"
+    },
+    "323084": {
+      "amazonInvoice": "VBE20250900994",
+      "amazonAmount": 1540,
+      "netPaid": 1540,
+      "status": "paid"
+    },
+    "323085": {
+      "amazonInvoice": "VBE20250900992",
+      "amazonAmount": 131.9,
+      "netPaid": 131.9,
+      "status": "paid"
+    },
+    "324524": {
+      "amazonInvoice": "VBE20250901067",
+      "amazonAmount": 334.03,
+      "netPaid": 334.03,
+      "status": "paid"
+    },
+    "324525": {
+      "amazonInvoice": "VBE20250901074",
+      "amazonAmount": 160.23,
+      "netPaid": 160.23,
+      "status": "paid"
+    },
+    "324530": {
+      "amazonInvoice": "VBE20250901068",
+      "amazonAmount": 658.74,
+      "netPaid": 658.74,
+      "status": "paid"
+    },
+    "324543": {
+      "amazonInvoice": "VBE20250901065",
+      "amazonAmount": 140,
+      "netPaid": 140,
+      "status": "paid"
+    },
+    "324544": {
+      "amazonInvoice": "VBE20250901066",
+      "amazonAmount": 496.7,
+      "netPaid": 496.7,
+      "status": "paid"
+    },
+    "324766": {
+      "amazonInvoice": "VBE20251000021",
+      "amazonAmount": 419.52,
+      "netPaid": 419.52,
+      "status": "paid"
+    },
+    "324767": {
+      "amazonInvoice": "VBE20251000023",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "324769": {
+      "amazonInvoice": "VBE20251000022",
+      "amazonAmount": 164.64,
+      "netPaid": 164.64,
+      "status": "paid"
+    },
+    "324770": {
+      "amazonInvoice": "VBE20251000024",
+      "amazonAmount": 396.99,
+      "netPaid": 396.99,
+      "status": "paid"
+    },
+    "324781": {
+      "amazonInvoice": "VBE20251000026",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "325020": {
+      "amazonInvoice": "VBE20251000025",
+      "amazonAmount": 437.14,
+      "netPaid": 437.14,
+      "status": "paid"
+    },
+    "325021": {
+      "amazonInvoice": "VBE20251000028",
+      "amazonAmount": 1245.48,
+      "netPaid": 1245.48,
+      "status": "paid"
+    },
+    "325022": {
+      "amazonInvoice": "VBE20251000027",
+      "amazonAmount": 1440.51,
+      "netPaid": 1440.51,
+      "status": "paid"
+    },
+    "325023": {
+      "amazonInvoice": "VBE20251000019",
+      "amazonAmount": 444.6,
+      "netPaid": 444.6,
+      "status": "paid"
+    },
+    "325024": {
+      "amazonInvoice": "VBE20251000020",
+      "amazonAmount": 117.54,
+      "netPaid": 117.54,
+      "status": "paid"
+    },
+    "325426": {
+      "amazonInvoice": "VBE20251000072",
+      "amazonAmount": 391.7,
+      "netPaid": 391.7,
+      "status": "paid"
+    },
+    "325427": {
+      "amazonInvoice": "VBE20251000074",
+      "amazonAmount": 3844.08,
+      "netPaid": 3844.08,
+      "status": "paid"
+    },
+    "325428": {
+      "amazonInvoice": "VBE20251000073",
+      "amazonAmount": 215.37,
+      "netPaid": 215.37,
+      "status": "paid"
+    },
+    "334541": {
+      "amazonInvoice": "VBE20251000189",
+      "amazonAmount": 1800.01,
+      "netPaid": 1800.01,
+      "status": "paid"
+    },
+    "334551": {
+      "amazonInvoice": "VBE20251000207",
+      "amazonAmount": 94.81,
+      "netPaid": 94.81,
+      "status": "paid"
+    },
+    "334552": {
+      "amazonInvoice": "VBE20251000197",
+      "amazonAmount": 299.6,
+      "netPaid": 299.6,
+      "status": "paid"
+    },
+    "334562": {
+      "amazonInvoice": "VBE20251000201",
+      "amazonAmount": 222.87,
+      "netPaid": 222.87,
+      "status": "paid"
+    },
+    "334563": {
+      "amazonInvoice": "VBE20251000203",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "335209": {
+      "amazonInvoice": "VBE20251000227",
+      "amazonAmount": 64.2,
+      "netPaid": 64.2,
+      "status": "paid"
+    },
+    "335210": {
+      "amazonInvoice": "VBE20251000226",
+      "amazonAmount": 83.96,
+      "netPaid": 83.96,
+      "status": "paid"
+    },
+    "335221": {
+      "amazonInvoice": "VBE20251000225",
+      "amazonAmount": 128.4,
+      "netPaid": 128.4,
+      "status": "paid"
+    },
+    "335242": {
+      "amazonInvoice": "VBE20251000242",
+      "amazonAmount": 126.22,
+      "netPaid": 126.22,
+      "status": "paid"
+    },
+    "335243": {
+      "amazonInvoice": "VBE20251000243",
+      "amazonAmount": 1082.93,
+      "netPaid": 1082.93,
+      "status": "paid"
+    },
+    "335244": {
+      "amazonInvoice": "VBE20251000244",
+      "amazonAmount": 204.68,
+      "netPaid": 204.68,
+      "status": "paid"
+    },
+    "335844": {
+      "amazonInvoice": "VBE20251000284",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "335845": {
+      "amazonInvoice": "VBE20251000289",
+      "amazonAmount": 1680,
+      "netPaid": 1680,
+      "status": "paid"
+    },
+    "335846": {
+      "amazonInvoice": "VBE20251000282",
+      "amazonAmount": 139.84,
+      "netPaid": 139.84,
+      "status": "paid"
+    },
+    "335859": {
+      "amazonInvoice": "VBE20251000285",
+      "amazonAmount": 244.72,
+      "netPaid": 244.72,
+      "status": "paid"
+    },
+    "335860": {
+      "amazonInvoice": "VBE20251000290",
+      "amazonAmount": 1470,
+      "netPaid": 1470,
+      "status": "paid"
+    },
+    "335861": {
+      "amazonInvoice": "VBE20251000287",
+      "amazonAmount": 101.65,
+      "netPaid": 101.65,
+      "status": "paid"
+    },
+    "335952": {
+      "amazonInvoice": "VBE20251000281",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "335953": {
+      "amazonInvoice": "VBE20251000283",
+      "amazonAmount": 709.28,
+      "netPaid": 709.28,
+      "status": "paid"
+    },
+    "335954": {
+      "amazonInvoice": "VBE20251000286",
+      "amazonAmount": 3490,
+      "netPaid": 3490,
+      "status": "paid"
+    },
+    "335955": {
+      "amazonInvoice": "VBE20251000291",
+      "amazonAmount": 153.88,
+      "netPaid": 153.88,
+      "status": "paid"
+    },
+    "335956": {
+      "amazonInvoice": "VBE20251000288",
+      "amazonAmount": 479.55,
+      "netPaid": 479.55,
+      "status": "paid"
+    },
+    "336126": {
+      "amazonInvoice": "VBE20251000307",
+      "amazonAmount": 114.96,
+      "netPaid": 114.96,
+      "status": "paid"
+    },
+    "336128": {
+      "amazonInvoice": "VBE20251000309",
+      "amazonAmount": 163.74,
+      "netPaid": 163.74,
+      "status": "paid"
+    },
+    "336378": {
+      "amazonInvoice": "VBE20251000326",
+      "amazonAmount": 586.75,
+      "netPaid": 586.75,
+      "status": "paid"
+    },
+    "336379": {
+      "amazonInvoice": "VBE20251000327",
+      "amazonAmount": 119.76,
+      "netPaid": 119.76,
+      "status": "paid"
+    },
+    "336380": {
+      "amazonInvoice": "VBE20251000325",
+      "amazonAmount": 3425.03,
+      "netPaid": 3425.03,
+      "status": "paid"
+    },
+    "336933": {
+      "amazonInvoice": "VBE20251100017",
+      "amazonAmount": 334.66,
+      "netPaid": 334.66,
+      "status": "paid"
+    },
+    "336934": {
+      "amazonInvoice": "VBE20251100003",
+      "amazonAmount": 377.74,
+      "netPaid": 377.74,
+      "status": "paid"
+    },
+    "336936": {
+      "amazonInvoice": "VBE20251100016",
+      "amazonAmount": 886.16,
+      "netPaid": 886.16,
+      "status": "paid"
+    },
+    "336938": {
+      "amazonInvoice": "VBE20251100015",
+      "amazonAmount": 227.38,
+      "netPaid": 227.38,
+      "status": "paid"
+    },
+    "337292": {
+      "amazonInvoice": "VBE20251100028",
+      "amazonAmount": 86.36,
+      "netPaid": 86.36,
+      "status": "paid"
+    },
+    "337293": {
+      "amazonInvoice": "VBE20251100034",
+      "amazonAmount": 114.96,
+      "netPaid": 114.96,
+      "status": "paid"
+    },
+    "337304": {
+      "amazonInvoice": "VBE20251100030",
+      "amazonAmount": 574.53,
+      "netPaid": 574.53,
+      "status": "paid"
+    },
+    "337306": {
+      "amazonInvoice": "VBE20251100031",
+      "amazonAmount": 391.54,
+      "netPaid": 391.54,
+      "status": "paid"
+    },
+    "337307": {
+      "amazonInvoice": "VBE20251100032",
+      "amazonAmount": 104.32,
+      "netPaid": 104.32,
+      "status": "paid"
+    }
+  }
+}

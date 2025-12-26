@@ -12,8 +12,22 @@
 
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const { getDb } = require('../../db');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+
+// Load paid invoices data from remittance import
+let paidInvoicesData = { paidInvoices: {} };
+try {
+  const paidInvoicesPath = path.join(__dirname, '../../../data/vendor-paid-invoices.json');
+  if (fs.existsSync(paidInvoicesPath)) {
+    paidInvoicesData = JSON.parse(fs.readFileSync(paidInvoicesPath, 'utf8'));
+    console.log(`[VendorAPI] Loaded ${Object.keys(paidInvoicesData.paidInvoices).length} paid invoice records`);
+  }
+} catch (e) {
+  console.warn('[VendorAPI] Could not load paid invoices data:', e.message);
+}
 const {
   VendorClient,
   getVendorPOImporter,
@@ -727,6 +741,9 @@ router.get('/invoices/odoo', async (req, res) => {
         else if (lower.includes('czech')) marketplace = 'CZ';
       }
 
+      // Check if this invoice was paid via Amazon remittance
+      const paidInfo = paidInvoicesData.paidInvoices[String(inv.id)];
+
       return {
         id: inv.id,
         invoiceNumber: inv.name,
@@ -746,7 +763,13 @@ router.get('/invoices/odoo', async (req, res) => {
           errorMessage: submission.errorMessage
         } : {
           status: 'not_submitted'
-        }
+        },
+        amazonPayment: paidInfo ? {
+          status: 'paid',
+          amazonInvoiceNumber: paidInfo.amazonInvoice,
+          amazonAmount: paidInfo.amazonAmount,
+          netPaid: paidInfo.netPaid
+        } : null
       };
     });
 

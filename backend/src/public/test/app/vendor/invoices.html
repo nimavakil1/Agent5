@@ -69,8 +69,8 @@
     </header>
     <div class="stats-row">
       <div class="stat-card" id="stat-card-total" onclick="filterByStatus('')"><div class="stat-value" id="stat-total">--</div><div class="stat-label">Total Invoices</div></div>
-      <div class="stat-card warning" id="stat-card-pending" onclick="filterByStatus('not_submitted')"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">Not Submitted to Amazon</div></div>
-      <div class="stat-card" id="stat-card-submitted" onclick="filterByStatus('submitted')"><div class="stat-value" id="stat-submitted">--</div><div class="stat-label">Submitted</div></div>
+      <div class="stat-card success" id="stat-card-amazon-paid" onclick="filterByStatus('amazon_paid')"><div class="stat-value" id="stat-amazon-paid">--</div><div class="stat-label">Amazon Paid</div></div>
+      <div class="stat-card warning" id="stat-card-pending" onclick="filterByStatus('amazon_unpaid')"><div class="stat-value" id="stat-amazon-unpaid">--</div><div class="stat-label">Awaiting Payment</div></div>
       <div class="stat-card danger" id="stat-card-failed" onclick="filterByStatus('failed')"><div class="stat-value" id="stat-failed">--</div><div class="stat-label">Failed</div></div>
     </div>
     <div class="filters-bar">
@@ -90,7 +90,7 @@
     <div class="card">
       <div class="table-container">
         <table>
-          <thead><tr><th>Invoice Number</th><th>Partner</th><th>Marketplace</th><th>Amazon Status</th><th>Payment</th><th>Amount</th><th>Invoice Date</th><th>Due Date</th></tr></thead>
+          <thead><tr><th>Invoice Number</th><th>Partner</th><th>Marketplace</th><th>Submission</th><th>Amazon Payment</th><th>Amount</th><th>Invoice Date</th><th>Due Date</th></tr></thead>
           <tbody id="invoices-table"><tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading invoices...</div></div></td></tr></tbody>
         </table>
       </div>
@@ -127,8 +127,8 @@
       // Update active state on cards
       document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
       if (status === '') document.getElementById('stat-card-total').classList.add('active');
-      else if (status === 'not_submitted') document.getElementById('stat-card-pending').classList.add('active');
-      else if (status === 'submitted') document.getElementById('stat-card-submitted').classList.add('active');
+      else if (status === 'amazon_paid') document.getElementById('stat-card-amazon-paid').classList.add('active');
+      else if (status === 'amazon_unpaid') document.getElementById('stat-card-pending').classList.add('active');
       else if (status === 'failed') document.getElementById('stat-card-failed').classList.add('active');
       loadInvoices();
     }
@@ -146,18 +146,19 @@
         // Filter by status client-side (since we need all data for stats)
         let allInvoices = data.invoices || [];
 
-        // Calculate stats from full data
-        const stats = { total: allInvoices.length, not_submitted: 0, submitted: 0, failed: 0 };
+        // Calculate stats based on Amazon payment status (from remittance data)
+        const stats = { total: allInvoices.length, amazon_paid: 0, amazon_unpaid: 0, failed: 0 };
         allInvoices.forEach(inv => {
-          const status = inv.amazonSubmission?.status || 'not_submitted';
-          if (status === 'not_submitted') stats.not_submitted++;
-          else if (status === 'submitted' || status === 'accepted') stats.submitted++;
-          else if (status === 'failed') stats.failed++;
+          const submissionStatus = inv.amazonSubmission?.status || 'not_submitted';
+          const isAmazonPaid = inv.amazonPayment?.status === 'paid';
+          if (submissionStatus === 'failed') stats.failed++;
+          else if (isAmazonPaid) stats.amazon_paid++;
+          else stats.amazon_unpaid++;
         });
 
         document.getElementById('stat-total').textContent = data.total || stats.total;
-        document.getElementById('stat-pending').textContent = stats.not_submitted;
-        document.getElementById('stat-submitted').textContent = stats.submitted;
+        document.getElementById('stat-amazon-paid').textContent = stats.amazon_paid;
+        document.getElementById('stat-amazon-unpaid').textContent = stats.amazon_unpaid;
         document.getElementById('stat-failed').textContent = stats.failed;
 
         // Apply marketplace filter
@@ -166,12 +167,15 @@
           allInvoices = allInvoices.filter(inv => inv.marketplace === mpFilter);
         }
 
-        // Apply status filter
+        // Apply status filter based on Amazon payment status
         if (currentStatusFilter) {
           allInvoices = allInvoices.filter(inv => {
-            const status = inv.amazonSubmission?.status || 'not_submitted';
-            if (currentStatusFilter === 'submitted') return status === 'submitted' || status === 'accepted';
-            return status === currentStatusFilter;
+            const submissionStatus = inv.amazonSubmission?.status || 'not_submitted';
+            const isAmazonPaid = inv.amazonPayment?.status === 'paid';
+            if (currentStatusFilter === 'amazon_paid') return isAmazonPaid;
+            if (currentStatusFilter === 'amazon_unpaid') return !isAmazonPaid && submissionStatus !== 'failed';
+            if (currentStatusFilter === 'failed') return submissionStatus === 'failed';
+            return true;
           });
         }
 
@@ -197,9 +201,21 @@
         var mpDisplay = getFlagImg(mp);
         var amazonStatus = inv.amazonSubmission?.status || 'not_submitted';
         var statusLabel = amazonStatus.replace('_', ' ');
-        var paymentState = inv.paymentState || 'not_paid';
-        var paymentLabel = paymentState === 'paid' ? 'Paid' : paymentState === 'partial' ? 'Partial' : 'Unpaid';
-        var paymentClass = paymentState === 'paid' ? 'paid' : paymentState === 'partial' ? 'partial' : 'not_submitted';
+
+        // Amazon Payment Status (from remittance data)
+        var isAmazonPaid = inv.amazonPayment?.status === 'paid';
+        var paymentLabel, paymentClass;
+        if (isAmazonPaid) {
+          paymentLabel = 'Amazon Paid';
+          paymentClass = 'paid';
+        } else if (amazonStatus === 'failed') {
+          paymentLabel = 'Failed';
+          paymentClass = 'failed';
+        } else {
+          paymentLabel = 'Awaiting';
+          paymentClass = 'partial';
+        }
+
         var partnerShort = (inv.partnerName || '-').replace('Amazon EU SARL ', '').replace('AMAZON EU SARL ', '').substring(0, 20);
 
         return '<tr>' +
