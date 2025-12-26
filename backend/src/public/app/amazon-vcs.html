@@ -473,8 +473,8 @@
           // Clear the cache to force fresh data
           odooOrders = {};
 
-          // Re-check all orders from Odoo
-          await checkOdooOrders();
+          // Re-check all orders from Odoo (force refresh to bypass cache)
+          await checkOdooOrders(true);
 
           btn.disabled = false;
           btn.innerHTML = originalHtml;
@@ -917,13 +917,13 @@
         }
       }
 
-      async function checkOdooOrders() {
+      async function checkOdooOrders(forceRefresh = false) {
         try {
           const orderIds = pendingOrders.map(o => o.orderId);
           const response = await fetch('/api/amazon/vcs/check-odoo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderIds })
+            body: JSON.stringify({ orderIds, forceRefresh })
           });
           const data = await response.json();
           if (data.success && data.orders) {
