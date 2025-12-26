@@ -3633,6 +3633,76 @@ router.post('/vcs/create-invoices', async (req, res) => {
 });
 
 /**
+ * @route GET /api/amazon/vcs/create-invoices-stream
+ * @desc Stream invoice creation progress using Server-Sent Events
+ * @query { orderIds (comma-separated), dryRun }
+ */
+router.get('/vcs/create-invoices-stream', async (req, res) => {
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+  res.flushHeaders();
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const orderIds = req.query.orderIds ? req.query.orderIds.split(',') : [];
+    const dryRun = req.query.dryRun === 'true';
+
+    if (!orderIds || orderIds.length === 0) {
+      sendEvent('error', { message: 'No orders selected' });
+      res.end();
+      return;
+    }
+
+    // Check Odoo credentials
+    if (!process.env.ODOO_URL || !process.env.ODOO_DB || !process.env.ODOO_USERNAME || !process.env.ODOO_PASSWORD) {
+      sendEvent('error', { message: 'Odoo not configured' });
+      res.end();
+      return;
+    }
+
+    // Send initial status
+    sendEvent('start', { total: orderIds.length, dryRun });
+
+    // Initialize Odoo client
+    const odooClient = new OdooDirectClient();
+    await odooClient.authenticate();
+    sendEvent('progress', { message: 'Connected to Odoo', phase: 'init' });
+
+    const invoicer = new VcsOdooInvoicer(odooClient);
+    await invoicer.loadCache();
+    sendEvent('progress', { message: 'Cache loaded', phase: 'init' });
+
+    // Create invoices with progress callback
+    const result = await invoicer.createInvoicesWithProgress(
+      { orderIds, dryRun },
+      (progressData) => {
+        sendEvent('progress', progressData);
+      }
+    );
+
+    // Send final result
+    sendEvent('complete', {
+      success: true,
+      dryRun,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('[VCS Invoices Stream] Error:', error);
+    sendEvent('error', { message: error.message });
+  } finally {
+    res.end();
+  }
+});
+
+/**
  * @route GET /api/amazon/vcs/invoice-status
  * @desc Get VCS invoice creation status
  */

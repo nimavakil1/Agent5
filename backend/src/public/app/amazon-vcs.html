@@ -1543,42 +1543,125 @@
           }
         }
 
-        // Show loading state
+        // Show progress modal
+        const progressModal = showProgressModal(selectedIds.length, dryRun);
         btn.disabled = true;
-        btn.innerHTML = `
-          <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-          ${dryRun ? 'Generating preview...' : 'Creating invoices...'}
-        `;
 
         try {
-          const response = await fetch('/api/amazon/vcs/create-invoices', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderIds: selectedIds, dryRun })
+          // Use SSE for real-time progress
+          const url = `/api/amazon/vcs/create-invoices-stream?orderIds=${selectedIds.join(',')}&dryRun=${dryRun}`;
+          const eventSource = new EventSource(url);
+          let finalResult = null;
+
+          eventSource.addEventListener('start', (e) => {
+            const data = JSON.parse(e.data);
+            updateProgress(progressModal, { phase: 'start', total: data.total });
           });
 
-          const result = await response.json();
+          eventSource.addEventListener('progress', (e) => {
+            const data = JSON.parse(e.data);
+            updateProgress(progressModal, data);
+          });
 
-          if (response.ok && result.success) {
-            // Show result modal
-            showInvoiceResult(result, dryRun);
+          eventSource.addEventListener('complete', (e) => {
+            const data = JSON.parse(e.data);
+            finalResult = data;
+            eventSource.close();
+            closeProgressModal(progressModal);
+            showInvoiceResult(data, dryRun);
 
             // Refresh if real creation
             if (!dryRun) {
-              // Clear selection after successful creation
               selectedOrderIds.clear();
               allFilteredSelected = false;
               loadSummary();
               loadPendingOrders();
             }
-          } else {
-            alert(`Error: ${result.error || 'Unknown error'}`);
-          }
+          });
+
+          eventSource.addEventListener('error', (e) => {
+            if (e.data) {
+              const data = JSON.parse(e.data);
+              alert(`Error: ${data.message}`);
+            }
+            eventSource.close();
+            closeProgressModal(progressModal);
+          });
+
+          eventSource.onerror = () => {
+            if (!finalResult) {
+              eventSource.close();
+              closeProgressModal(progressModal);
+              alert('Connection lost. Please try again.');
+            }
+          };
+
         } catch (error) {
+          closeProgressModal(progressModal);
           alert(`Error: ${error.message}`);
         } finally {
           btn.disabled = false;
           btn.innerHTML = originalText;
+        }
+      }
+
+      function showProgressModal(total, dryRun) {
+        const modal = document.createElement('div');
+        modal.id = 'progress-modal';
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+          <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="text-center">
+              <h3 class="text-white font-semibold text-lg mb-4">
+                ${dryRun ? 'Generating Preview' : 'Creating Invoices'}
+              </h3>
+              <div class="mb-4">
+                <div class="h-3 bg-slate-700 rounded-full overflow-hidden">
+                  <div id="progress-bar" class="h-full bg-green-500 transition-all duration-300" style="width: 0%"></div>
+                </div>
+              </div>
+              <div id="progress-text" class="text-slate-300 text-sm mb-2">Connecting...</div>
+              <div id="progress-stats" class="flex justify-center gap-4 text-xs">
+                <span class="text-green-400">Created: <span id="stat-created">0</span></span>
+                <span class="text-slate-400">Skipped: <span id="stat-skipped">0</span></span>
+                <span class="text-red-400">Errors: <span id="stat-errors">0</span></span>
+              </div>
+              <div id="progress-order" class="text-slate-500 text-xs mt-2 truncate"></div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        return modal;
+      }
+
+      function updateProgress(modal, data) {
+        const progressBar = modal.querySelector('#progress-bar');
+        const progressText = modal.querySelector('#progress-text');
+        const progressOrder = modal.querySelector('#progress-order');
+        const statCreated = modal.querySelector('#stat-created');
+        const statSkipped = modal.querySelector('#stat-skipped');
+        const statErrors = modal.querySelector('#stat-errors');
+
+        if (data.phase === 'init') {
+          progressText.textContent = data.message;
+        } else if (data.phase === 'prefetch') {
+          progressText.textContent = data.message;
+        } else if (data.phase === 'processing') {
+          const percent = Math.round((data.current / data.total) * 100);
+          progressBar.style.width = `${percent}%`;
+          progressText.textContent = `Processing ${data.current} of ${data.total}`;
+          if (data.orderId) {
+            progressOrder.textContent = data.orderId;
+          }
+          if (statCreated) statCreated.textContent = data.created || 0;
+          if (statSkipped) statSkipped.textContent = data.skipped || 0;
+          if (statErrors) statErrors.textContent = data.errors || 0;
+        }
+      }
+
+      function closeProgressModal(modal) {
+        if (modal && modal.parentNode) {
+          modal.parentNode.removeChild(modal);
         }
       }
 

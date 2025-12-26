@@ -536,6 +536,159 @@ class VcsOdooInvoicer {
   }
 
   /**
+   * Create invoices with progress callback for streaming
+   * @param {object} options - { orderIds, dryRun }
+   * @param {function} onProgress - Callback function for progress updates
+   * @returns {object} Results
+   */
+  async createInvoicesWithProgress(options = {}, onProgress = () => {}) {
+    const { orderIds = [], dryRun = false } = options;
+    const db = getDb();
+
+    const result = {
+      processed: 0,
+      created: 0,
+      skipped: 0,
+      errors: [],
+      invoices: [],
+    };
+
+    if (orderIds.length === 0) {
+      return { ...result, message: 'No orders selected' };
+    }
+
+    // Get selected orders by their MongoDB IDs
+    const orders = await db.collection('amazon_vcs_orders')
+      .find({ _id: { $in: orderIds.map(id => new ObjectId(id)) } })
+      .toArray();
+
+    if (orders.length === 0) {
+      return { ...result, message: 'No orders found for the given IDs' };
+    }
+
+    const total = orders.length;
+    onProgress({ phase: 'prefetch', message: `Prefetching ${total} orders...`, current: 0, total });
+
+    // PERFORMANCE OPTIMIZATION: Prefetch all Odoo orders in batch
+    await this.prefetchOrders(orders);
+    onProgress({ phase: 'prefetch', message: 'Prefetch complete', current: total, total });
+
+    // Get or create Amazon customer partner
+    const partnerId = await this.getOrCreateAmazonPartner();
+
+    for (let i = 0; i < orders.length; i++) {
+      const order = orders[i];
+      result.processed++;
+
+      // Send progress update
+      onProgress({
+        phase: 'processing',
+        current: i + 1,
+        total,
+        orderId: order.orderId,
+        created: result.created,
+        skipped: result.skipped,
+        errors: result.errors.length,
+      });
+
+      try {
+        // Skip orders that shouldn't be invoiced
+        if (this.shouldSkipOrder(order)) {
+          result.skipped++;
+          await this.markOrderSkipped(order._id, 'Not invoiceable');
+          continue;
+        }
+
+        // REQUIRED: Find existing Odoo order
+        const odooOrderData = await this.findOdooOrder(order);
+        if (!odooOrderData) {
+          result.skipped++;
+          await this.markOrderSkipped(order._id, 'No matching Odoo order found');
+          result.errors.push({
+            orderId: order.orderId,
+            error: 'No matching Odoo order found - order must exist in Odoo first',
+          });
+          continue;
+        }
+
+        const { saleOrder, orderLines } = odooOrderData;
+
+        // Check if invoice already exists in Odoo for this sale order
+        const existingInvoice = await this.findExistingInvoice(saleOrder.name);
+        if (existingInvoice) {
+          result.skipped++;
+          await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
+          continue;
+        }
+
+        if (dryRun) {
+          const invoiceData = this.buildInvoiceData(order, saleOrder.partner_id[0], saleOrder, orderLines);
+          const journalName = this.getJournalName(invoiceData.journal_id);
+          const fiscalPositionName = this.getFiscalPositionName(invoiceData.fiscal_position_id);
+          const expectedJournal = this.getExpectedJournalCode(order);
+          const expectedFiscalPosition = this.getExpectedFiscalPositionKey(order);
+
+          result.invoices.push({
+            orderId: order.orderId,
+            dryRun: true,
+            odooOrderName: saleOrder.name,
+            odooOrderId: saleOrder.id,
+            preview: {
+              invoiceDate: invoiceData.invoice_date,
+              journalName: journalName || `Not found (expected: ${expectedJournal})`,
+              fiscalPositionName: fiscalPositionName || (expectedFiscalPosition ? `Not found (expected: ${expectedFiscalPosition})` : 'Default'),
+              currency: order.currency || 'EUR',
+              shipFrom: order.shipFromCountry || 'BE',
+              shipTo: order.shipToCountry,
+              taxScheme: order.taxReportingScheme || 'Standard',
+              buyerVatId: order.buyerTaxRegistration || null,
+              vatAmount: order.totalTax || 0,
+              totalExclVat: order.totalExclusive || 0,
+              totalInclVat: order.totalInclusive || 0,
+              vatInvoiceNumber: order.vatInvoiceNumber,
+            },
+            wouldCreate: invoiceData,
+          });
+          result.created++;
+          continue;
+        }
+
+        // Create invoice linked to sale order
+        const invoice = await this.createInvoice(order, saleOrder.partner_id[0], saleOrder, orderLines);
+        result.created++;
+        result.invoices.push(invoice);
+
+        // Mark order as invoiced
+        await db.collection('amazon_vcs_orders').updateOne(
+          { _id: order._id },
+          {
+            $set: {
+              status: 'invoiced',
+              odooInvoiceId: invoice.id,
+              odooInvoiceName: invoice.name,
+              odooSaleOrderId: saleOrder.id,
+              odooSaleOrderName: saleOrder.name,
+              invoicedAt: new Date(),
+            }
+          }
+        );
+
+        // Rate limiting
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+      } catch (error) {
+        result.errors.push({
+          orderId: order.orderId,
+          error: error.message,
+        });
+        console.error(`[VcsOdooInvoicer] Error processing ${order.orderId}:`, error);
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * Check if order should be skipped
    * @param {object} order
    * @returns {boolean}
