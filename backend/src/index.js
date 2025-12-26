@@ -224,6 +224,9 @@ app.get('/shell-v2.js', (req, res) => {
 app.get('/accept-invite.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'accept-invite.html'));
 });
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 
 // New platform UI (v2) - protected sections
 const protectedSections = ['vendor', 'settings', 'seller', 'inventory', 'accounting', 'analytics', 'ai', 'calls'];

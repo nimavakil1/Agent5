@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<title>Login - ACROPAQ Platform</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0a0a0f;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .login-container {
+    width: 100%;
+    max-width: 400px;
+  }
+  .logo {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .logo img {
+    height: 40px;
+  }
+  .login-card {
+    background: #12121a;
+    border: 1px solid #252532;
+    border-radius: 20px;
+    padding: 40px;
+  }
+  .login-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #fff;
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .form-group {
+    margin-bottom: 20px;
+  }
+  .form-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #a1a1aa;
+    margin-bottom: 8px;
+  }
+  .form-input {
+    width: 100%;
+    padding: 14px 16px;
+    background: #0a0a0f;
+    border: 1px solid #252532;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus {
+    border-color: #6366f1;
+  }
+  .form-input::placeholder {
+    color: #52525b;
+  }
+  .btn {
+    width: 100%;
+    padding: 14px 24px;
+    background: #6366f1;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-top: 8px;
+  }
+  .btn:hover {
+    background: #4f46e5;
+  }
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .error-msg {
+    color: #f87171;
+    font-size: 14px;
+    text-align: center;
+    margin-top: 16px;
+    min-height: 20px;
+  }
+  .footer-text {
+    text-align: center;
+    margin-top: 24px;
+    font-size: 13px;
+    color: #52525b;
+  }
+</style>
+</head>
+<body>
+<div class="login-container">
+  <div class="logo">
+    <img src="/assets/acropaq-wordmark.png" alt="ACROPAQ" onerror="this.style.display='none'">
+  </div>
+  <div class="login-card">
+    <h1 class="login-title">Sign in</h1>
+    <form id="login-form">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-input" id="email" placeholder="you@company.com" required autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-input" id="password" placeholder="Enter your password" required>
+      </div>
+      <button type="submit" class="btn" id="submit-btn">Sign in</button>
+      <p class="error-msg" id="error-msg"></p>
+    </form>
+  </div>
+  <p class="footer-text">ACROPAQ AI Platform</p>
+</div>
+<script>
+  const form = document.getElementById('login-form');
+  const submitBtn = document.getElementById('submit-btn');
+  const errorMsg = document.getElementById('error-msg');
+
+  function getNextUrl() {
+    const params = new URLSearchParams(location.search);
+    return params.get('next') || '/';
+  }
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    errorMsg.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Signing in...';
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        credentials: 'include'
+      });
+
+      if (res.ok) {
+        location.href = getNextUrl();
+      } else {
+        const data = await res.json();
+        errorMsg.textContent = data.message || 'Login failed';
+      }
+    } catch (err) {
+      errorMsg.textContent = 'Connection error. Please try again.';
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Sign in';
+    }
+  };
+</script>
+</body>
+</html>
