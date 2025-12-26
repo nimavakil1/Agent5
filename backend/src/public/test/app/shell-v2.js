@@ -51,9 +51,9 @@
       basePath: '/test/app/vendor',
       pages: [
         { id: 'orders', path: '/test/app/vendor/', name: 'Purchase Orders', icon: 'receipt_long' },
-        { id: 'invoices', path: '/test/app/vendor/invoices', name: 'Invoices', icon: 'description' },
-        { id: 'shipments', path: '/test/app/vendor/shipments', name: 'Shipments', icon: 'local_shipping' },
-        { id: 'settings', path: '/test/app/vendor/settings', name: 'Settings', icon: 'settings' }
+        { id: 'invoices', path: '/test/app/vendor/invoices.html', name: 'Invoices', icon: 'description' },
+        { id: 'shipments', path: '/test/app/vendor/shipments.html', name: 'Shipments', icon: 'local_shipping' },
+        { id: 'settings', path: '/test/app/vendor/settings.html', name: 'Settings', icon: 'settings' }
       ]
     },
     'inventory': {
