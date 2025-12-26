@@ -11,6 +11,8 @@
 
 const { getSellerOrderImporter } = require('./SellerOrderImporter');
 const { getSellerOrderCreator } = require('./SellerOrderCreator');
+const { getSellerShipmentSync } = require('./SellerShipmentSync');
+const { getSellerTrackingPusher } = require('./SellerTrackingPusher');
 
 // Default polling interval: 15 minutes
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
@@ -26,6 +28,7 @@ class SellerOrderScheduler {
     this.intervalMs = options.intervalMs || DEFAULT_INTERVAL_MS;
     this.hoursBack = options.hoursBack || DEFAULT_HOURS_BACK;
     this.autoCreateOdoo = options.autoCreateOdoo !== false;
+    this.autoSyncShipments = options.autoSyncShipments !== false;
 
     this.intervalId = null;
     this.isRunning = false;
@@ -37,6 +40,8 @@ class SellerOrderScheduler {
 
     this.importer = null;
     this.creator = null;
+    this.shipmentSync = null;
+    this.trackingPusher = null;
   }
 
   /**
@@ -49,6 +54,11 @@ class SellerOrderScheduler {
 
     if (this.autoCreateOdoo) {
       this.creator = await getSellerOrderCreator();
+    }
+
+    if (this.autoSyncShipments) {
+      this.shipmentSync = await getSellerShipmentSync();
+      this.trackingPusher = await getSellerTrackingPusher();
     }
 
     console.log('[SellerOrderScheduler] Initialized');
@@ -134,6 +144,32 @@ class SellerOrderScheduler {
         }
       }
 
+      // Sync FBA shipments (Amazon → Odoo pickings)
+      if (this.autoSyncShipments && this.shipmentSync) {
+        try {
+          const syncResult = await this.shipmentSync.syncFbaShipments();
+          console.log(`[SellerOrderScheduler] FBA shipment sync: ${syncResult.synced} synced, ${syncResult.skipped} skipped`);
+          pollResult.fbaShipmentsSynced = syncResult.synced;
+          pollResult.fbaShipmentsSkipped = syncResult.skipped;
+        } catch (syncError) {
+          console.error('[SellerOrderScheduler] FBA shipment sync error:', syncError.message);
+          pollResult.fbaShipmentError = syncError.message;
+        }
+      }
+
+      // Push FBM tracking (Odoo → Amazon)
+      if (this.autoSyncShipments && this.trackingPusher) {
+        try {
+          const pushResult = await this.trackingPusher.pushPendingTracking();
+          console.log(`[SellerOrderScheduler] FBM tracking push: ${pushResult.pushed} pushed, ${pushResult.skipped} skipped`);
+          pollResult.fbmTrackingPushed = pushResult.pushed;
+          pollResult.fbmTrackingSkipped = pushResult.skipped;
+        } catch (pushError) {
+          console.error('[SellerOrderScheduler] FBM tracking push error:', pushError.message);
+          pollResult.fbmTrackingError = pushError.message;
+        }
+      }
+
       return pollResult;
 
     } catch (error) {
@@ -158,6 +194,7 @@ class SellerOrderScheduler {
       intervalMinutes: this.intervalMs / 60000,
       hoursBack: this.hoursBack,
       autoCreateOdoo: this.autoCreateOdoo,
+      autoSyncShipments: this.autoSyncShipments,
       lastPollTime: this.lastPollTime,
       lastPollResult: this.lastPollResult,
       pollCount: this.pollCount,
@@ -182,6 +219,9 @@ class SellerOrderScheduler {
     }
     if (options.autoCreateOdoo !== undefined) {
       this.autoCreateOdoo = options.autoCreateOdoo;
+    }
+    if (options.autoSyncShipments !== undefined) {
+      this.autoSyncShipments = options.autoSyncShipments;
     }
 
     // Restart if running to apply new interval

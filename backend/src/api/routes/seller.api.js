@@ -16,6 +16,8 @@ const { getDb } = require('../../db');
 // Lazy-load seller services to avoid initialization issues
 let sellerOrderImporter = null;
 let sellerOrderCreator = null;
+let sellerShipmentSync = null;
+let sellerTrackingPusher = null;
 
 async function getImporter() {
   if (!sellerOrderImporter) {
@@ -31,6 +33,22 @@ async function getCreator() {
     sellerOrderCreator = await getSellerOrderCreator();
   }
   return sellerOrderCreator;
+}
+
+async function getShipmentSync() {
+  if (!sellerShipmentSync) {
+    const { getSellerShipmentSync } = require('../../services/amazon/seller');
+    sellerShipmentSync = await getSellerShipmentSync();
+  }
+  return sellerShipmentSync;
+}
+
+async function getTrackingPusher() {
+  if (!sellerTrackingPusher) {
+    const { getSellerTrackingPusher } = require('../../services/amazon/seller');
+    sellerTrackingPusher = await getSellerTrackingPusher();
+  }
+  return sellerTrackingPusher;
 }
 
 // ==================== ORDERS ====================
@@ -442,6 +460,152 @@ router.post('/scheduler/stop', async (req, res) => {
     });
   } catch (error) {
     console.error('[SellerAPI] POST /scheduler/stop error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== SHIPMENT SYNC (FBA: Amazon → Odoo) ====================
+
+/**
+ * @route POST /api/seller/shipments/sync-fba
+ * @desc Sync FBA shipments from Amazon to Odoo (validate pickings)
+ */
+router.post('/shipments/sync-fba', async (req, res) => {
+  try {
+    const shipmentSync = await getShipmentSync();
+    const result = await shipmentSync.syncFbaShipments();
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[SellerAPI] POST /shipments/sync-fba error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/seller/shipments/fba-stats
+ * @desc Get FBA shipment sync statistics
+ */
+router.get('/shipments/fba-stats', async (req, res) => {
+  try {
+    const shipmentSync = await getShipmentSync();
+    const stats = await shipmentSync.getStats();
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('[SellerAPI] GET /shipments/fba-stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== TRACKING PUSH (FBM: Odoo → Amazon) ====================
+
+/**
+ * @route POST /api/seller/tracking/push-fbm
+ * @desc Push FBM tracking from Odoo to Amazon
+ */
+router.post('/tracking/push-fbm', async (req, res) => {
+  try {
+    const trackingPusher = await getTrackingPusher();
+    const result = await trackingPusher.pushPendingTracking();
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[SellerAPI] POST /tracking/push-fbm error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/seller/tracking/fbm-stats
+ * @desc Get FBM tracking push statistics
+ */
+router.get('/tracking/fbm-stats', async (req, res) => {
+  try {
+    const trackingPusher = await getTrackingPusher();
+    const stats = await trackingPusher.getStats();
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('[SellerAPI] GET /tracking/fbm-stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/seller/orders/:orderId/push-tracking
+ * @desc Push tracking for a specific FBM order
+ */
+router.post('/orders/:orderId/push-tracking', async (req, res) => {
+  try {
+    const importer = await getImporter();
+    const order = await importer.getOrder(req.params.orderId);
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    if (order.fulfillmentChannel !== 'MFN') {
+      return res.status(400).json({
+        success: false,
+        error: 'Only FBM (MFN) orders support tracking push'
+      });
+    }
+
+    const trackingPusher = await getTrackingPusher();
+    const result = await trackingPusher.pushOrderTracking(order);
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[SellerAPI] POST /orders/:orderId/push-tracking error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/seller/orders/:orderId/sync-shipment
+ * @desc Sync shipment for a specific FBA order
+ */
+router.post('/orders/:orderId/sync-shipment', async (req, res) => {
+  try {
+    const importer = await getImporter();
+    const order = await importer.getOrder(req.params.orderId);
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    if (order.fulfillmentChannel !== 'AFN') {
+      return res.status(400).json({
+        success: false,
+        error: 'Only FBA (AFN) orders support shipment sync'
+      });
+    }
+
+    const shipmentSync = await getShipmentSync();
+    const result = await shipmentSync.syncOrderShipment(order);
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[SellerAPI] POST /orders/:orderId/sync-shipment error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

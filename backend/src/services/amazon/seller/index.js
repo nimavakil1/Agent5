@@ -1,7 +1,8 @@
 /**
  * Amazon Seller Central Services
  *
- * Exports all seller-related services for order import, Odoo creation, and scheduling.
+ * Exports all seller-related services for order import, Odoo creation, scheduling,
+ * shipment sync, and tracking push.
  *
  * @module services/amazon/seller
  */
@@ -34,6 +35,8 @@ const {
   getAllMarketplaceIds,
   getAllMarketplaces
 } = require('./SellerMarketplaceConfig');
+const { SellerShipmentSync, getSellerShipmentSync } = require('./SellerShipmentSync');
+const { SellerTrackingPusher, getSellerTrackingPusher, CARRIER_MAPPING } = require('./SellerTrackingPusher');
 
 module.exports = {
   // Client
@@ -54,6 +57,15 @@ module.exports = {
   SellerOrderScheduler,
   getSellerOrderScheduler,
   startSellerScheduler,
+
+  // Shipment Sync (FBA: Amazon → Odoo)
+  SellerShipmentSync,
+  getSellerShipmentSync,
+
+  // Tracking Push (FBM: Odoo → Amazon)
+  SellerTrackingPusher,
+  getSellerTrackingPusher,
+  CARRIER_MAPPING,
 
   // Marketplace Config
   MARKETPLACE_IDS,

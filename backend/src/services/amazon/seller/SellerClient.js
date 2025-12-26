@@ -298,16 +298,73 @@ class SellerClient {
   // ==================== SHIPMENT CONFIRMATION ====================
 
   /**
-   * Update shipment status for an order (for FBM orders)
-   * Note: This requires the Shipping API - implementation TBD
+   * Confirm shipment for an FBM order (push tracking to Amazon)
+   * Uses the Orders API confirmShipment operation
    * @param {string} orderId - Amazon Order ID
-   * @param {Object} shipmentData - Shipment details
+   * @param {string} marketplaceId - Marketplace ID
+   * @param {Object} packageDetail - Package details with tracking info
    */
-  async confirmShipment(orderId, shipmentData) {
-    // TODO: Implement shipping confirmation
-    // This requires the Shipping API which has specific requirements
-    console.warn('confirmShipment not yet implemented');
-    return { success: false, message: 'Not implemented' };
+  async confirmShipment(orderId, marketplaceId, packageDetail) {
+    const client = await this.getClient();
+
+    try {
+      const response = await client.callAPI({
+        operation: 'orders.confirmShipment',
+        path: {
+          orderId
+        },
+        body: {
+          marketplaceId,
+          packageDetail
+        }
+      });
+
+      return { success: true, response };
+
+    } catch (error) {
+      console.error(`[SellerClient] confirmShipment error for ${orderId}:`, error.message);
+
+      // Parse specific error types
+      if (error.message.includes('InvalidInput')) {
+        return { success: false, error: 'Invalid input: ' + error.message };
+      }
+      if (error.message.includes('InvalidOrderState')) {
+        return { success: false, error: 'Invalid order state - order may already be shipped or cancelled' };
+      }
+      if (error.message.includes('OrderAlreadyShipped')) {
+        return { success: false, error: 'Order already shipped', alreadyShipped: true };
+      }
+
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Update order shipment (alternative method using updateShipmentStatus)
+   * @param {string} orderId - Amazon Order ID
+   * @param {string} marketplaceId - Marketplace ID
+   * @param {string} shipmentStatus - Status: "ReadyForPickup" or "PickedUp"
+   */
+  async updateShipmentStatus(orderId, marketplaceId, shipmentStatus) {
+    const client = await this.getClient();
+
+    try {
+      const response = await client.callAPI({
+        operation: 'orders.updateShipmentStatus',
+        path: {
+          orderId
+        },
+        body: {
+          marketplaceId,
+          shipmentStatus
+        }
+      });
+
+      return { success: true, response };
+    } catch (error) {
+      console.error(`[SellerClient] updateShipmentStatus error for ${orderId}:`, error.message);
+      return { success: false, error: error.message };
+    }
   }
 }
 
