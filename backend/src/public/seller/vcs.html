@@ -1,0 +1,2038 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VCS Tax Reports - Amazon Seller</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+    <script src="/shell-v2.js"></script>
+  </head>
+  <body class="min-h-screen bg-slate-900">
+    <!-- Page Header -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4">
+      <div class="flex items-center justify-between max-w-7xl mx-auto">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-green-400 text-2xl">receipt_long</span>
+          <h1 class="text-white text-xl font-semibold">VCS Tax Reports</h1>
+        </div>
+        <div id="status-indicator" class="flex items-center gap-2 text-sm text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-green-500"></span>
+          Ready
+        </div>
+      </div>
+    </header>
+
+    <main class="px-6 py-8">
+      <!-- Upload Section -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">Upload VCS Tax Report</h2>
+
+        <div class="bg-slate-900 rounded-lg p-6 mb-4">
+          <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center hover:border-green-500 transition-colors cursor-pointer">
+            <span class="material-symbols-outlined text-4xl text-slate-500 mb-2">upload_file</span>
+            <p class="text-slate-400 mb-2">Drag & drop your VCS Tax Report CSV here</p>
+            <p class="text-slate-500 text-sm">or click to browse</p>
+            <input type="file" id="file-input" accept=".csv,.tsv,.txt" class="hidden" />
+          </div>
+        </div>
+
+        <div id="upload-progress" class="hidden">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="animate-spin">
+              <span class="material-symbols-outlined text-green-400">progress_activity</span>
+            </div>
+            <span class="text-slate-300">Processing report...</span>
+          </div>
+          <div class="w-full bg-slate-700 rounded-full h-2">
+            <div id="progress-bar" class="bg-green-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div id="upload-result" class="hidden">
+          <div class="bg-green-900/30 border border-green-700 rounded-lg p-4">
+            <div class="flex items-center gap-2 text-green-400 mb-2">
+              <span class="material-symbols-outlined">check_circle</span>
+              <span class="font-semibold">Report Processed Successfully</span>
+            </div>
+            <div id="result-summary" class="text-slate-300 text-sm"></div>
+          </div>
+        </div>
+
+        <div id="upload-error" class="hidden">
+          <div class="bg-red-900/30 border border-red-700 rounded-lg p-4">
+            <div class="flex items-center gap-2 text-red-400 mb-2">
+              <span class="material-symbols-outlined">error</span>
+              <span class="font-semibold">Upload Failed</span>
+            </div>
+            <div id="error-message" class="text-slate-300 text-sm"></div>
+          </div>
+        </div>
+
+        <p class="text-slate-500 text-sm mt-4">
+          <strong class="text-slate-400">How to get this report:</strong> Amazon Seller Central → Reports → Tax Document Library → Download VAT Transaction Report
+        </p>
+      </div>
+
+      <!-- Report Selector -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">Select VCS Report</h2>
+        <p class="text-slate-400 text-sm mb-4">Choose a report to view its pending orders and returns. Select "All Reports" to see pending items from all uploaded reports.</p>
+        <div class="grid grid-cols-1 gap-4">
+          <div id="reports-list" class="space-y-2">
+            <div class="text-slate-400 text-sm">Loading reports...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary Stats - Hidden as all stats are shown in Upload History -->
+      <div id="summary-section" class="hidden bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <h2 class="text-white font-semibold text-lg mb-4">Summary</h2>
+        <div id="stats-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-slate-700/50 rounded-lg p-4 text-center">
+            <div id="stat-pending" class="text-3xl font-bold text-yellow-400">-</div>
+            <div class="text-slate-400 text-sm">Pending</div>
+          </div>
+          <div class="bg-slate-700/50 rounded-lg p-4 text-center">
+            <div id="stat-invoiced" class="text-3xl font-bold text-green-400">-</div>
+            <div class="text-slate-400 text-sm">Invoiced</div>
+          </div>
+          <div class="bg-slate-700/50 rounded-lg p-4 text-center">
+            <div id="stat-skipped" class="text-3xl font-bold text-slate-400">-</div>
+            <div class="text-slate-400 text-sm">Skipped</div>
+          </div>
+          <div class="bg-slate-700/50 rounded-lg p-4 text-center">
+            <div id="stat-total" class="text-3xl font-bold text-white">-</div>
+            <div class="text-slate-400 text-sm">Total Orders</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pending Orders -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-white font-semibold text-lg">Pending Orders</h2>
+          <div class="flex gap-2">
+            <button id="refresh-btn" class="flex items-center gap-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
+              <span class="material-symbols-outlined text-sm">refresh</span>
+              Refresh
+            </button>
+            <button id="export-btn" class="flex items-center gap-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
+              <span class="material-symbols-outlined text-sm">download</span>
+              Export CSV
+            </button>
+            <button id="preview-invoices-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">preview</span>
+              Preview Invoices
+            </button>
+            <button id="create-invoices-btn" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">receipt</span>
+              Create Invoices in Odoo
+            </button>
+            <button id="create-orders-btn" class="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">add_shopping_cart</span>
+              Create Orders in Odoo
+            </button>
+            <button id="check-odoo-btn" class="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">sync</span>
+              Check Odoo Orders
+            </button>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex gap-4 mb-4">
+          <select id="filter-country" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Countries</option>
+            <option value="DE">Germany</option>
+            <option value="FR">France</option>
+            <option value="IT">Italy</option>
+            <option value="ES">Spain</option>
+            <option value="NL">Netherlands</option>
+            <option value="BE">Belgium</option>
+            <option value="AT">Austria</option>
+            <option value="PL">Poland</option>
+            <option value="GB">United Kingdom</option>
+          </select>
+          <select id="filter-scheme" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Schemes</option>
+            <option value="OSS">OSS</option>
+            <option value="B2B">B2B (Reverse Charge)</option>
+            <option value="EXPORT">Export</option>
+            <option value="DOMESTIC">All Domestic</option>
+            <option value="DOMESTIC_DE">Domestic DE</option>
+            <option value="DOMESTIC_FR">Domestic FR</option>
+            <option value="DOMESTIC_IT">Domestic IT</option>
+            <option value="DOMESTIC_NL">Domestic NL</option>
+            <option value="DOMESTIC_PL">Domestic PL</option>
+            <option value="DOMESTIC_CZ">Domestic CZ</option>
+            <option value="DOMESTIC_BE">Domestic BE</option>
+            <option value="DOMESTIC_GB">Domestic GB</option>
+          </select>
+          <select id="filter-odoo-status" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Odoo Status</option>
+            <option value="has-order">Has Odoo Order</option>
+            <option value="missing-order">Missing Odoo Order</option>
+          </select>
+          <select id="filter-currency" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Currencies</option>
+            <option value="EUR">EUR</option>
+            <option value="GBP">GBP</option>
+            <option value="PLN">PLN</option>
+            <option value="CZK">CZK</option>
+            <option value="SEK">SEK</option>
+          </select>
+        </div>
+
+        <!-- Orders Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-400 border-b border-slate-700">
+                <th class="pb-2 pr-4 pl-4">
+                  <input type="checkbox" id="select-all" class="rounded bg-slate-700 border-slate-600">
+                </th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('orderId')">
+                  Order ID <span id="sort-orderId" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('orderDate')">
+                  Date <span id="sort-orderDate" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('shipToCountry')">
+                  Country <span id="sort-shipToCountry" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('scheme')">
+                  Scheme <span id="sort-scheme" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('items')">
+                  Items <span id="sort-items" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 text-right cursor-pointer hover:text-white" onclick="sortOrdersBy('totalExclusive')">
+                  Net <span id="sort-totalExclusive" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 text-right cursor-pointer hover:text-white" onclick="sortOrdersBy('totalTax')">
+                  VAT <span id="sort-totalTax" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 text-right cursor-pointer hover:text-white" onclick="sortOrdersBy('totalInclusive')">
+                  Total <span id="sort-totalInclusive" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 cursor-pointer hover:text-white" onclick="sortOrdersBy('odooOrder')">
+                  Odoo Order <span id="sort-odooOrder" class="text-xs"></span>
+                </th>
+                <th class="pb-2 pr-4 text-center">URL</th>
+              </tr>
+              <tr class="text-slate-500 border-b border-slate-700/50">
+                <th class="pb-2 pr-4 pl-4"></th>
+                <th class="pb-2 pr-4"><input type="text" placeholder="Search..." class="orders-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="orderId"></th>
+                <th class="pb-2 pr-4"><input type="text" placeholder="Search..." class="orders-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="orderDate"></th>
+                <th class="pb-2 pr-4"><input type="text" placeholder="Search..." class="orders-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="shipToCountry"></th>
+                <th class="pb-2 pr-4"><input type="text" placeholder="Search..." class="orders-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="scheme"></th>
+                <th class="pb-2 pr-4"></th>
+                <th class="pb-2 pr-4"></th>
+                <th class="pb-2 pr-4"></th>
+                <th class="pb-2 pr-4"></th>
+                <th class="pb-2 pr-4"><input type="text" placeholder="Search..." class="orders-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="odooOrder"></th>
+                <th class="pb-2 pr-4"></th>
+              </tr>
+            </thead>
+            <tbody id="orders-table-body" class="text-slate-300">
+              <tr>
+                <td colspan="11" class="py-8 text-center text-slate-500">
+                  <span class="material-symbols-outlined text-3xl mb-2 block">inbox</span>
+                  Loading orders...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-4 pt-4 border-t border-slate-700">
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-sm">Show</span>
+              <select id="orders-page-size" class="bg-slate-700 border border-slate-600 text-slate-300 rounded px-2 py-1 text-sm">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="250">250</option>
+                <option value="500">500</option>
+              </select>
+              <span class="text-slate-400 text-sm">per page</span>
+            </div>
+            <div id="pagination-info" class="text-slate-400 text-sm">Showing 0 orders</div>
+            <div id="selection-info" class="text-sm">
+              <span id="selection-count" class="text-green-400 font-semibold">0</span>
+              <span class="text-slate-400">of</span>
+              <span id="total-filtered" class="text-slate-300">0</span>
+              <span class="text-slate-400">selected</span>
+              <span class="text-slate-500 mx-1">-</span>
+              <button id="select-all-btn" class="text-blue-400 hover:text-blue-300 underline">Select All</button>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button id="prev-page" class="px-3 py-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 disabled:opacity-50" disabled>Previous</button>
+            <button id="next-page" class="px-3 py-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 disabled:opacity-50" disabled>Next</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pending Returns (Credit Notes) -->
+      <div id="returns-section" class="bg-slate-800 border border-orange-700/50 rounded-xl p-6 mb-8 hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-white font-semibold text-lg flex items-center gap-2">
+            <span class="material-symbols-outlined text-orange-400">undo</span>
+            Pending Returns (Credit Notes)
+          </h2>
+          <div class="flex gap-2">
+            <button id="refresh-returns-btn" class="flex items-center gap-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors">
+              <span class="material-symbols-outlined text-sm">refresh</span>
+              Refresh
+            </button>
+            <button id="preview-credit-notes-btn" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">preview</span>
+              Preview Credit Notes
+            </button>
+            <button id="create-credit-notes-btn" class="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+              <span class="material-symbols-outlined text-sm">receipt_long</span>
+              Create Credit Notes in Odoo
+            </button>
+          </div>
+        </div>
+
+        <!-- Returns Filters -->
+        <div class="flex gap-4 mb-4">
+          <select id="filter-returns-currency" class="bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">All Currencies</option>
+            <option value="EUR">EUR</option>
+            <option value="GBP">GBP</option>
+            <option value="PLN">PLN</option>
+            <option value="CZK">CZK</option>
+            <option value="SEK">SEK</option>
+          </select>
+        </div>
+
+        <!-- Returns Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="text-slate-400 border-b border-slate-700">
+              <tr>
+                <th class="text-left py-2 px-3"><input type="checkbox" id="select-all-returns" class="rounded"></th>
+                <th class="text-left py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('orderId')">
+                  Order ID <span id="ret-sort-orderId" class="text-xs"></span>
+                </th>
+                <th class="text-left py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('returnDate')">
+                  Return Date <span id="ret-sort-returnDate" class="text-xs"></span>
+                </th>
+                <th class="text-left py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('shipToCountry')">
+                  Country <span id="ret-sort-shipToCountry" class="text-xs"></span>
+                </th>
+                <th class="text-left py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('items')">
+                  Items <span id="ret-sort-items" class="text-xs"></span>
+                </th>
+                <th class="text-right py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('totalExclusive')">
+                  Total (excl) <span id="ret-sort-totalExclusive" class="text-xs"></span>
+                </th>
+                <th class="text-right py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('totalTax')">
+                  VAT <span id="ret-sort-totalTax" class="text-xs"></span>
+                </th>
+                <th class="text-left py-2 px-3 cursor-pointer hover:text-white" onclick="sortReturnsBy('scheme')">
+                  Scheme <span id="ret-sort-scheme" class="text-xs"></span>
+                </th>
+              </tr>
+              <tr class="text-slate-500 border-b border-slate-700/50">
+                <th class="py-2 px-3"></th>
+                <th class="py-2 px-3"><input type="text" placeholder="Search..." class="returns-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="orderId"></th>
+                <th class="py-2 px-3"><input type="text" placeholder="Search..." class="returns-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="returnDate"></th>
+                <th class="py-2 px-3"><input type="text" placeholder="Search..." class="returns-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="shipToCountry"></th>
+                <th class="py-2 px-3"></th>
+                <th class="py-2 px-3"></th>
+                <th class="py-2 px-3"></th>
+                <th class="py-2 px-3"><input type="text" placeholder="Search..." class="returns-col-filter w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-300" data-column="scheme"></th>
+              </tr>
+            </thead>
+            <tbody id="returns-table-body" class="text-slate-300">
+              <!-- Returns loaded dynamically -->
+            </tbody>
+          </table>
+        </div>
+        <div class="flex justify-between items-center mt-4">
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-sm">Show</span>
+              <select id="returns-page-size" class="bg-slate-700 border border-slate-600 text-slate-300 rounded px-2 py-1 text-sm">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="250">250</option>
+              </select>
+              <span class="text-slate-400 text-sm">per page</span>
+            </div>
+            <div id="returns-count" class="text-slate-400 text-sm"></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <span id="returns-pagination-info" class="text-slate-400 text-sm"></span>
+            <div class="flex gap-2">
+              <button id="returns-prev-page" class="px-3 py-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 disabled:opacity-50" disabled>Previous</button>
+              <button id="returns-next-page" class="px-3 py-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 disabled:opacity-50" disabled>Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <script>
+      // State
+      let pendingOrders = [];
+      let pendingReturns = [];
+      let vcsReports = [];
+      let selectedReportId = null;
+      let odooOrders = {}; // Map of orderId -> Odoo order info
+      let currentPage = 1;
+      let pageSize = 50;
+      let selectedOrderIds = new Set(); // Track selected order IDs across pages
+      let allFilteredSelected = false; // Whether all filtered orders are selected
+      let selectedReturnIds = new Set(); // Track selected return IDs
+      let returnsPage = 1;
+      let returnsPageSize = 50;
+
+      // Sorting state
+      let ordersSortColumn = null;
+      let ordersSortDirection = 'asc'; // 'asc' or 'desc'
+      let returnsSortColumn = null;
+      let returnsSortDirection = 'asc';
+
+      // Column search filters
+      let ordersColumnFilters = {};
+      let returnsColumnFilters = {};
+
+      // DOM Elements
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
+      const uploadProgress = document.getElementById('upload-progress');
+      const uploadResult = document.getElementById('upload-result');
+      const uploadError = document.getElementById('upload-error');
+      const ordersTableBody = document.getElementById('orders-table-body');
+
+      // Initialize
+      document.addEventListener('DOMContentLoaded', () => {
+        loadReports();
+        loadSummary();
+        loadPendingOrders();
+        loadPendingReturns();
+        setupEventListeners();
+      });
+
+      function setupEventListeners() {
+        // File upload
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZone.classList.add('border-green-500');
+        });
+        dropZone.addEventListener('dragleave', () => {
+          dropZone.classList.remove('border-green-500');
+        });
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('border-green-500');
+          const file = e.dataTransfer.files[0];
+          if (file) uploadFile(file);
+        });
+        fileInput.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (file) uploadFile(file);
+        });
+
+        // Refresh button
+        document.getElementById('refresh-btn').addEventListener('click', () => {
+          loadSummary();
+          loadPendingOrders();
+        });
+
+        // Export button
+        document.getElementById('export-btn').addEventListener('click', exportToCSV);
+
+        // Invoice buttons
+        document.getElementById('preview-invoices-btn').addEventListener('click', () => createInvoices(true));
+        document.getElementById('create-invoices-btn').addEventListener('click', () => createInvoices(false));
+
+        // Create orders button
+        document.getElementById('create-orders-btn').addEventListener('click', () => createOdooOrders());
+
+        // Check Odoo orders button - clears cache and fetches fresh data
+        document.getElementById('check-odoo-btn').addEventListener('click', async () => {
+          const btn = document.getElementById('check-odoo-btn');
+          const originalHtml = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">sync</span> Checking...';
+
+          // Clear the cache to force fresh data
+          odooOrders = {};
+
+          // Re-check all orders from Odoo (force refresh to bypass cache)
+          await checkOdooOrders(true);
+
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+        });
+
+        // Select all checkbox (header checkbox - only affects current page)
+        document.getElementById('select-all').addEventListener('change', (e) => {
+          const filtered = getFilteredOrders();
+          const start = (currentPage - 1) * pageSize;
+          const pageOrders = filtered.slice(start, start + pageSize);
+
+          pageOrders.forEach(order => {
+            if (e.target.checked) {
+              selectedOrderIds.add(order._id);
+            } else {
+              selectedOrderIds.delete(order._id);
+              allFilteredSelected = false;
+            }
+          });
+          document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = e.target.checked);
+          updateSelectionInfo();
+        });
+
+        // Select All button (selects all filtered orders across all pages)
+        document.getElementById('select-all-btn').addEventListener('click', () => {
+          const filtered = getFilteredOrders();
+          if (allFilteredSelected) {
+            // Deselect all
+            selectedOrderIds.clear();
+            allFilteredSelected = false;
+          } else {
+            // Select all filtered
+            filtered.forEach(order => selectedOrderIds.add(order._id));
+            allFilteredSelected = true;
+          }
+          // Update checkboxes on current page
+          document.querySelectorAll('.order-checkbox').forEach(cb => {
+            cb.checked = selectedOrderIds.has(cb.dataset.id);
+          });
+          document.getElementById('select-all').checked = allFilteredSelected;
+          updateSelectionInfo();
+        });
+
+        // Filters
+        document.getElementById('filter-country').addEventListener('change', applyFilters);
+        document.getElementById('filter-scheme').addEventListener('change', applyFilters);
+        document.getElementById('filter-odoo-status').addEventListener('change', applyFilters);
+        document.getElementById('filter-currency').addEventListener('change', applyFilters);
+        document.getElementById('filter-returns-currency').addEventListener('change', applyReturnsFilters);
+
+        // Pagination
+        document.getElementById('prev-page').addEventListener('click', () => {
+          if (currentPage > 1) {
+            currentPage--;
+            renderOrders();
+          }
+        });
+        document.getElementById('next-page').addEventListener('click', () => {
+          const filtered = getFilteredOrders();
+          const maxPage = Math.ceil(filtered.length / pageSize);
+          if (currentPage < maxPage) {
+            currentPage++;
+            renderOrders();
+          }
+        });
+
+        // Returns section event listeners
+        document.getElementById('refresh-returns-btn')?.addEventListener('click', loadPendingReturns);
+        document.getElementById('preview-credit-notes-btn')?.addEventListener('click', () => createCreditNotes(true));
+        document.getElementById('create-credit-notes-btn')?.addEventListener('click', () => createCreditNotes(false));
+
+        // Select all returns checkbox
+        document.getElementById('select-all-returns')?.addEventListener('change', (e) => {
+          pendingReturns.forEach(ret => {
+            if (e.target.checked) {
+              selectedReturnIds.add(ret._id);
+            } else {
+              selectedReturnIds.delete(ret._id);
+            }
+          });
+          document.querySelectorAll('.return-checkbox').forEach(cb => cb.checked = e.target.checked);
+          renderReturns();
+        });
+
+        // Returns pagination
+        document.getElementById('returns-prev-page')?.addEventListener('click', () => {
+          if (returnsPage > 1) {
+            returnsPage--;
+            renderReturns();
+          }
+        });
+        document.getElementById('returns-next-page')?.addEventListener('click', () => {
+          const maxPage = Math.ceil(getFilteredReturns().length / returnsPageSize);
+          if (returnsPage < maxPage) {
+            returnsPage++;
+            renderReturns();
+          }
+        });
+
+        // Page size selectors
+        document.getElementById('orders-page-size')?.addEventListener('change', (e) => {
+          pageSize = parseInt(e.target.value);
+          currentPage = 1;
+          renderOrders();
+        });
+        document.getElementById('returns-page-size')?.addEventListener('change', (e) => {
+          returnsPageSize = parseInt(e.target.value);
+          returnsPage = 1;
+          renderReturns();
+        });
+
+        // Column search filters for orders
+        document.querySelectorAll('.orders-col-filter').forEach(input => {
+          input.addEventListener('input', (e) => {
+            const column = e.target.dataset.column;
+            const value = e.target.value.trim().toLowerCase();
+            if (value) {
+              ordersColumnFilters[column] = value;
+            } else {
+              delete ordersColumnFilters[column];
+            }
+            currentPage = 1;
+            renderOrders();
+          });
+        });
+
+        // Column search filters for returns
+        document.querySelectorAll('.returns-col-filter').forEach(input => {
+          input.addEventListener('input', (e) => {
+            const column = e.target.dataset.column;
+            const value = e.target.value.trim().toLowerCase();
+            if (value) {
+              returnsColumnFilters[column] = value;
+            } else {
+              delete returnsColumnFilters[column];
+            }
+            returnsPage = 1;
+            renderReturns();
+          });
+        });
+      }
+
+      // Sorting functions
+      function sortOrdersBy(column) {
+        if (ordersSortColumn === column) {
+          ordersSortDirection = ordersSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          ordersSortColumn = column;
+          ordersSortDirection = 'asc';
+        }
+        updateSortIndicators('orders');
+        renderOrders();
+      }
+
+      function sortReturnsBy(column) {
+        if (returnsSortColumn === column) {
+          returnsSortDirection = returnsSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          returnsSortColumn = column;
+          returnsSortDirection = 'asc';
+        }
+        updateSortIndicators('returns');
+        renderReturns();
+      }
+
+      function updateSortIndicators(tableType) {
+        if (tableType === 'orders') {
+          // Clear all order sort indicators
+          ['orderId', 'orderDate', 'shipToCountry', 'scheme', 'items', 'totalExclusive', 'totalTax', 'totalInclusive', 'odooOrder'].forEach(col => {
+            const el = document.getElementById(`sort-${col}`);
+            if (el) el.textContent = '';
+          });
+          // Set active indicator
+          if (ordersSortColumn) {
+            const el = document.getElementById(`sort-${ordersSortColumn}`);
+            if (el) el.textContent = ordersSortDirection === 'asc' ? '▲' : '▼';
+          }
+        } else {
+          // Clear all return sort indicators
+          ['orderId', 'returnDate', 'shipToCountry', 'items', 'totalExclusive', 'totalTax', 'scheme'].forEach(col => {
+            const el = document.getElementById(`ret-sort-${col}`);
+            if (el) el.textContent = '';
+          });
+          // Set active indicator
+          if (returnsSortColumn) {
+            const el = document.getElementById(`ret-sort-${returnsSortColumn}`);
+            if (el) el.textContent = returnsSortDirection === 'asc' ? '▲' : '▼';
+          }
+        }
+      }
+
+      // Get filtered returns with column filters and sorting
+      function getFilteredReturns() {
+        const returnsCurrency = document.getElementById('filter-returns-currency').value;
+
+        let filtered = [...pendingReturns];
+
+        // Apply currency filter
+        if (returnsCurrency) {
+          filtered = filtered.filter(r => r.currency === returnsCurrency);
+        }
+
+        // Apply column filters
+        Object.entries(returnsColumnFilters).forEach(([column, searchValue]) => {
+          filtered = filtered.filter(ret => {
+            let fieldValue = '';
+            if (column === 'orderId') fieldValue = ret.orderId || '';
+            else if (column === 'returnDate') fieldValue = formatDate(ret.returnDate || ret.shipmentDate) || '';
+            else if (column === 'shipToCountry') fieldValue = ret.shipToCountry || '';
+            else if (column === 'scheme') fieldValue = getSchemeLabel(ret) || '';
+            return fieldValue.toLowerCase().includes(searchValue);
+          });
+        });
+
+        // Apply sorting
+        if (returnsSortColumn) {
+          filtered.sort((a, b) => {
+            let valA, valB;
+            if (returnsSortColumn === 'orderId') {
+              valA = a.orderId || '';
+              valB = b.orderId || '';
+            } else if (returnsSortColumn === 'returnDate') {
+              valA = new Date(a.returnDate || a.shipmentDate || 0);
+              valB = new Date(b.returnDate || b.shipmentDate || 0);
+              return returnsSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (returnsSortColumn === 'shipToCountry') {
+              valA = a.shipToCountry || '';
+              valB = b.shipToCountry || '';
+            } else if (returnsSortColumn === 'items') {
+              valA = a.items?.length || 0;
+              valB = b.items?.length || 0;
+              return returnsSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (returnsSortColumn === 'totalExclusive') {
+              valA = parseFloat(a.totalExclusive) || 0;
+              valB = parseFloat(b.totalExclusive) || 0;
+              return returnsSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (returnsSortColumn === 'totalTax') {
+              valA = parseFloat(a.totalTax) || 0;
+              valB = parseFloat(b.totalTax) || 0;
+              return returnsSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (returnsSortColumn === 'scheme') {
+              valA = getSchemeLabel(a) || '';
+              valB = getSchemeLabel(b) || '';
+            } else {
+              return 0;
+            }
+            // String comparison
+            if (typeof valA === 'string') {
+              return returnsSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+            return 0;
+          });
+        }
+
+        return filtered;
+      }
+
+      // Shared filter logic
+      function getFilteredOrders() {
+        const country = document.getElementById('filter-country').value;
+        const scheme = document.getElementById('filter-scheme').value;
+        const odooStatus = document.getElementById('filter-odoo-status').value;
+        const currency = document.getElementById('filter-currency').value;
+
+        let filtered = [...pendingOrders];
+
+        // Apply dropdown filters
+        if (country) filtered = filtered.filter(o => o.shipToCountry === country);
+        if (currency) filtered = filtered.filter(o => o.currency === currency);
+        if (scheme) {
+          filtered = filtered.filter(o => {
+            const isOSS = o.taxReportingScheme === 'VCS_EU_OSS';
+            const isB2B = !!o.buyerTaxRegistration;
+            const isExport = o.exportOutsideEu === 'true' || o.exportOutsideEu === true;
+            const isDomestic = o.shipFromCountry && o.shipFromCountry === o.shipToCountry && !isOSS && !isB2B && !isExport;
+
+            if (scheme === 'OSS') return isOSS;
+            if (scheme === 'B2B') return isB2B;
+            if (scheme === 'EXPORT') return isExport;
+            if (scheme === 'DOMESTIC') return isDomestic;
+            if (scheme.startsWith('DOMESTIC_')) {
+              const domesticCountry = scheme.replace('DOMESTIC_', '');
+              return isDomestic && o.shipFromCountry === domesticCountry;
+            }
+            return true;
+          });
+        }
+
+        // Apply Odoo status filter
+        if (odooStatus === 'has-order') {
+          filtered = filtered.filter(o => odooOrders[o.orderId]);
+        } else if (odooStatus === 'missing-order') {
+          filtered = filtered.filter(o => !odooOrders[o.orderId]);
+        }
+
+        // Apply column search filters
+        Object.entries(ordersColumnFilters).forEach(([column, searchValue]) => {
+          filtered = filtered.filter(order => {
+            let fieldValue = '';
+            if (column === 'orderId') fieldValue = order.orderId || '';
+            else if (column === 'orderDate') fieldValue = formatDate(order.orderDate) || '';
+            else if (column === 'shipToCountry') fieldValue = order.shipToCountry || '';
+            else if (column === 'scheme') fieldValue = getSchemeLabel(order) || '';
+            else if (column === 'odooOrder') fieldValue = odooOrders[order.orderId]?.orderNumber || '';
+            return fieldValue.toLowerCase().includes(searchValue);
+          });
+        });
+
+        // Apply sorting
+        if (ordersSortColumn) {
+          filtered.sort((a, b) => {
+            let valA, valB;
+            if (ordersSortColumn === 'orderId') {
+              valA = a.orderId || '';
+              valB = b.orderId || '';
+            } else if (ordersSortColumn === 'orderDate') {
+              valA = new Date(a.orderDate || 0);
+              valB = new Date(b.orderDate || 0);
+              return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (ordersSortColumn === 'shipToCountry') {
+              valA = a.shipToCountry || '';
+              valB = b.shipToCountry || '';
+            } else if (ordersSortColumn === 'scheme') {
+              valA = getSchemeLabel(a) || '';
+              valB = getSchemeLabel(b) || '';
+            } else if (ordersSortColumn === 'items') {
+              valA = a.items?.length || 0;
+              valB = b.items?.length || 0;
+              return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (ordersSortColumn === 'totalExclusive') {
+              valA = parseFloat(a.totalExclusive) || 0;
+              valB = parseFloat(b.totalExclusive) || 0;
+              return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (ordersSortColumn === 'totalTax') {
+              valA = parseFloat(a.totalTax) || 0;
+              valB = parseFloat(b.totalTax) || 0;
+              return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (ordersSortColumn === 'totalInclusive') {
+              valA = parseFloat(a.totalInclusive) || 0;
+              valB = parseFloat(b.totalInclusive) || 0;
+              return ordersSortDirection === 'asc' ? valA - valB : valB - valA;
+            } else if (ordersSortColumn === 'odooOrder') {
+              valA = odooOrders[a.orderId]?.orderNumber || '';
+              valB = odooOrders[b.orderId]?.orderNumber || '';
+            } else {
+              return 0;
+            }
+            // String comparison
+            if (typeof valA === 'string') {
+              return ordersSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+            return 0;
+          });
+        }
+
+        return filtered;
+      }
+
+      async function uploadFile(file) {
+        uploadProgress.classList.remove('hidden');
+        uploadResult.classList.add('hidden');
+        uploadError.classList.add('hidden');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+          const response = await fetch('/api/amazon/vcs/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          const result = await response.json();
+
+          uploadProgress.classList.add('hidden');
+
+          if (response.ok && result.success) {
+            uploadResult.classList.remove('hidden');
+            document.getElementById('result-summary').innerHTML = `
+              <p>Imported <strong>${result.orderCount}</strong> orders</p>
+            `;
+            loadSummary();
+            loadPendingOrders();
+            loadReports();
+          } else {
+            uploadError.classList.remove('hidden');
+            document.getElementById('error-message').textContent = result.error || 'Unknown error';
+          }
+        } catch (error) {
+          uploadProgress.classList.add('hidden');
+          uploadError.classList.remove('hidden');
+          document.getElementById('error-message').textContent = error.message;
+        }
+      }
+
+      async function loadSummary() {
+        try {
+          const response = await fetch('/api/amazon/vcs/summary');
+          const data = await response.json();
+
+          let pending = 0, invoiced = 0, skipped = 0;
+          data.byStatus?.forEach(s => {
+            if (s._id === 'pending') pending = s.count;
+            if (s._id === 'invoiced') invoiced = s.count;
+            if (s._id === 'skipped') skipped = s.count;
+          });
+
+          document.getElementById('stat-pending').textContent = pending;
+          document.getElementById('stat-invoiced').textContent = invoiced;
+          document.getElementById('stat-skipped').textContent = skipped;
+          document.getElementById('stat-total').textContent = pending + invoiced + skipped;
+        } catch (error) {
+          console.error('Error loading summary:', error);
+        }
+      }
+
+      async function loadPendingOrders() {
+        try {
+          const url = selectedReportId
+            ? `/api/amazon/vcs/orders/pending?reportId=${selectedReportId}`
+            : '/api/amazon/vcs/orders/pending';
+          const response = await fetch(url);
+          const data = await response.json();
+          pendingOrders = data.orders || [];
+          renderOrders();
+
+          // Check Odoo for existing orders (async, updates UI when done)
+          if (pendingOrders.length > 0) {
+            checkOdooOrders();
+          }
+        } catch (error) {
+          console.error('Error loading orders:', error);
+          ordersTableBody.innerHTML = `
+            <tr>
+              <td colspan="11" class="py-8 text-center text-red-400">
+                Error loading orders: ${error.message}
+              </td>
+            </tr>
+          `;
+        }
+      }
+
+      async function checkOdooOrders(forceRefresh = false) {
+        try {
+          const orderIds = pendingOrders.map(o => o.orderId);
+          const response = await fetch('/api/amazon/vcs/check-odoo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderIds, forceRefresh })
+          });
+          const data = await response.json();
+          if (data.success && data.orders) {
+            odooOrders = data.orders;
+            renderOrders(); // Re-render with order data
+
+            // Count matched orders
+            const matchedCount = Object.keys(data.orders).length;
+            const totalCount = pendingOrders.length;
+            console.log(`Odoo check complete: ${matchedCount}/${totalCount} orders found in Odoo`);
+          }
+        } catch (error) {
+          console.error('Error checking Odoo:', error);
+        }
+      }
+
+      async function loadPendingReturns() {
+        try {
+          const url = selectedReportId
+            ? `/api/amazon/vcs/returns/pending?reportId=${selectedReportId}`
+            : '/api/amazon/vcs/returns/pending';
+          const response = await fetch(url);
+          const data = await response.json();
+          pendingReturns = data.orders || [];
+
+          // Show/hide returns section based on whether we have returns
+          const returnsSection = document.getElementById('returns-section');
+          if (pendingReturns.length > 0) {
+            returnsSection.classList.remove('hidden');
+            renderReturns();
+          } else {
+            returnsSection.classList.add('hidden');
+          }
+        } catch (error) {
+          console.error('Error loading returns:', error);
+        }
+      }
+
+      async function loadReports() {
+        try {
+          const response = await fetch('/api/amazon/vcs/reports');
+          const data = await response.json();
+          vcsReports = data.reports || [];
+          renderReports();
+        } catch (error) {
+          console.error('Error loading reports:', error);
+          document.getElementById('reports-list').innerHTML = '<div class="text-red-400 text-sm">Error loading reports</div>';
+        }
+      }
+
+      function renderReports() {
+        const container = document.getElementById('reports-list');
+
+        // Filter out reports with all zero counts (deleted uploads)
+        const activeReports = vcsReports.filter(r =>
+          (r.pendingOrders || 0) > 0 || (r.pendingReturns || 0) > 0 || (r.invoicedCount || 0) > 0
+        );
+
+        if (activeReports.length === 0) {
+          container.innerHTML = '<div class="text-slate-400 text-sm">No reports uploaded yet. Upload a VCS Tax Report above to get started.</div>';
+          return;
+        }
+
+        // Create "All Reports" option + individual report cards
+        const allReportsHtml = `
+          <div onclick="selectReport(null)" class="cursor-pointer p-4 rounded-lg border transition-all ${selectedReportId === null ? 'border-green-500 bg-green-900/20' : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'}">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined ${selectedReportId === null ? 'text-green-400' : 'text-slate-400'}">select_all</span>
+                <div>
+                  <div class="text-white font-medium">All Reports</div>
+                  <div class="text-slate-400 text-sm">View pending items from all uploaded reports</div>
+                </div>
+              </div>
+              <div class="flex gap-4 text-sm">
+                <span class="text-yellow-400">${activeReports.reduce((sum, r) => sum + (r.pendingOrders || 0), 0)} pending orders</span>
+                <span class="text-orange-400">${activeReports.reduce((sum, r) => sum + (r.pendingReturns || 0), 0)} pending returns</span>
+              </div>
+            </div>
+          </div>
+        `;
+
+        const reportsHtml = activeReports.map(report => {
+          const isSelected = selectedReportId === report._id;
+          const uploadDate = new Date(report.uploadedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          const uploadTime = new Date(report.uploadedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+          return `
+            <div class="p-4 rounded-lg border transition-all ${isSelected ? 'border-green-500 bg-green-900/20' : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'}">
+              <div class="flex items-center justify-between">
+                <div onclick="selectReport('${report._id}')" class="flex items-center gap-3 cursor-pointer flex-1">
+                  <span class="material-symbols-outlined ${isSelected ? 'text-green-400' : 'text-slate-400'}">description</span>
+                  <div>
+                    <div class="text-white font-medium">${report.filename || 'VCS Report'}</div>
+                    <div class="text-slate-400 text-sm">Uploaded ${uploadDate} at ${uploadTime}</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-4">
+                  <div class="flex gap-4 text-sm">
+                    <span class="text-yellow-400">${report.pendingOrders || 0} pending</span>
+                    <span class="text-orange-400">${report.pendingReturns || 0} returns</span>
+                    <span class="text-green-400">${report.invoicedCount || 0} invoiced</span>
+                  </div>
+                  <button onclick="event.stopPropagation(); downloadReportCsv('${report.uploadId || report._id}')" class="flex items-center gap-1 px-3 py-1 bg-slate-600 text-slate-300 rounded hover:bg-slate-500 transition-colors text-sm">
+                    <span class="material-symbols-outlined text-sm">download</span>
+                    CSV
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        container.innerHTML = allReportsHtml + reportsHtml;
+      }
+
+      function downloadReportCsv(uploadId) {
+        window.location.href = `/api/amazon/vcs/uploads/${uploadId}/download`;
+      }
+
+      function selectReport(reportId) {
+        selectedReportId = reportId;
+        // Clear selections when switching reports
+        selectedOrderIds.clear();
+        selectedReturnIds.clear();
+        allFilteredSelected = false;
+        currentPage = 1;
+        returnsPage = 1;
+        // Re-render reports to show selection
+        renderReports();
+        // Reload orders and returns for the selected report
+        loadPendingOrders();
+        loadPendingReturns();
+      }
+
+      function renderReturns() {
+        const tbody = document.getElementById('returns-table-body');
+        const countDiv = document.getElementById('returns-count');
+        const paginationInfo = document.getElementById('returns-pagination-info');
+        const prevBtn = document.getElementById('returns-prev-page');
+        const nextBtn = document.getElementById('returns-next-page');
+
+        const filteredReturns = getFilteredReturns();
+
+        if (filteredReturns.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" class="py-4 text-center text-slate-500">No pending returns</td></tr>`;
+          countDiv.textContent = pendingReturns.length > 0 ? `0 of ${pendingReturns.length} returns match filters` : '';
+          paginationInfo.textContent = '';
+          prevBtn.disabled = true;
+          nextBtn.disabled = true;
+          return;
+        }
+
+        const formatCurrencyLocal = (val) => {
+          const num = Math.abs(parseFloat(val) || 0);
+          return num.toFixed(2);
+        };
+
+        const formatDateLocal = (dateStr) => {
+          if (!dateStr) return '-';
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('en-GB');
+        };
+
+        const getSchemeLabelLocal = (order) => {
+          if (order.taxReportingScheme === 'VCS_EU_OSS') return 'OSS';
+          if (order.taxReportingScheme === 'DEEMED_RESELLER') return 'Deemed';
+          if (order.buyerTaxRegistration) return 'B2B';
+          if (order.exportOutsideEu) return 'Export';
+          return 'Standard';
+        };
+
+        // Pagination logic
+        const totalReturns = filteredReturns.length;
+        const totalPages = Math.ceil(totalReturns / returnsPageSize);
+        const startIndex = (returnsPage - 1) * returnsPageSize;
+        const endIndex = Math.min(startIndex + returnsPageSize, totalReturns);
+        const pageReturns = filteredReturns.slice(startIndex, endIndex);
+
+        tbody.innerHTML = pageReturns.map(ret => `
+          <tr class="border-b border-slate-700/50 hover:bg-slate-700/30">
+            <td class="py-2 px-3">
+              <input type="checkbox" class="return-checkbox rounded" data-id="${ret._id}"
+                     ${selectedReturnIds.has(ret._id) ? 'checked' : ''}
+                     onchange="toggleReturn('${ret._id}', this.checked)">
+            </td>
+            <td class="py-2 px-3 font-mono text-xs">${ret.orderId}</td>
+            <td class="py-2 px-3 text-slate-400 text-xs">${formatDateLocal(ret.returnDate || ret.shipmentDate)}</td>
+            <td class="py-2 px-3">
+              <span class="px-2 py-0.5 bg-slate-700 rounded text-xs">${ret.shipToCountry || '-'}</span>
+            </td>
+            <td class="py-2 px-3 text-slate-400">${ret.items?.length || 0}</td>
+            <td class="py-2 px-3 text-right font-mono text-orange-400">-${formatCurrencyLocal(ret.totalExclusive)}</td>
+            <td class="py-2 px-3 text-right font-mono text-slate-400">-${formatCurrencyLocal(ret.totalTax)}</td>
+            <td class="py-2 px-3">
+              <span class="px-2 py-0.5 bg-orange-900/30 text-orange-400 rounded text-xs">${getSchemeLabelLocal(ret)}</span>
+            </td>
+          </tr>
+        `).join('');
+
+        countDiv.textContent = `${totalReturns} pending return${totalReturns !== 1 ? 's' : ''} (${selectedReturnIds.size} selected)${pendingReturns.length !== totalReturns ? ` · filtered from ${pendingReturns.length}` : ''}`;
+        paginationInfo.textContent = `Page ${returnsPage} of ${totalPages} (${startIndex + 1}-${endIndex} of ${totalReturns})`;
+        prevBtn.disabled = returnsPage <= 1;
+        nextBtn.disabled = returnsPage >= totalPages;
+      }
+
+      function toggleReturn(returnId, checked) {
+        if (checked) {
+          selectedReturnIds.add(returnId);
+        } else {
+          selectedReturnIds.delete(returnId);
+        }
+        document.getElementById('returns-count').textContent =
+          `${pendingReturns.length} pending return${pendingReturns.length !== 1 ? 's' : ''} (${selectedReturnIds.size} selected)`;
+      }
+
+      async function createCreditNotes(dryRun = true) {
+        const orderIds = Array.from(selectedReturnIds);
+        if (orderIds.length === 0) {
+          alert('Please select at least one return order');
+          return;
+        }
+
+        const btn = dryRun ? document.getElementById('preview-credit-notes-btn') : document.getElementById('create-credit-notes-btn');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="animate-spin material-symbols-outlined text-sm">progress_activity</span> ${dryRun ? 'Previewing...' : 'Creating...'}`;
+
+        try {
+          const response = await fetch('/api/amazon/vcs/create-credit-notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderIds, dryRun })
+          });
+
+          const result = await response.json();
+
+          if (response.ok && result.success) {
+            // Show result modal (same style as invoices)
+            showCreditNoteResult(result, dryRun);
+
+            // Refresh if real creation
+            if (!dryRun) {
+              selectedReturnIds.clear();
+              loadPendingReturns();
+              loadUploadHistory();
+            }
+          } else {
+            alert(`Error: ${result.error || 'Unknown error'}`);
+          }
+        } catch (error) {
+          console.error('Error creating credit notes:', error);
+          alert('Error creating credit notes: ' + error.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
+      }
+
+      function showCreditNoteResult(result, dryRun) {
+        const wouldCreateCount = dryRun ? (result.creditNotes?.length || result.created || 0) : (result.created || 0);
+
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+          <div class="bg-slate-800 rounded-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between shrink-0">
+              <div class="flex items-center gap-3">
+                <h3 class="text-white font-semibold text-lg">
+                  ${dryRun ? 'Credit Note Preview' : 'Credit Notes Created'}
+                </h3>
+                ${dryRun ? `<span class="text-slate-400 text-xs">Click "Create Credit Notes Now" to create them in Odoo</span>` : ''}
+              </div>
+              <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-1">
+              <!-- Compact Summary -->
+              <div class="flex gap-3 mb-4 text-xs">
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-white font-bold">${result.processed || 0}</span>
+                  <span class="text-slate-400">Processed</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-orange-400 font-bold">${wouldCreateCount}</span>
+                  <span class="text-slate-400">${dryRun ? 'Would Create' : 'Created'}</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-slate-400 font-bold">${result.skipped || 0}</span>
+                  <span class="text-slate-400">Skipped</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-red-400 font-bold">${result.errors?.length || 0}</span>
+                  <span class="text-slate-400">Errors</span>
+                </div>
+              </div>
+
+              <!-- Credit Notes list with details -->
+              ${result.creditNotes && result.creditNotes.length > 0 ? `
+                <div class="space-y-2">
+                  ${result.creditNotes.slice(0, 30).map(cn => {
+                    const data = cn.wouldCreate || cn;
+                    const preview = cn.preview || {};
+                    const lines = data.invoice_line_ids || [];
+                    return `
+                      <div class="bg-slate-700/30 rounded-lg p-3 border-l-4 border-orange-500">
+                        <div class="flex items-center justify-between mb-2">
+                          <div>
+                            <span class="text-white font-mono text-sm font-semibold">${cn.orderId}</span>
+                            ${cn.originalInvoice ? `<span class="text-slate-400 text-xs ml-2">reverses ${cn.originalInvoice}</span>` : ''}
+                          </div>
+                          ${!dryRun && cn.name ? `<span class="px-2 py-1 bg-orange-900/50 text-orange-300 rounded text-sm font-semibold">${cn.name}</span>` : ''}
+                        </div>
+                        ${dryRun && preview ? `
+                          <!-- Credit note metadata - compact 4 column layout -->
+                          <div class="grid grid-cols-4 gap-1.5 mb-2 text-xs">
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Journal:</span>
+                              <span class="text-slate-200 ml-1">${preview.journalName || '-'}</span>
+                            </div>
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Fiscal:</span>
+                              <span class="text-slate-200 ml-1">${preview.fiscalPositionName || '-'}</span>
+                            </div>
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Route:</span>
+                              <span class="text-slate-200 ml-1">${preview.shipFrom || '-'} → ${preview.shipTo || '-'}</span>
+                            </div>
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Scheme:</span>
+                              <span class="text-slate-200 ml-1">${preview.taxScheme || '-'}</span>
+                            </div>
+                          </div>
+                          <!-- Totals - inline -->
+                          <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded px-2 py-1.5 mb-2">
+                            <div class="flex gap-3">
+                              <span class="text-slate-400">Net: <span class="text-orange-300">-${Math.abs(preview.totalExclVat || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                              <span class="text-slate-400">VAT: <span class="text-slate-300">-${Math.abs(preview.vatAmount || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                            </div>
+                            <span class="text-slate-400">Total: <span class="text-orange-400 font-semibold">-${Math.abs(preview.totalInclVat || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                          </div>
+                        ` : ''}
+                        ${dryRun && lines.length > 0 ? `
+                          <div class="bg-slate-800/50 rounded px-2 py-1.5 text-xs">
+                            <table class="w-full">
+                              <thead>
+                                <tr class="text-slate-400 text-left">
+                                  <th class="pb-1">Product</th>
+                                  <th class="pb-1 text-right">Qty</th>
+                                  <th class="pb-1 text-right">Price</th>
+                                </tr>
+                              </thead>
+                              <tbody class="text-slate-300">
+                                ${lines.map(line => {
+                                  const lineData = line[2] || {};
+                                  return `
+                                    <tr>
+                                      <td class="py-0.5">${lineData.name || 'Product'}</td>
+                                      <td class="py-0.5 text-right">${lineData.quantity || 1}</td>
+                                      <td class="py-0.5 text-right text-orange-300">-${Math.abs(lineData.price_unit || 0).toFixed(2)} €</td>
+                                    </tr>
+                                  `;
+                                }).join('')}
+                              </tbody>
+                            </table>
+                          </div>
+                        ` : ''}
+                      </div>
+                    `;
+                  }).join('')}
+                  ${result.creditNotes.length > 30 ? `<div class="text-slate-500 text-xs text-center py-1">... and ${result.creditNotes.length - 30} more</div>` : ''}
+                </div>
+              ` : ''}
+
+              <!-- Errors -->
+              ${result.errors && result.errors.length > 0 ? `
+                <h4 class="text-red-400 font-semibold text-sm mt-3 mb-2">Errors:</h4>
+                <div class="space-y-1 max-h-32 overflow-y-auto">
+                  ${result.errors.map(err => `
+                    <div class="p-1.5 bg-red-900/30 border border-red-800 rounded text-xs">
+                      <span class="text-slate-300 font-mono">${err.orderId}</span>
+                      <span class="text-red-400 ml-2">${err.error}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+            <div class="px-4 py-2 border-t border-slate-700 flex justify-end gap-2 shrink-0">
+              <button onclick="this.closest('.fixed').remove()" class="px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-600">
+                Close
+              </button>
+              ${dryRun ? `
+                <button onclick="this.closest('.fixed').remove(); createCreditNotes(false);" class="px-3 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700">
+                  Create Credit Notes Now
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.remove();
+        });
+      }
+
+      function renderOrders() {
+        const filtered = getFilteredOrders();
+
+        if (filtered.length === 0) {
+          ordersTableBody.innerHTML = `
+            <tr>
+              <td colspan="11" class="py-8 text-center text-slate-500">
+                <span class="material-symbols-outlined text-3xl mb-2 block">inbox</span>
+                No pending orders
+              </td>
+            </tr>
+          `;
+          document.getElementById('pagination-info').textContent = 'No orders';
+          updateSelectionInfo();
+          return;
+        }
+
+        const start = (currentPage - 1) * pageSize;
+        const pageOrders = filtered.slice(start, start + pageSize);
+
+        ordersTableBody.innerHTML = pageOrders.map(order => {
+          // First check cached odooOrderNumber from MongoDB, then fall back to odooOrders map
+          const odooOrder = odooOrders[order.orderId];
+          const displayOrderNumber = order.odooOrderNumber || (odooOrder && odooOrder.orderNumber);
+          const odooOrderCell = displayOrderNumber
+            ? `<span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-xs">${displayOrderNumber}</span>`
+            : `<span class="flex items-center gap-1 text-amber-400 text-xs" title="No Odoo order found - needs to be created"><span class="material-symbols-outlined text-sm">warning</span> Missing</span>`;
+          const isChecked = selectedOrderIds.has(order._id) ? 'checked' : '';
+
+          return `
+            <tr class="border-b border-slate-700/50 hover:bg-slate-700/30">
+              <td class="py-3 pr-4 pl-4">
+                <input type="checkbox" class="order-checkbox rounded bg-slate-700 border-slate-600" data-id="${order._id}" ${isChecked}>
+              </td>
+              <td class="py-3 pr-4 font-mono text-xs">${order.orderId}</td>
+              <td class="py-3 pr-4">${formatDate(order.orderDate)}</td>
+              <td class="py-3 pr-4">
+                <span class="px-2 py-1 bg-slate-700 rounded text-xs">${order.shipToCountry || '-'}</span>
+              </td>
+              <td class="py-3 pr-4">
+                <span class="px-2 py-1 ${getSchemeColor(order)} rounded text-xs">${getSchemeLabel(order)}</span>
+              </td>
+              <td class="py-3 pr-4">${order.items?.length || 0}</td>
+              <td class="py-3 pr-4 text-right font-mono">${formatCurrency(order.totalExclusive, order.currency)}</td>
+              <td class="py-3 pr-4 text-right font-mono">${formatCurrency(order.totalTax, order.currency)}</td>
+              <td class="py-3 pr-4 text-right font-mono font-semibold">${formatCurrency(order.totalInclusive, order.currency)}</td>
+              <td class="py-3 pr-4">${odooOrderCell}</td>
+              <td class="py-3 pr-4 text-center">${order.invoiceUrl ? `<a href="${order.invoiceUrl}" target="_blank" class="text-blue-400 hover:text-blue-300">View</a>` : '-'}</td>
+            </tr>
+          `;
+        }).join('');
+
+        // Add event listeners to individual checkboxes
+        document.querySelectorAll('.order-checkbox').forEach(cb => {
+          cb.addEventListener('change', (e) => {
+            if (e.target.checked) {
+              selectedOrderIds.add(e.target.dataset.id);
+            } else {
+              selectedOrderIds.delete(e.target.dataset.id);
+              allFilteredSelected = false;
+            }
+            updateSelectionInfo();
+          });
+        });
+
+        // Update header checkbox state
+        const allPageChecked = pageOrders.every(o => selectedOrderIds.has(o._id));
+        document.getElementById('select-all').checked = allPageChecked;
+
+        document.getElementById('pagination-info').textContent = `Showing ${start + 1}-${Math.min(start + pageSize, filtered.length)} of ${filtered.length} orders`;
+        document.getElementById('prev-page').disabled = currentPage === 1;
+        document.getElementById('next-page').disabled = start + pageSize >= filtered.length;
+        updateSelectionInfo();
+      }
+
+      function updateSelectionInfo() {
+        const filtered = getFilteredOrders();
+        const selectionCount = selectedOrderIds.size;
+        const totalFiltered = filtered.length;
+
+        document.getElementById('selection-count').textContent = selectionCount;
+        document.getElementById('total-filtered').textContent = totalFiltered;
+
+        const selectAllBtn = document.getElementById('select-all-btn');
+        if (allFilteredSelected || selectionCount === totalFiltered) {
+          selectAllBtn.textContent = 'Deselect All';
+        } else {
+          selectAllBtn.textContent = 'Select All';
+        }
+      }
+
+      function applyFilters() {
+        currentPage = 1;
+        // Reset selection when filters change
+        selectedOrderIds.clear();
+        allFilteredSelected = false;
+        renderOrders();
+      }
+
+      function applyReturnsFilters() {
+        returnsPage = 1;
+        // Reset selection when filters change
+        selectedReturnIds.clear();
+        renderReturns();
+      }
+
+      async function loadUploadHistory() {
+        try {
+          const response = await fetch('/api/amazon/vcs/uploads');
+          const data = await response.json();
+
+          const uploadsList = document.getElementById('uploads-list');
+          if (!data.uploads || data.uploads.length === 0) {
+            uploadsList.innerHTML = '<div class="text-slate-500 text-sm">No files uploaded yet</div>';
+            return;
+          }
+
+          uploadsList.innerHTML = data.uploads.map(upload => `
+            <div class="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg">
+              <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-green-400">description</span>
+                <div>
+                  <div class="text-slate-300 text-sm font-medium">${upload.originalFilename || 'VCS Report'}</div>
+                  <div class="text-slate-500 text-xs">
+                    ${formatDate(upload.uploadedAt)} · ${formatFileSize(upload.fileSize)}
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-4">
+                <!-- Stats -->
+                <div class="text-right">
+                  <div class="text-slate-300 text-sm">${upload.transactionCount || 0} lines → ${(upload.pendingOrders || 0) + (upload.invoicedOrders || 0)} shipments${(upload.pendingReturns || 0) + (upload.creditedReturns || 0) > 0 ? ` + ${(upload.pendingReturns || 0) + (upload.creditedReturns || 0)} returns` : ''}</div>
+                  <div class="text-xs">
+                    <span class="text-yellow-400">${upload.pendingOrders || 0} pending</span>
+                    <span class="text-slate-500 mx-1">·</span>
+                    <span class="text-green-400">${upload.invoicedOrders || 0} invoiced</span>
+                    ${(upload.pendingReturns || 0) > 0 || (upload.creditedReturns || 0) > 0 ? `<span class="text-slate-500 mx-1">·</span><span class="text-orange-400">${upload.pendingReturns || 0} ret. pending</span><span class="text-slate-500 mx-1">·</span><span class="text-orange-300">${upload.creditedReturns || 0} credited</span>` : ''}
+                  </div>
+                </div>
+                <!-- Download button -->
+                <a href="/api/amazon/vcs/uploads/${upload._id}/download"
+                   class="flex items-center gap-1 px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded text-sm transition-colors"
+                   title="Download original file">
+                  <span class="material-symbols-outlined text-sm">download</span>
+                  CSV
+                </a>
+              </div>
+            </div>
+          `).join('');
+        } catch (error) {
+          console.error('Error loading upload history:', error);
+          document.getElementById('uploads-list').innerHTML = '<div class="text-red-400 text-sm">Error loading history</div>';
+        }
+      }
+
+      function formatFileSize(bytes) {
+        if (!bytes) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        while (bytes >= 1024 && i < units.length - 1) {
+          bytes /= 1024;
+          i++;
+        }
+        return bytes.toFixed(1) + ' ' + units[i];
+      }
+
+      function exportToCSV() {
+        if (pendingOrders.length === 0) {
+          alert('No orders to export');
+          return;
+        }
+
+        const headers = ['Order ID', 'Date', 'Country', 'Scheme', 'SKUs', 'Net', 'VAT', 'Total', 'Currency'];
+        const rows = pendingOrders.map(o => [
+          o.orderId,
+          formatDate(o.orderDate),
+          o.shipToCountry,
+          getSchemeLabel(o),
+          o.items?.map(i => i.sku).join('; '),
+          o.totalExclusive?.toFixed(2),
+          o.totalTax?.toFixed(2),
+          o.totalInclusive?.toFixed(2),
+          o.currency
+        ]);
+
+        const csv = [headers, ...rows].map(row => row.map(cell => `"${cell || ''}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `vcs-pending-orders-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+      }
+
+      async function createInvoices(dryRun = true) {
+        const btn = dryRun ? document.getElementById('preview-invoices-btn') : document.getElementById('create-invoices-btn');
+        const originalText = btn.innerHTML;
+
+        // Get selected order IDs from the Set (works across all pages)
+        const selectedIds = Array.from(selectedOrderIds);
+
+        if (selectedIds.length === 0) {
+          alert('Please select at least one order to process.');
+          return;
+        }
+
+        // Confirmation for actual creation
+        if (!dryRun) {
+          if (!confirm(`Are you sure you want to create invoices in Odoo for ${selectedIds.length} selected order(s)?\n\nThis action cannot be undone.`)) {
+            return;
+          }
+        }
+
+        // Show progress modal
+        const progressModal = showProgressModal(selectedIds.length, dryRun);
+        btn.disabled = true;
+
+        try {
+          // Use fetch with streaming for real-time progress (POST to handle large payloads)
+          const response = await fetch('/api/amazon/vcs/create-invoices-stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderIds: selectedIds, dryRun })
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error: ${response.status}`);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let finalResult = null;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Parse SSE events from buffer
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            let eventType = null;
+            for (const line of lines) {
+              if (line.startsWith('event: ')) {
+                eventType = line.slice(7).trim();
+              } else if (line.startsWith('data: ') && eventType) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+
+                  if (eventType === 'start') {
+                    updateProgress(progressModal, { phase: 'start', total: data.total });
+                  } else if (eventType === 'progress') {
+                    updateProgress(progressModal, data);
+                  } else if (eventType === 'complete') {
+                    finalResult = data;
+                    closeProgressModal(progressModal);
+                    showInvoiceResult(data, dryRun);
+
+                    // Refresh if real creation
+                    if (!dryRun) {
+                      selectedOrderIds.clear();
+                      allFilteredSelected = false;
+                      loadSummary();
+                      loadPendingOrders();
+                    }
+                  } else if (eventType === 'error') {
+                    alert(`Error: ${data.message}`);
+                    closeProgressModal(progressModal);
+                  }
+                } catch (parseErr) {
+                  console.error('Failed to parse SSE data:', parseErr);
+                }
+                eventType = null;
+              }
+            }
+          }
+
+          if (!finalResult) {
+            closeProgressModal(progressModal);
+            alert('Connection closed unexpectedly. Please check results and try again if needed.');
+          }
+
+        } catch (error) {
+          closeProgressModal(progressModal);
+          alert(`Error: ${error.message}`);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
+      }
+
+      function showProgressModal(total, dryRun) {
+        const modal = document.createElement('div');
+        modal.id = 'progress-modal';
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+          <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="text-center">
+              <h3 class="text-white font-semibold text-lg mb-4">
+                ${dryRun ? 'Generating Preview' : 'Creating Invoices'}
+              </h3>
+              <div class="mb-4">
+                <div class="h-3 bg-slate-700 rounded-full overflow-hidden">
+                  <div id="progress-bar" class="h-full bg-green-500 transition-all duration-300" style="width: 0%"></div>
+                </div>
+              </div>
+              <div id="progress-text" class="text-slate-300 text-sm mb-2">Connecting...</div>
+              <div id="progress-stats" class="flex justify-center gap-4 text-xs">
+                <span class="text-green-400">Created: <span id="stat-created">0</span></span>
+                <span class="text-slate-400">Skipped: <span id="stat-skipped">0</span></span>
+                <span class="text-red-400">Errors: <span id="stat-errors">0</span></span>
+              </div>
+              <div id="progress-order" class="text-slate-500 text-xs mt-2 truncate"></div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        return modal;
+      }
+
+      function updateProgress(modal, data) {
+        const progressBar = modal.querySelector('#progress-bar');
+        const progressText = modal.querySelector('#progress-text');
+        const progressOrder = modal.querySelector('#progress-order');
+        const statCreated = modal.querySelector('#stat-created');
+        const statSkipped = modal.querySelector('#stat-skipped');
+        const statErrors = modal.querySelector('#stat-errors');
+
+        if (data.phase === 'init') {
+          progressText.textContent = data.message;
+        } else if (data.phase === 'prefetch') {
+          progressText.textContent = data.message;
+        } else if (data.phase === 'processing') {
+          const percent = Math.round((data.current / data.total) * 100);
+          progressBar.style.width = `${percent}%`;
+          progressText.textContent = `Processing ${data.current} of ${data.total}`;
+          if (data.orderId) {
+            progressOrder.textContent = data.orderId;
+          }
+          if (statCreated) statCreated.textContent = data.created || 0;
+          if (statSkipped) statSkipped.textContent = data.skipped || 0;
+          if (statErrors) statErrors.textContent = data.errors || 0;
+        }
+      }
+
+      function closeProgressModal(modal) {
+        if (modal && modal.parentNode) {
+          modal.parentNode.removeChild(modal);
+        }
+      }
+
+      function showInvoiceResult(result, dryRun) {
+        // For dry run, count invoices array; for real, use created count
+        const wouldCreateCount = dryRun ? (result.invoices?.length || 0) : (result.created || 0);
+
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+          <div class="bg-slate-800 rounded-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between shrink-0">
+              <div class="flex items-center gap-3">
+                <h3 class="text-white font-semibold text-lg">
+                  ${dryRun ? 'Invoice Preview' : 'Invoices Created'}
+                </h3>
+                ${dryRun ? `<span class="text-slate-400 text-xs">Click "Create Invoices Now" to create them in Odoo</span>` : ''}
+              </div>
+              <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-1">
+              <!-- Compact Summary -->
+              <div class="flex gap-3 mb-4 text-xs">
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-white font-bold">${result.processed || 0}</span>
+                  <span class="text-slate-400">Processed</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-green-400 font-bold">${wouldCreateCount}</span>
+                  <span class="text-slate-400">${dryRun ? 'Would Create' : 'Created'}</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-slate-400 font-bold">${result.skipped || 0}</span>
+                  <span class="text-slate-400">Skipped</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-red-400 font-bold">${result.errors?.length || 0}</span>
+                  <span class="text-slate-400">Errors</span>
+                </div>
+              </div>
+
+              <!-- Invoices list with details -->
+              ${result.invoices && result.invoices.length > 0 ? `
+                <div class="space-y-2">
+                  ${result.invoices.slice(0, 30).map(inv => {
+                    const data = inv.wouldCreate || inv;
+                    const preview = inv.preview || {};
+                    const lines = data.invoice_line_ids || [];
+                    return `
+                      <div class="bg-slate-700/30 rounded-lg p-3">
+                        <div class="flex items-center justify-between mb-2">
+                          <div>
+                            <span class="text-white font-mono text-sm font-semibold">${inv.orderId}</span>
+                            ${inv.odooOrderName || inv.saleOrderName ? `<span class="text-slate-400 text-xs ml-2">→ ${inv.odooOrderName || inv.saleOrderName}</span>` : ''}
+                          </div>
+                          ${!dryRun && inv.name ? `<span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-sm font-semibold">${inv.name}</span>` : ''}
+                        </div>
+                        ${dryRun && preview ? `
+                          <!-- Invoice metadata - compact 4 column layout -->
+                          <div class="grid grid-cols-4 gap-1.5 mb-2 text-xs">
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Journal:</span>
+                              <span class="text-slate-200 ml-1">${preview.journalName || '-'}</span>
+                            </div>
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Fiscal:</span>
+                              <span class="text-slate-200 ml-1">${preview.fiscalPositionName || '-'}</span>
+                            </div>
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Route:</span>
+                              <span class="text-slate-200 ml-1">${preview.shipFrom || '-'} → ${preview.shipTo || '-'}</span>
+                            </div>
+                            <div class="bg-slate-800/50 rounded px-2 py-1">
+                              <span class="text-slate-500">Scheme:</span>
+                              <span class="text-slate-200 ml-1">${preview.taxScheme || '-'}</span>
+                            </div>
+                          </div>
+                          <!-- Totals - inline -->
+                          <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded px-2 py-1.5 mb-2">
+                            <div class="flex gap-3">
+                              <span class="text-slate-400">Net: <span class="text-white">${(preview.totalExclVat || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                              <span class="text-slate-400">VAT: <span class="text-amber-400">${(preview.vatAmount || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                            </div>
+                            <span class="text-slate-400">Total: <span class="text-green-400 font-semibold">${(preview.totalInclVat || 0).toFixed(2)} ${preview.currency || 'EUR'}</span></span>
+                          </div>
+                        ` : ''}
+                        ${dryRun && lines.length > 0 ? `
+                          <div class="bg-slate-800/50 rounded px-2 py-1.5 text-xs">
+                            <table class="w-full">
+                              <thead>
+                                <tr class="text-slate-400 text-left">
+                                  <th class="pb-1">Product</th>
+                                  <th class="pb-1 text-right">Qty</th>
+                                  <th class="pb-1 text-right">Price</th>
+                                </tr>
+                              </thead>
+                              <tbody class="text-slate-300">
+                                ${lines.map(line => {
+                                  const lineData = line[2] || {};
+                                  return `
+                                    <tr>
+                                      <td class="py-0.5">${lineData.name || 'Product'}</td>
+                                      <td class="py-0.5 text-right">${lineData.quantity || 1}</td>
+                                      <td class="py-0.5 text-right">${(lineData.price_unit || 0).toFixed(2)} €</td>
+                                    </tr>
+                                  `;
+                                }).join('')}
+                              </tbody>
+                            </table>
+                          </div>
+                        ` : ''}
+                      </div>
+                    `;
+                  }).join('')}
+                  ${result.invoices.length > 30 ? `<div class="text-slate-500 text-xs text-center py-1">... and ${result.invoices.length - 30} more</div>` : ''}
+                </div>
+              ` : ''}
+
+              <!-- Errors -->
+              ${result.errors && result.errors.length > 0 ? `
+                <h4 class="text-red-400 font-semibold text-sm mt-3 mb-2">Errors:</h4>
+                <div class="space-y-1 max-h-32 overflow-y-auto">
+                  ${result.errors.map(err => `
+                    <div class="p-1.5 bg-red-900/30 border border-red-800 rounded text-xs">
+                      <span class="text-slate-300 font-mono">${err.orderId}</span>
+                      <span class="text-red-400 ml-2">${err.error}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+            <div class="px-4 py-2 border-t border-slate-700 flex justify-end gap-2 shrink-0">
+              <button onclick="this.closest('.fixed').remove()" class="px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-600">
+                Close
+              </button>
+              ${dryRun ? `
+                <button onclick="this.closest('.fixed').remove(); createInvoices(false);" class="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700">
+                  Create Invoices Now
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.remove();
+        });
+      }
+
+      // Helpers
+      function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+
+      function formatCurrency(amount, currency = 'EUR') {
+        if (amount === undefined || amount === null) return '-';
+        return new Intl.NumberFormat('de-DE', { style: 'currency', currency: currency || 'EUR' }).format(amount);
+      }
+
+      function getSchemeLabel(order) {
+        if (order.taxReportingScheme === 'VCS_EU_OSS') return 'OSS';
+        if (order.taxReportingScheme === 'DEEMED_RESELLER') return 'Deemed';
+        if (order.taxReportingScheme === 'CH_VOEC') return 'CH VOEC';
+        if (order.buyerTaxRegistration) return 'B2B';
+        if (order.exportOutsideEu === 'true' || order.exportOutsideEu === true) return 'Export';
+        // Domestic = shipFrom === shipTo (same country, B2C)
+        if (order.shipFromCountry && order.shipFromCountry === order.shipToCountry) {
+          return `Domestic ${order.shipFromCountry}`;
+        }
+        // Cross-border without OSS scheme (FBM shipments)
+        if (order.shipFromCountry && order.shipToCountry && order.shipFromCountry !== order.shipToCountry) {
+          return `${order.shipFromCountry} → ${order.shipToCountry}`;
+        }
+        return 'Standard';
+      }
+
+      function getSchemeColor(order) {
+        if (order.taxReportingScheme === 'VCS_EU_OSS') return 'bg-blue-900/50 text-blue-300';
+        if (order.taxReportingScheme === 'DEEMED_RESELLER') return 'bg-gray-900/50 text-gray-300';
+        if (order.taxReportingScheme === 'CH_VOEC') return 'bg-yellow-900/50 text-yellow-300';
+        if (order.buyerTaxRegistration) return 'bg-purple-900/50 text-purple-300';
+        if (order.exportOutsideEu === 'true' || order.exportOutsideEu === true) return 'bg-orange-900/50 text-orange-300';
+        // Domestic - green
+        if (order.shipFromCountry && order.shipFromCountry === order.shipToCountry) {
+          return 'bg-green-900/50 text-green-300';
+        }
+        // Cross-border - cyan
+        if (order.shipFromCountry && order.shipToCountry && order.shipFromCountry !== order.shipToCountry) {
+          return 'bg-cyan-900/50 text-cyan-300';
+        }
+        return 'bg-slate-600';
+      }
+
+      // Create Odoo orders from VCS data
+      async function createOdooOrders(dryRun = true) {
+        const btn = document.getElementById('create-orders-btn');
+        const originalText = btn.innerHTML;
+
+        // Get selected order IDs
+        const selectedIds = Array.from(selectedOrderIds);
+
+        // Filter to only orders that are missing from Odoo
+        const missingOrderIds = selectedIds.filter(id => {
+          const order = pendingOrders.find(o => o._id === id);
+          return order && !odooOrders[order.orderId];
+        });
+
+        if (missingOrderIds.length === 0) {
+          // Check if user selected orders that already have Odoo orders
+          if (selectedIds.length > 0) {
+            alert('All selected orders already have Odoo orders. Please select orders that are missing from Odoo (marked with warning icon).');
+          } else {
+            alert('Please select at least one order that is missing from Odoo.');
+          }
+          return;
+        }
+
+        // First do a dry run to preview
+        btn.disabled = true;
+        btn.innerHTML = `
+          <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+          ${dryRun ? 'Previewing...' : 'Creating...'}
+        `;
+
+        try {
+          const response = await fetch('/api/amazon/vcs/create-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderIds: missingOrderIds, dryRun })
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(result.error || 'Failed to create orders');
+          }
+
+          // Show results modal
+          showCreateOrdersResult(result, dryRun);
+
+          // If not dry run and successful, refresh the data
+          if (!dryRun && result.created > 0) {
+            selectedOrderIds.clear();
+            allFilteredSelected = false;
+            loadPendingOrders();
+          }
+        } catch (error) {
+          alert(`Error: ${error.message}`);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
+      }
+
+      function showCreateOrdersResult(result, dryRun) {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+          <div class="bg-slate-800 rounded-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between shrink-0">
+              <div class="flex items-center gap-3">
+                <h3 class="text-white font-semibold text-lg">
+                  ${dryRun ? 'Order Creation Preview' : 'Orders Created in Odoo'}
+                </h3>
+                ${dryRun ? `<span class="text-slate-400 text-xs">Click "Create Orders Now" to create them in Odoo</span>` : ''}
+              </div>
+              <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-1">
+              <!-- Summary -->
+              <div class="flex gap-3 mb-4 text-xs">
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-white font-bold">${result.processed || 0}</span>
+                  <span class="text-slate-400">Processed</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-green-400 font-bold">${result.created || 0}</span>
+                  <span class="text-slate-400">${dryRun ? 'Would Create' : 'Created'}</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-slate-400 font-bold">${result.skipped || 0}</span>
+                  <span class="text-slate-400">Skipped</span>
+                </div>
+                <div class="bg-slate-700/50 rounded px-3 py-1.5 flex items-center gap-2">
+                  <span class="text-red-400 font-bold">${result.errors?.length || 0}</span>
+                  <span class="text-slate-400">Errors</span>
+                </div>
+              </div>
+
+              <!-- Orders list -->
+              ${result.orders && result.orders.length > 0 ? `
+                <div class="space-y-2">
+                  ${result.orders.slice(0, 30).map(ord => `
+                    <div class="bg-slate-700/30 rounded-lg p-3">
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <span class="text-white font-mono text-sm font-semibold">${ord.amazonOrderId || ord.orderId}</span>
+                          ${ord.customerName ? `<span class="text-slate-400 text-xs ml-2">→ ${ord.customerName}</span>` : ''}
+                        </div>
+                        ${ord.odooOrderNumber ? `
+                          <span class="px-2 py-1 bg-green-900/50 text-green-300 rounded text-sm font-semibold">${ord.odooOrderNumber}</span>
+                        ` : ord.status === 'would_create' ? `
+                          <span class="px-2 py-1 bg-amber-900/50 text-amber-300 rounded text-xs">Would create</span>
+                        ` : ''}
+                      </div>
+                      ${ord.lines && ord.lines.length > 0 ? `
+                        <div class="mt-2 text-xs text-slate-400">
+                          ${ord.lines.map(l => `<span class="mr-2">${l.sku || l.productName}: ${l.quantity}x</span>`).join('')}
+                        </div>
+                      ` : ''}
+                      ${ord.error ? `
+                        <div class="mt-2 text-xs text-red-400">${ord.error}</div>
+                      ` : ''}
+                    </div>
+                  `).join('')}
+                  ${result.orders.length > 30 ? `<div class="text-slate-500 text-xs text-center py-1">... and ${result.orders.length - 30} more</div>` : ''}
+                </div>
+              ` : ''}
+
+              <!-- Errors -->
+              ${result.errors && result.errors.length > 0 ? `
+                <h4 class="text-red-400 font-semibold text-sm mt-3 mb-2">Errors:</h4>
+                <div class="space-y-1 max-h-32 overflow-y-auto">
+                  ${result.errors.map(err => `
+                    <div class="p-1.5 bg-red-900/30 border border-red-800 rounded text-xs">
+                      <span class="text-slate-300 font-mono">${err.orderId || err.amazonOrderId}</span>
+                      <span class="text-red-400 ml-2">${err.error}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+            <div class="px-4 py-2 border-t border-slate-700 flex justify-end gap-2 shrink-0">
+              <button onclick="this.closest('.fixed').remove()" class="px-3 py-1.5 text-sm bg-slate-700 text-white rounded hover:bg-slate-600">
+                Close
+              </button>
+              ${dryRun ? `
+                <button onclick="this.closest('.fixed').remove(); createOdooOrders(false);" class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded hover:bg-amber-700">
+                  Create Orders Now
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.remove();
+        });
+      }
+    </script>
+  </body>
+</html>

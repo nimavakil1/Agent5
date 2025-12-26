@@ -1,0 +1,411 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Settlements - Amazon Seller</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+    <script src="/shell-v2.js"></script>
+  </head>
+  <body class="min-h-screen bg-slate-900">
+    <!-- Page Header -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4">
+      <div class="flex items-center justify-between max-w-6xl mx-auto">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-green-400 text-2xl">account_balance</span>
+          <h1 class="text-white text-xl font-semibold">Settlements</h1>
+        </div>
+        <div id="status-indicator" class="flex items-center gap-2 text-sm text-slate-400">
+          <span id="status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+          <span id="status-text">Loading...</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-6 py-8">
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div class="flex items-center gap-2 text-slate-400 text-sm mb-2">
+            <span class="material-symbols-outlined text-lg">receipt_long</span>
+            Total Settlements
+          </div>
+          <div id="total-count" class="text-2xl font-bold text-white">-</div>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div class="flex items-center gap-2 text-slate-400 text-sm mb-2">
+            <span class="material-symbols-outlined text-lg">euro</span>
+            Total Amount
+          </div>
+          <div id="total-amount" class="text-2xl font-bold text-green-400">-</div>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div class="flex items-center gap-2 text-slate-400 text-sm mb-2">
+            <span class="material-symbols-outlined text-lg">calendar_today</span>
+            Last Settlement
+          </div>
+          <div id="last-date" class="text-2xl font-bold text-white">-</div>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div class="flex items-center gap-2 text-slate-400 text-sm mb-2">
+            <span class="material-symbols-outlined text-lg">schedule</span>
+            Next Expected
+          </div>
+          <div id="next-expected" class="text-2xl font-bold text-white">-</div>
+          <div id="overdue-warning" class="hidden text-yellow-400 text-xs mt-1">
+            <span class="material-symbols-outlined text-sm align-middle">warning</span>
+            <span id="overdue-text"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload Section -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-white font-semibold text-lg">Upload Settlement Report</h2>
+          <a href="https://sellercentral.amazon.de/payments/reports-repository" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
+            <span class="material-symbols-outlined text-lg">open_in_new</span>
+            Download from Seller Central
+          </a>
+        </div>
+        <div class="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center hover:border-slate-500 transition-colors" id="drop-zone">
+          <input type="file" id="file-input" accept=".csv,.tsv,.txt" class="hidden" />
+          <span class="material-symbols-outlined text-4xl text-slate-500 mb-2">cloud_upload</span>
+          <p class="text-slate-400 mb-2">Drag & drop your settlement report here</p>
+          <p class="text-slate-500 text-sm mb-4">or</p>
+          <button onclick="document.getElementById('file-input').click()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg">
+            Select File
+          </button>
+          <p class="text-slate-500 text-xs mt-4">Supports: CSV, TSV (Flat File V2 Settlement Report)</p>
+        </div>
+        <div id="upload-result" class="mt-4 hidden"></div>
+      </div>
+
+      <!-- Settlements List -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+        <h2 class="text-white font-semibold text-lg mb-4">Settlement History</h2>
+        <div id="settlements-list" class="space-y-3">
+          <div class="text-slate-500 text-sm">Loading...</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Settlement Detail Modal -->
+    <div id="detail-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+      <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-slate-700">
+          <h3 class="text-white font-semibold text-lg">Settlement Details</h3>
+          <button onclick="closeDetailModal()" class="text-slate-400 hover:text-white">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div id="detail-content" class="p-4 overflow-y-auto max-h-[calc(90vh-100px)]">
+          <!-- Content loaded dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Format helpers
+      function formatCurrency(amount, currency = 'EUR') {
+        return new Intl.NumberFormat('de-DE', {
+          style: 'currency',
+          currency: currency
+        }).format(amount);
+      }
+
+      function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('de-DE', { year: 'numeric', month: 'short', day: 'numeric' });
+      }
+
+      function formatDateShort(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('de-DE', { month: 'short', day: 'numeric' });
+      }
+
+      // Load settlements
+      async function loadSettlements() {
+        const container = document.getElementById('settlements-list');
+        try {
+          const res = await fetch('/api/amazon/settlements?limit=50');
+          const data = await res.json();
+
+          if (!data.settlements || data.settlements.length === 0) {
+            container.innerHTML = '<div class="text-slate-500 text-sm">No settlements uploaded yet. Upload your first settlement report above.</div>';
+            return;
+          }
+
+          // Update summary stats
+          document.getElementById('total-count').textContent = data.settlements.length;
+          const totalAmount = data.settlements.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+          document.getElementById('total-amount').textContent = formatCurrency(totalAmount);
+
+          if (data.settlements.length > 0) {
+            const latest = data.settlements[0];
+            document.getElementById('last-date').textContent = formatDateShort(latest.settlementEndDate);
+
+            // Calculate next expected (14 days after last)
+            if (latest.settlementEndDate) {
+              const lastDate = new Date(latest.settlementEndDate);
+              const nextDate = new Date(lastDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+              document.getElementById('next-expected').textContent = formatDateShort(nextDate);
+
+              // Check if overdue
+              if (nextDate < new Date()) {
+                document.getElementById('overdue-warning').classList.remove('hidden');
+                const daysOverdue = Math.floor((new Date() - nextDate) / (24 * 60 * 60 * 1000));
+                document.getElementById('overdue-text').textContent = `${daysOverdue} days overdue`;
+              }
+            }
+
+            document.getElementById('status-dot').classList.remove('bg-slate-500');
+            document.getElementById('status-dot').classList.add('bg-green-500');
+            document.getElementById('status-text').textContent = `${data.settlements.length} settlements`;
+          }
+
+          container.innerHTML = data.settlements.map(s => `
+            <div class="bg-slate-700/30 rounded-lg p-4 hover:bg-slate-700/50 cursor-pointer transition-colors" onclick="viewDetail('${s.settlementId}')">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                  <span class="material-symbols-outlined text-green-400">payments</span>
+                  <div>
+                    <div class="text-white font-semibold">${s.settlementId}</div>
+                    <div class="text-slate-400 text-sm">
+                      ${formatDate(s.settlementStartDate)} - ${formatDate(s.settlementEndDate)}
+                    </div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="text-green-400 font-semibold text-lg">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
+                  <div class="text-slate-500 text-xs">${s.transactionCount || 0} transactions</div>
+                </div>
+              </div>
+            </div>
+          `).join('');
+
+        } catch (error) {
+          container.innerHTML = `<div class="text-red-400 text-sm">Error loading settlements: ${error.message}</div>`;
+        }
+      }
+
+      // View settlement detail
+      async function viewDetail(settlementId) {
+        const modal = document.getElementById('detail-modal');
+        const content = document.getElementById('detail-content');
+        modal.classList.remove('hidden');
+        content.innerHTML = '<div class="text-slate-500">Loading...</div>';
+
+        try {
+          const res = await fetch(`/api/amazon/settlements/${settlementId}`);
+          const data = await res.json();
+
+          if (!data.settlement) {
+            content.innerHTML = '<div class="text-red-400">Settlement not found</div>';
+            return;
+          }
+
+          const s = data.settlement;
+          const fees = s.feesByMarketplace || {};
+          const orders = s.ordersByMarketplace || {};
+
+          content.innerHTML = `
+            <div class="space-y-6">
+              <!-- Header -->
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <div class="text-slate-400 text-sm">Settlement ID</div>
+                  <div class="text-white font-semibold">${s.settlementId}</div>
+                </div>
+                <div>
+                  <div class="text-slate-400 text-sm">Period</div>
+                  <div class="text-white">${formatDate(s.settlementStartDate)} - ${formatDate(s.settlementEndDate)}</div>
+                </div>
+                <div>
+                  <div class="text-slate-400 text-sm">Deposit Date</div>
+                  <div class="text-white">${formatDate(s.depositDate)}</div>
+                </div>
+                <div>
+                  <div class="text-slate-400 text-sm">Total Amount</div>
+                  <div class="text-green-400 font-semibold text-xl">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
+                </div>
+              </div>
+
+              <!-- Fees by Marketplace -->
+              <div>
+                <h4 class="text-white font-semibold mb-3">Fees by Marketplace</h4>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="text-left text-slate-400 border-b border-slate-700">
+                        <th class="pb-2">Marketplace</th>
+                        <th class="pb-2 text-right">Commission</th>
+                        <th class="pb-2 text-right">FBA Fulfillment</th>
+                        <th class="pb-2 text-right">Storage</th>
+                        <th class="pb-2 text-right">Advertising</th>
+                        <th class="pb-2 text-right">Other</th>
+                        <th class="pb-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${Object.entries(fees).map(([mp, f]) => `
+                        <tr class="border-b border-slate-700/50">
+                          <td class="py-2 text-white font-medium">${mp}</td>
+                          <td class="py-2 text-right text-red-400">${formatCurrency(f.commission || 0)}</td>
+                          <td class="py-2 text-right text-red-400">${formatCurrency(f.fbaFulfillment || 0)}</td>
+                          <td class="py-2 text-right text-red-400">${formatCurrency(f.fbaStorage || 0)}</td>
+                          <td class="py-2 text-right text-red-400">${formatCurrency(f.advertising || 0)}</td>
+                          <td class="py-2 text-right text-red-400">${formatCurrency(f.other || 0)}</td>
+                          <td class="py-2 text-right text-red-400 font-semibold">${formatCurrency(f.total || 0)}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Order Totals by Marketplace -->
+              ${Object.keys(orders).length > 0 ? `
+              <div>
+                <h4 class="text-white font-semibold mb-3">Order Totals by Marketplace</h4>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="text-left text-slate-400 border-b border-slate-700">
+                        <th class="pb-2">Marketplace</th>
+                        <th class="pb-2 text-right">Orders</th>
+                        <th class="pb-2 text-right">Refunds</th>
+                        <th class="pb-2 text-right">Chargebacks</th>
+                        <th class="pb-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${Object.entries(orders).map(([mp, o]) => `
+                        <tr class="border-b border-slate-700/50">
+                          <td class="py-2 text-white font-medium">${mp}</td>
+                          <td class="py-2 text-right text-green-400">${formatCurrency(o.orders || 0)}</td>
+                          <td class="py-2 text-right text-red-400">${formatCurrency(o.refunds || 0)}</td>
+                          <td class="py-2 text-right text-red-400">${formatCurrency(o.chargebacks || 0)}</td>
+                          <td class="py-2 text-right text-white font-semibold">${formatCurrency(o.total || 0)}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              ` : ''}
+            </div>
+          `;
+
+        } catch (error) {
+          content.innerHTML = `<div class="text-red-400">Error: ${error.message}</div>`;
+        }
+      }
+
+      function closeDetailModal() {
+        document.getElementById('detail-modal').classList.add('hidden');
+      }
+
+      // File upload handling
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
+      const uploadResult = document.getElementById('upload-result');
+
+      dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('border-green-500', 'bg-slate-700/50');
+      });
+
+      dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('border-green-500', 'bg-slate-700/50');
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('border-green-500', 'bg-slate-700/50');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+          uploadFile(files[0]);
+        }
+      });
+
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+          uploadFile(fileInput.files[0]);
+        }
+      });
+
+      async function uploadFile(file) {
+        uploadResult.classList.remove('hidden');
+        uploadResult.innerHTML = `
+          <div class="flex items-center gap-2 text-slate-400">
+            <span class="material-symbols-outlined animate-spin">sync</span>
+            Uploading ${file.name}...
+          </div>
+        `;
+
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('reportType', 'settlement');
+
+          const res = await fetch('/api/amazon/reports/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          const data = await res.json();
+
+          if (data.error) {
+            uploadResult.innerHTML = `
+              <div class="bg-red-900/30 border border-red-700 rounded-lg p-4">
+                <div class="flex items-center gap-2 text-red-400">
+                  <span class="material-symbols-outlined">error</span>
+                  Error: ${data.error}
+                </div>
+              </div>
+            `;
+          } else {
+            uploadResult.innerHTML = `
+              <div class="bg-green-900/30 border border-green-700 rounded-lg p-4">
+                <div class="flex items-center gap-2 text-green-400 mb-2">
+                  <span class="material-symbols-outlined">check_circle</span>
+                  Settlement uploaded successfully!
+                </div>
+                <div class="text-slate-300 text-sm">
+                  <p>Settlement ID: ${data.result?.settlementId || 'N/A'}</p>
+                  <p>Transactions: ${data.result?.transactionCount || 0}</p>
+                  <p>Total Amount: ${formatCurrency(data.result?.totalAmount || 0)}</p>
+                </div>
+              </div>
+            `;
+            // Reload settlements list
+            loadSettlements();
+          }
+        } catch (error) {
+          uploadResult.innerHTML = `
+            <div class="bg-red-900/30 border border-red-700 rounded-lg p-4">
+              <div class="flex items-center gap-2 text-red-400">
+                <span class="material-symbols-outlined">error</span>
+                Upload failed: ${error.message}
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      // Close modal on escape
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeDetailModal();
+        }
+      });
+
+      // Initialize
+      loadSettlements();
+    </script>
+  </body>
+</html>

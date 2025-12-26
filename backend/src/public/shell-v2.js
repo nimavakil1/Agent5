@@ -40,10 +40,10 @@
       id: 'amazon-seller', name: 'Amazon Seller', icon: 'storefront', color: '#f59e0b',
       basePath: '/seller',
       pages: [
-        { id: 'orders', path: '/seller/', name: 'Orders', icon: 'shopping_cart' },
-        { id: 'settlements', path: '/seller/settlements', name: 'Settlements', icon: 'account_balance' },
-        { id: 'vcs', path: '/seller/vcs', name: 'VCS Reports', icon: 'receipt_long' },
-        { id: 'reports', path: '/seller/reports', name: 'Reports', icon: 'upload_file' }
+        { id: 'orders', path: '/seller/', name: 'Dashboard', icon: 'dashboard' },
+        { id: 'vcs', path: '/seller/vcs.html', name: 'VCS Reports', icon: 'receipt_long' },
+        { id: 'settlements', path: '/seller/settlements.html', name: 'Settlements', icon: 'account_balance' },
+        { id: 'reports', path: '/seller/reports.html', name: 'Upload Reports', icon: 'upload_file' }
       ]
     },
     'amazon-vendor': {
