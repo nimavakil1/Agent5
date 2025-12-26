@@ -529,6 +529,17 @@
             <input type="email" class="form-input" id="edit-email" disabled>
           </div>
 
+          <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label class="form-label">First Name</label>
+              <input type="text" class="form-input" id="edit-first-name" placeholder="John">
+            </div>
+            <div>
+              <label class="form-label">Last Name</label>
+              <input type="text" class="form-input" id="edit-last-name" placeholder="Doe">
+            </div>
+          </div>
+
           <div class="form-group">
             <label class="form-label">Role</label>
             <select class="form-select" id="edit-role">
@@ -811,6 +822,8 @@
 
       document.getElementById('edit-user-id').value = user._id;
       document.getElementById('edit-email').value = user.email;
+      document.getElementById('edit-first-name').value = user.firstName || '';
+      document.getElementById('edit-last-name').value = user.lastName || '';
       document.getElementById('edit-role').value = user.roleId || '';
       document.getElementById('edit-active').value = String(user.active);
       document.getElementById('edit-modal').classList.add('open');
@@ -824,6 +837,8 @@
       e.preventDefault();
 
       const userId = document.getElementById('edit-user-id').value;
+      const firstName = document.getElementById('edit-first-name').value.trim();
+      const lastName = document.getElementById('edit-last-name').value.trim();
       const roleId = document.getElementById('edit-role').value;
       const active = document.getElementById('edit-active').value === 'true';
 
@@ -832,7 +847,7 @@
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ roleId, active })
+          body: JSON.stringify({ firstName, lastName, roleId, active })
         });
 
         if (!res.ok) {

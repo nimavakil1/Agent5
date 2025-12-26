@@ -219,7 +219,7 @@ router.get('/modules/list', requireSession, requirePrivilege('roles.view'), asyn
 // --- Admin user management ---
 router.get('/users', requireSession, requirePrivilege('users.view'), async (req, res) => {
   try {
-    const users = await User.find({}).select('_id email role roleId active status createdAt updatedAt').sort({ createdAt: -1 }).lean();
+    const users = await User.find({}).select('_id email firstName lastName role roleId active status createdAt updatedAt').sort({ createdAt: -1 }).lean();
     // attach role names if ref present
     const ids = users.map(u=>u.roleId).filter(Boolean);
     const roleMap = new Map((await Role.find({ _id: { $in: ids } }).lean()).map(r=>[String(r._id), r.name]));
@@ -232,7 +232,7 @@ router.get('/users', requireSession, requirePrivilege('users.view'), async (req,
 
 router.put('/users/:id', requireSession, requirePrivilege('users.manage'), async (req, res) => {
   try {
-    const { role, roleId, active } = req.body || {};
+    const { role, roleId, active, firstName, lastName } = req.body || {};
     const update = {};
     if (roleId) {
       update.roleId = roleId;
@@ -242,11 +242,13 @@ router.put('/users/:id', requireSession, requirePrivilege('users.manage'), async
       update.role = role === 'admin' ? 'admin' : (role === 'manager' ? 'manager' : 'user');
     }
     if (typeof active === 'boolean') update.active = active;
+    if (typeof firstName === 'string') update.firstName = firstName || null;
+    if (typeof lastName === 'string') update.lastName = lastName || null;
     // prevent modifying superadmin record
     const target = await User.findById(req.params.id).lean();
     if (!target) return res.status(404).json({ message: 'not found' });
     if (target.role === 'superadmin') return res.status(403).json({ message: 'superadmin immutable' });
-    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select('_id email role roleId active createdAt updatedAt');
+    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select('_id email firstName lastName role roleId active createdAt updatedAt');
     if (!user) return res.status(404).json({ message: 'not found' });
     res.json(user);
   } catch (e) {
