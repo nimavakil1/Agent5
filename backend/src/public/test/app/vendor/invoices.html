@@ -55,6 +55,28 @@
     .pagination { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 20px; }
     .pagination-info { color: #71717a; font-size: 13px; }
     .pagination button { padding: 8px 16px; }
+    .remittance-section { background: #18181f; border: 1px solid #252532; border-radius: 16px; padding: 20px; margin-bottom: 24px; }
+    .remittance-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .remittance-title { font-size: 16px; font-weight: 600; color: #e4e4e7; display: flex; align-items: center; gap: 8px; }
+    .remittance-title .material-symbols-outlined { color: #f97316; }
+    .upload-area { border: 2px dashed #3f3f50; border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.15s; }
+    .upload-area:hover { border-color: #f97316; background: rgba(249, 115, 22, 0.05); }
+    .upload-area.dragover { border-color: #f97316; background: rgba(249, 115, 22, 0.1); }
+    .upload-area .material-symbols-outlined { font-size: 36px; color: #71717a; margin-bottom: 8px; }
+    .upload-area-text { color: #a1a1aa; font-size: 14px; }
+    .upload-area-hint { color: #71717a; font-size: 12px; margin-top: 4px; }
+    .upload-progress { margin-top: 16px; display: none; }
+    .upload-progress.active { display: block; }
+    .progress-bar { height: 6px; background: #252532; border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #f97316; transition: width 0.3s; }
+    .upload-status { margin-top: 8px; font-size: 13px; color: #a1a1aa; }
+    .recent-imports { margin-top: 16px; }
+    .recent-imports-title { font-size: 13px; color: #71717a; margin-bottom: 8px; }
+    .import-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #12121a; border-radius: 8px; margin-bottom: 6px; }
+    .import-item-name { font-size: 13px; color: #e4e4e7; }
+    .import-item-stats { font-size: 12px; color: #71717a; }
+    .import-item-stats .success { color: #4ade80; }
+    .file-input { display: none; }
   </style>
 </head>
 <body>
@@ -67,6 +89,29 @@
         </button>
       </div>
     </header>
+
+    <!-- Remittance Upload Section -->
+    <div class="remittance-section">
+      <div class="remittance-header">
+        <div class="remittance-title">
+          <span class="material-symbols-outlined">payments</span>
+          Import Remittance Advices
+        </div>
+        <div id="remittance-summary" style="font-size: 13px; color: #71717a;"></div>
+      </div>
+      <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+        <span class="material-symbols-outlined">upload_file</span>
+        <div class="upload-area-text">Click to upload or drag & drop</div>
+        <div class="upload-area-hint">Excel files (.xlsx, .xls) from Amazon Vendor Central</div>
+      </div>
+      <input type="file" id="file-input" class="file-input" accept=".xlsx,.xls" multiple onchange="handleFileSelect(event)">
+      <div class="upload-progress" id="upload-progress">
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width: 0%"></div></div>
+        <div class="upload-status" id="upload-status">Uploading...</div>
+      </div>
+      <div class="recent-imports" id="recent-imports"></div>
+    </div>
+
     <div class="stats-row">
       <div class="stat-card" id="stat-card-total" onclick="filterByStatus('')"><div class="stat-value" id="stat-total">--</div><div class="stat-label">Total Invoices</div></div>
       <div class="stat-card success" id="stat-card-amazon-paid" onclick="filterByStatus('amazon_paid')"><div class="stat-value" id="stat-amazon-paid">--</div><div class="stat-label">Amazon Paid</div></div>
@@ -262,6 +307,128 @@
       if (a == null) return '-';
       return new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR' }).format(a);
     }
+
+    // ==================== REMITTANCE UPLOAD ====================
+
+    // Setup drag and drop
+    const uploadArea = document.getElementById('upload-area');
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const files = Array.from(e.dataTransfer.files).filter(f =>
+        f.name.endsWith('.xlsx') || f.name.endsWith('.xls')
+      );
+      if (files.length > 0) {
+        uploadFiles(files);
+      }
+    });
+
+    function handleFileSelect(event) {
+      const files = Array.from(event.target.files);
+      if (files.length > 0) {
+        uploadFiles(files);
+      }
+      event.target.value = ''; // Reset input
+    }
+
+    async function uploadFiles(files) {
+      const progressDiv = document.getElementById('upload-progress');
+      const progressFill = document.getElementById('progress-fill');
+      const statusText = document.getElementById('upload-status');
+
+      progressDiv.classList.add('active');
+      progressFill.style.width = '0%';
+
+      let uploaded = 0;
+      let matched = 0;
+      let totalAmount = 0;
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        statusText.textContent = `Uploading ${file.name} (${i + 1}/${files.length})...`;
+        progressFill.style.width = ((i / files.length) * 50) + '%';
+
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+
+          const res = await fetch('/api/vendor/remittance/upload', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+          });
+
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Upload failed');
+          }
+
+          const data = await res.json();
+          uploaded++;
+          matched += data.result?.matched || 0;
+          totalAmount += data.result?.totalAmountMatched || 0;
+
+          progressFill.style.width = (50 + ((i + 1) / files.length) * 50) + '%';
+        } catch (e) {
+          console.error('Upload error:', e);
+          statusText.textContent = `Error: ${e.message}`;
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+
+      progressFill.style.width = '100%';
+      statusText.innerHTML = `<span style="color: #4ade80;">✓</span> Imported ${uploaded} file(s): ${matched} invoices matched, ${formatCurrency(totalAmount)} total`;
+
+      // Reload invoices to show updated payment status
+      setTimeout(() => {
+        loadInvoices();
+        loadRemittanceSummary();
+      }, 1500);
+
+      // Hide progress after delay
+      setTimeout(() => {
+        progressDiv.classList.remove('active');
+      }, 5000);
+    }
+
+    async function loadRemittanceSummary() {
+      try {
+        const res = await fetch('/api/vendor/remittance/summary', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.summary) {
+          const { matchedInvoices, totalAmountPaid, recentImports } = data.summary;
+          document.getElementById('remittance-summary').innerHTML =
+            `<span style="color: #4ade80;">${matchedInvoices || 0}</span> invoices matched | ` +
+            `<span style="color: #4ade80;">${formatCurrency(totalAmountPaid || 0)}</span> total paid`;
+
+          // Show recent imports
+          if (recentImports && recentImports.length > 0) {
+            const importsHtml = recentImports.slice(0, 3).map(imp =>
+              `<div class="import-item">
+                <span class="import-item-name">${imp.fileName}</span>
+                <span class="import-item-stats"><span class="success">${imp.invoiceDetailsCount}</span> invoices • ${formatDate(imp.importedAt)}</span>
+              </div>`
+            ).join('');
+            document.getElementById('recent-imports').innerHTML =
+              `<div class="recent-imports-title">Recent Imports</div>${importsHtml}`;
+          }
+        }
+      } catch (e) {
+        console.error('Error loading remittance summary:', e);
+      }
+    }
+
+    // Load remittance summary on page load
+    loadRemittanceSummary();
 
     init();
   </script>

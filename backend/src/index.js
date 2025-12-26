@@ -208,6 +208,10 @@ app.use('/app', requireSession, express.static(path.join(__dirname, 'public', 'a
 app.get('/test/app/shell-v2.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'test', 'app', 'shell-v2.js'));
 });
+// Public page for accepting invitations (no auth required)
+app.get('/test/app/accept-invite.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'test', 'app', 'accept-invite.html'));
+});
 app.use('/test/app', requireSession, express.static(path.join(__dirname, 'public', 'test', 'app'), {
   etag: false,
   maxAge: 0,
