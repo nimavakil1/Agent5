@@ -10,7 +10,8 @@
     .page { max-width: 1600px; margin: 0 auto; padding: 24px; }
     .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
     .page-title { font-size: 24px; font-weight: 700; color: #fff; margin: 0; }
-    .page-logo { height: 40px; width: auto; }
+    .page-logo-container { background: #fff; border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; justify-content: center; }
+    .page-logo { height: 32px; width: auto; }
     .header-actions { display: flex; gap: 12px; align-items: center; }
     .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
     .btn-primary { background: #f59e0b; color: white; }
@@ -90,7 +91,9 @@
 <body>
   <div class="page">
     <header class="page-header">
-      <img src="/assets/logos/amazon-seller-central.png" alt="Amazon Seller Central" class="page-logo">
+      <div class="page-logo-container">
+        <img src="/assets/logos/amazon-seller-central.png" alt="Amazon Seller Central" class="page-logo">
+      </div>
       <div class="header-actions">
         <button class="btn btn-primary" id="fetch-btn" onclick="fetchOrders()">
           <span class="material-symbols-outlined">sync</span>Fetch Now
