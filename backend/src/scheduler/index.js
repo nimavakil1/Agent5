@@ -4,6 +4,7 @@ const { getDb } = require('../db');
 let shopifyTimer = null;
 let amazonSettlementTimer = null;
 let vendorOrdersTimer = null;
+let productSyncTimer = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -104,6 +105,16 @@ function start() {
       console.log(`[scheduler] Vendor Central PO polling initialized (every ${minutes} minutes)`);
     }
   } catch (e) { console.error('[scheduler] Vendor polling init error', e); }
+
+  // Product sync from Odoo to MongoDB (every 15 minutes)
+  try {
+    const productSyncMinutes = Number(process.env.PRODUCT_SYNC_INTERVAL_MIN || '15');
+    const productSyncMs = Math.max(5, productSyncMinutes) * 60 * 1000;
+    productSyncTimer = setInterval(syncProductsIncremental, productSyncMs);
+    // Run initial sync after 30 seconds (after DB is ready)
+    setTimeout(syncProductsIncremental, 30000);
+    console.log(`[scheduler] Product sync initialized (every ${productSyncMinutes} minutes)`);
+  } catch (e) { console.error('[scheduler] Product sync init error', e); }
 }
 
 /**
@@ -200,4 +211,35 @@ async function checkAmazonSettlementReminders() {
   }
 }
 
-module.exports = { start, checkAmazonSettlementReminders, pollVendorOrders };
+/**
+ * Sync products from Odoo to MongoDB
+ * Uses incremental sync (only products changed since last sync)
+ * Falls back to full sync if no products exist yet
+ */
+async function syncProductsIncremental() {
+  try {
+    const { getProductSyncService } = require('../services/ProductSyncService');
+    const Product = require('../models/Product');
+
+    const syncService = getProductSyncService();
+
+    // Check if we have any products - if not, do a full sync
+    const count = await Product.countDocuments();
+
+    if (count === 0) {
+      console.log('[scheduler] No products in cache, running full sync...');
+      const result = await syncService.fullSync();
+      console.log(`[scheduler] Product full sync complete: ${result.synced} products`);
+    } else {
+      // Incremental sync - only changed products
+      const result = await syncService.incrementalSync();
+      if (result.synced > 0) {
+        console.log(`[scheduler] Product incremental sync: ${result.synced} products updated`);
+      }
+    }
+  } catch (e) {
+    console.error('[scheduler] Product sync error:', e?.message || e);
+  }
+}
+
+module.exports = { start, checkAmazonSettlementReminders, pollVendorOrders, syncProductsIncremental };
