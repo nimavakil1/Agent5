@@ -954,6 +954,33 @@ router.post('/shipments/:poNumber/create-asn', async (req, res) => {
 });
 
 /**
+ * @route GET /api/vendor/shipments/ready
+ * @desc Get POs that are ready to ship (acknowledged but no ASN sent)
+ * NOTE: This route MUST be defined before /shipments/:shipmentId to avoid matching "ready" as a shipmentId
+ */
+router.get('/shipments/ready', async (req, res) => {
+  try {
+    const asnCreator = await getVendorASNCreator();
+    const readyPOs = await asnCreator.findPOsReadyToShip();
+
+    res.json({
+      success: true,
+      count: readyPOs.length,
+      orders: readyPOs.map(po => ({
+        purchaseOrderNumber: po.purchaseOrderNumber,
+        marketplaceId: po.marketplaceId,
+        purchaseOrderDate: po.purchaseOrderDate,
+        odoo: po.odoo,
+        totals: po.totals
+      }))
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /shipments/ready error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route GET /api/vendor/shipments/:shipmentId
  * @desc Get a specific shipment by ID
  */
@@ -1016,32 +1043,6 @@ router.post('/shipments/submit-pending', async (req, res) => {
     });
   } catch (error) {
     console.error('[VendorAPI] POST /shipments/submit-pending error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * @route GET /api/vendor/shipments/ready
- * @desc Get POs that are ready to ship (acknowledged but no ASN sent)
- */
-router.get('/shipments/ready', async (req, res) => {
-  try {
-    const asnCreator = await getVendorASNCreator();
-    const readyPOs = await asnCreator.findPOsReadyToShip();
-
-    res.json({
-      success: true,
-      count: readyPOs.length,
-      orders: readyPOs.map(po => ({
-        purchaseOrderNumber: po.purchaseOrderNumber,
-        marketplaceId: po.marketplaceId,
-        purchaseOrderDate: po.purchaseOrderDate,
-        odoo: po.odoo,
-        totals: po.totals
-      }))
-    });
-  } catch (error) {
-    console.error('[VendorAPI] GET /shipments/ready error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
