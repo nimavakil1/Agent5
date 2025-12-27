@@ -299,7 +299,13 @@ if (process.env.PROTECT_RECORDINGS === '1') {
 
 const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
 const max = parseInt(process.env.RATE_LIMIT_MAX || '60', 10);
-const limiter = rateLimit({ windowMs, max, standardHeaders: true, legacyHeaders: false });
+const limiter = rateLimit({
+  windowMs,
+  max,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path.startsWith('/auth') // Exempt auth routes from rate limiting
+});
 app.use('/api', limiter);
 
 app.use('/api/auth', authRouter);
