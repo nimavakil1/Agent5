@@ -534,6 +534,7 @@
           font-weight: 500;
           transition: all 0.15s;
           border: 1px solid transparent;
+          position: relative;
         }
 
         .shell-subnav-item:hover {
@@ -542,9 +543,9 @@
         }
 
         .shell-subnav-item.active {
-          color: var(--shell-module);
-          background: color-mix(in srgb, var(--shell-module) 10%, transparent);
-          border-color: color-mix(in srgb, var(--shell-module) 25%, transparent);
+          color: var(--shell-text);
+          background: transparent;
+          border-color: var(--shell-module);
         }
 
         .shell-subnav-item .material-symbols-outlined {
