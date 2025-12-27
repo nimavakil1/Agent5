@@ -1005,11 +1005,11 @@
       const fulfilmentFilter = document.getElementById('orders-fulfilment-filter')?.value || '';
 
       // Build query string with fulfilment filter
-      let queryParams = [];
+      let queryParams = ['skipSync=true'];
       if (fulfilmentFilter) {
         queryParams.push(`fulfilmentMethod=${fulfilmentFilter}`);
       }
-      const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+      const queryString = `?${queryParams.join('&')}`;
 
       try {
         const res = await fetch(`/api/bolcom/orders${queryString}`, { credentials: 'include' });
@@ -1104,7 +1104,7 @@
     async function loadShipments() {
       const tbody = document.getElementById('shipments-table');
       try {
-        const res = await fetch('/api/bolcom/shipments', { credentials: 'include' });
+        const res = await fetch('/api/bolcom/shipments?skipSync=true', { credentials: 'include' });
         const data = await res.json();
 
         if (!data.success || !data.shipments || data.shipments.length === 0) {
@@ -1195,7 +1195,8 @@
     async function loadReturns() {
       const tbody = document.getElementById('returns-table');
       const handled = document.getElementById('returns-filter').value;
-      const query = handled !== '' ? `?handled=${handled}` : '';
+      let query = '?skipSync=true';
+      if (handled !== '') query += `&handled=${handled}`;
 
       try {
         const res = await fetch(`/api/bolcom/returns${query}`, { credentials: 'include' });
@@ -1299,7 +1300,7 @@
     async function loadInvoices() {
       const tbody = document.getElementById('invoices-table');
       try {
-        const res = await fetch('/api/bolcom/invoices', { credentials: 'include' });
+        const res = await fetch('/api/bolcom/invoices?skipSync=true', { credentials: 'include' });
         const data = await res.json();
 
         if (!data.success || !data.invoices || data.invoices.length === 0) {
