@@ -53,8 +53,14 @@ router.put('/:id', requirePrivilege('roles.manage'), async (req, res) => {
     console.log('Current moduleAccess:', role.moduleAccess);
     console.log('Incoming body:', JSON.stringify(req.body, null, 2));
 
-    if (role.protected && req.body.privileges && role.name === 'superadmin') {
-      return res.status(400).json({ message: 'cannot modify superadmin privileges' });
+    // Block modifying superadmin privileges (but allow moduleAccess changes)
+    if (role.name === 'superadmin' && req.body.privileges) {
+      // Only block if privileges are actually being changed
+      const currentPrivs = JSON.stringify([...role.privileges].sort());
+      const newPrivs = JSON.stringify([...req.body.privileges].sort());
+      if (currentPrivs !== newPrivs) {
+        return res.status(400).json({ message: 'cannot modify superadmin privileges' });
+      }
     }
     const update = {};
     if (req.body.description !== undefined) update.description = String(req.body.description);
