@@ -74,7 +74,7 @@
     .quick-link-icon.reports { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
     .quick-link-content h3 { font-size: 16px; font-weight: 600; color: #fff; margin: 0 0 4px 0; }
     .quick-link-content p { font-size: 13px; color: #71717a; margin: 0; }
-    .status-bar { background: #12121a; border: 1px solid #252532; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .status-bar { background: #12121a; border: 1px solid #252532; border-radius: 10px; padding: 8px 16px; display: flex; align-items: center; gap: 16px; }
     .status-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #a1a1aa; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; }
     .status-dot.running { background: #4ade80; animation: pulse 2s ease-in-out infinite; }
@@ -94,28 +94,26 @@
       <div class="page-logo-container">
         <img src="/assets/logos/amazon-seller-central.png" alt="Amazon Seller Central" class="page-logo">
       </div>
+      <div class="status-bar" id="status-bar">
+        <div class="status-item">
+          <span class="status-dot" id="scheduler-dot"></span>
+          <span id="scheduler-status">Loading...</span>
+        </div>
+        <div class="status-item">
+          <span class="material-symbols-outlined" style="font-size: 16px;">schedule</span>
+          <span id="last-poll">--</span>
+        </div>
+        <div class="status-item">
+          <span class="material-symbols-outlined" style="font-size: 16px;">update</span>
+          <span id="next-poll">--</span>
+        </div>
+      </div>
       <div class="header-actions">
         <button class="btn btn-primary" id="fetch-btn" onclick="fetchOrders()">
           <span class="material-symbols-outlined">sync</span>Fetch Now
         </button>
       </div>
     </header>
-
-    <!-- Scheduler Status -->
-    <div class="status-bar" id="status-bar">
-      <div class="status-item">
-        <span class="status-dot" id="scheduler-dot"></span>
-        <span id="scheduler-status">Loading...</span>
-      </div>
-      <div class="status-item">
-        <span class="material-symbols-outlined" style="font-size: 16px;">schedule</span>
-        <span id="last-poll">--</span>
-      </div>
-      <div class="status-item">
-        <span class="material-symbols-outlined" style="font-size: 16px;">update</span>
-        <span id="next-poll">--</span>
-      </div>
-    </div>
 
     <!-- Stats -->
     <div class="stats-row">
