@@ -158,27 +158,40 @@ async function syncOrders(mode = 'RECENT', onProgress = null) {
     }
   }
 
-  console.log(`[BolSync] Fetching details for ${allOrders.length} orders...`);
+  // For HISTORICAL mode, skip detail fetching to avoid rate limits
+  const skipDetails = mode === 'HISTORICAL';
+
+  if (!skipDetails) {
+    console.log(`[BolSync] Fetching details for ${allOrders.length} orders...`);
+  } else {
+    console.log(`[BolSync] Storing ${allOrders.length} orders (skipping details for historical mode)...`);
+  }
 
   // Fetch order details in batches with rate limiting
   let processed = 0;
   for (let i = 0; i < allOrders.length; i += RATE_LIMIT.BATCH_SIZE) {
     const batch = allOrders.slice(i, i + RATE_LIMIT.BATCH_SIZE);
 
-    const detailPromises = batch.map(async (order, idx) => {
-      // Stagger requests within batch
-      await sleep(idx * RATE_LIMIT.REQUEST_DELAY_MS);
+    let results;
+    if (skipDetails) {
+      // For historical, just use list data
+      results = batch.map(order => ({ order, details: null, success: false }));
+    } else {
+      const detailPromises = batch.map(async (order, idx) => {
+        // Stagger requests within batch
+        await sleep(idx * RATE_LIMIT.REQUEST_DELAY_MS);
 
-      try {
-        const details = await bolRequest(`/orders/${order.orderId}`);
-        return { order, details, success: true };
-      } catch (error) {
-        console.error(`[BolSync] Error fetching order ${order.orderId}:`, error.message);
-        return { order, details: null, success: false };
-      }
-    });
+        try {
+          const details = await bolRequest(`/orders/${order.orderId}`);
+          return { order, details, success: true };
+        } catch (error) {
+          console.error(`[BolSync] Error fetching order ${order.orderId}:`, error.message);
+          return { order, details: null, success: false };
+        }
+      });
 
-    const results = await Promise.all(detailPromises);
+      results = await Promise.all(detailPromises);
+    }
 
     // Upsert to MongoDB
     for (const { order, details, success } of results) {
@@ -296,26 +309,40 @@ async function syncShipments(mode = 'RECENT', onProgress = null) {
     }
   }
 
-  console.log(`[BolSync] Fetching details for ${allShipments.length} shipments...`);
+  // For HISTORICAL mode, skip detail fetching to avoid rate limits
+  // List data has basic info which is sufficient for historical records
+  const skipDetails = mode === 'HISTORICAL';
 
-  // Fetch shipment details in batches
+  if (!skipDetails) {
+    console.log(`[BolSync] Fetching details for ${allShipments.length} shipments...`);
+  } else {
+    console.log(`[BolSync] Storing ${allShipments.length} shipments (skipping details for historical mode)...`);
+  }
+
+  // Fetch shipment details in batches (or skip for historical)
   let processed = 0;
   for (let i = 0; i < allShipments.length; i += RATE_LIMIT.BATCH_SIZE) {
     const batch = allShipments.slice(i, i + RATE_LIMIT.BATCH_SIZE);
 
-    const detailPromises = batch.map(async (shipment, idx) => {
-      await sleep(idx * RATE_LIMIT.REQUEST_DELAY_MS);
+    let results;
+    if (skipDetails) {
+      // For historical, just use list data
+      results = batch.map(shipment => ({ shipment, details: null, success: false }));
+    } else {
+      const detailPromises = batch.map(async (shipment, idx) => {
+        await sleep(idx * RATE_LIMIT.REQUEST_DELAY_MS);
 
-      try {
-        const details = await bolRequest(`/shipments/${shipment.shipmentId}`);
-        return { shipment, details, success: true };
-      } catch (error) {
-        console.error(`[BolSync] Error fetching shipment ${shipment.shipmentId}:`, error.message);
-        return { shipment, details: null, success: false };
-      }
-    });
+        try {
+          const details = await bolRequest(`/shipments/${shipment.shipmentId}`);
+          return { shipment, details, success: true };
+        } catch (error) {
+          console.error(`[BolSync] Error fetching shipment ${shipment.shipmentId}:`, error.message);
+          return { shipment, details: null, success: false };
+        }
+      });
 
-    const results = await Promise.all(detailPromises);
+      results = await Promise.all(detailPromises);
+    }
 
     for (const { shipment, details, success } of results) {
       const data = success ? details : shipment;
