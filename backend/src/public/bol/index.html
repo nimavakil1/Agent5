@@ -918,15 +918,47 @@
 
     // Load all data
     async function loadAllData() {
-      // First load all the data (which triggers syncs)
+      // First quickly load stats from MongoDB (no sync wait)
+      await loadStatsQuick();
+
+      // Then load all the data (which triggers syncs in background)
       await Promise.all([
         loadOrders(),
         loadShipments(),
         loadReturns(),
         loadInvoices()
       ]);
-      // Then load stats from the synced data
-      await loadStats();
+      // Update stats from the loaded data
+      loadStats();
+    }
+
+    // Quick stats load from MongoDB (no sync)
+    async function loadStatsQuick() {
+      try {
+        const [ordersRes, shipmentsRes, returnsRes] = await Promise.all([
+          fetch('/api/bolcom/orders?skipSync=true', { credentials: 'include' }),
+          fetch('/api/bolcom/shipments?skipSync=true', { credentials: 'include' }),
+          fetch('/api/bolcom/returns?skipSync=true', { credentials: 'include' })
+        ]);
+
+        if (ordersRes.ok) {
+          const data = await ordersRes.json();
+          const openOrders = (data.orders || []).filter(o => o.status === 'OPEN' || !o.status);
+          document.getElementById('stat-orders').textContent = openOrders.length;
+        }
+        if (shipmentsRes.ok) {
+          const data = await shipmentsRes.json();
+          document.getElementById('stat-shipments').textContent = data.count || 0;
+        }
+        if (returnsRes.ok) {
+          const data = await returnsRes.json();
+          const openReturns = (data.returns || []).filter(r => !r.handled);
+          document.getElementById('stat-returns').textContent = openReturns.length;
+        }
+        document.getElementById('stat-offers').textContent = '-';
+      } catch (e) {
+        console.error('Failed to load quick stats:', e);
+      }
     }
 
     // Load stats - uses already loaded data from paginationState
