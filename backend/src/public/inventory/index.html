@@ -471,7 +471,17 @@
 
     // Initialize
     async function init() {
-      await Promise.all([loadWarehouses(), loadStockByWarehouse()]);
+      // Load warehouse data in parallel, but don't block products if it fails
+      Promise.all([loadWarehouses(), loadStockByWarehouse()]).then(() => {
+        // Re-render products once warehouse data is available
+        if (allProducts.length > 0) {
+          renderProducts();
+        }
+      }).catch(err => {
+        console.error('Failed to load warehouse data:', err);
+      });
+
+      // Load products independently
       await loadProducts();
     }
 
