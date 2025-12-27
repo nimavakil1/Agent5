@@ -59,6 +59,9 @@
     .table-stock.in-stock { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
     .table-stock.low-stock { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
     .table-stock.out-of-stock { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+    .stock-qty { font-weight: 600; font-size: 13px; }
+    .stock-qty.positive { color: #4ade80; }
+    .stock-qty.zero { color: #71717a; }
 
     .empty-state { padding: 60px 20px; text-align: center; }
     .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 12px; }
@@ -74,6 +77,21 @@
     .toast { position: fixed; bottom: 20px; right: 20px; background: #252532; border: 1px solid #22c55e; border-radius: 10px; padding: 14px 18px; color: #e4e4e7; font-size: 13px; z-index: 2000; display: none; }
     .toast.show { display: flex; align-items: center; gap: 10px; animation: slideIn 0.3s ease-out; }
     @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* Multi-select dropdown */
+    .multi-select { position: relative; }
+    .multi-select-btn { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #12121a; border: 1px solid #252532; border-radius: 6px; color: #e4e4e7; font-size: 12px; cursor: pointer; min-width: 80px; justify-content: space-between; }
+    .multi-select-btn:hover { border-color: #8b5cf6; }
+    .multi-select-btn .material-symbols-outlined { font-size: 16px; }
+    .multi-select-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #18181f; border: 1px solid #252532; border-radius: 8px; margin-top: 4px; z-index: 100; max-height: 300px; overflow-y: auto; display: none; min-width: 180px; }
+    .multi-select-dropdown.show { display: block; }
+    .multi-select-option { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 12px; color: #e4e4e7; }
+    .multi-select-option:hover { background: #252532; }
+    .multi-select-option input { accent-color: #8b5cf6; }
+    .multi-select-actions { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid #252532; }
+    .multi-select-actions button { flex: 1; padding: 4px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; border: none; }
+    .multi-select-actions .select-all { background: #8b5cf6; color: white; }
+    .multi-select-actions .clear-all { background: #252532; color: #e4e4e7; }
   </style>
 </head>
 <body>
@@ -122,8 +140,8 @@
               <th>Category</th>
               <th>Price</th>
               <th>Cost</th>
-              <th>Stock</th>
-              <th>Available</th>
+              <th>All Warehouses</th>
+              <th>CW</th>
             </tr>
             <tr class="filter-row">
               <th></th>
@@ -137,12 +155,19 @@
               <th></th>
               <th></th>
               <th>
-                <select class="filter-select" id="filter-stock" onchange="filterProducts()">
-                  <option value="">All</option>
-                  <option value="in">In Stock</option>
-                  <option value="low">Low Stock</option>
-                  <option value="out">Out of Stock</option>
-                </select>
+                <div class="multi-select" id="warehouse-multi-select">
+                  <div class="multi-select-btn" onclick="toggleWarehouseDropdown(event)">
+                    <span id="warehouse-label">All</span>
+                    <span class="material-symbols-outlined">expand_more</span>
+                  </div>
+                  <div class="multi-select-dropdown" id="warehouse-dropdown">
+                    <div id="warehouse-options"></div>
+                    <div class="multi-select-actions">
+                      <button class="select-all" onclick="selectAllWarehouses()">All</button>
+                      <button class="clear-all" onclick="clearAllWarehouses()">Clear</button>
+                    </div>
+                  </div>
+                </div>
               </th>
               <th></th>
             </tr>
@@ -187,12 +212,110 @@
     const pageSize = 50;
     let filterTimeout = null;
 
+    // Warehouse data
+    let warehouses = [];
+    let stockByProduct = {};
+    let selectedWarehouseIds = [];
+    const CW_WAREHOUSE_ID = 1; // Central Warehouse
+
     function debounceFilter() {
       clearTimeout(filterTimeout);
       filterTimeout = setTimeout(() => {
         currentPage = 1;
         filterProducts();
       }, 300);
+    }
+
+    async function loadWarehouses() {
+      try {
+        const res = await fetch('/api/odoo/warehouses', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to fetch warehouses');
+        const data = await res.json();
+        warehouses = data.warehouses || [];
+
+        // Select all warehouses by default
+        selectedWarehouseIds = warehouses.map(w => w.id);
+
+        // Render warehouse options
+        renderWarehouseOptions();
+      } catch (error) {
+        console.error('Failed to load warehouses:', error);
+      }
+    }
+
+    async function loadStockByWarehouse() {
+      try {
+        const res = await fetch('/api/odoo/products/stock-by-warehouse', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to fetch stock');
+        const data = await res.json();
+        stockByProduct = data.stockByProduct || {};
+      } catch (error) {
+        console.error('Failed to load stock by warehouse:', error);
+      }
+    }
+
+    function renderWarehouseOptions() {
+      const container = document.getElementById('warehouse-options');
+      container.innerHTML = warehouses.map(w => `
+        <label class="multi-select-option">
+          <input type="checkbox" value="${w.id}" ${selectedWarehouseIds.includes(w.id) ? 'checked' : ''} onchange="onWarehouseChange()">
+          <span>${w.code} - ${w.name}</span>
+        </label>
+      `).join('');
+      updateWarehouseLabel();
+    }
+
+    function toggleWarehouseDropdown(event) {
+      event.stopPropagation();
+      const dropdown = document.getElementById('warehouse-dropdown');
+      dropdown.classList.toggle('show');
+    }
+
+    function onWarehouseChange() {
+      const checkboxes = document.querySelectorAll('#warehouse-options input[type="checkbox"]');
+      selectedWarehouseIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => parseInt(cb.value));
+      updateWarehouseLabel();
+      renderProducts();
+    }
+
+    function selectAllWarehouses() {
+      selectedWarehouseIds = warehouses.map(w => w.id);
+      renderWarehouseOptions();
+      renderProducts();
+    }
+
+    function clearAllWarehouses() {
+      selectedWarehouseIds = [];
+      renderWarehouseOptions();
+      renderProducts();
+    }
+
+    function updateWarehouseLabel() {
+      const label = document.getElementById('warehouse-label');
+      if (selectedWarehouseIds.length === 0) {
+        label.textContent = 'None';
+      } else if (selectedWarehouseIds.length === warehouses.length) {
+        label.textContent = 'All';
+      } else if (selectedWarehouseIds.length <= 2) {
+        label.textContent = selectedWarehouseIds.map(id => {
+          const w = warehouses.find(w => w.id === id);
+          return w ? w.code : '';
+        }).join(', ');
+      } else {
+        label.textContent = `${selectedWarehouseIds.length} selected`;
+      }
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.multi-select')) {
+        document.getElementById('warehouse-dropdown').classList.remove('show');
+      }
+    });
+
+    function getWarehouseStock(productId, warehouseIds) {
+      const productStock = stockByProduct[productId] || {};
+      return warehouseIds.reduce((sum, whId) => sum + (productStock[whId] || 0), 0);
     }
 
     async function loadProducts() {
@@ -240,7 +363,7 @@
     }
 
     function filterByStock(status) {
-      document.getElementById('filter-stock').value = status;
+      document.getElementById('filter-stock')?.value = status;
       document.getElementById('filter-sku').value = '';
       document.getElementById('filter-name').value = '';
       document.getElementById('filter-category').value = '';
@@ -252,15 +375,11 @@
       const sku = document.getElementById('filter-sku').value.toLowerCase();
       const name = document.getElementById('filter-name').value.toLowerCase();
       const category = document.getElementById('filter-category').value;
-      const stockFilter = document.getElementById('filter-stock').value;
 
       filteredProducts = allProducts.filter(p => {
         if (sku && !(p.sku && p.sku.toLowerCase().includes(sku))) return false;
         if (name && !(p.name && p.name.toLowerCase().includes(name))) return false;
         if (category && p.category !== category) return false;
-        if (stockFilter === 'in' && p.stock <= 10) return false;
-        if (stockFilter === 'low' && (p.stock <= 0 || p.stock > 10)) return false;
-        if (stockFilter === 'out' && p.stock > 0) return false;
         return true;
       });
 
@@ -287,7 +406,10 @@
       }
 
       tbody.innerHTML = pageProducts.map(p => {
-        const stockClass = p.stock <= 0 ? 'out-of-stock' : p.stock <= 10 ? 'low-stock' : 'in-stock';
+        const allWhStock = getWarehouseStock(p.id, selectedWarehouseIds);
+        const cwStock = getWarehouseStock(p.id, [CW_WAREHOUSE_ID]);
+        const stockClass = allWhStock <= 0 ? 'out-of-stock' : allWhStock <= 10 ? 'low-stock' : 'in-stock';
+
         return `
           <tr onclick="window.location.href='/inventory/product.html?id=${p.id}'">
             <td>
@@ -300,8 +422,8 @@
             <td>${p.category || '\u2014'}</td>
             <td>${p.price ? '\u20AC' + p.price.toFixed(2) : '\u2014'}</td>
             <td>${p.cost ? '\u20AC' + p.cost.toFixed(2) : '\u2014'}</td>
-            <td><span class="table-stock ${stockClass}">${p.stock ?? 0}</span></td>
-            <td>${p.available ?? 0}</td>
+            <td><span class="table-stock ${stockClass}">${Math.round(allWhStock)}</span></td>
+            <td><span class="stock-qty ${cwStock > 0 ? 'positive' : 'zero'}">${Math.round(cwStock)}</span></td>
           </tr>
         `;
       }).join('');
@@ -320,11 +442,19 @@
     function nextPage() { currentPage++; renderProducts(); updatePagination(); }
 
     function exportToExcel() {
-      const data = filteredProducts.map(p => ({
-        'ID': p.id, 'SKU': p.sku, 'Name': p.name, 'Barcode': p.barcode,
-        'Category': p.category, 'Sale Price': p.price, 'Cost': p.cost,
-        'Stock': p.stock, 'Available': p.available, 'Type': p.type, 'Unit': p.uom
-      }));
+      const data = filteredProducts.map(p => {
+        const row = {
+          'ID': p.id, 'SKU': p.sku, 'Name': p.name, 'Barcode': p.barcode,
+          'Category': p.category, 'Sale Price': p.price, 'Cost': p.cost,
+          'Total Stock': p.stock, 'Available': p.available, 'Type': p.type, 'Unit': p.uom,
+          'CW Stock': getWarehouseStock(p.id, [CW_WAREHOUSE_ID])
+        };
+        // Add stock for each warehouse
+        warehouses.forEach(w => {
+          row[`${w.code} Stock`] = getWarehouseStock(p.id, [w.id]);
+        });
+        return row;
+      });
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Products');
@@ -339,7 +469,13 @@
       setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
-    loadProducts();
+    // Initialize
+    async function init() {
+      await Promise.all([loadWarehouses(), loadStockByWarehouse()]);
+      await loadProducts();
+    }
+
+    init();
   </script>
 </body>
 </html>
