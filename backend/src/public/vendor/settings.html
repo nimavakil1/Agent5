@@ -44,10 +44,11 @@
     .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
     .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 8px; }
     .empty-state-desc { font-size: 14px; color: #71717a; }
-    .action-btn { width: 32px; height: 32px; border-radius: 8px; background: #252532; border: none; color: #71717a; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .action-btn { width: 32px; height: 32px; border-radius: 8px; background: #252532; border: none; color: #71717a; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
     .action-btn:hover { background: #3f3f50; color: #e4e4e7; }
     .action-btn.danger:hover { background: rgba(239, 68, 68, 0.2); color: #f87171; }
     .action-btn .material-symbols-outlined { font-size: 18px; }
+    .action-btns { display: flex; gap: 8px; align-items: center; }
     .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
     .stat-card { background: #12121a; border: 1px solid #252532; border-radius: 10px; padding: 16px; text-align: center; }
     .stat-value { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 4px; }
@@ -260,10 +261,10 @@
             '<td>' + (m.partyName || m.odooPartnerName || '-') + '</td>' +
             '<td>' + getFlagImg(mp) + ' ' + mp + '</td>' +
             '<td>' + (m.odooPartnerId ? (m.odooPartnerName || '') + ' (' + m.odooPartnerId + ')' : '<span class="badge badge-warning">Not linked</span>') + '</td>' +
-            '<td>' +
+            '<td><div class="action-btns">' +
               '<button class="action-btn" onclick="editMapping(\'' + pid + '\')" title="Edit"><span class="material-symbols-outlined">edit</span></button>' +
               '<button class="action-btn danger" onclick="deleteMapping(\'' + pid + '\')" title="Delete"><span class="material-symbols-outlined">delete</span></button>' +
-            '</td>' +
+            '</div></td>' +
           '</tr>';
         }).join('');
       } catch (e) {
@@ -288,7 +289,7 @@
             '<td>' + (u.partyName || '-') + '</td>' +
             '<td>' + getFlagImg(mp) + ' ' + mp + '</td>' +
             '<td>' + formatDate(u.lastSeen) + '</td>' +
-            '<td><button class="action-btn" onclick="mapParty(\'' + pid + '\', \'' + (u.partyName || '').replace(/'/g, "\\'") + '\', \'' + mp + '\')" title="Map"><span class="material-symbols-outlined">link</span></button></td>' +
+            '<td><div class="action-btns"><button class="action-btn" onclick="mapParty(\'' + pid + '\', \'' + (u.partyName || '').replace(/'/g, "\\'") + '\', \'' + mp + '\')" title="Map"><span class="material-symbols-outlined">link</span></button></div></td>' +
           '</tr>';
         }).join('');
       } catch (e) { console.error(e); }
