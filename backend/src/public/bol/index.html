@@ -549,13 +549,6 @@
             <span class="material-symbols-outlined">shopping_cart</span>
             Orders
           </div>
-          <div class="filters" style="margin: 0;">
-            <select class="filter-select" id="orders-fulfilment-filter" onchange="loadOrders()">
-              <option value="">All</option>
-              <option value="FBR">FBR</option>
-              <option value="FBB">FBB</option>
-            </select>
-          </div>
         </div>
         <div class="card-body">
           <div class="table-container">
@@ -564,7 +557,13 @@
                 <tr>
                   <th class="filterable">Order ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
                   <th class="filterable">Date<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
-                  <th>Fulfilment</th>
+                  <th class="filterable">Fulfilment<br>
+                    <select class="column-filter" id="orders-fulfilment-filter" onchange="loadOrders()" style="padding: 4px 8px;">
+                      <option value="">All</option>
+                      <option value="FBR">FBR</option>
+                      <option value="FBB">FBB</option>
+                    </select>
+                  </th>
                   <th>Items</th>
                   <th>Total</th>
                   <th class="filterable">Status<br><input type="text" class="column-filter" data-column="5" placeholder="Filter..."></th>
@@ -972,7 +971,8 @@
               trackUrl = `https://track.bpost.cloud/btr/web/#/search?itemCode=${encodeURIComponent(trackTrace)}&lang=nl`;
               carrierDisplay = 'bpost';
             } else if (carrierLower.includes('gls') || carrierLower === 'gls_nl') {
-              trackUrl = `https://gls-group.eu/NL/nl/volg-pakket?match=${encodeURIComponent(trackTrace)}`;
+              // GLS direct URLs return 404 - use universal Parcels App tracker
+              trackUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackTrace)}`;
               carrierDisplay = 'GLS';
             } else if (carrierLower.includes('dpd') || carrierLower === 'dpd_nl' || carrierLower === 'dpd_be') {
               trackUrl = `https://tracking.dpd.de/status/nl_NL/parcel/${encodeURIComponent(trackTrace)}`;

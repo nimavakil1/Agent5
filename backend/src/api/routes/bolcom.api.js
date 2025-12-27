@@ -278,30 +278,57 @@ router.post('/clear-token', async (req, res) => {
 
 /**
  * Get orders
- * Query params: page, fulfilment-method (FBR/FBB), status
+ * Query params: page, fulfilment-method (FBR/FBB), status, fromDate (YYYY-MM-DD), maxPages
  * Note: The list endpoint doesn't return prices, so we fetch individual order details
+ * Default: Fetch orders from 2024-01-01 onwards, up to 10 pages
  */
 router.get('/orders', async (req, res) => {
   try {
-    const { page = 1, fulfilmentMethod, status } = req.query;
+    const { page = 1, fulfilmentMethod, status, fromDate = '2024-01-01', maxPages = 10 } = req.query;
+    const fromDateObj = new Date(fromDate);
 
-    let endpoint = `/orders?page=${page}`;
-    if (fulfilmentMethod) {
-      endpoint += `&fulfilment-method=${fulfilmentMethod}`;
-    }
-    if (status) {
-      endpoint += `&status=${status}`;
-    }
+    // Collect all orders across multiple pages
+    let allOrders = [];
+    let currentPage = parseInt(page, 10);
+    const maxPagesToFetch = Math.min(parseInt(maxPages, 10) || 10, 50); // Cap at 50 pages
+    let reachedDateLimit = false;
 
-    const data = await bolRequest(endpoint);
+    // Fetch multiple pages until we reach the date limit or max pages
+    while (currentPage <= maxPagesToFetch && !reachedDateLimit) {
+      let endpoint = `/orders?page=${currentPage}`;
+      if (fulfilmentMethod) {
+        endpoint += `&fulfilment-method=${fulfilmentMethod}`;
+      }
+      if (status) {
+        endpoint += `&status=${status}`;
+      }
+
+      const data = await bolRequest(endpoint);
+      const ordersList = data.orders || [];
+
+      if (ordersList.length === 0) {
+        break; // No more orders
+      }
+
+      // Check if any order is before our date limit
+      for (const order of ordersList) {
+        const orderDate = new Date(order.orderPlacedDateTime);
+        if (orderDate < fromDateObj) {
+          reachedDateLimit = true;
+          break;
+        }
+        allOrders.push(order);
+      }
+
+      currentPage++;
+    }
 
     // Fetch individual order details to get prices (in parallel, max 5 at a time)
     const ordersWithDetails = [];
-    const ordersList = data.orders || [];
 
     // Batch fetch order details (5 at a time to avoid rate limiting)
-    for (let i = 0; i < ordersList.length; i += 5) {
-      const batch = ordersList.slice(i, i + 5);
+    for (let i = 0; i < allOrders.length; i += 5) {
+      const batch = allOrders.slice(i, i + 5);
       const detailsPromises = batch.map(async (o) => {
         try {
           const details = await bolRequest(`/orders/${o.orderId}`);
@@ -312,7 +339,7 @@ router.get('/orders', async (req, res) => {
             pickupPoint: details.shipmentDetails?.pickupPointName,
             orderItems: (details.orderItems || o.orderItems || []).map(item => ({
               orderItemId: item.orderItemId,
-              ean: item.ean,
+              ean: item.product?.ean || item.ean || '',
               sku: item.offer?.reference || item.offerReference || '',
               title: item.product?.title || '',
               quantity: item.quantity || 1,
@@ -334,7 +361,7 @@ router.get('/orders', async (req, res) => {
             orderPlacedDateTime: o.orderPlacedDateTime,
             orderItems: (o.orderItems || []).map(item => ({
               orderItemId: item.orderItemId,
-              ean: item.ean,
+              ean: item.product?.ean || item.ean || '',
               quantity: item.quantity || 1,
               fulfilmentMethod: item.fulfilmentMethod,
               fulfilmentStatus: item.fulfilmentStatus || 'OPEN'
@@ -350,6 +377,8 @@ router.get('/orders', async (req, res) => {
     res.json({
       success: true,
       count: ordersWithDetails.length,
+      pagesFetched: currentPage - 1,
+      fromDate: fromDate,
       orders: ordersWithDetails
     });
   } catch (error) {
@@ -375,12 +404,15 @@ router.get('/orders/:orderId', async (req, res) => {
         shipmentDetails: data.shipmentDetails,
         orderItems: (data.orderItems || []).map(item => ({
           orderItemId: item.orderItemId,
-          ean: item.ean,
+          // EAN is nested under product object in v10 API
+          ean: item.product?.ean || item.ean || '',
+          // SKU is nested under offer object
           sku: item.offer?.reference || item.offerReference || '',
-          title: item.product?.title,
-          quantity: item.quantity,
-          quantityShipped: item.quantityShipped,
-          quantityCancelled: item.quantityCancelled,
+          // Title is nested under product object
+          title: item.product?.title || '',
+          quantity: item.quantity || 1,
+          quantityShipped: item.quantityShipped || 0,
+          quantityCancelled: item.quantityCancelled || 0,
           unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
           totalPrice: typeof item.totalPrice === 'object' ? parseFloat(item.totalPrice?.amount || 0) : parseFloat(item.totalPrice || 0),
           commission: item.commission,
@@ -398,28 +430,54 @@ router.get('/orders/:orderId', async (req, res) => {
 
 /**
  * Get shipments
+ * Query params: page, fulfilment-method, orderId, fromDate (YYYY-MM-DD), maxPages
  * Note: List endpoint only returns basic transport info (transportId), fetch details for full info
+ * Default: Fetch shipments from 2024-01-01 onwards, up to 10 pages
  */
 router.get('/shipments', async (req, res) => {
   try {
-    const { page = 1, fulfilmentMethod, orderId } = req.query;
+    const { page = 1, fulfilmentMethod, orderId, fromDate = '2024-01-01', maxPages = 10 } = req.query;
+    const fromDateObj = new Date(fromDate);
 
-    let endpoint = `/shipments?page=${page}`;
-    if (fulfilmentMethod) {
-      endpoint += `&fulfilment-method=${fulfilmentMethod}`;
-    }
-    if (orderId) {
-      endpoint += `&order-id=${orderId}`;
-    }
+    // Collect all shipments across multiple pages
+    let allShipments = [];
+    let currentPage = parseInt(page, 10);
+    const maxPagesToFetch = Math.min(parseInt(maxPages, 10) || 10, 50);
+    let reachedDateLimit = false;
 
-    const data = await bolRequest(endpoint);
+    while (currentPage <= maxPagesToFetch && !reachedDateLimit) {
+      let endpoint = `/shipments?page=${currentPage}`;
+      if (fulfilmentMethod) {
+        endpoint += `&fulfilment-method=${fulfilmentMethod}`;
+      }
+      if (orderId) {
+        endpoint += `&order-id=${orderId}`;
+      }
+
+      const data = await bolRequest(endpoint);
+      const shipmentsList = data.shipments || [];
+
+      if (shipmentsList.length === 0) {
+        break;
+      }
+
+      for (const shipment of shipmentsList) {
+        const shipmentDate = new Date(shipment.shipmentDateTime);
+        if (shipmentDate < fromDateObj) {
+          reachedDateLimit = true;
+          break;
+        }
+        allShipments.push(shipment);
+      }
+
+      currentPage++;
+    }
 
     // Fetch individual shipment details to get full transport info (in batches of 5)
     const shipmentsWithDetails = [];
-    const shipmentsList = data.shipments || [];
 
-    for (let i = 0; i < shipmentsList.length; i += 5) {
-      const batch = shipmentsList.slice(i, i + 5);
+    for (let i = 0; i < allShipments.length; i += 5) {
+      const batch = allShipments.slice(i, i + 5);
       const detailsPromises = batch.map(async (s) => {
         try {
           const details = await bolRequest(`/shipments/${s.shipmentId}`);
@@ -468,6 +526,8 @@ router.get('/shipments', async (req, res) => {
     res.json({
       success: true,
       count: shipmentsWithDetails.length,
+      pagesFetched: currentPage - 1,
+      fromDate: fromDate,
       shipments: shipmentsWithDetails
     });
   } catch (error) {
