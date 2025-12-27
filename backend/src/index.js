@@ -298,13 +298,14 @@ if (process.env.PROTECT_RECORDINGS === '1') {
 }
 
 const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
-const max = parseInt(process.env.RATE_LIMIT_MAX || '60', 10);
+const max = parseInt(process.env.RATE_LIMIT_MAX || '120', 10); // Increased from 60 to 120
 const limiter = rateLimit({
   windowMs,
   max,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path.startsWith('/auth') // Exempt auth routes from rate limiting
+  skip: (req) => req.path.startsWith('/auth'), // Exempt auth routes from rate limiting
+  message: { error: 'Too many requests', message: 'Please try again later' } // Return JSON instead of text
 });
 app.use('/api', limiter);
 
