@@ -918,36 +918,33 @@
 
     // Load all data
     async function loadAllData() {
+      // First load all the data (which triggers syncs)
       await Promise.all([
-        loadStats(),
         loadOrders(),
         loadShipments(),
         loadReturns(),
         loadInvoices()
       ]);
+      // Then load stats from the synced data
+      await loadStats();
     }
 
-    // Load stats
-    async function loadStats() {
+    // Load stats - uses already loaded data from paginationState
+    function loadStats() {
       try {
-        const [ordersRes, shipmentsRes, returnsRes] = await Promise.all([
-          fetch('/api/bolcom/orders', { credentials: 'include' }),
-          fetch('/api/bolcom/shipments', { credentials: 'include' }),
-          fetch('/api/bolcom/returns?handled=false', { credentials: 'include' })
-        ]);
+        // Count only OPEN orders
+        const openOrders = (paginationState.orders.all || []).filter(o => o.status === 'OPEN' || !o.status);
+        document.getElementById('stat-orders').textContent = openOrders.length;
 
-        if (ordersRes.ok) {
-          const data = await ordersRes.json();
-          document.getElementById('stat-orders').textContent = data.count || 0;
-        }
-        if (shipmentsRes.ok) {
-          const data = await shipmentsRes.json();
-          document.getElementById('stat-shipments').textContent = data.count || 0;
-        }
-        if (returnsRes.ok) {
-          const data = await returnsRes.json();
-          document.getElementById('stat-returns').textContent = data.count || 0;
-        }
+        // All shipments
+        document.getElementById('stat-shipments').textContent = paginationState.shipments.all?.length || 0;
+
+        // Only unhandled returns
+        const openReturns = (paginationState.returns.all || []).filter(r => !r.handled);
+        document.getElementById('stat-returns').textContent = openReturns.length;
+
+        // Active offers - placeholder (Bol.com doesn't have a simple list endpoint)
+        document.getElementById('stat-offers').textContent = '-';
       } catch (e) {
         console.error('Failed to load stats:', e);
       }
