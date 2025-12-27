@@ -229,7 +229,7 @@ app.get('/login', (req, res) => {
 });
 
 // New platform UI (v2) - protected sections
-const protectedSections = ['vendor', 'settings', 'seller', 'inventory', 'accounting', 'analytics', 'ai', 'calls'];
+const protectedSections = ['vendor', 'settings', 'seller', 'inventory', 'accounting', 'analytics', 'ai', 'calls', 'bol'];
 protectedSections.forEach(section => {
   app.use(`/${section}`, requireSession, express.static(path.join(__dirname, 'public', section), {
     etag: false,
