@@ -180,7 +180,7 @@ router.get('/products/:id', async (req, res) => {
       // Extra
       'company_id', 'currency_id',
       // Logistics - customs & shipping
-      'hs_code', 'origin_country_id',
+      'hs_code',
       'sale_delay', 'produce_delay',
       // Packaging
       'packaging_ids'
@@ -277,8 +277,8 @@ router.get('/products/:id', async (req, res) => {
 
         // Logistics
         hsCode: p.hs_code || '',
-        originCountry: p.origin_country_id ? p.origin_country_id[1] : null,
-        originCountryId: p.origin_country_id ? p.origin_country_id[0] : null,
+        originCountry: null,
+        originCountryId: null,
         saleDelay: p.sale_delay || 0,
         produceDelay: p.produce_delay || 0,
         packagingCount: Array.isArray(p.packaging_ids) ? p.packaging_ids.length : 0,
