@@ -68,6 +68,16 @@ const bolOrderSchema = new mongoose.Schema({
     index: true
   },
 
+  // Odoo integration
+  odoo: {
+    saleOrderId: { type: Number },
+    saleOrderName: { type: String },
+    invoiceId: { type: Number },
+    invoiceName: { type: String },
+    linkedAt: { type: Date },
+    syncError: { type: String }
+  },
+
   // Sync metadata
   syncedAt: { type: Date, default: Date.now, index: true },
   rawResponse: { type: mongoose.Schema.Types.Mixed } // Store raw API response
@@ -79,5 +89,6 @@ const bolOrderSchema = new mongoose.Schema({
 // Index for common queries
 bolOrderSchema.index({ orderPlacedDateTime: -1, status: 1 });
 bolOrderSchema.index({ fulfilmentMethod: 1, orderPlacedDateTime: -1 });
+bolOrderSchema.index({ 'odoo.saleOrderId': 1 });
 
 module.exports = mongoose.model('BolOrder', bolOrderSchema);

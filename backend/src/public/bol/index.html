@@ -571,6 +571,10 @@
             <span class="material-symbols-outlined">shopping_cart</span>
             Orders
           </div>
+          <button class="btn btn-secondary btn-sm" onclick="syncOrdersWithOdoo()" id="sync-odoo-btn">
+            <span class="material-symbols-outlined">sync</span>
+            Sync with Odoo
+          </button>
         </div>
         <div class="card-body">
           <div class="table-container">
@@ -579,6 +583,7 @@
                 <tr>
                   <th class="filterable">Order ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
                   <th class="filterable">Date<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
+                  <th class="filterable">Odoo<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
                   <th class="filterable">Fulfilment<br>
                     <select class="column-filter" id="orders-fulfilment-filter" onchange="loadOrders()" style="padding: 4px 8px;">
                       <option value="">All</option>
@@ -588,13 +593,13 @@
                   </th>
                   <th>Items</th>
                   <th>Total</th>
-                  <th class="filterable">Status<br><input type="text" class="column-filter" data-column="5" placeholder="Filter..."></th>
+                  <th class="filterable">Status<br><input type="text" class="column-filter" data-column="6" placeholder="Filter..."></th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="orders-table">
                 <tr>
-                  <td colspan="7">
+                  <td colspan="8">
                     <div class="loading">
                       <div class="spinner"></div>
                       Loading orders...
@@ -969,7 +974,7 @@
           paginationState.orders.filtered = [];
           tbody.innerHTML = `
             <tr>
-              <td colspan="7">
+              <td colspan="8">
                 <div class="empty-state">
                   <span class="material-symbols-outlined">inbox</span>
                   <div class="empty-state-title">No orders</div>
@@ -1016,10 +1021,25 @@
           statusClass = 'returned';
         }
 
+        // Odoo order and invoice info
+        let odooCell = '<span style="color: #52525b;">-</span>';
+        if (order.odoo?.saleOrderId) {
+          const orderUrl = `https://acropaq.odoo.com/web#id=${order.odoo.saleOrderId}&model=sale.order&view_type=form`;
+          let odooContent = `<a href="${orderUrl}" target="_blank" style="color: #60a5fa;">${order.odoo.saleOrderName}</a>`;
+
+          // Add invoice icon if invoiced
+          if (order.odoo.invoiceId) {
+            const invoiceUrl = `https://acropaq.odoo.com/web#id=${order.odoo.invoiceId}&model=account.move&view_type=form`;
+            odooContent += ` <a href="${invoiceUrl}" target="_blank" title="${order.odoo.invoiceName}" style="color: #4ade80;"><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">receipt</span></a>`;
+          }
+          odooCell = odooContent;
+        }
+
         return `
           <tr>
             <td><span class="order-id">${order.orderId}</span></td>
             <td>${formatDate(order.orderPlacedDateTime)}</td>
+            <td>${odooCell}</td>
             <td>${items[0]?.fulfilmentMethod || '-'}</td>
             <td>${items.length}</td>
             <td>&euro;${calculateTotal(items)}</td>
@@ -1548,6 +1568,36 @@
 
     function refreshData() {
       checkStatus();
+    }
+
+    async function syncOrdersWithOdoo() {
+      const btn = document.getElementById('sync-odoo-btn');
+      const originalContent = btn.innerHTML;
+      btn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; margin: 0;"></div> Syncing...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/bolcom/sync/odoo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          alert(`Synced ${data.synced} orders with Odoo.\n${data.notFound} orders not found in Odoo.`);
+          // Reload orders to show updated Odoo info
+          await loadOrders();
+        } else {
+          alert('Sync failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Error syncing with Odoo: ' + e.message);
+      } finally {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+      }
     }
 
     // Pagination functions

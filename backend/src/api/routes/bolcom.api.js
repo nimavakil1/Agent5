@@ -340,7 +340,8 @@ router.get('/orders', async (req, res) => {
         orderPlacedDateTime: o.orderPlacedDateTime,
         shipmentMethod: o.shipmentMethod,
         pickupPoint: o.pickupPoint,
-        orderItems: o.orderItems
+        orderItems: o.orderItems,
+        odoo: o.odoo || null
       }))
     });
   } catch (error) {
@@ -1453,6 +1454,99 @@ router.post('/sync/historical', async (req, res) => {
       .catch(error => {
         console.error('[BolSync] Historical import failed:', error);
       });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Sync Bol orders with Odoo - link orders and check invoice status
+ * Looks up orders in Odoo by client_order_ref and updates MongoDB with Odoo IDs
+ */
+router.post('/sync/odoo', async (req, res) => {
+  try {
+    const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+
+    // Get all Bol orders that don't have Odoo info yet (or need refresh)
+    const { refresh = false } = req.body;
+    const query = refresh ? {} : { 'odoo.saleOrderId': { $exists: false } };
+    const bolOrders = await BolOrder.find(query)
+      .sort({ orderPlacedDateTime: -1 })
+      .limit(500)
+      .lean();
+
+    if (bolOrders.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No orders to sync',
+        synced: 0,
+        notFound: 0
+      });
+    }
+
+    let synced = 0;
+    let notFound = 0;
+    const errors = [];
+
+    for (const bolOrder of bolOrders) {
+      try {
+        // Search for sale order in Odoo by client_order_ref (Bol order ID)
+        // Emipro typically stores the Bol order ID in client_order_ref
+        const saleOrders = await odoo.searchRead('sale.order', [
+          ['client_order_ref', '=', bolOrder.orderId]
+        ], ['id', 'name', 'invoice_ids', 'state'], { limit: 1 });
+
+        if (saleOrders.length === 0) {
+          notFound++;
+          continue;
+        }
+
+        const saleOrder = saleOrders[0];
+        const odooData = {
+          saleOrderId: saleOrder.id,
+          saleOrderName: saleOrder.name,
+          linkedAt: new Date()
+        };
+
+        // Check if there are invoices
+        if (saleOrder.invoice_ids && saleOrder.invoice_ids.length > 0) {
+          // Get the first invoice details
+          const invoices = await odoo.searchRead('account.move', [
+            ['id', 'in', saleOrder.invoice_ids],
+            ['move_type', '=', 'out_invoice'],
+            ['state', '=', 'posted']
+          ], ['id', 'name'], { limit: 1 });
+
+          if (invoices.length > 0) {
+            odooData.invoiceId = invoices[0].id;
+            odooData.invoiceName = invoices[0].name;
+          }
+        }
+
+        // Update MongoDB
+        await BolOrder.updateOne(
+          { orderId: bolOrder.orderId },
+          { $set: { odoo: odooData } }
+        );
+        synced++;
+
+      } catch (err) {
+        errors.push({ orderId: bolOrder.orderId, error: err.message });
+      }
+
+      // Small delay to avoid overwhelming Odoo
+      await new Promise(r => setTimeout(r, 50));
+    }
+
+    res.json({
+      success: true,
+      message: `Synced ${synced} orders with Odoo`,
+      synced,
+      notFound,
+      errors: errors.length > 0 ? errors.slice(0, 10) : undefined
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
