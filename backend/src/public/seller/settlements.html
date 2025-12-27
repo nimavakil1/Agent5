@@ -1,411 +1,512 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Settlements - Amazon Seller</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
-    <script src="/shell-v2.js"></script>
-  </head>
-  <body class="min-h-screen bg-slate-900">
-    <!-- Page Header -->
-    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4">
-      <div class="flex items-center justify-between max-w-6xl mx-auto">
-        <div class="flex items-center gap-3">
-          <span class="material-symbols-outlined text-green-400 text-2xl">account_balance</span>
-          <h1 class="text-white text-xl font-semibold">Settlements</h1>
-        </div>
-        <div id="status-indicator" class="flex items-center gap-2 text-sm text-slate-400">
-          <span id="status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settlements - Amazon Seller</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .page-logo-container { background: #fff; border-radius: 10px; padding: 8px 14px; display: flex; align-items: center; justify-content: center; }
+    .page-logo { height: 28px; width: auto; }
+    .status-bar { background: #12121a; border: 1px solid #252532; border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; gap: 12px; }
+    .status-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #a1a1aa; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #71717a; }
+    .status-dot.active { background: #4ade80; }
+
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 500px) { .stats-row { grid-template-columns: 1fr; } }
+    .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 10px; padding: 16px; }
+    .stat-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #71717a; margin-bottom: 8px; }
+    .stat-label .material-symbols-outlined { font-size: 18px; }
+    .stat-value { font-size: 24px; font-weight: 700; color: #fff; }
+    .stat-value.success { color: #4ade80; }
+    .stat-value.warning { color: #fbbf24; }
+    .stat-warning { display: none; align-items: center; gap: 4px; font-size: 11px; color: #fbbf24; margin-top: 6px; }
+    .stat-warning.show { display: flex; }
+    .stat-warning .material-symbols-outlined { font-size: 14px; }
+
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .card-title { font-size: 16px; font-weight: 600; color: #fff; margin: 0; }
+    .card-body { padding: 20px; }
+
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; text-decoration: none; }
+    .btn-primary { background: #f59e0b; color: white; }
+    .btn-primary:hover { background: #d97706; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn .material-symbols-outlined { font-size: 18px; }
+
+    .upload-zone { border: 2px dashed #3f3f50; border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.15s; }
+    .upload-zone:hover, .upload-zone.dragover { border-color: #f59e0b; background: rgba(245, 158, 11, 0.05); }
+    .upload-zone .material-symbols-outlined { font-size: 48px; color: #52525b; margin-bottom: 12px; display: block; }
+    .upload-zone-text { font-size: 14px; color: #a1a1aa; margin-bottom: 8px; }
+    .upload-zone-hint { font-size: 12px; color: #52525b; margin-top: 16px; }
+    .upload-zone input { display: none; }
+
+    .upload-result { margin-top: 16px; display: none; }
+    .upload-result.show { display: block; }
+    .result-box { padding: 16px; border-radius: 10px; }
+    .result-box.success { background: rgba(34, 197, 94, 0.1); border: 1px solid #22c55e; }
+    .result-box.error { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; }
+    .result-box-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .result-box.success .result-box-header { color: #4ade80; }
+    .result-box.error .result-box-header { color: #f87171; }
+    .result-box-header .material-symbols-outlined { font-size: 20px; }
+    .result-box-content { font-size: 13px; color: #e4e4e7; }
+
+    .settlement-list { display: flex; flex-direction: column; gap: 10px; }
+    .settlement-item { background: #12121a; border: 1px solid #252532; border-radius: 10px; padding: 16px 20px; cursor: pointer; transition: all 0.15s; display: flex; justify-content: space-between; align-items: center; }
+    .settlement-item:hover { border-color: #f59e0b; background: #1a1a24; }
+    .settlement-info { display: flex; align-items: center; gap: 14px; }
+    .settlement-icon { color: #4ade80; }
+    .settlement-icon .material-symbols-outlined { font-size: 24px; }
+    .settlement-id { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 2px; }
+    .settlement-dates { font-size: 12px; color: #71717a; }
+    .settlement-amount { text-align: right; }
+    .settlement-total { font-size: 18px; font-weight: 600; color: #4ade80; }
+    .settlement-count { font-size: 11px; color: #52525b; }
+
+    .empty-state { padding: 40px 20px; text-align: center; }
+    .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 12px; display: block; }
+    .empty-state-title { font-size: 14px; color: #a1a1aa; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; width: 100%; max-width: 900px; max-height: 90vh; overflow: hidden; }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; }
+    .modal-close { background: none; border: none; color: #71717a; cursor: pointer; padding: 4px; }
+    .modal-close:hover { color: #fff; }
+    .modal-body { padding: 20px; overflow-y: auto; max-height: calc(90vh - 70px); }
+
+    .detail-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 700px) { .detail-grid { grid-template-columns: repeat(2, 1fr); } }
+    .detail-item label { display: block; font-size: 11px; color: #71717a; text-transform: uppercase; margin-bottom: 4px; }
+    .detail-item span { font-size: 14px; color: #fff; }
+    .detail-item span.success { color: #4ade80; font-weight: 600; font-size: 18px; }
+
+    .detail-section { margin-bottom: 24px; }
+    .detail-section h4 { font-size: 14px; font-weight: 600; color: #fff; margin: 0 0 12px 0; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #252532; }
+    th { background: #12121a; font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; }
+    td { font-size: 13px; color: #e4e4e7; }
+    td.text-right, th.text-right { text-align: right; }
+    td.success { color: #4ade80; }
+    td.danger { color: #f87171; }
+    td.bold { font-weight: 600; }
+
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .spin { animation: spin 1s linear infinite; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div class="page-logo-container">
+        <img src="/assets/logos/amazon-seller-central.png" alt="Amazon Seller Central" class="page-logo">
+      </div>
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="status-dot" id="status-dot"></span>
           <span id="status-text">Loading...</span>
         </div>
       </div>
     </header>
 
-    <main class="max-w-6xl mx-auto px-6 py-8">
-      <!-- Summary Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-          <div class="flex items-center gap-2 text-slate-400 text-sm mb-2">
-            <span class="material-symbols-outlined text-lg">receipt_long</span>
-            Total Settlements
-          </div>
-          <div id="total-count" class="text-2xl font-bold text-white">-</div>
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">
+          <span class="material-symbols-outlined">receipt_long</span>
+          Total Settlements
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-          <div class="flex items-center gap-2 text-slate-400 text-sm mb-2">
-            <span class="material-symbols-outlined text-lg">euro</span>
-            Total Amount
-          </div>
-          <div id="total-amount" class="text-2xl font-bold text-green-400">-</div>
-        </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-          <div class="flex items-center gap-2 text-slate-400 text-sm mb-2">
-            <span class="material-symbols-outlined text-lg">calendar_today</span>
-            Last Settlement
-          </div>
-          <div id="last-date" class="text-2xl font-bold text-white">-</div>
-        </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-          <div class="flex items-center gap-2 text-slate-400 text-sm mb-2">
-            <span class="material-symbols-outlined text-lg">schedule</span>
-            Next Expected
-          </div>
-          <div id="next-expected" class="text-2xl font-bold text-white">-</div>
-          <div id="overdue-warning" class="hidden text-yellow-400 text-xs mt-1">
-            <span class="material-symbols-outlined text-sm align-middle">warning</span>
-            <span id="overdue-text"></span>
-          </div>
-        </div>
+        <div class="stat-value" id="total-count">-</div>
       </div>
-
-      <!-- Upload Section -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-white font-semibold text-lg">Upload Settlement Report</h2>
-          <a href="https://sellercentral.amazon.de/payments/reports-repository" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
-            <span class="material-symbols-outlined text-lg">open_in_new</span>
-            Download from Seller Central
-          </a>
+      <div class="stat-card">
+        <div class="stat-label">
+          <span class="material-symbols-outlined">euro</span>
+          Total Amount
         </div>
-        <div class="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center hover:border-slate-500 transition-colors" id="drop-zone">
-          <input type="file" id="file-input" accept=".csv,.tsv,.txt" class="hidden" />
-          <span class="material-symbols-outlined text-4xl text-slate-500 mb-2">cloud_upload</span>
-          <p class="text-slate-400 mb-2">Drag & drop your settlement report here</p>
-          <p class="text-slate-500 text-sm mb-4">or</p>
-          <button onclick="document.getElementById('file-input').click()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg">
-            Select File
-          </button>
-          <p class="text-slate-500 text-xs mt-4">Supports: CSV, TSV (Flat File V2 Settlement Report)</p>
-        </div>
-        <div id="upload-result" class="mt-4 hidden"></div>
+        <div class="stat-value success" id="total-amount">-</div>
       </div>
-
-      <!-- Settlements List -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-        <h2 class="text-white font-semibold text-lg mb-4">Settlement History</h2>
-        <div id="settlements-list" class="space-y-3">
-          <div class="text-slate-500 text-sm">Loading...</div>
+      <div class="stat-card">
+        <div class="stat-label">
+          <span class="material-symbols-outlined">calendar_today</span>
+          Last Settlement
         </div>
+        <div class="stat-value" id="last-date">-</div>
       </div>
-    </main>
-
-    <!-- Settlement Detail Modal -->
-    <div id="detail-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        <div class="flex items-center justify-between p-4 border-b border-slate-700">
-          <h3 class="text-white font-semibold text-lg">Settlement Details</h3>
-          <button onclick="closeDetailModal()" class="text-slate-400 hover:text-white">
-            <span class="material-symbols-outlined">close</span>
-          </button>
+      <div class="stat-card">
+        <div class="stat-label">
+          <span class="material-symbols-outlined">schedule</span>
+          Next Expected
         </div>
-        <div id="detail-content" class="p-4 overflow-y-auto max-h-[calc(90vh-100px)]">
-          <!-- Content loaded dynamically -->
+        <div class="stat-value" id="next-expected">-</div>
+        <div class="stat-warning" id="overdue-warning">
+          <span class="material-symbols-outlined">warning</span>
+          <span id="overdue-text"></span>
         </div>
       </div>
     </div>
 
-    <script>
-      // Format helpers
-      function formatCurrency(amount, currency = 'EUR') {
-        return new Intl.NumberFormat('de-DE', {
-          style: 'currency',
-          currency: currency
-        }).format(amount);
-      }
+    <!-- Upload Section -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Upload Settlement Report</h2>
+        <a href="https://sellercentral.amazon.de/payments/reports-repository" target="_blank" class="btn btn-secondary">
+          <span class="material-symbols-outlined">open_in_new</span>
+          Download from Seller Central
+        </a>
+      </div>
+      <div class="card-body">
+        <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+          <span class="material-symbols-outlined">cloud_upload</span>
+          <div class="upload-zone-text">Drag & drop your settlement report here, or click to browse</div>
+          <input type="file" id="file-input" accept=".csv,.tsv,.txt">
+          <div class="upload-zone-hint">Supports: CSV, TSV (Flat File V2 Settlement Report)</div>
+        </div>
+        <div class="upload-result" id="upload-result"></div>
+      </div>
+    </div>
 
-      function formatDate(dateStr) {
-        if (!dateStr) return '-';
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('de-DE', { year: 'numeric', month: 'short', day: 'numeric' });
-      }
+    <!-- Settlements List -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Settlement History</h2>
+      </div>
+      <div class="card-body">
+        <div class="settlement-list" id="settlements-list">
+          <div class="empty-state">
+            <span class="material-symbols-outlined">hourglass_empty</span>
+            <div class="empty-state-title">Loading settlements...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-      function formatDateShort(dateStr) {
-        if (!dateStr) return '-';
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('de-DE', { month: 'short', day: 'numeric' });
-      }
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="detail-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Settlement Details</h3>
+        <button class="modal-close" onclick="closeDetailModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body" id="detail-content">
+        <!-- Content loaded dynamically -->
+      </div>
+    </div>
+  </div>
 
-      // Load settlements
-      async function loadSettlements() {
-        const container = document.getElementById('settlements-list');
-        try {
-          const res = await fetch('/api/amazon/settlements?limit=50');
-          const data = await res.json();
+  <script>
+    // Format helpers
+    function formatCurrency(amount, currency = 'EUR') {
+      return new Intl.NumberFormat('de-DE', {
+        style: 'currency',
+        currency: currency
+      }).format(amount);
+    }
 
-          if (!data.settlements || data.settlements.length === 0) {
-            container.innerHTML = '<div class="text-slate-500 text-sm">No settlements uploaded yet. Upload your first settlement report above.</div>';
-            return;
-          }
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('de-DE', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
 
-          // Update summary stats
-          document.getElementById('total-count').textContent = data.settlements.length;
-          const totalAmount = data.settlements.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
-          document.getElementById('total-amount').textContent = formatCurrency(totalAmount);
+    function formatDateShort(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('de-DE', { month: 'short', day: 'numeric' });
+    }
 
-          if (data.settlements.length > 0) {
-            const latest = data.settlements[0];
-            document.getElementById('last-date').textContent = formatDateShort(latest.settlementEndDate);
+    // Load settlements
+    async function loadSettlements() {
+      const container = document.getElementById('settlements-list');
+      try {
+        const res = await fetch('/api/amazon/settlements?limit=50');
+        const data = await res.json();
 
-            // Calculate next expected (14 days after last)
-            if (latest.settlementEndDate) {
-              const lastDate = new Date(latest.settlementEndDate);
-              const nextDate = new Date(lastDate.getTime() + 14 * 24 * 60 * 60 * 1000);
-              document.getElementById('next-expected').textContent = formatDateShort(nextDate);
-
-              // Check if overdue
-              if (nextDate < new Date()) {
-                document.getElementById('overdue-warning').classList.remove('hidden');
-                const daysOverdue = Math.floor((new Date() - nextDate) / (24 * 60 * 60 * 1000));
-                document.getElementById('overdue-text').textContent = `${daysOverdue} days overdue`;
-              }
-            }
-
-            document.getElementById('status-dot').classList.remove('bg-slate-500');
-            document.getElementById('status-dot').classList.add('bg-green-500');
-            document.getElementById('status-text').textContent = `${data.settlements.length} settlements`;
-          }
-
-          container.innerHTML = data.settlements.map(s => `
-            <div class="bg-slate-700/30 rounded-lg p-4 hover:bg-slate-700/50 cursor-pointer transition-colors" onclick="viewDetail('${s.settlementId}')">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                  <span class="material-symbols-outlined text-green-400">payments</span>
-                  <div>
-                    <div class="text-white font-semibold">${s.settlementId}</div>
-                    <div class="text-slate-400 text-sm">
-                      ${formatDate(s.settlementStartDate)} - ${formatDate(s.settlementEndDate)}
-                    </div>
-                  </div>
-                </div>
-                <div class="text-right">
-                  <div class="text-green-400 font-semibold text-lg">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
-                  <div class="text-slate-500 text-xs">${s.transactionCount || 0} transactions</div>
-                </div>
-              </div>
-            </div>
-          `).join('');
-
-        } catch (error) {
-          container.innerHTML = `<div class="text-red-400 text-sm">Error loading settlements: ${error.message}</div>`;
-        }
-      }
-
-      // View settlement detail
-      async function viewDetail(settlementId) {
-        const modal = document.getElementById('detail-modal');
-        const content = document.getElementById('detail-content');
-        modal.classList.remove('hidden');
-        content.innerHTML = '<div class="text-slate-500">Loading...</div>';
-
-        try {
-          const res = await fetch(`/api/amazon/settlements/${settlementId}`);
-          const data = await res.json();
-
-          if (!data.settlement) {
-            content.innerHTML = '<div class="text-red-400">Settlement not found</div>';
-            return;
-          }
-
-          const s = data.settlement;
-          const fees = s.feesByMarketplace || {};
-          const orders = s.ordersByMarketplace || {};
-
-          content.innerHTML = `
-            <div class="space-y-6">
-              <!-- Header -->
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <div class="text-slate-400 text-sm">Settlement ID</div>
-                  <div class="text-white font-semibold">${s.settlementId}</div>
-                </div>
-                <div>
-                  <div class="text-slate-400 text-sm">Period</div>
-                  <div class="text-white">${formatDate(s.settlementStartDate)} - ${formatDate(s.settlementEndDate)}</div>
-                </div>
-                <div>
-                  <div class="text-slate-400 text-sm">Deposit Date</div>
-                  <div class="text-white">${formatDate(s.depositDate)}</div>
-                </div>
-                <div>
-                  <div class="text-slate-400 text-sm">Total Amount</div>
-                  <div class="text-green-400 font-semibold text-xl">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
-                </div>
-              </div>
-
-              <!-- Fees by Marketplace -->
-              <div>
-                <h4 class="text-white font-semibold mb-3">Fees by Marketplace</h4>
-                <div class="overflow-x-auto">
-                  <table class="w-full text-sm">
-                    <thead>
-                      <tr class="text-left text-slate-400 border-b border-slate-700">
-                        <th class="pb-2">Marketplace</th>
-                        <th class="pb-2 text-right">Commission</th>
-                        <th class="pb-2 text-right">FBA Fulfillment</th>
-                        <th class="pb-2 text-right">Storage</th>
-                        <th class="pb-2 text-right">Advertising</th>
-                        <th class="pb-2 text-right">Other</th>
-                        <th class="pb-2 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${Object.entries(fees).map(([mp, f]) => `
-                        <tr class="border-b border-slate-700/50">
-                          <td class="py-2 text-white font-medium">${mp}</td>
-                          <td class="py-2 text-right text-red-400">${formatCurrency(f.commission || 0)}</td>
-                          <td class="py-2 text-right text-red-400">${formatCurrency(f.fbaFulfillment || 0)}</td>
-                          <td class="py-2 text-right text-red-400">${formatCurrency(f.fbaStorage || 0)}</td>
-                          <td class="py-2 text-right text-red-400">${formatCurrency(f.advertising || 0)}</td>
-                          <td class="py-2 text-right text-red-400">${formatCurrency(f.other || 0)}</td>
-                          <td class="py-2 text-right text-red-400 font-semibold">${formatCurrency(f.total || 0)}</td>
-                        </tr>
-                      `).join('')}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- Order Totals by Marketplace -->
-              ${Object.keys(orders).length > 0 ? `
-              <div>
-                <h4 class="text-white font-semibold mb-3">Order Totals by Marketplace</h4>
-                <div class="overflow-x-auto">
-                  <table class="w-full text-sm">
-                    <thead>
-                      <tr class="text-left text-slate-400 border-b border-slate-700">
-                        <th class="pb-2">Marketplace</th>
-                        <th class="pb-2 text-right">Orders</th>
-                        <th class="pb-2 text-right">Refunds</th>
-                        <th class="pb-2 text-right">Chargebacks</th>
-                        <th class="pb-2 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${Object.entries(orders).map(([mp, o]) => `
-                        <tr class="border-b border-slate-700/50">
-                          <td class="py-2 text-white font-medium">${mp}</td>
-                          <td class="py-2 text-right text-green-400">${formatCurrency(o.orders || 0)}</td>
-                          <td class="py-2 text-right text-red-400">${formatCurrency(o.refunds || 0)}</td>
-                          <td class="py-2 text-right text-red-400">${formatCurrency(o.chargebacks || 0)}</td>
-                          <td class="py-2 text-right text-white font-semibold">${formatCurrency(o.total || 0)}</td>
-                        </tr>
-                      `).join('')}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              ` : ''}
+        if (!data.settlements || data.settlements.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <span class="material-symbols-outlined">inbox</span>
+              <div class="empty-state-title">No settlements uploaded yet. Upload your first settlement report above.</div>
             </div>
           `;
-
-        } catch (error) {
-          content.innerHTML = `<div class="text-red-400">Error: ${error.message}</div>`;
+          return;
         }
-      }
 
-      function closeDetailModal() {
-        document.getElementById('detail-modal').classList.add('hidden');
-      }
+        // Update summary stats
+        document.getElementById('total-count').textContent = data.settlements.length;
+        const totalAmount = data.settlements.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+        document.getElementById('total-amount').textContent = formatCurrency(totalAmount);
 
-      // File upload handling
-      const dropZone = document.getElementById('drop-zone');
-      const fileInput = document.getElementById('file-input');
-      const uploadResult = document.getElementById('upload-result');
+        if (data.settlements.length > 0) {
+          const latest = data.settlements[0];
+          document.getElementById('last-date').textContent = formatDateShort(latest.settlementEndDate);
 
-      dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('border-green-500', 'bg-slate-700/50');
-      });
+          // Calculate next expected (14 days after last)
+          if (latest.settlementEndDate) {
+            const lastDate = new Date(latest.settlementEndDate);
+            const nextDate = new Date(lastDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+            document.getElementById('next-expected').textContent = formatDateShort(nextDate);
 
-      dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('border-green-500', 'bg-slate-700/50');
-      });
+            // Check if overdue
+            if (nextDate < new Date()) {
+              document.getElementById('overdue-warning').classList.add('show');
+              const daysOverdue = Math.floor((new Date() - nextDate) / (24 * 60 * 60 * 1000));
+              document.getElementById('overdue-text').textContent = `${daysOverdue} days overdue`;
+            }
+          }
 
-      dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('border-green-500', 'bg-slate-700/50');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-          uploadFile(files[0]);
+          document.getElementById('status-dot').classList.add('active');
+          document.getElementById('status-text').textContent = `${data.settlements.length} settlements`;
         }
-      });
 
-      fileInput.addEventListener('change', () => {
-        if (fileInput.files.length > 0) {
-          uploadFile(fileInput.files[0]);
-        }
-      });
+        container.innerHTML = data.settlements.map(s => `
+          <div class="settlement-item" onclick="viewDetail('${s.settlementId}')">
+            <div class="settlement-info">
+              <div class="settlement-icon">
+                <span class="material-symbols-outlined">payments</span>
+              </div>
+              <div>
+                <div class="settlement-id">${s.settlementId}</div>
+                <div class="settlement-dates">${formatDate(s.settlementStartDate)} - ${formatDate(s.settlementEndDate)}</div>
+              </div>
+            </div>
+            <div class="settlement-amount">
+              <div class="settlement-total">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
+              <div class="settlement-count">${s.transactionCount || 0} transactions</div>
+            </div>
+          </div>
+        `).join('');
 
-      async function uploadFile(file) {
-        uploadResult.classList.remove('hidden');
-        uploadResult.innerHTML = `
-          <div class="flex items-center gap-2 text-slate-400">
-            <span class="material-symbols-outlined animate-spin">sync</span>
-            Uploading ${file.name}...
+      } catch (error) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <span class="material-symbols-outlined">error</span>
+            <div class="empty-state-title">Error loading settlements: ${error.message}</div>
           </div>
         `;
+      }
+    }
 
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('reportType', 'settlement');
+    // View settlement detail
+    async function viewDetail(settlementId) {
+      const modal = document.getElementById('detail-modal');
+      const content = document.getElementById('detail-content');
+      modal.classList.add('show');
+      content.innerHTML = '<div style="text-align:center;padding:40px;color:#71717a"><span class="material-symbols-outlined spin">sync</span><div>Loading...</div></div>';
 
-          const res = await fetch('/api/amazon/reports/upload', {
-            method: 'POST',
-            body: formData
-          });
+      try {
+        const res = await fetch(`/api/amazon/settlements/${settlementId}`);
+        const data = await res.json();
 
-          const data = await res.json();
+        if (!data.settlement) {
+          content.innerHTML = '<div style="color:#f87171">Settlement not found</div>';
+          return;
+        }
 
-          if (data.error) {
-            uploadResult.innerHTML = `
-              <div class="bg-red-900/30 border border-red-700 rounded-lg p-4">
-                <div class="flex items-center gap-2 text-red-400">
-                  <span class="material-symbols-outlined">error</span>
-                  Error: ${data.error}
-                </div>
-              </div>
-            `;
-          } else {
-            uploadResult.innerHTML = `
-              <div class="bg-green-900/30 border border-green-700 rounded-lg p-4">
-                <div class="flex items-center gap-2 text-green-400 mb-2">
-                  <span class="material-symbols-outlined">check_circle</span>
-                  Settlement uploaded successfully!
-                </div>
-                <div class="text-slate-300 text-sm">
-                  <p>Settlement ID: ${data.result?.settlementId || 'N/A'}</p>
-                  <p>Transactions: ${data.result?.transactionCount || 0}</p>
-                  <p>Total Amount: ${formatCurrency(data.result?.totalAmount || 0)}</p>
-                </div>
-              </div>
-            `;
-            // Reload settlements list
-            loadSettlements();
-          }
-        } catch (error) {
+        const s = data.settlement;
+        const fees = s.feesByMarketplace || {};
+        const orders = s.ordersByMarketplace || {};
+
+        content.innerHTML = `
+          <div class="detail-grid">
+            <div class="detail-item">
+              <label>Settlement ID</label>
+              <span>${s.settlementId}</span>
+            </div>
+            <div class="detail-item">
+              <label>Period</label>
+              <span>${formatDate(s.settlementStartDate)} - ${formatDate(s.settlementEndDate)}</span>
+            </div>
+            <div class="detail-item">
+              <label>Deposit Date</label>
+              <span>${formatDate(s.depositDate)}</span>
+            </div>
+            <div class="detail-item">
+              <label>Total Amount</label>
+              <span class="success">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</span>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <h4>Fees by Marketplace</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>Marketplace</th>
+                  <th class="text-right">Commission</th>
+                  <th class="text-right">FBA Fulfillment</th>
+                  <th class="text-right">Storage</th>
+                  <th class="text-right">Advertising</th>
+                  <th class="text-right">Other</th>
+                  <th class="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Object.entries(fees).map(([mp, f]) => `
+                  <tr>
+                    <td>${mp}</td>
+                    <td class="text-right danger">${formatCurrency(f.commission || 0)}</td>
+                    <td class="text-right danger">${formatCurrency(f.fbaFulfillment || 0)}</td>
+                    <td class="text-right danger">${formatCurrency(f.fbaStorage || 0)}</td>
+                    <td class="text-right danger">${formatCurrency(f.advertising || 0)}</td>
+                    <td class="text-right danger">${formatCurrency(f.other || 0)}</td>
+                    <td class="text-right danger bold">${formatCurrency(f.total || 0)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          ${Object.keys(orders).length > 0 ? `
+          <div class="detail-section">
+            <h4>Order Totals by Marketplace</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>Marketplace</th>
+                  <th class="text-right">Orders</th>
+                  <th class="text-right">Refunds</th>
+                  <th class="text-right">Chargebacks</th>
+                  <th class="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Object.entries(orders).map(([mp, o]) => `
+                  <tr>
+                    <td>${mp}</td>
+                    <td class="text-right success">${formatCurrency(o.orders || 0)}</td>
+                    <td class="text-right danger">${formatCurrency(o.refunds || 0)}</td>
+                    <td class="text-right danger">${formatCurrency(o.chargebacks || 0)}</td>
+                    <td class="text-right bold">${formatCurrency(o.total || 0)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+        `;
+
+      } catch (error) {
+        content.innerHTML = `<div style="color:#f87171">Error: ${error.message}</div>`;
+      }
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detail-modal').classList.remove('show');
+    }
+
+    // File upload handling
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const uploadResult = document.getElementById('upload-result');
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        uploadFile(files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        uploadFile(fileInput.files[0]);
+      }
+    });
+
+    async function uploadFile(file) {
+      uploadResult.classList.add('show');
+      uploadResult.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;color:#a1a1aa">
+          <span class="material-symbols-outlined spin">sync</span>
+          Uploading ${file.name}...
+        </div>
+      `;
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('reportType', 'settlement');
+
+        const res = await fetch('/api/amazon/reports/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
           uploadResult.innerHTML = `
-            <div class="bg-red-900/30 border border-red-700 rounded-lg p-4">
-              <div class="flex items-center gap-2 text-red-400">
+            <div class="result-box error">
+              <div class="result-box-header">
                 <span class="material-symbols-outlined">error</span>
-                Upload failed: ${error.message}
+                Error: ${data.error}
               </div>
             </div>
           `;
+        } else {
+          uploadResult.innerHTML = `
+            <div class="result-box success">
+              <div class="result-box-header">
+                <span class="material-symbols-outlined">check_circle</span>
+                Settlement uploaded successfully!
+              </div>
+              <div class="result-box-content">
+                <p>Settlement ID: ${data.result?.settlementId || 'N/A'}</p>
+                <p>Transactions: ${data.result?.transactionCount || 0}</p>
+                <p>Total Amount: ${formatCurrency(data.result?.totalAmount || 0)}</p>
+              </div>
+            </div>
+          `;
+          loadSettlements();
         }
+      } catch (error) {
+        uploadResult.innerHTML = `
+          <div class="result-box error">
+            <div class="result-box-header">
+              <span class="material-symbols-outlined">error</span>
+              Upload failed: ${error.message}
+            </div>
+          </div>
+        `;
       }
+    }
 
-      // Close modal on escape
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          closeDetailModal();
-        }
-      });
+    // Close modal on escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeDetailModal();
+      }
+    });
 
-      // Initialize
-      loadSettlements();
-    </script>
-  </body>
+    // Initialize
+    loadSettlements();
+  </script>
+</body>
 </html>

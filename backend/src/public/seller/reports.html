@@ -1,756 +1,622 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Reports - Amazon Seller</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
-    <script src="/shell-v2.js"></script>
-  </head>
-  <body class="min-h-screen bg-slate-900">
-    <!-- Page Header -->
-    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4">
-      <div class="flex items-center justify-between max-w-6xl mx-auto">
-        <div class="flex items-center gap-3">
-          <span class="material-symbols-outlined text-orange-400 text-2xl">upload_file</span>
-          <h1 class="text-white text-xl font-semibold">Upload Reports</h1>
-        </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload Reports - Amazon Seller</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .page-logo-container { background: #fff; border-radius: 10px; padding: 8px 14px; display: flex; align-items: center; justify-content: center; }
+    .page-logo { height: 28px; width: auto; }
+
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .card-title { font-size: 16px; font-weight: 600; color: #fff; margin: 0; }
+    .card-body { padding: 20px; }
+
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; text-decoration: none; }
+    .btn-primary { background: #f59e0b; color: white; }
+    .btn-primary:hover { background: #d97706; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn-purple { background: #8b5cf6; color: white; }
+    .btn-purple:hover { background: #7c3aed; }
+    .btn-blue { background: #3b82f6; color: white; }
+    .btn-blue:hover { background: #2563eb; }
+    .btn-red { background: #ef4444; color: white; }
+    .btn-red:hover { background: #dc2626; }
+    .btn .material-symbols-outlined { font-size: 18px; }
+
+    /* Report Type Selector */
+    .report-types { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    @media (max-width: 900px) { .report-types { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 500px) { .report-types { grid-template-columns: 1fr; } }
+    .report-type-btn { background: #12121a; border: 1px solid #252532; border-radius: 10px; padding: 20px 16px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+    .report-type-btn:hover { border-color: #f59e0b; background: #1a1a24; }
+    .report-type-btn.active { border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
+    .report-type-btn .material-symbols-outlined { font-size: 32px; color: #71717a; }
+    .report-type-btn.active .material-symbols-outlined { color: #f59e0b; }
+    .report-type-btn.vcs .material-symbols-outlined { color: #a78bfa; }
+    .report-type-btn.fba .material-symbols-outlined { color: #4ade80; }
+    .report-type-btn.returns .material-symbols-outlined { color: #f87171; }
+    .report-type-btn.settlement .material-symbols-outlined { color: #60a5fa; }
+    .report-type-name { font-size: 14px; font-weight: 600; color: #fff; }
+    .report-type-desc { font-size: 11px; color: #71717a; }
+
+    /* Upload Zone */
+    .upload-section { display: none; }
+    .upload-section.show { display: block; }
+    .upload-zone { border: 2px dashed #3f3f50; border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.15s; }
+    .upload-zone:hover, .upload-zone.dragover { border-color: #f59e0b; background: rgba(245, 158, 11, 0.05); }
+    .upload-zone .material-symbols-outlined { font-size: 48px; color: #52525b; margin-bottom: 12px; display: block; }
+    .upload-zone-text { font-size: 14px; color: #a1a1aa; margin-bottom: 4px; }
+    .upload-zone-hint { font-size: 12px; color: #52525b; }
+    .upload-zone input { display: none; }
+
+    .upload-progress { display: none; align-items: center; gap: 12px; padding: 16px; background: #12121a; border-radius: 10px; margin-top: 16px; }
+    .upload-progress.show { display: flex; }
+    .upload-progress .material-symbols-outlined { font-size: 24px; color: #f59e0b; animation: spin 1s linear infinite; }
+    .progress-bar { flex: 1; height: 6px; background: #252532; border-radius: 3px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: #f59e0b; width: 50%; }
+
+    .result-box { padding: 16px; border-radius: 10px; margin-top: 16px; display: none; }
+    .result-box.show { display: block; }
+    .result-box.success { background: rgba(34, 197, 94, 0.1); border: 1px solid #22c55e; }
+    .result-box.error { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; }
+    .result-box-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 600; }
+    .result-box.success .result-box-header { color: #4ade80; }
+    .result-box.error .result-box-header { color: #f87171; }
+    .result-box-header .material-symbols-outlined { font-size: 20px; }
+    .result-box-content { font-size: 13px; color: #e4e4e7; }
+
+    /* Quick Actions */
+    .quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    @media (max-width: 1100px) { .quick-actions { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px) { .quick-actions { grid-template-columns: 1fr; } }
+    .quick-action { background: #18181f; border: 1px solid #252532; border-radius: 12px; padding: 20px; }
+    .quick-action-header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .quick-action-header .material-symbols-outlined { font-size: 22px; }
+    .quick-action-header.vcs .material-symbols-outlined { color: #a78bfa; }
+    .quick-action-header.fba .material-symbols-outlined { color: #4ade80; }
+    .quick-action-header.returns .material-symbols-outlined { color: #f87171; }
+    .quick-action-header.settlement .material-symbols-outlined { color: #60a5fa; }
+    .quick-action-title { font-size: 14px; font-weight: 600; color: #fff; }
+    .quick-action-stats { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .quick-action-stat { display: flex; justify-content: space-between; font-size: 13px; }
+    .quick-action-stat label { color: #71717a; }
+    .quick-action-stat span { font-weight: 600; }
+    .quick-action-stat span.warning { color: #fbbf24; }
+    .quick-action-stat span.success { color: #4ade80; }
+    .quick-action-stat span.danger { color: #f87171; }
+    .quick-action-warning { display: none; align-items: center; gap: 4px; font-size: 11px; color: #fbbf24; margin-bottom: 12px; }
+    .quick-action-warning.show { display: flex; }
+    .quick-action-warning .material-symbols-outlined { font-size: 14px; }
+
+    /* Recent Uploads */
+    .recent-list { display: flex; flex-direction: column; gap: 10px; }
+    .recent-item { display: flex; align-items: center; justify-content: space-between; background: #12121a; border: 1px solid #252532; border-radius: 10px; padding: 12px 16px; }
+    .recent-item-info { display: flex; align-items: center; gap: 12px; }
+    .recent-item-badge { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .recent-item-badge.vcs { background: rgba(167, 139, 250, 0.2); color: #a78bfa; }
+    .recent-item-badge.fba { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
+    .recent-item-badge.returns { background: rgba(248, 113, 113, 0.2); color: #f87171; }
+    .recent-item-name { font-size: 13px; color: #e4e4e7; }
+    .recent-item-date { font-size: 11px; color: #52525b; }
+    .recent-item-count { font-size: 13px; color: #71717a; }
+
+    .empty-state { padding: 40px 20px; text-align: center; }
+    .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 12px; display: block; }
+    .empty-state-text { font-size: 14px; color: #71717a; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; width: 100%; max-width: 900px; max-height: 90vh; overflow: hidden; }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; }
+    .modal-close { background: none; border: none; color: #71717a; cursor: pointer; padding: 4px; }
+    .modal-close:hover { color: #fff; }
+    .modal-body { padding: 20px; overflow-y: auto; max-height: calc(90vh - 70px); }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #252532; }
+    th { background: #12121a; font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; }
+    td { font-size: 13px; color: #e4e4e7; }
+    td.text-right, th.text-right { text-align: right; }
+    td.success { color: #4ade80; }
+    td.warning { color: #fbbf24; }
+    td.danger { color: #f87171; }
+    td.bold { font-weight: 600; }
+    .font-mono { font-family: monospace; font-size: 11px; }
+
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div class="page-logo-container">
+        <img src="/assets/logos/amazon-seller-central.png" alt="Amazon Seller Central" class="page-logo">
       </div>
     </header>
 
-    <main class="max-w-6xl mx-auto px-6 py-8">
-      <!-- Report Type Selector -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
-        <h2 class="text-white font-semibold text-lg mb-4">Select Report Type</h2>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <button onclick="selectReportType('vcs')" id="btn-vcs" class="report-type-btn bg-slate-700 hover:bg-purple-600 text-white p-4 rounded-lg flex flex-col items-center gap-2 transition-colors">
-            <span class="material-symbols-outlined text-3xl">receipt_long</span>
-            <span class="font-medium">VCS Tax Report</span>
-            <span class="text-xs text-slate-400">VAT Transactions</span>
-          </button>
-          <button onclick="selectReportType('fba')" id="btn-fba" class="report-type-btn bg-slate-700 hover:bg-green-600 text-white p-4 rounded-lg flex flex-col items-center gap-2 transition-colors">
-            <span class="material-symbols-outlined text-3xl">inventory_2</span>
-            <span class="font-medium">FBA Inventory</span>
-            <span class="text-xs text-slate-400">Stock Levels</span>
-          </button>
-          <button onclick="selectReportType('returns')" id="btn-returns" class="report-type-btn bg-slate-700 hover:bg-red-600 text-white p-4 rounded-lg flex flex-col items-center gap-2 transition-colors">
-            <span class="material-symbols-outlined text-3xl">assignment_return</span>
-            <span class="font-medium">Returns</span>
-            <span class="text-xs text-slate-400">FBA Returns</span>
-          </button>
-          <button onclick="selectReportType('settlement')" id="btn-settlement" class="report-type-btn bg-slate-700 hover:bg-blue-600 text-white p-4 rounded-lg flex flex-col items-center gap-2 transition-colors">
-            <span class="material-symbols-outlined text-3xl">payments</span>
-            <span class="font-medium">Settlement</span>
-            <span class="text-xs text-slate-400">Financial Report</span>
-          </button>
-        </div>
+    <!-- Report Type Selector -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Select Report Type</h2>
       </div>
-
-      <!-- Upload Section -->
-      <div id="upload-section" class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8 hidden">
-        <div class="flex items-center justify-between mb-4">
-          <h2 id="upload-title" class="text-white font-semibold text-lg">Upload Report</h2>
-          <span id="upload-help" class="text-slate-500 text-sm"></span>
-        </div>
-
-        <div class="bg-slate-900 rounded-lg p-6 mb-4">
-          <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center hover:border-orange-500 transition-colors cursor-pointer">
-            <span class="material-symbols-outlined text-4xl text-slate-500 mb-2">upload_file</span>
-            <p class="text-slate-400 mb-2">Drag & drop your CSV/TSV file here</p>
-            <p class="text-slate-500 text-sm">or click to browse</p>
-            <input type="file" id="file-input" accept=".csv,.tsv,.txt" class="hidden" />
-          </div>
-        </div>
-
-        <!-- Progress -->
-        <div id="upload-progress" class="hidden">
-          <div class="flex items-center gap-3 mb-2">
-            <div class="animate-spin">
-              <span class="material-symbols-outlined text-orange-400">progress_activity</span>
-            </div>
-            <span class="text-slate-300">Processing report...</span>
-          </div>
-          <div class="w-full bg-slate-700 rounded-full h-2">
-            <div id="progress-bar" class="bg-orange-500 h-2 rounded-full transition-all" style="width: 50%"></div>
-          </div>
-        </div>
-
-        <!-- Success -->
-        <div id="upload-result" class="hidden">
-          <div class="bg-green-900/30 border border-green-700 rounded-lg p-4">
-            <div class="flex items-center gap-2 text-green-400 mb-2">
-              <span class="material-symbols-outlined">check_circle</span>
-              <span class="font-semibold">Report Processed Successfully</span>
-            </div>
-            <div id="result-summary" class="text-slate-300 text-sm"></div>
-          </div>
-        </div>
-
-        <!-- Error -->
-        <div id="upload-error" class="hidden">
-          <div class="bg-red-900/30 border border-red-700 rounded-lg p-4">
-            <div class="flex items-center gap-2 text-red-400 mb-2">
-              <span class="material-symbols-outlined">error</span>
-              <span class="font-semibold">Upload Failed</span>
-            </div>
-            <div id="error-message" class="text-slate-300 text-sm"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quick Actions -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <!-- VCS Summary -->
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-purple-400">receipt_long</span>
-            <h3 class="text-white font-semibold">VCS Tax Reports</h3>
-          </div>
-          <div id="vcs-stats" class="space-y-2 text-sm mb-4">
-            <div class="flex justify-between text-slate-400">
-              <span>Pending Orders</span>
-              <span id="vcs-pending" class="text-yellow-400 font-semibold">-</span>
-            </div>
-            <div class="flex justify-between text-slate-400">
-              <span>Invoiced</span>
-              <span id="vcs-invoiced" class="text-green-400 font-semibold">-</span>
-            </div>
-          </div>
-          <a href="/app/amazon-vcs.html" class="block w-full text-center bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg transition-colors">
-            View VCS Orders
-          </a>
-        </div>
-
-        <!-- Settlement Summary -->
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-blue-400">payments</span>
-            <h3 class="text-white font-semibold">Settlements</h3>
-          </div>
-          <div id="settlement-stats" class="space-y-2 text-sm mb-4">
-            <div class="flex justify-between text-slate-400">
-              <span>Last Settlement</span>
-              <span id="settlement-last-date" class="text-white font-semibold">-</span>
-            </div>
-            <div class="flex justify-between text-slate-400">
-              <span>Total Amount</span>
-              <span id="settlement-last-amount" class="text-green-400 font-semibold">-</span>
-            </div>
-            <div id="settlement-warning" class="hidden text-yellow-400 text-xs mt-2">
-              <span class="material-symbols-outlined text-sm align-middle">warning</span>
-              <span id="settlement-warning-text"></span>
-            </div>
-          </div>
-          <button onclick="viewSettlements()" class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors">
-            View Settlements
+      <div class="card-body">
+        <div class="report-types">
+          <button class="report-type-btn vcs" id="btn-vcs" onclick="selectReportType('vcs')">
+            <span class="material-symbols-outlined">receipt_long</span>
+            <span class="report-type-name">VCS Tax Report</span>
+            <span class="report-type-desc">VAT Transactions</span>
           </button>
-        </div>
-
-        <!-- FBA Inventory Summary -->
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-green-400">inventory_2</span>
-            <h3 class="text-white font-semibold">FBA Inventory</h3>
-          </div>
-          <div id="fba-stats" class="space-y-2 text-sm mb-4">
-            <div class="flex justify-between text-slate-400">
-              <span>Total SKUs</span>
-              <span id="fba-skus" class="text-white font-semibold">-</span>
-            </div>
-            <div class="flex justify-between text-slate-400">
-              <span>Fulfillable</span>
-              <span id="fba-fulfillable" class="text-green-400 font-semibold">-</span>
-            </div>
-          </div>
-          <button onclick="viewFbaInventory()" class="block w-full text-center bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-colors">
-            View Inventory
+          <button class="report-type-btn fba" id="btn-fba" onclick="selectReportType('fba')">
+            <span class="material-symbols-outlined">inventory_2</span>
+            <span class="report-type-name">FBA Inventory</span>
+            <span class="report-type-desc">Stock Levels</span>
           </button>
-        </div>
-
-        <!-- Returns Summary -->
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-red-400">assignment_return</span>
-            <h3 class="text-white font-semibold">Returns (30 days)</h3>
-          </div>
-          <div id="returns-stats" class="space-y-2 text-sm mb-4">
-            <div class="flex justify-between text-slate-400">
-              <span>Total Returns</span>
-              <span id="returns-total" class="text-red-400 font-semibold">-</span>
-            </div>
-            <div class="flex justify-between text-slate-400">
-              <span>Sellable</span>
-              <span id="returns-sellable" class="text-green-400 font-semibold">-</span>
-            </div>
-          </div>
-          <button onclick="viewReturns()" class="block w-full text-center bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition-colors">
-            View Returns
+          <button class="report-type-btn returns" id="btn-returns" onclick="selectReportType('returns')">
+            <span class="material-symbols-outlined">assignment_return</span>
+            <span class="report-type-name">Returns</span>
+            <span class="report-type-desc">FBA Returns</span>
           </button>
-        </div>
-      </div>
-
-      <!-- Recent Uploads -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-        <h2 class="text-white font-semibold text-lg mb-4">Recent Uploads</h2>
-        <div id="recent-uploads" class="space-y-3">
-          <div class="text-slate-500 text-sm">Loading...</div>
-        </div>
-      </div>
-    </main>
-
-    <!-- FBA Inventory Modal -->
-    <div id="fba-modal" class="fixed inset-0 bg-black/50 hidden z-50">
-      <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
-          <div class="flex items-center justify-between p-4 border-b border-slate-700">
-            <h3 class="text-white font-semibold">FBA Inventory</h3>
-            <button onclick="closeModal('fba-modal')" class="text-slate-400 hover:text-white">
-              <span class="material-symbols-outlined">close</span>
-            </button>
-          </div>
-          <div class="p-4 overflow-auto max-h-[60vh]">
-            <table class="w-full text-sm">
-              <thead class="text-slate-400 border-b border-slate-700">
-                <tr>
-                  <th class="text-left py-2">SKU</th>
-                  <th class="text-right py-2">Fulfillable</th>
-                  <th class="text-right py-2">Inbound</th>
-                  <th class="text-right py-2">Reserved</th>
-                  <th class="text-right py-2">Total</th>
-                </tr>
-              </thead>
-              <tbody id="fba-table-body" class="text-slate-300"></tbody>
-            </table>
-          </div>
+          <button class="report-type-btn settlement" id="btn-settlement" onclick="selectReportType('settlement')">
+            <span class="material-symbols-outlined">payments</span>
+            <span class="report-type-name">Settlement</span>
+            <span class="report-type-desc">Financial Report</span>
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- Returns Modal -->
-    <div id="returns-modal" class="fixed inset-0 bg-black/50 hidden z-50">
-      <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
-          <div class="flex items-center justify-between p-4 border-b border-slate-700">
-            <h3 class="text-white font-semibold">Returns (Last 30 Days)</h3>
-            <button onclick="closeModal('returns-modal')" class="text-slate-400 hover:text-white">
-              <span class="material-symbols-outlined">close</span>
-            </button>
+    <!-- Upload Section -->
+    <div class="card upload-section" id="upload-section">
+      <div class="card-header">
+        <h2 class="card-title" id="upload-title">Upload Report</h2>
+        <span id="upload-help" style="font-size:12px;color:#71717a"></span>
+      </div>
+      <div class="card-body">
+        <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+          <span class="material-symbols-outlined">upload_file</span>
+          <div class="upload-zone-text">Drag & drop your CSV/TSV file here, or click to browse</div>
+          <div class="upload-zone-hint" id="upload-hint"></div>
+          <input type="file" id="file-input" accept=".csv,.tsv,.txt">
+        </div>
+        <div class="upload-progress" id="upload-progress">
+          <span class="material-symbols-outlined">sync</span>
+          <div class="progress-bar"><div class="progress-bar-fill"></div></div>
+          <span style="color:#a1a1aa;font-size:13px">Processing...</span>
+        </div>
+        <div class="result-box success" id="upload-result">
+          <div class="result-box-header">
+            <span class="material-symbols-outlined">check_circle</span>
+            Report Processed Successfully
           </div>
-          <div class="p-4 overflow-auto max-h-[60vh]">
-            <table class="w-full text-sm">
-              <thead class="text-slate-400 border-b border-slate-700">
-                <tr>
-                  <th class="text-left py-2">SKU</th>
-                  <th class="text-left py-2">Product</th>
-                  <th class="text-right py-2">Returns</th>
-                  <th class="text-right py-2">Sellable</th>
-                  <th class="text-left py-2">Top Reason</th>
-                </tr>
-              </thead>
-              <tbody id="returns-table-body" class="text-slate-300"></tbody>
-            </table>
+          <div class="result-box-content" id="result-summary"></div>
+        </div>
+        <div class="result-box error" id="upload-error">
+          <div class="result-box-header">
+            <span class="material-symbols-outlined">error</span>
+            Upload Failed
           </div>
+          <div class="result-box-content" id="error-message"></div>
         </div>
       </div>
     </div>
 
-    <!-- Settlements Modal -->
-    <div id="settlements-modal" class="fixed inset-0 bg-black/50 hidden z-50">
-      <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-5xl max-h-[80vh] overflow-hidden">
-          <div class="flex items-center justify-between p-4 border-b border-slate-700">
-            <h3 class="text-white font-semibold">Amazon Settlement Reports</h3>
-            <button onclick="closeModal('settlements-modal')" class="text-slate-400 hover:text-white">
-              <span class="material-symbols-outlined">close</span>
-            </button>
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <!-- VCS -->
+      <div class="quick-action">
+        <div class="quick-action-header vcs">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span class="quick-action-title">VCS Tax Reports</span>
+        </div>
+        <div class="quick-action-stats">
+          <div class="quick-action-stat">
+            <label>Pending Orders</label>
+            <span class="warning" id="vcs-pending">-</span>
           </div>
-          <div class="p-4 overflow-auto max-h-[60vh]">
-            <div id="settlements-list" class="space-y-4">
-              <div class="text-slate-500 text-sm">Loading...</div>
-            </div>
+          <div class="quick-action-stat">
+            <label>Invoiced</label>
+            <span class="success" id="vcs-invoiced">-</span>
+          </div>
+        </div>
+        <a href="/seller/vcs.html" class="btn btn-purple" style="width:100%;justify-content:center">View VCS Orders</a>
+      </div>
+
+      <!-- Settlements -->
+      <div class="quick-action">
+        <div class="quick-action-header settlement">
+          <span class="material-symbols-outlined">payments</span>
+          <span class="quick-action-title">Settlements</span>
+        </div>
+        <div class="quick-action-stats">
+          <div class="quick-action-stat">
+            <label>Last Settlement</label>
+            <span id="settlement-last-date">-</span>
+          </div>
+          <div class="quick-action-stat">
+            <label>Total Amount</label>
+            <span class="success" id="settlement-last-amount">-</span>
+          </div>
+        </div>
+        <div class="quick-action-warning" id="settlement-warning">
+          <span class="material-symbols-outlined">warning</span>
+          <span id="settlement-warning-text"></span>
+        </div>
+        <button onclick="viewSettlements()" class="btn btn-blue" style="width:100%;justify-content:center">View Settlements</button>
+      </div>
+
+      <!-- FBA Inventory -->
+      <div class="quick-action">
+        <div class="quick-action-header fba">
+          <span class="material-symbols-outlined">inventory_2</span>
+          <span class="quick-action-title">FBA Inventory</span>
+        </div>
+        <div class="quick-action-stats">
+          <div class="quick-action-stat">
+            <label>Total SKUs</label>
+            <span id="fba-skus">-</span>
+          </div>
+          <div class="quick-action-stat">
+            <label>Fulfillable</label>
+            <span class="success" id="fba-fulfillable">-</span>
+          </div>
+        </div>
+        <button onclick="viewFbaInventory()" class="btn btn-success" style="width:100%;justify-content:center">View Inventory</button>
+      </div>
+
+      <!-- Returns -->
+      <div class="quick-action">
+        <div class="quick-action-header returns">
+          <span class="material-symbols-outlined">assignment_return</span>
+          <span class="quick-action-title">Returns (30 days)</span>
+        </div>
+        <div class="quick-action-stats">
+          <div class="quick-action-stat">
+            <label>Total Returns</label>
+            <span class="danger" id="returns-total">-</span>
+          </div>
+          <div class="quick-action-stat">
+            <label>Sellable</label>
+            <span class="success" id="returns-sellable">-</span>
+          </div>
+        </div>
+        <button onclick="viewReturns()" class="btn btn-red" style="width:100%;justify-content:center">View Returns</button>
+      </div>
+    </div>
+
+    <!-- Recent Uploads -->
+    <div class="card" style="margin-top:20px">
+      <div class="card-header">
+        <h2 class="card-title">Recent Uploads</h2>
+      </div>
+      <div class="card-body">
+        <div class="recent-list" id="recent-uploads">
+          <div class="empty-state">
+            <span class="material-symbols-outlined">hourglass_empty</span>
+            <div class="empty-state-text">Loading...</div>
           </div>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Settlement Detail Modal -->
-    <div id="settlement-detail-modal" class="fixed inset-0 bg-black/50 hidden z-50">
-      <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-5xl max-h-[85vh] overflow-hidden">
-          <div class="flex items-center justify-between p-4 border-b border-slate-700">
-            <h3 id="settlement-detail-title" class="text-white font-semibold">Settlement Details</h3>
-            <button onclick="closeModal('settlement-detail-modal')" class="text-slate-400 hover:text-white">
-              <span class="material-symbols-outlined">close</span>
-            </button>
-          </div>
-          <div class="p-4 overflow-auto max-h-[70vh]">
-            <div id="settlement-detail-content" class="space-y-6">
-              <div class="text-slate-500 text-sm">Loading...</div>
-            </div>
-          </div>
-        </div>
+  <!-- FBA Inventory Modal -->
+  <div class="modal-overlay" id="fba-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">FBA Inventory</h3>
+        <button class="modal-close" onclick="closeModal('fba-modal')">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th class="text-right">Fulfillable</th>
+              <th class="text-right">Inbound</th>
+              <th class="text-right">Reserved</th>
+              <th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody id="fba-table-body"></tbody>
+        </table>
       </div>
     </div>
+  </div>
 
-    <script>
-      // State
-      let selectedType = null;
-      const reportConfigs = {
-        vcs: {
-          title: 'VCS Tax Report',
-          help: 'Reports → Tax Document Library → VAT Transaction Report',
-          endpoint: '/api/amazon/vcs/upload',
-          color: 'purple'
-        },
-        fba: {
-          title: 'FBA Inventory Report',
-          help: 'Inventory → Manage FBA Inventory → Download',
-          endpoint: '/api/amazon/fba/upload',
-          color: 'green'
-        },
-        returns: {
-          title: 'FBA Returns Report',
-          help: 'Reports → Fulfillment → FBA Customer Returns',
-          endpoint: '/api/amazon/returns/upload',
-          color: 'red'
-        },
-        settlement: {
-          title: 'Settlement Report',
-          help: 'Reports → Payments → Settlement Reports',
-          endpoint: '/api/amazon/settlement/upload',
-          color: 'blue'
-        }
-      };
+  <!-- Returns Modal -->
+  <div class="modal-overlay" id="returns-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Returns (Last 30 Days)</h3>
+        <button class="modal-close" onclick="closeModal('returns-modal')">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Product</th>
+              <th class="text-right">Returns</th>
+              <th class="text-right">Sellable</th>
+            </tr>
+          </thead>
+          <tbody id="returns-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
-      // Initialize
-      document.addEventListener('DOMContentLoaded', () => {
-        loadStats();
-        loadRecentUploads();
-        setupEventListeners();
+  <!-- Settlements Modal -->
+  <div class="modal-overlay" id="settlements-modal">
+    <div class="modal" style="max-width:1000px">
+      <div class="modal-header">
+        <h3 class="modal-title">Settlement Reports</h3>
+        <button class="modal-close" onclick="closeModal('settlements-modal')">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body" id="settlements-list"></div>
+    </div>
+  </div>
+
+  <script>
+    let selectedType = null;
+    const reportConfigs = {
+      vcs: { title: 'VCS Tax Report', help: 'Reports > Tax Document Library > VAT Transaction Report', endpoint: '/api/amazon/vcs/upload' },
+      fba: { title: 'FBA Inventory Report', help: 'Inventory > Manage FBA Inventory > Download', endpoint: '/api/amazon/fba/upload' },
+      returns: { title: 'FBA Returns Report', help: 'Reports > Fulfillment > FBA Customer Returns', endpoint: '/api/amazon/returns/upload' },
+      settlement: { title: 'Settlement Report', help: 'Reports > Payments > Settlement Reports', endpoint: '/api/amazon/settlement/upload' }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadStats();
+      loadRecentUploads();
+      setupEventListeners();
+    });
+
+    function setupEventListeners() {
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
+
+      dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+      dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
       });
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) uploadFile(e.target.files[0]);
+      });
+    }
 
-      function setupEventListeners() {
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('file-input');
+    function selectReportType(type) {
+      selectedType = type;
+      const config = reportConfigs[type];
 
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => {
-          e.preventDefault();
-          dropZone.classList.add('border-orange-500');
-        });
-        dropZone.addEventListener('dragleave', () => {
-          dropZone.classList.remove('border-orange-500');
-        });
-        dropZone.addEventListener('drop', (e) => {
-          e.preventDefault();
-          dropZone.classList.remove('border-orange-500');
-          const file = e.dataTransfer.files[0];
-          if (file) uploadFile(file);
-        });
-        fileInput.addEventListener('change', (e) => {
-          const file = e.target.files[0];
-          if (file) uploadFile(file);
-        });
+      document.querySelectorAll('.report-type-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(`btn-${type}`).classList.add('active');
+
+      document.getElementById('upload-section').classList.add('show');
+      document.getElementById('upload-title').textContent = `Upload ${config.title}`;
+      document.getElementById('upload-help').textContent = config.help;
+      document.getElementById('upload-progress').classList.remove('show');
+      document.getElementById('upload-result').classList.remove('show');
+      document.getElementById('upload-error').classList.remove('show');
+    }
+
+    async function uploadFile(file) {
+      if (!selectedType) { alert('Please select a report type first'); return; }
+      const config = reportConfigs[selectedType];
+
+      document.getElementById('upload-progress').classList.add('show');
+      document.getElementById('upload-result').classList.remove('show');
+      document.getElementById('upload-error').classList.remove('show');
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const response = await fetch(config.endpoint, { method: 'POST', body: formData });
+        const result = await response.json();
+        document.getElementById('upload-progress').classList.remove('show');
+
+        if (response.ok && result.success) {
+          document.getElementById('upload-result').classList.add('show');
+          document.getElementById('result-summary').innerHTML = result.message || 'Report processed successfully';
+          loadStats();
+          loadRecentUploads();
+        } else {
+          document.getElementById('upload-error').classList.add('show');
+          document.getElementById('error-message').textContent = result.error || 'Unknown error';
+        }
+      } catch (error) {
+        document.getElementById('upload-progress').classList.remove('show');
+        document.getElementById('upload-error').classList.add('show');
+        document.getElementById('error-message').textContent = error.message;
       }
+    }
 
-      function selectReportType(type) {
-        selectedType = type;
-        const config = reportConfigs[type];
+    async function loadStats() {
+      try {
+        const vcsRes = await fetch('/api/amazon/vcs/summary');
+        const vcsData = await vcsRes.json();
+        document.getElementById('vcs-pending').textContent = vcsData.byStatus?.find(s => s._id === 'pending')?.count || 0;
+        document.getElementById('vcs-invoiced').textContent = vcsData.byStatus?.find(s => s._id === 'invoiced')?.count || 0;
+      } catch (e) {}
 
-        // Update buttons
-        document.querySelectorAll('.report-type-btn').forEach(btn => {
-          btn.classList.remove('bg-purple-600', 'bg-green-600', 'bg-red-600', 'bg-blue-600');
-          btn.classList.add('bg-slate-700');
-        });
-        document.getElementById(`btn-${type}`).classList.remove('bg-slate-700');
-        document.getElementById(`btn-${type}`).classList.add(`bg-${config.color}-600`);
+      try {
+        const fbaRes = await fetch('/api/amazon/fba/inventory');
+        const fbaData = await fbaRes.json();
+        document.getElementById('fba-skus').textContent = fbaData.skuCount || 0;
+        document.getElementById('fba-fulfillable').textContent = (fbaData.totalFulfillable || 0).toLocaleString();
+      } catch (e) {}
 
-        // Show upload section
-        document.getElementById('upload-section').classList.remove('hidden');
-        document.getElementById('upload-title').textContent = `Upload ${config.title}`;
-        document.getElementById('upload-help').textContent = config.help;
+      try {
+        const retRes = await fetch('/api/amazon/returns/summary?days=30');
+        const retData = await retRes.json();
+        document.getElementById('returns-total').textContent = retData.totalReturns || 0;
+        document.getElementById('returns-sellable').textContent = retData.sellableReturns || 0;
+      } catch (e) {}
 
-        // Reset upload state
-        document.getElementById('upload-progress').classList.add('hidden');
-        document.getElementById('upload-result').classList.add('hidden');
-        document.getElementById('upload-error').classList.add('hidden');
-      }
+      try {
+        const settRes = await fetch('/api/amazon/settlement-reminders');
+        const settData = await settRes.json();
+        if (settData.lastSettlement) {
+          document.getElementById('settlement-last-date').textContent = formatDateShort(settData.lastSettlement.endDate);
+          document.getElementById('settlement-last-amount').textContent = formatCurrency(settData.lastSettlement.totalAmount || 0);
+        }
+        if (settData.isOverdue) {
+          document.getElementById('settlement-warning').classList.add('show');
+          document.getElementById('settlement-warning-text').textContent = settData.message;
+        }
+      } catch (e) {}
+    }
 
-      async function uploadFile(file) {
-        if (!selectedType) {
-          alert('Please select a report type first');
+    async function loadRecentUploads() {
+      const container = document.getElementById('recent-uploads');
+      try {
+        const [vcsRes, fbaRes, retRes] = await Promise.all([
+          fetch('/api/amazon/vcs/reports').then(r => r.json()).catch(() => ({ reports: [] })),
+          fetch('/api/amazon/fba/reports').then(r => r.json()).catch(() => ({ reports: [] })),
+          fetch('/api/amazon/returns/reports').then(r => r.json()).catch(() => ({ reports: [] }))
+        ]);
+
+        const allReports = [
+          ...vcsRes.reports.map(r => ({ ...r, type: 'VCS', typeClass: 'vcs' })),
+          ...fbaRes.reports.map(r => ({ ...r, type: 'FBA', typeClass: 'fba' })),
+          ...retRes.reports.map(r => ({ ...r, type: 'Returns', typeClass: 'returns' }))
+        ].sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)).slice(0, 10);
+
+        if (allReports.length === 0) {
+          container.innerHTML = '<div class="empty-state"><span class="material-symbols-outlined">inbox</span><div class="empty-state-text">No reports uploaded yet</div></div>';
           return;
         }
 
-        const config = reportConfigs[selectedType];
-
-        document.getElementById('upload-progress').classList.remove('hidden');
-        document.getElementById('upload-result').classList.add('hidden');
-        document.getElementById('upload-error').classList.add('hidden');
-
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-          const response = await fetch(config.endpoint, {
-            method: 'POST',
-            body: formData
-          });
-
-          const result = await response.json();
-          document.getElementById('upload-progress').classList.add('hidden');
-
-          if (response.ok && result.success) {
-            document.getElementById('upload-result').classList.remove('hidden');
-            document.getElementById('result-summary').innerHTML = result.message || 'Report processed successfully';
-            loadStats();
-            loadRecentUploads();
-          } else {
-            document.getElementById('upload-error').classList.remove('hidden');
-            document.getElementById('error-message').textContent = result.error || 'Unknown error';
-          }
-        } catch (error) {
-          document.getElementById('upload-progress').classList.add('hidden');
-          document.getElementById('upload-error').classList.remove('hidden');
-          document.getElementById('error-message').textContent = error.message;
-        }
-      }
-
-      async function loadStats() {
-        // VCS Stats
-        try {
-          const vcsRes = await fetch('/api/amazon/vcs/summary');
-          const vcsData = await vcsRes.json();
-          const pending = vcsData.byStatus?.find(s => s._id === 'pending')?.count || 0;
-          const invoiced = vcsData.byStatus?.find(s => s._id === 'invoiced')?.count || 0;
-          document.getElementById('vcs-pending').textContent = pending;
-          document.getElementById('vcs-invoiced').textContent = invoiced;
-        } catch (e) { console.error('VCS stats error:', e); }
-
-        // FBA Stats
-        try {
-          const fbaRes = await fetch('/api/amazon/fba/inventory');
-          const fbaData = await fbaRes.json();
-          document.getElementById('fba-skus').textContent = fbaData.skuCount || 0;
-          document.getElementById('fba-fulfillable').textContent = (fbaData.totalFulfillable || 0).toLocaleString();
-        } catch (e) { console.error('FBA stats error:', e); }
-
-        // Returns Stats
-        try {
-          const retRes = await fetch('/api/amazon/returns/summary?days=30');
-          const retData = await retRes.json();
-          document.getElementById('returns-total').textContent = retData.totalReturns || 0;
-          document.getElementById('returns-sellable').textContent = retData.sellableReturns || 0;
-        } catch (e) { console.error('Returns stats error:', e); }
-
-        // Settlement Stats
-        try {
-          const settRes = await fetch('/api/amazon/settlement-reminders');
-          const settData = await settRes.json();
-          if (settData.lastSettlement) {
-            document.getElementById('settlement-last-date').textContent = formatDateShort(settData.lastSettlement.endDate);
-            const amount = settData.lastSettlement.totalAmount || 0;
-            document.getElementById('settlement-last-amount').textContent = formatCurrency(amount, 'EUR');
-          } else {
-            document.getElementById('settlement-last-date').textContent = 'None';
-            document.getElementById('settlement-last-amount').textContent = '-';
-          }
-          // Show warning if overdue
-          if (settData.isOverdue) {
-            document.getElementById('settlement-warning').classList.remove('hidden');
-            document.getElementById('settlement-warning-text').textContent = settData.message;
-          } else {
-            document.getElementById('settlement-warning').classList.add('hidden');
-          }
-        } catch (e) { console.error('Settlement stats error:', e); }
-      }
-
-      async function loadRecentUploads() {
-        const container = document.getElementById('recent-uploads');
-
-        try {
-          const [vcsRes, fbaRes, retRes] = await Promise.all([
-            fetch('/api/amazon/vcs/reports').then(r => r.json()).catch(() => ({ reports: [] })),
-            fetch('/api/amazon/fba/reports').then(r => r.json()).catch(() => ({ reports: [] })),
-            fetch('/api/amazon/returns/reports').then(r => r.json()).catch(() => ({ reports: [] }))
-          ]);
-
-          const allReports = [
-            ...vcsRes.reports.map(r => ({ ...r, type: 'VCS Tax', color: 'purple' })),
-            ...fbaRes.reports.map(r => ({ ...r, type: 'FBA Inventory', color: 'green' })),
-            ...retRes.reports.map(r => ({ ...r, type: 'Returns', color: 'red' }))
-          ].sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)).slice(0, 10);
-
-          if (allReports.length === 0) {
-            container.innerHTML = '<div class="text-slate-500 text-sm">No reports uploaded yet</div>';
-            return;
-          }
-
-          container.innerHTML = allReports.map(report => `
-            <div class="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
-              <div class="flex items-center gap-3">
-                <span class="px-2 py-1 bg-${report.color}-900/50 text-${report.color}-300 rounded text-xs">${report.type}</span>
-                <div>
-                  <div class="text-slate-300 text-sm">${report.filename || 'Report'}</div>
-                  <div class="text-slate-500 text-xs">${formatDate(report.uploadedAt)}</div>
-                </div>
-              </div>
-              <div class="text-slate-400 text-sm">
-                ${report.orderCount || report.skuCount || report.returnCount || 0} items
+        container.innerHTML = allReports.map(r => `
+          <div class="recent-item">
+            <div class="recent-item-info">
+              <span class="recent-item-badge ${r.typeClass}">${r.type}</span>
+              <div>
+                <div class="recent-item-name">${r.filename || 'Report'}</div>
+                <div class="recent-item-date">${formatDate(r.uploadedAt)}</div>
               </div>
             </div>
-          `).join('');
-        } catch (error) {
-          container.innerHTML = '<div class="text-red-400 text-sm">Error loading reports</div>';
-        }
+            <div class="recent-item-count">${r.orderCount || r.skuCount || r.returnCount || 0} items</div>
+          </div>
+        `).join('');
+      } catch (error) {
+        container.innerHTML = '<div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-text">Error loading reports</div></div>';
       }
+    }
 
-      async function viewFbaInventory() {
-        const modal = document.getElementById('fba-modal');
-        const tbody = document.getElementById('fba-table-body');
-        modal.classList.remove('hidden');
-        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">Loading...</td></tr>';
+    async function viewFbaInventory() {
+      const modal = document.getElementById('fba-modal');
+      const tbody = document.getElementById('fba-table-body');
+      modal.classList.add('show');
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#71717a">Loading...</td></tr>';
 
-        try {
-          const res = await fetch('/api/amazon/fba/inventory');
-          const data = await res.json();
-
-          if (!data.inventory || data.inventory.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">No inventory data. Upload an FBA Inventory report first.</td></tr>';
-            return;
-          }
-
-          tbody.innerHTML = data.inventory.slice(0, 100).map(item => `
-            <tr class="border-b border-slate-700/50">
-              <td class="py-2 font-mono text-xs">${item.sku}</td>
-              <td class="py-2 text-right text-green-400">${item.fulfillable}</td>
-              <td class="py-2 text-right text-yellow-400">${item.inbound}</td>
-              <td class="py-2 text-right text-orange-400">${item.reserved}</td>
-              <td class="py-2 text-right font-semibold">${item.totalQuantity}</td>
-            </tr>
-          `).join('');
-        } catch (error) {
-          tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-red-400">Error: ${error.message}</td></tr>`;
+      try {
+        const res = await fetch('/api/amazon/fba/inventory');
+        const data = await res.json();
+        if (!data.inventory?.length) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#71717a">No inventory data</td></tr>';
+          return;
         }
+        tbody.innerHTML = data.inventory.slice(0, 100).map(item => `
+          <tr>
+            <td class="font-mono">${item.sku}</td>
+            <td class="text-right success">${item.fulfillable}</td>
+            <td class="text-right warning">${item.inbound}</td>
+            <td class="text-right">${item.reserved}</td>
+            <td class="text-right bold">${item.totalQuantity}</td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#f87171">Error: ${error.message}</td></tr>`;
       }
+    }
 
-      async function viewReturns() {
-        const modal = document.getElementById('returns-modal');
-        const tbody = document.getElementById('returns-table-body');
-        modal.classList.remove('hidden');
-        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">Loading...</td></tr>';
+    async function viewReturns() {
+      const modal = document.getElementById('returns-modal');
+      const tbody = document.getElementById('returns-table-body');
+      modal.classList.add('show');
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:40px;color:#71717a">Loading...</td></tr>';
 
-        try {
-          const res = await fetch('/api/amazon/returns/summary?days=30');
-          const data = await res.json();
-
-          if (!data.topReturnedSkus || data.topReturnedSkus.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">No returns data. Upload a Returns report first.</td></tr>';
-            return;
-          }
-
-          tbody.innerHTML = data.topReturnedSkus.map(item => `
-            <tr class="border-b border-slate-700/50">
-              <td class="py-2 font-mono text-xs">${item.sku}</td>
-              <td class="py-2 text-slate-400 truncate max-w-[200px]">${item.productName || '-'}</td>
-              <td class="py-2 text-right text-red-400">${item.totalReturns}</td>
-              <td class="py-2 text-right text-green-400">${item.sellableReturns || 0}</td>
-              <td class="py-2 text-slate-400 text-xs">-</td>
-            </tr>
-          `).join('');
-        } catch (error) {
-          tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-red-400">Error: ${error.message}</td></tr>`;
+      try {
+        const res = await fetch('/api/amazon/returns/summary?days=30');
+        const data = await res.json();
+        if (!data.topReturnedSkus?.length) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:40px;color:#71717a">No returns data</td></tr>';
+          return;
         }
+        tbody.innerHTML = data.topReturnedSkus.map(item => `
+          <tr>
+            <td class="font-mono">${item.sku}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.productName || '-'}</td>
+            <td class="text-right danger">${item.totalReturns}</td>
+            <td class="text-right success">${item.sellableReturns || 0}</td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:#f87171">Error: ${error.message}</td></tr>`;
       }
+    }
 
-      async function viewSettlements() {
-        const modal = document.getElementById('settlements-modal');
-        const container = document.getElementById('settlements-list');
-        modal.classList.remove('hidden');
-        container.innerHTML = '<div class="text-slate-500 text-sm">Loading...</div>';
+    async function viewSettlements() {
+      const modal = document.getElementById('settlements-modal');
+      const container = document.getElementById('settlements-list');
+      modal.classList.add('show');
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:#71717a">Loading...</div>';
 
-        try {
-          const res = await fetch('/api/amazon/settlements?limit=20');
-          const data = await res.json();
-
-          if (!data.settlements || data.settlements.length === 0) {
-            container.innerHTML = '<div class="text-slate-500 text-sm">No settlements uploaded yet. Upload a Settlement Report using the button above.</div>';
-            return;
-          }
-
-          container.innerHTML = data.settlements.map(s => `
-            <div class="bg-slate-700/30 rounded-lg p-4 hover:bg-slate-700/50 cursor-pointer transition-colors" onclick="viewSettlementDetail('${s.settlementId}')">
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-3">
-                  <span class="material-symbols-outlined text-blue-400">payments</span>
-                  <div>
-                    <div class="text-white font-semibold">${s.settlementId}</div>
-                    <div class="text-slate-400 text-sm">
-                      ${formatDateShort(s.settlementStartDate)} - ${formatDateShort(s.settlementEndDate)}
-                    </div>
-                  </div>
-                </div>
-                <div class="text-right">
-                  <div class="text-green-400 font-semibold text-lg">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
-                  <div class="text-slate-500 text-xs">${s.transactionCount || 0} transactions</div>
-                </div>
-              </div>
-              ${s.depositDate ? `<div class="text-slate-500 text-xs">Deposit: ${formatDateShort(s.depositDate)}</div>` : ''}
-            </div>
-          `).join('');
-        } catch (error) {
-          container.innerHTML = `<div class="text-red-400 text-sm">Error: ${error.message}</div>`;
+      try {
+        const res = await fetch('/api/amazon/settlements?limit=20');
+        const data = await res.json();
+        if (!data.settlements?.length) {
+          container.innerHTML = '<div style="text-align:center;padding:40px;color:#71717a">No settlements uploaded yet</div>';
+          return;
         }
-      }
-
-      async function viewSettlementDetail(settlementId) {
-        const modal = document.getElementById('settlement-detail-modal');
-        const title = document.getElementById('settlement-detail-title');
-        const content = document.getElementById('settlement-detail-content');
-        modal.classList.remove('hidden');
-        title.textContent = `Settlement: ${settlementId}`;
-        content.innerHTML = '<div class="text-slate-500 text-sm">Loading...</div>';
-
-        try {
-          const res = await fetch(`/api/amazon/settlements/${settlementId}`);
-          const s = await res.json();
-
-          if (!s) {
-            content.innerHTML = '<div class="text-red-400">Settlement not found</div>';
-            return;
-          }
-
-          // Build summary sections
-          let html = `
-            <!-- Overview -->
-            <div class="bg-slate-700/30 rounded-lg p-4">
-              <h4 class="text-white font-semibold mb-3">Overview</h4>
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <div class="text-slate-500">Period</div>
-                  <div class="text-white">${formatDateShort(s.settlementStartDate)} - ${formatDateShort(s.settlementEndDate)}</div>
-                </div>
-                <div>
-                  <div class="text-slate-500">Deposit Date</div>
-                  <div class="text-white">${formatDateShort(s.depositDate)}</div>
-                </div>
-                <div>
-                  <div class="text-slate-500">Total Amount</div>
-                  <div class="text-green-400 font-semibold">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
-                </div>
-                <div>
-                  <div class="text-slate-500">Transactions</div>
-                  <div class="text-white">${s.transactionCount || 0}</div>
-                </div>
+        container.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">' + data.settlements.map(s => `
+          <div style="background:#12121a;border:1px solid #252532;border-radius:10px;padding:16px;display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="material-symbols-outlined" style="color:#60a5fa">payments</span>
+              <div>
+                <div style="font-weight:600;color:#fff">${s.settlementId}</div>
+                <div style="font-size:12px;color:#71717a">${formatDateShort(s.settlementStartDate)} - ${formatDateShort(s.settlementEndDate)}</div>
               </div>
             </div>
-          `;
-
-          // Fees by Marketplace
-          if (s.feesByMarketplace && Object.keys(s.feesByMarketplace).length > 0) {
-            html += `
-              <div class="bg-slate-700/30 rounded-lg p-4">
-                <h4 class="text-white font-semibold mb-3">Fees by Marketplace</h4>
-                <table class="w-full text-sm">
-                  <thead class="text-slate-400 border-b border-slate-600">
-                    <tr>
-                      <th class="text-left py-2">Marketplace</th>
-                      <th class="text-right py-2">Commission</th>
-                      <th class="text-right py-2">FBA Fulfillment</th>
-                      <th class="text-right py-2">Storage</th>
-                      <th class="text-right py-2">Advertising</th>
-                      <th class="text-right py-2">Other</th>
-                      <th class="text-right py-2 font-semibold">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody class="text-slate-300">
-                    ${Object.entries(s.feesByMarketplace).map(([mp, fees]) => `
-                      <tr class="border-b border-slate-700/50">
-                        <td class="py-2 font-medium">${mp}</td>
-                        <td class="py-2 text-right text-red-400">${formatCurrency(fees.commission || 0, 'EUR')}</td>
-                        <td class="py-2 text-right text-orange-400">${formatCurrency(fees.fbaFulfillment || 0, 'EUR')}</td>
-                        <td class="py-2 text-right text-yellow-400">${formatCurrency(fees.fbaStorage || 0, 'EUR')}</td>
-                        <td class="py-2 text-right text-purple-400">${formatCurrency(fees.advertising || 0, 'EUR')}</td>
-                        <td class="py-2 text-right text-slate-400">${formatCurrency((fees.other || 0) + (fees.subscription || 0) + (fees.fbaRemoval || 0) + (fees.fbaInbound || 0), 'EUR')}</td>
-                        <td class="py-2 text-right font-semibold text-red-300">${formatCurrency(fees.total || 0, 'EUR')}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
-            `;
-          }
-
-          // Order Totals by Marketplace
-          if (s.ordersByMarketplace && Object.keys(s.ordersByMarketplace).length > 0) {
-            html += `
-              <div class="bg-slate-700/30 rounded-lg p-4">
-                <h4 class="text-white font-semibold mb-3">Order Totals by Marketplace</h4>
-                <table class="w-full text-sm">
-                  <thead class="text-slate-400 border-b border-slate-600">
-                    <tr>
-                      <th class="text-left py-2">Marketplace</th>
-                      <th class="text-right py-2">Orders</th>
-                      <th class="text-right py-2">Refunds</th>
-                      <th class="text-right py-2">Chargebacks</th>
-                      <th class="text-right py-2 font-semibold">Net</th>
-                    </tr>
-                  </thead>
-                  <tbody class="text-slate-300">
-                    ${Object.entries(s.ordersByMarketplace).map(([mp, orders]) => `
-                      <tr class="border-b border-slate-700/50">
-                        <td class="py-2 font-medium">${mp}</td>
-                        <td class="py-2 text-right text-green-400">${formatCurrency(orders.orders || 0, 'EUR')}</td>
-                        <td class="py-2 text-right text-red-400">${formatCurrency(orders.refunds || 0, 'EUR')}</td>
-                        <td class="py-2 text-right text-orange-400">${formatCurrency(orders.chargebacks || 0, 'EUR')}</td>
-                        <td class="py-2 text-right font-semibold">${formatCurrency(orders.total || 0, 'EUR')}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
-            `;
-          }
-
-          // Note about reconciliation
-          html += `
-            <div class="bg-blue-900/30 border border-blue-700 rounded-lg p-4">
-              <div class="flex items-center gap-2 text-blue-400 mb-2">
-                <span class="material-symbols-outlined">info</span>
-                <span class="font-semibold">Reconciliation Note</span>
-              </div>
-              <p class="text-slate-300 text-sm">
-                This settlement data is for reconciliation purposes only. Amazon fee vendor bills are created from PEPPOL invoices sent by Amazon, not from settlement reports.
-              </p>
+            <div style="text-align:right">
+              <div style="font-size:18px;font-weight:600;color:#4ade80">${formatCurrency(s.totalAmount || 0)}</div>
+              <div style="font-size:11px;color:#52525b">${s.transactionCount || 0} transactions</div>
             </div>
-          `;
-
-          content.innerHTML = html;
-        } catch (error) {
-          content.innerHTML = `<div class="text-red-400">Error: ${error.message}</div>`;
-        }
+          </div>
+        `).join('') + '</div>';
+      } catch (error) {
+        container.innerHTML = `<div style="text-align:center;padding:40px;color:#f87171">Error: ${error.message}</div>`;
       }
+    }
 
-      function closeModal(id) {
-        document.getElementById(id).classList.add('hidden');
-      }
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+    function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'; }
+    function formatDateShort(d) { return d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'; }
+    function formatCurrency(a, c = 'EUR') { return new Intl.NumberFormat('en-GB', { style: 'currency', currency: c }).format(a); }
 
-      function formatDate(dateStr) {
-        if (!dateStr) return '-';
-        return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      }
-
-      function formatDateShort(dateStr) {
-        if (!dateStr) return '-';
-        return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      }
-
-      function formatCurrency(amount, currency = 'EUR') {
-        const sign = amount < 0 ? '-' : '';
-        const absAmount = Math.abs(amount);
-        return sign + new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(absAmount);
-      }
-    </script>
-  </body>
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show')); });
+  </script>
+</body>
 </html>
