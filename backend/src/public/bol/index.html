@@ -403,6 +403,31 @@
       cursor: pointer;
     }
 
+    /* Column filter inputs */
+    .column-filter {
+      padding: 6px 10px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 6px;
+      color: #e4e4e7;
+      font-size: 12px;
+      width: 100%;
+      margin-top: 6px;
+      outline: none;
+    }
+
+    .column-filter:focus {
+      border-color: #6366f1;
+    }
+
+    .column-filter::placeholder {
+      color: #52525b;
+    }
+
+    th.filterable {
+      vertical-align: top;
+    }
+
     /* Product info */
     .product-info {
       display: flex;
@@ -527,15 +552,15 @@
         </div>
         <div class="card-body">
           <div class="table-container">
-            <table>
+            <table id="orders-table-element">
               <thead>
                 <tr>
-                  <th>Order ID</th>
-                  <th>Date</th>
-                  <th>Customer</th>
+                  <th class="filterable">Order ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
+                  <th class="filterable">Date<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
+                  <th class="filterable">Fulfilment<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
                   <th>Items</th>
                   <th>Total</th>
-                  <th>Status</th>
+                  <th class="filterable">Status<br><input type="text" class="column-filter" data-column="5" placeholder="Filter..."></th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -566,14 +591,14 @@
         </div>
         <div class="card-body">
           <div class="table-container">
-            <table>
+            <table id="shipments-table-element">
               <thead>
                 <tr>
-                  <th>Shipment ID</th>
-                  <th>Order ID</th>
-                  <th>Date</th>
-                  <th>Carrier</th>
-                  <th>Track & Trace</th>
+                  <th class="filterable">Shipment ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
+                  <th class="filterable">Order ID<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
+                  <th class="filterable">Date<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
+                  <th class="filterable">Carrier<br><input type="text" class="column-filter" data-column="3" placeholder="Filter..."></th>
+                  <th class="filterable">Track & Trace<br><input type="text" class="column-filter" data-column="4" placeholder="Filter..."></th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -611,14 +636,14 @@
         </div>
         <div class="card-body">
           <div class="table-container">
-            <table>
+            <table id="returns-table-element">
               <thead>
                 <tr>
-                  <th>Return ID</th>
-                  <th>Order ID</th>
-                  <th>Date</th>
-                  <th>Reason</th>
-                  <th>Product</th>
+                  <th class="filterable">Return ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
+                  <th class="filterable">Order ID<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
+                  <th class="filterable">Date<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
+                  <th class="filterable">Reason<br><input type="text" class="column-filter" data-column="3" placeholder="Filter..."></th>
+                  <th class="filterable">Product<br><input type="text" class="column-filter" data-column="4" placeholder="Filter..."></th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -650,13 +675,13 @@
         </div>
         <div class="card-body">
           <div class="table-container">
-            <table>
+            <table id="invoices-table-element">
               <thead>
                 <tr>
-                  <th>Invoice ID</th>
-                  <th>Period</th>
-                  <th>Issue Date</th>
-                  <th>Amount</th>
+                  <th class="filterable">Invoice ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
+                  <th class="filterable">Period<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
+                  <th class="filterable">Issue Date<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
+                  <th>Amount (excl. VAT)</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -891,16 +916,33 @@
         }
 
         tbody.innerHTML = data.shipments.map(shipment => {
-          const orderId = shipment.orderItems?.[0]?.orderId || '-';
+          // Get order ID from multiple possible locations
+          const orderId = shipment.orderId || shipment.shipmentItems?.[0]?.orderId || '-';
+          // Get transport info
           const carrier = shipment.transport?.transporterCode || '-';
           const trackTrace = shipment.transport?.trackAndTrace || '-';
+
+          // Build tracking URL based on carrier
+          let trackUrl = '';
+          if (trackTrace !== '-') {
+            if (carrier.toLowerCase().includes('bpost') || carrier.toLowerCase().includes('postnl')) {
+              trackUrl = `https://tracking.bpost.be/btr/web/#/search?itemCode=${trackTrace}`;
+            } else if (carrier.toLowerCase().includes('dhl')) {
+              trackUrl = `https://www.dhl.com/nl-nl/home/tracking.html?tracking-id=${trackTrace}`;
+            } else if (carrier.toLowerCase().includes('dpd')) {
+              trackUrl = `https://tracking.dpd.de/status/nl_NL/parcel/${trackTrace}`;
+            } else {
+              trackUrl = `https://www.google.com/search?q=${encodeURIComponent(trackTrace)}+tracking`;
+            }
+          }
+
           return `
             <tr>
               <td><span class="order-id">${shipment.shipmentId}</span></td>
               <td><span class="order-id">${orderId}</span></td>
               <td>${formatDate(shipment.shipmentDateTime)}</td>
               <td>${carrier}</td>
-              <td>${trackTrace !== '-' ? `<a href="https://tracking.bpost.be/btr/web/#/search?itemCode=${trackTrace}" target="_blank" style="color: #60a5fa;">${trackTrace}</a>` : '-'}</td>
+              <td>${trackTrace !== '-' ? `<a href="${trackUrl}" target="_blank" style="color: #60a5fa;">${trackTrace}</a>` : '-'}</td>
               <td><span class="badge shipped">Shipped</span></td>
             </tr>
           `;
@@ -944,7 +986,20 @@
           const orderId = firstItem.orderId || '-';
           const reason = firstItem.returnReason || '-';
           const ean = firstItem.ean || '-';
+          const sku = firstItem.sku || '';
           const title = firstItem.title || '';
+          const imageUrl = firstItem.productImageUrl;
+
+          // Build product display: SKU first (if available), then EAN
+          let productDisplay = '';
+          if (title) {
+            productDisplay = `<div style="font-size: 13px; color: #e4e4e7; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${title}</div>`;
+          }
+          if (sku) {
+            productDisplay += `<div style="font-size: 11px; color: #a1a1aa; font-family: monospace;">SKU: ${sku}</div>`;
+          }
+          productDisplay += `<div style="font-size: 11px; color: #71717a; font-family: monospace;">EAN: ${ean}</div>`;
+
           return `
             <tr>
               <td><span class="order-id">${ret.returnId}</span></td>
@@ -953,10 +1008,8 @@
               <td>${reason}</td>
               <td>
                 <div class="return-product">
-                  <div>
-                    <div style="font-size: 13px; color: #e4e4e7;">${title || ean}</div>
-                    <div style="font-size: 11px; color: #71717a; font-family: monospace;">${ean}</div>
-                  </div>
+                  ${imageUrl ? `<img src="${imageUrl}" class="return-thumb" onerror="this.style.display='none'">` : ''}
+                  <div>${productDisplay}</div>
                 </div>
               </td>
               <td><span class="badge ${ret.handled ? 'shipped' : 'returned'}">${ret.handled ? 'Handled' : 'Open'}</span></td>
@@ -1015,9 +1068,12 @@
               <td>${formatDate(inv.issueDate)}</td>
               <td>${amount}</td>
               <td><span class="badge shipped">Paid</span></td>
-              <td>
-                <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')">
-                  <span class="material-symbols-outlined">download</span>
+              <td style="display: flex; gap: 6px;">
+                <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')" title="Download PDF">
+                  <span class="material-symbols-outlined">picture_as_pdf</span>
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="downloadSpecification('${inv.invoiceId}')" title="Download Specification (Excel)">
+                  <span class="material-symbols-outlined">table_chart</span>
                 </button>
               </td>
             </tr>
@@ -1042,10 +1098,56 @@
     function calculateTotal(items) {
       if (!items || !items.length) return '0.00';
       return items.reduce((sum, item) => {
+        // Use totalPrice if available, otherwise calculate from unitPrice × quantity
+        if (item.totalPrice && item.totalPrice > 0) {
+          return sum + item.totalPrice;
+        }
         const price = parseFloat(item.unitPrice) || 0;
         const qty = parseInt(item.quantity) || 1;
         return sum + (price * qty);
       }, 0).toFixed(2);
+    }
+
+    // Column filtering
+    function setupColumnFilters() {
+      document.querySelectorAll('.column-filter').forEach(input => {
+        input.addEventListener('input', function() {
+          const table = this.closest('table');
+          const tbody = table.querySelector('tbody');
+          const rows = tbody.querySelectorAll('tr');
+          const filters = {};
+
+          // Collect all filter values for this table
+          table.querySelectorAll('.column-filter').forEach(filter => {
+            const col = parseInt(filter.dataset.column);
+            if (filter.value.trim()) {
+              filters[col] = filter.value.toLowerCase();
+            }
+          });
+
+          // Filter rows
+          rows.forEach(row => {
+            if (row.querySelector('.loading') || row.querySelector('.empty-state')) {
+              return; // Skip loading/empty rows
+            }
+            const cells = row.querySelectorAll('td');
+            let visible = true;
+
+            for (const [col, searchText] of Object.entries(filters)) {
+              const cell = cells[parseInt(col)];
+              if (cell) {
+                const cellText = cell.textContent.toLowerCase();
+                if (!cellText.includes(searchText)) {
+                  visible = false;
+                  break;
+                }
+              }
+            }
+
+            row.style.display = visible ? '' : 'none';
+          });
+        });
+      });
     }
 
     async function viewOrder(orderId) {
@@ -1147,9 +1249,58 @@
     }
 
     async function downloadInvoice(invoiceId) {
-      // Bol.com invoices need to be fetched via their API - open in new tab
-      // The actual PDF would require a backend endpoint to proxy the download
-      window.open(`/api/bolcom/invoices/${invoiceId}/download`, '_blank');
+      try {
+        const res = await fetch(`/api/bolcom/invoices/${invoiceId}/download`, { credentials: 'include' });
+
+        if (res.ok) {
+          // If we get a PDF, download it
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `bol-invoice-${invoiceId}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          a.remove();
+        } else {
+          // Handle error response
+          const data = await res.json();
+          if (data.partnerPortalUrl) {
+            if (confirm(`Invoice PDF not available via API.\n\nOpen Bol.com Partner Portal to download manually?`)) {
+              window.open(data.partnerPortalUrl, '_blank');
+            }
+          } else {
+            alert('Failed to download invoice: ' + (data.error || 'Unknown error'));
+          }
+        }
+      } catch (e) {
+        alert('Error downloading invoice: ' + e.message);
+      }
+    }
+
+    async function downloadSpecification(invoiceId) {
+      try {
+        const res = await fetch(`/api/bolcom/invoices/${invoiceId}/specification`, { credentials: 'include' });
+
+        if (res.ok) {
+          // Download the Excel file
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `bol-invoice-spec-${invoiceId}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          a.remove();
+        } else {
+          const data = await res.json();
+          alert('Failed to download specification: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Error downloading specification: ' + e.message);
+      }
     }
 
     function refreshData() {
@@ -1158,6 +1309,7 @@
 
     // Initialize
     init();
+    setupColumnFilters();
   </script>
 </body>
 </html>

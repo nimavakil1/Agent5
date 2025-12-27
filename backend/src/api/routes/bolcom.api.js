@@ -305,12 +305,18 @@ router.get('/orders', async (req, res) => {
         orderItems: (o.orderItems || []).map(item => ({
           orderItemId: item.orderItemId,
           ean: item.ean,
+          sku: item.offer?.reference || item.offerReference || '',
           title: item.product?.title,
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
+          quantityShipped: item.quantityShipped,
+          quantityCancelled: item.quantityCancelled,
+          // unitPrice can be a number or object with amount/currency
+          unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
+          totalPrice: typeof item.totalPrice === 'object' ? parseFloat(item.totalPrice?.amount || 0) : parseFloat(item.totalPrice || 0),
           commission: item.commission,
-          fulfilmentMethod: item.fulfilmentMethod,
-          fulfilmentStatus: item.fulfilmentStatus,
+          fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod,
+          fulfilmentStatus: item.fulfilment?.latestDeliveryDate ? 'Pending' : (item.fulfilmentStatus || 'Open'),
+          latestDeliveryDate: item.fulfilment?.latestDeliveryDate || item.latestDeliveryDate,
           cancellationRequest: item.cancellationRequest
         }))
       }))
@@ -339,13 +345,17 @@ router.get('/orders/:orderId', async (req, res) => {
         orderItems: (data.orderItems || []).map(item => ({
           orderItemId: item.orderItemId,
           ean: item.ean,
+          sku: item.offer?.reference || item.offerReference || '',
           title: item.product?.title,
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
+          quantityShipped: item.quantityShipped,
+          quantityCancelled: item.quantityCancelled,
+          unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
+          totalPrice: typeof item.totalPrice === 'object' ? parseFloat(item.totalPrice?.amount || 0) : parseFloat(item.totalPrice || 0),
           commission: item.commission,
-          fulfilmentMethod: item.fulfilmentMethod,
-          fulfilmentStatus: item.fulfilmentStatus,
-          latestDeliveryDate: item.latestDeliveryDate,
+          fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod,
+          fulfilmentStatus: item.fulfilment?.latestDeliveryDate ? 'Pending' : (item.fulfilmentStatus || 'Open'),
+          latestDeliveryDate: item.fulfilment?.latestDeliveryDate || item.latestDeliveryDate,
           cancellationRequest: item.cancellationRequest
         }))
       }
@@ -379,10 +389,23 @@ router.get('/shipments', async (req, res) => {
         shipmentId: s.shipmentId,
         shipmentDateTime: s.shipmentDateTime,
         shipmentReference: s.shipmentReference,
-        transport: s.transport,
-        orderItems: s.shipmentItems?.map(item => ({
+        // Transport info - may be at root level or nested
+        transport: s.transport || {
+          transporterCode: s.transporterCode,
+          trackAndTrace: s.trackAndTrace
+        },
+        // Get order ID from order object or first shipment item
+        orderId: s.order?.orderId || s.shipmentItems?.[0]?.orderId || s.orderId,
+        shipmentItems: (s.shipmentItems || []).map(item => ({
           orderItemId: item.orderItemId,
-          orderId: item.orderId
+          orderId: item.orderId,
+          ean: item.product?.ean || item.ean,
+          title: item.product?.title || item.title,
+          sku: item.offer?.reference || item.offerReference || '',
+          quantity: item.quantity,
+          quantityShipped: item.quantityShipped,
+          unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
+          fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod
         }))
       }))
     });
@@ -431,12 +454,16 @@ router.get('/returns', async (req, res) => {
         returnItems: (r.returnItems || []).map(item => ({
           rmaId: item.rmaId,
           orderId: item.orderId,
+          orderItemId: item.orderItemId,
           ean: item.ean,
+          sku: item.offer?.reference || item.offerReference || item.reference || '',
           title: item.title,
-          quantity: item.quantity,
-          returnReason: item.returnReason?.mainReason,
-          returnReasonComments: item.returnReason?.customerComments,
-          handlingResult: item.handlingResult
+          quantity: item.quantity || item.expectedQuantity || 1,
+          returnReason: item.returnReason?.mainReason || item.returnReason,
+          returnReasonComments: item.returnReason?.customerComments || item.customerComments,
+          handlingResult: item.handlingResult,
+          // Try to get product image from product info
+          productImageUrl: item.product?.mediaUrl || null
         }))
       }))
     });
@@ -632,36 +659,76 @@ router.get('/invoices/:invoiceId/download', async (req, res) => {
   try {
     const token = await getRetailerAccessToken();
 
-    // Get invoice specification to find the PDF URL
-    const specResponse = await fetch(`https://api.bol.com/retailer/invoices/${req.params.invoiceId}/specification`, {
+    // Try to get the invoice PDF directly
+    const pdfResponse = await fetch(`https://api.bol.com/retailer/invoices/${req.params.invoiceId}`, {
       headers: {
         'Accept': 'application/vnd.retailer.v10+pdf',
         'Authorization': `Bearer ${token}`
       }
     });
 
-    if (!specResponse.ok) {
-      // Try getting as JSON to see the invoice details
-      const invoiceRes = await fetch(`https://api.bol.com/retailer/invoices/${req.params.invoiceId}`, {
-        headers: {
-          'Accept': 'application/vnd.retailer.v10+json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (invoiceRes.ok) {
-        const invoice = await invoiceRes.json();
-        // Redirect to Bol.com seller portal for manual download
-        return res.redirect(`https://partner.bol.com/sdd/orders/invoices`);
-      }
-
-      throw new Error('Invoice not found');
+    if (pdfResponse.ok) {
+      // Stream the PDF response
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="bol-invoice-${req.params.invoiceId}.pdf"`);
+      const buffer = await pdfResponse.arrayBuffer();
+      return res.send(Buffer.from(buffer));
     }
 
-    // Stream the PDF response
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="bol-invoice-${req.params.invoiceId}.pdf"`);
+    // PDF not available - return error with helpful message
+    res.status(404).json({
+      success: false,
+      error: 'Invoice PDF not available via API. Please download from the Bol.com Partner Portal.',
+      partnerPortalUrl: 'https://partner.bol.com/sdd/orders/invoices'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
+/**
+ * Download invoice specification (Excel)
+ */
+router.get('/invoices/:invoiceId/specification', async (req, res) => {
+  try {
+    const token = await getRetailerAccessToken();
+    const { format = 'excel' } = req.query;
+
+    let acceptHeader;
+    let filename;
+    let contentType;
+
+    if (format === 'json') {
+      acceptHeader = 'application/vnd.retailer.v10+json';
+      filename = `bol-invoice-spec-${req.params.invoiceId}.json`;
+      contentType = 'application/json';
+    } else {
+      // Default to Excel format
+      acceptHeader = 'application/vnd.retailer.v10+openxmlformats-officedocument.spreadsheetml.sheet';
+      filename = `bol-invoice-spec-${req.params.invoiceId}.xlsx`;
+      contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+
+    const specResponse = await fetch(`https://api.bol.com/retailer/invoices/${req.params.invoiceId}/specification`, {
+      headers: {
+        'Accept': acceptHeader,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!specResponse.ok) {
+      const errorText = await specResponse.text();
+      throw new Error(`Failed to get specification: ${specResponse.status} - ${errorText}`);
+    }
+
+    if (format === 'json') {
+      const data = await specResponse.json();
+      return res.json({ success: true, specification: data });
+    }
+
+    // Stream the Excel file
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     const buffer = await specResponse.arrayBuffer();
     res.send(Buffer.from(buffer));
   } catch (error) {
