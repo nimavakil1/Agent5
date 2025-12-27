@@ -77,6 +77,14 @@
     .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 12px; display: block; }
     .empty-state-title { font-size: 14px; color: #a1a1aa; }
 
+    .filters-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .filter-input { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; }
+    .filter-input:focus { outline: none; border-color: #f59e0b; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .pagination { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-top: 1px solid #252532; margin-top: 16px; }
+    .pagination-info { font-size: 13px; color: #71717a; }
+    .page-size-select { padding: 6px 10px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #e4e4e7; font-size: 13px; }
+
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
     .modal-overlay.show { display: flex; }
@@ -185,10 +193,32 @@
         <h2 class="card-title">Settlement History</h2>
       </div>
       <div class="card-body">
+        <div class="filters-bar">
+          <input type="text" class="filter-input" id="filter-search" placeholder="Search settlement ID..." oninput="applyFilters()" style="width: 200px;">
+          <input type="date" class="filter-input" id="filter-date-from" onchange="applyFilters()" title="From date">
+          <input type="date" class="filter-input" id="filter-date-to" onchange="applyFilters()" title="To date">
+          <button class="btn btn-secondary btn-sm" onclick="clearFilters()"><span class="material-symbols-outlined">clear</span>Clear</button>
+        </div>
         <div class="settlement-list" id="settlements-list">
           <div class="empty-state">
             <span class="material-symbols-outlined">hourglass_empty</span>
             <div class="empty-state-title">Loading settlements...</div>
+          </div>
+        </div>
+        <div class="pagination" id="pagination" style="display: none;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; color: #71717a;">Show</span>
+            <select class="page-size-select" id="page-size" onchange="changePageSize()">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <span class="pagination-info" id="pagination-info">-</span>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" id="prev-btn" onclick="prevPage()" disabled>Previous</button>
+            <button class="btn btn-secondary btn-sm" id="next-btn" onclick="nextPage()" disabled>Next</button>
           </div>
         </div>
       </div>
@@ -211,6 +241,12 @@
   </div>
 
   <script>
+    // State for filtering and pagination
+    let allSettlements = [];
+    let filteredSettlements = [];
+    let currentOffset = 0;
+    let pageSize = 25;
+
     // Format helpers
     function formatCurrency(amount, currency = 'EUR') {
       return new Intl.NumberFormat('de-DE', {
@@ -235,7 +271,7 @@
     async function loadSettlements() {
       const container = document.getElementById('settlements-list');
       try {
-        const res = await fetch('/api/amazon/settlements?limit=50');
+        const res = await fetch('/api/amazon/settlements?limit=200');
         const data = await res.json();
 
         if (!data.settlements || data.settlements.length === 0) {
@@ -245,8 +281,11 @@
               <div class="empty-state-title">No settlements uploaded yet. Upload your first settlement report above.</div>
             </div>
           `;
+          document.getElementById('pagination').style.display = 'none';
           return;
         }
+
+        allSettlements = data.settlements;
 
         // Update summary stats
         document.getElementById('total-count').textContent = data.settlements.length;
@@ -275,23 +314,7 @@
           document.getElementById('status-text').textContent = `${data.settlements.length} settlements`;
         }
 
-        container.innerHTML = data.settlements.map(s => `
-          <div class="settlement-item" onclick="viewDetail('${s.settlementId}')">
-            <div class="settlement-info">
-              <div class="settlement-icon">
-                <span class="material-symbols-outlined">payments</span>
-              </div>
-              <div>
-                <div class="settlement-id">${s.settlementId}</div>
-                <div class="settlement-dates">${formatDate(s.settlementStartDate)} - ${formatDate(s.settlementEndDate)}</div>
-              </div>
-            </div>
-            <div class="settlement-amount">
-              <div class="settlement-total">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
-              <div class="settlement-count">${s.transactionCount || 0} transactions</div>
-            </div>
-          </div>
-        `).join('');
+        applyFilters();
 
       } catch (error) {
         container.innerHTML = `
@@ -300,6 +323,104 @@
             <div class="empty-state-title">Error loading settlements: ${error.message}</div>
           </div>
         `;
+      }
+    }
+
+    // Apply filters
+    function applyFilters() {
+      const searchTerm = document.getElementById('filter-search').value.toLowerCase();
+      const dateFrom = document.getElementById('filter-date-from').value;
+      const dateTo = document.getElementById('filter-date-to').value;
+
+      filteredSettlements = allSettlements.filter(s => {
+        // Search filter
+        if (searchTerm && !s.settlementId?.toLowerCase().includes(searchTerm)) {
+          return false;
+        }
+        // Date from filter
+        if (dateFrom) {
+          const sDate = new Date(s.settlementStartDate);
+          if (sDate < new Date(dateFrom)) return false;
+        }
+        // Date to filter
+        if (dateTo) {
+          const eDate = new Date(s.settlementEndDate);
+          if (eDate > new Date(dateTo + 'T23:59:59')) return false;
+        }
+        return true;
+      });
+
+      currentOffset = 0;
+      renderSettlements();
+    }
+
+    // Clear filters
+    function clearFilters() {
+      document.getElementById('filter-search').value = '';
+      document.getElementById('filter-date-from').value = '';
+      document.getElementById('filter-date-to').value = '';
+      applyFilters();
+    }
+
+    // Render settlements with pagination
+    function renderSettlements() {
+      const container = document.getElementById('settlements-list');
+      const pageData = filteredSettlements.slice(currentOffset, currentOffset + pageSize);
+
+      if (filteredSettlements.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <span class="material-symbols-outlined">search_off</span>
+            <div class="empty-state-title">No settlements match your filters</div>
+          </div>
+        `;
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+
+      container.innerHTML = pageData.map(s => `
+        <div class="settlement-item" onclick="viewDetail('${s.settlementId}')">
+          <div class="settlement-info">
+            <div class="settlement-icon">
+              <span class="material-symbols-outlined">payments</span>
+            </div>
+            <div>
+              <div class="settlement-id">${s.settlementId}</div>
+              <div class="settlement-dates">${formatDate(s.settlementStartDate)} - ${formatDate(s.settlementEndDate)}</div>
+            </div>
+          </div>
+          <div class="settlement-amount">
+            <div class="settlement-total">${formatCurrency(s.totalAmount || 0, s.currency || 'EUR')}</div>
+            <div class="settlement-count">${s.transactionCount || 0} transactions</div>
+          </div>
+        </div>
+      `).join('');
+
+      // Update pagination
+      const pagination = document.getElementById('pagination');
+      pagination.style.display = 'flex';
+      document.getElementById('pagination-info').textContent =
+        `Showing ${currentOffset + 1}-${Math.min(currentOffset + pageSize, filteredSettlements.length)} of ${filteredSettlements.length}`;
+      document.getElementById('prev-btn').disabled = currentOffset === 0;
+      document.getElementById('next-btn').disabled = currentOffset + pageSize >= filteredSettlements.length;
+    }
+
+    // Pagination functions
+    function changePageSize() {
+      pageSize = parseInt(document.getElementById('page-size').value);
+      currentOffset = 0;
+      renderSettlements();
+    }
+
+    function prevPage() {
+      currentOffset = Math.max(0, currentOffset - pageSize);
+      renderSettlements();
+    }
+
+    function nextPage() {
+      if (currentOffset + pageSize < filteredSettlements.length) {
+        currentOffset += pageSize;
+        renderSettlements();
       }
     }
 

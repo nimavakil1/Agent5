@@ -67,6 +67,13 @@
     .badge { display: inline-flex; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
     .badge-paid { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
     .badge-unmatched { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .filters-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .filter-input { padding: 8px 12px; background: #12121a; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 13px; }
+    .filter-input:focus { outline: none; border-color: #f97316; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .pagination { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-top: 1px solid #252532; margin-top: 16px; }
+    .pagination-info { font-size: 13px; color: #71717a; }
+    .page-size-select { padding: 6px 10px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #e4e4e7; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -117,10 +124,31 @@
         <span class="material-symbols-outlined">history</span>
         Import History
       </h2>
+      <div class="filters-bar">
+        <input type="text" class="filter-input" id="filter-search" placeholder="Search filename..." oninput="applyFilters()" style="width: 200px;">
+        <input type="date" class="filter-input" id="filter-date-from" onchange="applyFilters()" title="From date">
+        <input type="date" class="filter-input" id="filter-date-to" onchange="applyFilters()" title="To date">
+        <button class="btn btn-secondary btn-sm" onclick="clearFilters()"><span class="material-symbols-outlined" style="font-size:16px;">clear</span>Clear</button>
+      </div>
       <div class="imports-list" id="imports-list">
         <div class="empty-state">
           <span class="material-symbols-outlined">hourglass_empty</span>
           <div class="empty-state-text">Loading...</div>
+        </div>
+      </div>
+      <div class="pagination" id="pagination" style="display: none;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 13px; color: #71717a;">Show</span>
+          <select class="page-size-select" id="page-size" onchange="changePageSize()">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+          </select>
+        </div>
+        <span class="pagination-info" id="pagination-info">-</span>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary btn-sm" id="prev-btn" onclick="prevPage()" disabled>Previous</button>
+          <button class="btn btn-secondary btn-sm" id="next-btn" onclick="nextPage()" disabled>Next</button>
         </div>
       </div>
     </div>
@@ -140,6 +168,12 @@
   </div>
 
   <script>
+    // State for filtering and pagination
+    let allImports = [];
+    let filteredImports = [];
+    let currentOffset = 0;
+    let pageSize = 25;
+
     // Setup drag and drop
     const uploadArea = document.getElementById('upload-area');
     uploadArea.addEventListener('dragover', (e) => {
@@ -258,37 +292,115 @@
         if (!res.ok) return;
         const data = await res.json();
 
-        const container = document.getElementById('imports-list');
-        const imports = data.summary?.recentImports || [];
+        allImports = data.summary?.recentImports || [];
 
-        if (imports.length === 0) {
+        if (allImports.length === 0) {
+          const container = document.getElementById('imports-list');
           container.innerHTML = `
             <div class="empty-state">
               <span class="material-symbols-outlined">upload_file</span>
               <div class="empty-state-text">No remittance files imported yet</div>
             </div>
           `;
+          document.getElementById('pagination').style.display = 'none';
           return;
         }
 
-        container.innerHTML = imports.map(imp => `
-          <div class="import-item">
-            <div class="import-info">
-              <div class="import-icon"><span class="material-symbols-outlined">description</span></div>
-              <div>
-                <div class="import-name">${imp.fileName}</div>
-                <div class="import-date">${formatDate(imp.importedAt)}</div>
-              </div>
-            </div>
-            <div class="import-stats">
-              <div class="import-matched">${imp.invoiceDetailsCount || 0} invoices</div>
-              <div class="import-count">${imp.paymentsCount || 0} payments</div>
-            </div>
-          </div>
-        `).join('');
-
+        applyFilters();
       } catch (e) {
         console.error('Error loading imports:', e);
+      }
+    }
+
+    function applyFilters() {
+      const searchTerm = document.getElementById('filter-search').value.toLowerCase();
+      const dateFrom = document.getElementById('filter-date-from').value;
+      const dateTo = document.getElementById('filter-date-to').value;
+
+      filteredImports = allImports.filter(imp => {
+        // Search filter
+        if (searchTerm && !imp.fileName?.toLowerCase().includes(searchTerm)) {
+          return false;
+        }
+        // Date from filter
+        if (dateFrom) {
+          const impDate = new Date(imp.importedAt);
+          if (impDate < new Date(dateFrom)) return false;
+        }
+        // Date to filter
+        if (dateTo) {
+          const impDate = new Date(imp.importedAt);
+          if (impDate > new Date(dateTo + 'T23:59:59')) return false;
+        }
+        return true;
+      });
+
+      currentOffset = 0;
+      renderImports();
+    }
+
+    function clearFilters() {
+      document.getElementById('filter-search').value = '';
+      document.getElementById('filter-date-from').value = '';
+      document.getElementById('filter-date-to').value = '';
+      applyFilters();
+    }
+
+    function renderImports() {
+      const container = document.getElementById('imports-list');
+      const pageData = filteredImports.slice(currentOffset, currentOffset + pageSize);
+
+      if (filteredImports.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <span class="material-symbols-outlined">search_off</span>
+            <div class="empty-state-text">No imports match your filters</div>
+          </div>
+        `;
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+
+      container.innerHTML = pageData.map(imp => `
+        <div class="import-item">
+          <div class="import-info">
+            <div class="import-icon"><span class="material-symbols-outlined">description</span></div>
+            <div>
+              <div class="import-name">${imp.fileName}</div>
+              <div class="import-date">${formatDate(imp.importedAt)}</div>
+            </div>
+          </div>
+          <div class="import-stats">
+            <div class="import-matched">${imp.invoiceDetailsCount || 0} invoices</div>
+            <div class="import-count">${imp.paymentsCount || 0} payments</div>
+          </div>
+        </div>
+      `).join('');
+
+      // Update pagination
+      const pagination = document.getElementById('pagination');
+      pagination.style.display = 'flex';
+      document.getElementById('pagination-info').textContent =
+        `Showing ${currentOffset + 1}-${Math.min(currentOffset + pageSize, filteredImports.length)} of ${filteredImports.length}`;
+      document.getElementById('prev-btn').disabled = currentOffset === 0;
+      document.getElementById('next-btn').disabled = currentOffset + pageSize >= filteredImports.length;
+    }
+
+    function changePageSize() {
+      pageSize = parseInt(document.getElementById('page-size').value);
+      currentOffset = 0;
+      renderImports();
+    }
+
+    function prevPage() {
+      currentOffset = Math.max(0, currentOffset - pageSize);
+      renderImports();
+    }
+
+    function nextPage() {
+      if (currentOffset + pageSize < filteredImports.length) {
+        currentOffset += pageSize;
+        renderImports();
       }
     }
 

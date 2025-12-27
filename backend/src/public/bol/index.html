@@ -457,6 +457,28 @@
       color: #71717a;
       font-family: 'JetBrains Mono', monospace;
     }
+
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      border-top: 1px solid #252532;
+    }
+
+    .pagination-info {
+      font-size: 13px;
+      color: #71717a;
+    }
+
+    .page-size-select {
+      padding: 6px 10px;
+      background: #252532;
+      border: 1px solid #3f3f50;
+      border-radius: 6px;
+      color: #e4e4e7;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -582,6 +604,22 @@
               </tbody>
             </table>
           </div>
+          <div class="pagination" id="orders-pagination" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 13px; color: #71717a;">Show</span>
+              <select class="page-size-select" id="orders-page-size" onchange="changePageSize('orders')">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <span class="pagination-info" id="orders-pagination-info">-</span>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" id="orders-prev-btn" onclick="prevPage('orders')" disabled>Previous</button>
+              <button class="btn btn-secondary btn-sm" id="orders-next-btn" onclick="nextPage('orders')" disabled>Next</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -619,6 +657,22 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div class="pagination" id="shipments-pagination" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 13px; color: #71717a;">Show</span>
+              <select class="page-size-select" id="shipments-page-size" onchange="changePageSize('shipments')">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <span class="pagination-info" id="shipments-pagination-info">-</span>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" id="shipments-prev-btn" onclick="prevPage('shipments')" disabled>Previous</button>
+              <button class="btn btn-secondary btn-sm" id="shipments-next-btn" onclick="nextPage('shipments')" disabled>Next</button>
+            </div>
           </div>
         </div>
       </div>
@@ -666,6 +720,22 @@
               </tbody>
             </table>
           </div>
+          <div class="pagination" id="returns-pagination" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 13px; color: #71717a;">Show</span>
+              <select class="page-size-select" id="returns-page-size" onchange="changePageSize('returns')">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <span class="pagination-info" id="returns-pagination-info">-</span>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" id="returns-prev-btn" onclick="prevPage('returns')" disabled>Previous</button>
+              <button class="btn btn-secondary btn-sm" id="returns-next-btn" onclick="nextPage('returns')" disabled>Next</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -704,6 +774,22 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div class="pagination" id="invoices-pagination" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 13px; color: #71717a;">Show</span>
+              <select class="page-size-select" id="invoices-page-size" onchange="changePageSize('invoices')">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <span class="pagination-info" id="invoices-pagination-info">-</span>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" id="invoices-prev-btn" onclick="prevPage('invoices')" disabled>Previous</button>
+              <button class="btn btn-secondary btn-sm" id="invoices-next-btn" onclick="nextPage('invoices')" disabled>Next</button>
+            </div>
           </div>
         </div>
       </div>
@@ -752,6 +838,14 @@
   </style>
 
   <script>
+    // Pagination state for each tab
+    const paginationState = {
+      orders: { all: [], filtered: [], offset: 0, pageSize: 25 },
+      shipments: { all: [], filtered: [], offset: 0, pageSize: 25 },
+      returns: { all: [], filtered: [], offset: 0, pageSize: 25 },
+      invoices: { all: [], filtered: [], offset: 0, pageSize: 25 }
+    };
+
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -871,6 +965,8 @@
         const data = await res.json();
 
         if (!data.success || !data.orders || data.orders.length === 0) {
+          paginationState.orders.all = [];
+          paginationState.orders.filtered = [];
           tbody.innerHTML = `
             <tr>
               <td colspan="7">
@@ -882,45 +978,14 @@
               </td>
             </tr>
           `;
+          document.getElementById('orders-pagination').style.display = 'none';
           return;
         }
 
-        tbody.innerHTML = data.orders.map(order => {
-          // Determine order status based on items
-          const items = order.orderItems || [];
-          const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
-          const shippedQty = items.reduce((sum, i) => sum + (i.quantityShipped || 0), 0);
-          const cancelledQty = items.reduce((sum, i) => sum + (i.quantityCancelled || 0), 0);
-
-          let status = 'Open';
-          let statusClass = 'open';
-          if (shippedQty >= totalQty) {
-            status = 'Shipped';
-            statusClass = 'shipped';
-          } else if (shippedQty > 0) {
-            status = 'Partial';
-            statusClass = 'pending';
-          } else if (cancelledQty >= totalQty) {
-            status = 'Cancelled';
-            statusClass = 'returned';
-          }
-
-          return `
-            <tr>
-              <td><span class="order-id">${order.orderId}</span></td>
-              <td>${formatDate(order.orderPlacedDateTime)}</td>
-              <td>${items[0]?.fulfilmentMethod || '-'}</td>
-              <td>${items.length}</td>
-              <td>&euro;${calculateTotal(items)}</td>
-              <td><span class="badge ${statusClass}">${status}</span></td>
-              <td>
-                <button class="btn btn-secondary btn-sm" onclick="viewOrder('${order.orderId}')">
-                  <span class="material-symbols-outlined">visibility</span>
-                </button>
-              </td>
-            </tr>
-          `;
-        }).join('');
+        paginationState.orders.all = data.orders;
+        paginationState.orders.filtered = data.orders;
+        paginationState.orders.offset = 0;
+        renderTable('orders');
       } catch (e) {
         tbody.innerHTML = `
           <tr>
@@ -928,6 +993,45 @@
           </tr>
         `;
       }
+    }
+
+    function renderOrdersTable(orders) {
+      const tbody = document.getElementById('orders-table');
+      tbody.innerHTML = orders.map(order => {
+        const items = order.orderItems || [];
+        const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+        const shippedQty = items.reduce((sum, i) => sum + (i.quantityShipped || 0), 0);
+        const cancelledQty = items.reduce((sum, i) => sum + (i.quantityCancelled || 0), 0);
+
+        let status = 'Open';
+        let statusClass = 'open';
+        if (shippedQty >= totalQty) {
+          status = 'Shipped';
+          statusClass = 'shipped';
+        } else if (shippedQty > 0) {
+          status = 'Partial';
+          statusClass = 'pending';
+        } else if (cancelledQty >= totalQty) {
+          status = 'Cancelled';
+          statusClass = 'returned';
+        }
+
+        return `
+          <tr>
+            <td><span class="order-id">${order.orderId}</span></td>
+            <td>${formatDate(order.orderPlacedDateTime)}</td>
+            <td>${items[0]?.fulfilmentMethod || '-'}</td>
+            <td>${items.length}</td>
+            <td>&euro;${calculateTotal(items)}</td>
+            <td><span class="badge ${statusClass}">${status}</span></td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="viewOrder('${order.orderId}')">
+                <span class="material-symbols-outlined">visibility</span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
     // Load shipments
@@ -938,6 +1042,8 @@
         const data = await res.json();
 
         if (!data.success || !data.shipments || data.shipments.length === 0) {
+          paginationState.shipments.all = [];
+          paginationState.shipments.filtered = [];
           tbody.innerHTML = `
             <tr>
               <td colspan="6">
@@ -949,63 +1055,14 @@
               </td>
             </tr>
           `;
+          document.getElementById('shipments-pagination').style.display = 'none';
           return;
         }
 
-        tbody.innerHTML = data.shipments.map(shipment => {
-          // Get order ID from multiple possible locations
-          const orderId = shipment.orderId || shipment.shipmentItems?.[0]?.orderId || '-';
-          // Get transport info
-          const carrier = shipment.transport?.transporterCode || '-';
-          const trackTrace = shipment.transport?.trackAndTrace || '-';
-
-          // Build tracking URL based on carrier
-          let trackUrl = '';
-          let carrierDisplay = carrier;
-          if (trackTrace && trackTrace !== '-') {
-            const carrierLower = carrier.toLowerCase();
-            if (carrierLower.includes('postnl') || carrierLower === 'pnl' || carrierLower === 'postnl_nl') {
-              trackUrl = `https://postnl.nl/tracktrace/?B=${encodeURIComponent(trackTrace)}`;
-              carrierDisplay = 'PostNL';
-            } else if (carrierLower.includes('bpost') || carrierLower === 'bpost_be') {
-              trackUrl = `https://track.bpost.cloud/btr/web/#/search?itemCode=${encodeURIComponent(trackTrace)}&lang=nl`;
-              carrierDisplay = 'bpost';
-            } else if (carrierLower.includes('gls') || carrierLower === 'gls_nl') {
-              // GLS direct URLs return 404 - use universal Parcels App tracker
-              trackUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackTrace)}`;
-              carrierDisplay = 'GLS';
-            } else if (carrierLower.includes('dpd') || carrierLower === 'dpd_nl' || carrierLower === 'dpd_be') {
-              trackUrl = `https://tracking.dpd.de/status/nl_NL/parcel/${encodeURIComponent(trackTrace)}`;
-              carrierDisplay = 'DPD';
-            } else if (carrierLower.includes('dhl') || carrierLower === 'dhl_nl' || carrierLower === 'dhl_de') {
-              trackUrl = `https://www.dhl.com/nl-nl/home/tracking.html?tracking-id=${encodeURIComponent(trackTrace)}`;
-              carrierDisplay = 'DHL';
-            } else if (carrierLower.includes('ups')) {
-              trackUrl = `https://www.ups.com/track?tracknum=${encodeURIComponent(trackTrace)}`;
-              carrierDisplay = 'UPS';
-            } else if (carrierLower.includes('fedex')) {
-              trackUrl = `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(trackTrace)}`;
-              carrierDisplay = 'FedEx';
-            } else if (carrierLower.includes('tnt')) {
-              trackUrl = `https://www.tnt.com/express/nl_nl/site/shipping-tools/tracking.html?searchType=con&cons=${encodeURIComponent(trackTrace)}`;
-              carrierDisplay = 'TNT';
-            } else {
-              // Generic tracking search
-              trackUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackTrace)}`;
-            }
-          }
-
-          return `
-            <tr>
-              <td><span class="order-id">${shipment.shipmentId}</span></td>
-              <td><span class="order-id">${orderId}</span></td>
-              <td>${formatDate(shipment.shipmentDateTime)}</td>
-              <td>${carrierDisplay}</td>
-              <td>${trackTrace && trackTrace !== '-' ? `<a href="${trackUrl}" target="_blank" style="color: #60a5fa;">${trackTrace}</a>` : '-'}</td>
-              <td><span class="badge shipped">Shipped</span></td>
-            </tr>
-          `;
-        }).join('');
+        paginationState.shipments.all = data.shipments;
+        paginationState.shipments.filtered = data.shipments;
+        paginationState.shipments.offset = 0;
+        renderTable('shipments');
       } catch (e) {
         tbody.innerHTML = `
           <tr>
@@ -1013,6 +1070,59 @@
           </tr>
         `;
       }
+    }
+
+    function renderShipmentsTable(shipments) {
+      const tbody = document.getElementById('shipments-table');
+      tbody.innerHTML = shipments.map(shipment => {
+        const orderId = shipment.orderId || shipment.shipmentItems?.[0]?.orderId || '-';
+        const carrier = shipment.transport?.transporterCode || '-';
+        const trackTrace = shipment.transport?.trackAndTrace || '-';
+
+        let trackUrl = '';
+        let carrierDisplay = carrier;
+        if (trackTrace && trackTrace !== '-') {
+          const carrierLower = carrier.toLowerCase();
+          if (carrierLower.includes('postnl') || carrierLower === 'pnl' || carrierLower === 'postnl_nl') {
+            trackUrl = `https://postnl.nl/tracktrace/?B=${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'PostNL';
+          } else if (carrierLower.includes('bpost') || carrierLower === 'bpost_be') {
+            trackUrl = `https://track.bpost.cloud/btr/web/#/search?itemCode=${encodeURIComponent(trackTrace)}&lang=nl`;
+            carrierDisplay = 'bpost';
+          } else if (carrierLower.includes('gls') || carrierLower === 'gls_nl') {
+            trackUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'GLS';
+          } else if (carrierLower.includes('dpd') || carrierLower === 'dpd_nl' || carrierLower === 'dpd_be') {
+            trackUrl = `https://tracking.dpd.de/status/nl_NL/parcel/${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'DPD';
+          } else if (carrierLower.includes('dhl') || carrierLower === 'dhl_nl' || carrierLower === 'dhl_de') {
+            trackUrl = `https://www.dhl.com/nl-nl/home/tracking.html?tracking-id=${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'DHL';
+          } else if (carrierLower.includes('ups')) {
+            trackUrl = `https://www.ups.com/track?tracknum=${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'UPS';
+          } else if (carrierLower.includes('fedex')) {
+            trackUrl = `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'FedEx';
+          } else if (carrierLower.includes('tnt')) {
+            trackUrl = `https://www.tnt.com/express/nl_nl/site/shipping-tools/tracking.html?searchType=con&cons=${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'TNT';
+          } else {
+            trackUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackTrace)}`;
+          }
+        }
+
+        return `
+          <tr>
+            <td><span class="order-id">${shipment.shipmentId}</span></td>
+            <td><span class="order-id">${orderId}</span></td>
+            <td>${formatDate(shipment.shipmentDateTime)}</td>
+            <td>${carrierDisplay}</td>
+            <td>${trackTrace && trackTrace !== '-' ? `<a href="${trackUrl}" target="_blank" style="color: #60a5fa;">${trackTrace}</a>` : '-'}</td>
+            <td><span class="badge shipped">Shipped</span></td>
+          </tr>
+        `;
+      }).join('');
     }
 
     // Load returns
@@ -1026,6 +1136,8 @@
         const data = await res.json();
 
         if (!data.success || !data.returns || data.returns.length === 0) {
+          paginationState.returns.all = [];
+          paginationState.returns.filtered = [];
           tbody.innerHTML = `
             <tr>
               <td colspan="7">
@@ -1037,6 +1149,7 @@
               </td>
             </tr>
           `;
+          document.getElementById('returns-pagination').style.display = 'none';
           return;
         }
 
@@ -1045,65 +1158,15 @@
           const firstItem = ret.returnItems?.[0] || {};
           if (firstItem.ean) {
             const product = await lookupProductByEan(firstItem.ean);
-            return {
-              ...ret,
-              productInfo: product
-            };
+            return { ...ret, productInfo: product };
           }
           return ret;
         }));
 
-        tbody.innerHTML = returnsWithProducts.map(ret => {
-          const firstItem = ret.returnItems?.[0] || {};
-          const orderId = firstItem.orderId || '-';
-          const ean = firstItem.ean || '-';
-          const product = ret.productInfo;
-          const sku = product?.sku || '';
-          const productName = product?.name || '';
-          const imageUrl = product?.image;  // Odoo returns 'image' field (base64)
-
-          // Build reason display with main reason and detail
-          let reasonDisplay = firstItem.returnReason || '-';
-          if (firstItem.returnReasonDetail) {
-            reasonDisplay += `<br><span style="font-size: 11px; color: #71717a;">${firstItem.returnReasonDetail}</span>`;
-          }
-
-          // Build product display with thumbnail, SKU and EAN
-          let productDisplay = '';
-          if (productName) {
-            productDisplay += `<div style="font-size: 13px; color: #e4e4e7; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${productName}</div>`;
-          }
-          if (sku) {
-            productDisplay += `<div style="font-size: 11px; color: #a1a1aa; font-family: monospace;">SKU: ${sku}</div>`;
-          }
-          productDisplay += `<div style="font-size: 11px; color: #71717a; font-family: monospace;">EAN: ${ean}</div>`;
-          if (firstItem.quantity > 1) {
-            productDisplay += `<div style="font-size: 11px; color: #71717a;">Qty: ${firstItem.quantity}</div>`;
-          }
-
-          return `
-            <tr>
-              <td><span class="order-id">${ret.returnId}</span></td>
-              <td><span class="order-id">${orderId}</span></td>
-              <td>${formatDate(ret.registrationDateTime)}</td>
-              <td>${reasonDisplay}</td>
-              <td>
-                <div class="return-product">
-                  ${imageUrl ? `<img src="${imageUrl}" class="return-thumb" onerror="this.style.display='none'">` : ''}
-                  <div>${productDisplay}</div>
-                </div>
-              </td>
-              <td><span class="badge ${ret.handled ? 'shipped' : 'returned'}">${ret.handled ? 'Handled' : 'Open'}</span></td>
-              <td>
-                ${!ret.handled ? `
-                  <button class="btn btn-secondary btn-sm" onclick="handleReturn('${firstItem.rmaId}')">
-                    <span class="material-symbols-outlined">check</span>
-                  </button>
-                ` : ''}
-              </td>
-            </tr>
-          `;
-        }).join('');
+        paginationState.returns.all = returnsWithProducts;
+        paginationState.returns.filtered = returnsWithProducts;
+        paginationState.returns.offset = 0;
+        renderTable('returns');
       } catch (e) {
         tbody.innerHTML = `
           <tr>
@@ -1111,6 +1174,59 @@
           </tr>
         `;
       }
+    }
+
+    function renderReturnsTable(returns) {
+      const tbody = document.getElementById('returns-table');
+      tbody.innerHTML = returns.map(ret => {
+        const firstItem = ret.returnItems?.[0] || {};
+        const orderId = firstItem.orderId || '-';
+        const ean = firstItem.ean || '-';
+        const product = ret.productInfo;
+        const sku = product?.sku || '';
+        const productName = product?.name || '';
+        const imageUrl = product?.image;
+
+        let reasonDisplay = firstItem.returnReason || '-';
+        if (firstItem.returnReasonDetail) {
+          reasonDisplay += `<br><span style="font-size: 11px; color: #71717a;">${firstItem.returnReasonDetail}</span>`;
+        }
+
+        let productDisplay = '';
+        if (productName) {
+          productDisplay += `<div style="font-size: 13px; color: #e4e4e7; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${productName}</div>`;
+        }
+        if (sku) {
+          productDisplay += `<div style="font-size: 11px; color: #a1a1aa; font-family: monospace;">SKU: ${sku}</div>`;
+        }
+        productDisplay += `<div style="font-size: 11px; color: #71717a; font-family: monospace;">EAN: ${ean}</div>`;
+        if (firstItem.quantity > 1) {
+          productDisplay += `<div style="font-size: 11px; color: #71717a;">Qty: ${firstItem.quantity}</div>`;
+        }
+
+        return `
+          <tr>
+            <td><span class="order-id">${ret.returnId}</span></td>
+            <td><span class="order-id">${orderId}</span></td>
+            <td>${formatDate(ret.registrationDateTime)}</td>
+            <td>${reasonDisplay}</td>
+            <td>
+              <div class="return-product">
+                ${imageUrl ? `<img src="${imageUrl}" class="return-thumb" onerror="this.style.display='none'">` : ''}
+                <div>${productDisplay}</div>
+              </div>
+            </td>
+            <td><span class="badge ${ret.handled ? 'shipped' : 'returned'}">${ret.handled ? 'Handled' : 'Open'}</span></td>
+            <td>
+              ${!ret.handled ? `
+                <button class="btn btn-secondary btn-sm" onclick="handleReturn('${firstItem.rmaId}')">
+                  <span class="material-symbols-outlined">check</span>
+                </button>
+              ` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
     // Load invoices
@@ -1121,6 +1237,8 @@
         const data = await res.json();
 
         if (!data.success || !data.invoices || data.invoices.length === 0) {
+          paginationState.invoices.all = [];
+          paginationState.invoices.filtered = [];
           tbody.innerHTML = `
             <tr>
               <td colspan="7">
@@ -1132,37 +1250,14 @@
               </td>
             </tr>
           `;
+          document.getElementById('invoices-pagination').style.display = 'none';
           return;
         }
 
-        tbody.innerHTML = data.invoices.map(inv => {
-          const period = inv.periodStartDate && inv.periodEndDate
-            ? `${formatDate(inv.periodStartDate)} - ${formatDate(inv.periodEndDate)}`
-            : '-';
-          const amount = inv.totalAmountExclVat != null
-            ? `€${Number(inv.totalAmountExclVat).toFixed(2)}`
-            : '-';
-          // Odoo Bill - placeholder until invoice import tool is built
-          const odooBill = inv.odooBillNumber || '-';
-          return `
-            <tr>
-              <td><span class="order-id">${inv.invoiceId}</span></td>
-              <td>${odooBill !== '-' ? `<a href="https://acropaq.odoo.com/web#id=${inv.odooBillId}&model=account.move&view_type=form" target="_blank" style="color: #60a5fa;">${odooBill}</a>` : '<span style="color: #52525b;">-</span>'}</td>
-              <td>${period}</td>
-              <td>${formatDate(inv.issueDate)}</td>
-              <td>${amount}</td>
-              <td><span class="badge shipped">Paid</span></td>
-              <td style="display: flex; gap: 6px;">
-                <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')" title="Download PDF">
-                  <span class="material-symbols-outlined">picture_as_pdf</span>
-                </button>
-                <button class="btn btn-secondary btn-sm" onclick="downloadSpecification('${inv.invoiceId}')" title="Download Specification (Excel)">
-                  <span class="material-symbols-outlined">table_chart</span>
-                </button>
-              </td>
-            </tr>
-          `;
-        }).join('');
+        paginationState.invoices.all = data.invoices;
+        paginationState.invoices.filtered = data.invoices;
+        paginationState.invoices.offset = 0;
+        renderTable('invoices');
       } catch (e) {
         tbody.innerHTML = `
           <tr>
@@ -1170,6 +1265,37 @@
           </tr>
         `;
       }
+    }
+
+    function renderInvoicesTable(invoices) {
+      const tbody = document.getElementById('invoices-table');
+      tbody.innerHTML = invoices.map(inv => {
+        const period = inv.periodStartDate && inv.periodEndDate
+          ? `${formatDate(inv.periodStartDate)} - ${formatDate(inv.periodEndDate)}`
+          : '-';
+        const amount = inv.totalAmountExclVat != null
+          ? `€${Number(inv.totalAmountExclVat).toFixed(2)}`
+          : '-';
+        const odooBill = inv.odooBillNumber || '-';
+        return `
+          <tr>
+            <td><span class="order-id">${inv.invoiceId}</span></td>
+            <td>${odooBill !== '-' ? `<a href="https://acropaq.odoo.com/web#id=${inv.odooBillId}&model=account.move&view_type=form" target="_blank" style="color: #60a5fa;">${odooBill}</a>` : '<span style="color: #52525b;">-</span>'}</td>
+            <td>${period}</td>
+            <td>${formatDate(inv.issueDate)}</td>
+            <td>${amount}</td>
+            <td><span class="badge shipped">Paid</span></td>
+            <td style="display: flex; gap: 6px;">
+              <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')" title="Download PDF">
+                <span class="material-symbols-outlined">picture_as_pdf</span>
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadSpecification('${inv.invoiceId}')" title="Download Specification (Excel)">
+                <span class="material-symbols-outlined">table_chart</span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
     // Helper functions
@@ -1422,6 +1548,61 @@
 
     function refreshData() {
       checkStatus();
+    }
+
+    // Pagination functions
+    function updatePagination(type) {
+      const state = paginationState[type];
+      const pagination = document.getElementById(`${type}-pagination`);
+      const info = document.getElementById(`${type}-pagination-info`);
+      const prevBtn = document.getElementById(`${type}-prev-btn`);
+      const nextBtn = document.getElementById(`${type}-next-btn`);
+
+      if (state.filtered.length === 0) {
+        pagination.style.display = 'none';
+        return;
+      }
+
+      pagination.style.display = 'flex';
+      const start = state.offset + 1;
+      const end = Math.min(state.offset + state.pageSize, state.filtered.length);
+      info.textContent = `Showing ${start}-${end} of ${state.filtered.length}`;
+
+      prevBtn.disabled = state.offset === 0;
+      nextBtn.disabled = state.offset + state.pageSize >= state.filtered.length;
+    }
+
+    function changePageSize(type) {
+      const state = paginationState[type];
+      state.pageSize = parseInt(document.getElementById(`${type}-page-size`).value);
+      state.offset = 0;
+      renderTable(type);
+    }
+
+    function prevPage(type) {
+      const state = paginationState[type];
+      state.offset = Math.max(0, state.offset - state.pageSize);
+      renderTable(type);
+    }
+
+    function nextPage(type) {
+      const state = paginationState[type];
+      if (state.offset + state.pageSize < state.filtered.length) {
+        state.offset += state.pageSize;
+        renderTable(type);
+      }
+    }
+
+    function renderTable(type) {
+      const state = paginationState[type];
+      const pageData = state.filtered.slice(state.offset, state.offset + state.pageSize);
+
+      if (type === 'orders') renderOrdersTable(pageData);
+      else if (type === 'shipments') renderShipmentsTable(pageData);
+      else if (type === 'returns') renderReturnsTable(pageData);
+      else if (type === 'invoices') renderInvoicesTable(pageData);
+
+      updatePagination(type);
     }
 
     // Initialize

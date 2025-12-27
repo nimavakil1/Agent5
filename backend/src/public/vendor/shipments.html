@@ -44,6 +44,15 @@
     .action-btn { width: 32px; height: 32px; border-radius: 8px; background: #252532; border: none; color: #71717a; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .action-btn:hover { background: #3f3f50; color: #e4e4e7; }
     .action-btn .material-symbols-outlined { font-size: 18px; }
+    .filters-bar { display: flex; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #252532; flex-wrap: wrap; align-items: center; }
+    .filter-input { padding: 8px 12px; background: #12121a; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 13px; }
+    .filter-input:focus { outline: none; border-color: #f97316; }
+    .filter-select { padding: 8px 12px; background: #12121a; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 13px; cursor: pointer; }
+    .filter-select:focus { outline: none; border-color: #f97316; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-top: 1px solid #252532; }
+    .pagination-info { font-size: 13px; color: #71717a; }
+    .page-size-select { padding: 6px 10px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #e4e4e7; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -75,16 +84,63 @@
     </div>
     <div class="card">
       <div class="card-header"><h3 class="card-title">Submitted Shipments</h3></div>
+      <div class="filters-bar">
+        <input type="text" class="filter-input" id="filter-search" placeholder="Search shipment/PO..." oninput="applyFilters()" style="width: 180px;">
+        <select class="filter-select" id="filter-country" onchange="applyFilters()">
+          <option value="">All Countries</option>
+          <option value="DE">Germany</option>
+          <option value="FR">France</option>
+          <option value="IT">Italy</option>
+          <option value="ES">Spain</option>
+          <option value="NL">Netherlands</option>
+          <option value="BE">Belgium</option>
+          <option value="PL">Poland</option>
+          <option value="SE">Sweden</option>
+          <option value="GB">UK</option>
+          <option value="AT">Austria</option>
+          <option value="CZ">Czech Republic</option>
+        </select>
+        <select class="filter-select" id="filter-status" onchange="applyFilters()">
+          <option value="">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="submitted">Submitted</option>
+          <option value="confirmed">Confirmed</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="clearFilters()"><span class="material-symbols-outlined" style="font-size:16px;">clear</span>Clear</button>
+      </div>
       <div class="table-container">
         <table>
           <thead><tr><th>Shipment ID</th><th>PO Numbers</th><th>Marketplace</th><th>Status</th><th>Date</th><th>Carrier</th></tr></thead>
           <tbody id="shipments-table"><tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading...</div></div></td></tr></tbody>
         </table>
       </div>
+      <div class="pagination" id="pagination" style="display: none;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 13px; color: #71717a;">Show</span>
+          <select class="page-size-select" id="page-size" onchange="changePageSize()">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <span class="pagination-info" id="pagination-info">-</span>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary btn-sm" id="prev-btn" onclick="prevPage()" disabled>Previous</button>
+          <button class="btn btn-secondary btn-sm" id="next-btn" onclick="nextPage()" disabled>Next</button>
+        </div>
+      </div>
     </div>
   </div>
   <script>
     const MARKETPLACE_FLAGS = { DE: 'de', FR: 'fr', IT: 'it', ES: 'es', NL: 'nl', BE: 'be', PL: 'pl', SE: 'se', UK: 'gb', GB: 'gb', CZ: 'cz', AT: 'at' };
+
+    // State for filtering and pagination
+    let allShipments = [];
+    let filteredShipments = [];
+    let currentOffset = 0;
+    let pageSize = 25;
+
     function getFlagImg(mp) {
       const code = MARKETPLACE_FLAGS[mp];
       if (!code) return mp || '-';
@@ -108,13 +164,79 @@
         const res = await fetch('/api/vendor/shipments', { credentials: 'include' });
         if (!res.ok) throw new Error('Failed');
         const data = await res.json();
-        const shipments = data.shipments || [];
-        document.getElementById('stat-submitted').textContent = shipments.filter(s => s.status === 'submitted').length;
-        document.getElementById('stat-confirmed').textContent = shipments.filter(s => s.status === 'confirmed').length;
-        const tbody = document.getElementById('shipments-table');
-        if (shipments.length === 0) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">local_shipping</span><div class="empty-state-title">No shipments yet</div></div></td></tr>'; return; }
-        tbody.innerHTML = shipments.map(s => '<tr><td>' + (s.shipmentId || '-') + '</td><td>' + (s.purchaseOrderNumbers?.join(', ') || s.purchaseOrderNumber || '-') + '</td><td><span class="marketplace-badge">' + getFlagImg(s.marketplaceId) + '</span></td><td><span class="badge badge-' + (s.status || 'pending') + '">' + (s.status || 'pending') + '</span></td><td>' + formatDate(s.shipmentDate || s.createdAt) + '</td><td>' + (s.carrier || '-') + '</td></tr>').join('');
+        allShipments = data.shipments || [];
+        document.getElementById('stat-submitted').textContent = allShipments.filter(s => s.status === 'submitted').length;
+        document.getElementById('stat-confirmed').textContent = allShipments.filter(s => s.status === 'confirmed').length;
+        applyFilters();
       } catch (e) { document.getElementById('shipments-table').innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>'; }
+    }
+
+    function applyFilters() {
+      const searchTerm = document.getElementById('filter-search').value.toLowerCase();
+      const country = document.getElementById('filter-country').value;
+      const status = document.getElementById('filter-status').value;
+
+      filteredShipments = allShipments.filter(s => {
+        // Search filter
+        if (searchTerm) {
+          const shipmentId = (s.shipmentId || '').toLowerCase();
+          const poNumbers = (s.purchaseOrderNumbers?.join(', ') || s.purchaseOrderNumber || '').toLowerCase();
+          if (!shipmentId.includes(searchTerm) && !poNumbers.includes(searchTerm)) return false;
+        }
+        // Country filter
+        if (country && s.marketplaceId !== country) return false;
+        // Status filter
+        if (status && s.status !== status) return false;
+        return true;
+      });
+
+      currentOffset = 0;
+      renderShipments();
+    }
+
+    function clearFilters() {
+      document.getElementById('filter-search').value = '';
+      document.getElementById('filter-country').value = '';
+      document.getElementById('filter-status').value = '';
+      applyFilters();
+    }
+
+    function renderShipments() {
+      const tbody = document.getElementById('shipments-table');
+      const pageData = filteredShipments.slice(currentOffset, currentOffset + pageSize);
+
+      if (filteredShipments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">search_off</span><div class="empty-state-title">No shipments match your filters</div></div></td></tr>';
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+
+      tbody.innerHTML = pageData.map(s => '<tr><td>' + (s.shipmentId || '-') + '</td><td>' + (s.purchaseOrderNumbers?.join(', ') || s.purchaseOrderNumber || '-') + '</td><td><span class="marketplace-badge">' + getFlagImg(s.marketplaceId) + '</span></td><td><span class="badge badge-' + (s.status || 'pending') + '">' + (s.status || 'pending') + '</span></td><td>' + formatDate(s.shipmentDate || s.createdAt) + '</td><td>' + (s.carrier || '-') + '</td></tr>').join('');
+
+      // Update pagination
+      const pagination = document.getElementById('pagination');
+      pagination.style.display = 'flex';
+      document.getElementById('pagination-info').textContent = 'Showing ' + (currentOffset + 1) + '-' + Math.min(currentOffset + pageSize, filteredShipments.length) + ' of ' + filteredShipments.length;
+      document.getElementById('prev-btn').disabled = currentOffset === 0;
+      document.getElementById('next-btn').disabled = currentOffset + pageSize >= filteredShipments.length;
+    }
+
+    function changePageSize() {
+      pageSize = parseInt(document.getElementById('page-size').value);
+      currentOffset = 0;
+      renderShipments();
+    }
+
+    function prevPage() {
+      currentOffset = Math.max(0, currentOffset - pageSize);
+      renderShipments();
+    }
+
+    function nextPage() {
+      if (currentOffset + pageSize < filteredShipments.length) {
+        currentOffset += pageSize;
+        renderShipments();
+      }
     }
     function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-GB') : '-'; }
     function formatCurrency(a) { return a != null ? new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR' }).format(a) : '-'; }
