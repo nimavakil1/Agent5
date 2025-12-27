@@ -29,7 +29,10 @@
     .stat-card.warning .stat-value { color: #fbbf24; }
     .stat-card.danger .stat-value { color: #f87171; }
     .filters-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-    .filter-select { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; }
+    .filter-select, .filter-input { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; }
+    .filter-input:focus, .filter-select:focus { outline: none; border-color: #f97316; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .page-size-select { padding: 6px 10px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #e4e4e7; font-size: 13px; }
     .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
     .table-container { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
@@ -74,7 +77,8 @@
       <div class="stat-card danger" id="stat-card-failed" onclick="filterByStatus('failed')"><div class="stat-value" id="stat-failed">--</div><div class="stat-label">Failed</div></div>
     </div>
     <div class="filters-bar">
-      <select class="filter-select" id="filter-country" onchange="loadInvoices()">
+      <input type="text" class="filter-input" id="filter-search" placeholder="Search invoice..." oninput="applyFilters()" style="width: 180px;">
+      <select class="filter-select" id="filter-country" onchange="applyFilters()">
         <option value="">All Countries</option>
         <option value="DE">Germany</option>
         <option value="FR">France</option>
@@ -86,6 +90,9 @@
         <option value="SE">Sweden</option>
         <option value="CZ">Czech Republic</option>
       </select>
+      <input type="date" class="filter-input" id="filter-date-from" onchange="applyFilters()" title="From date">
+      <input type="date" class="filter-input" id="filter-date-to" onchange="applyFilters()" title="To date">
+      <button class="btn btn-secondary btn-sm" onclick="clearFilters()"><span class="material-symbols-outlined">clear</span>Clear</button>
     </div>
     <div class="card">
       <div class="table-container">
@@ -94,22 +101,35 @@
           <tbody id="invoices-table"><tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading invoices...</div></div></td></tr></tbody>
         </table>
       </div>
-      <div class="pagination">
-        <button class="btn btn-secondary" id="prev-btn" onclick="prevPage()" disabled>Previous</button>
+      <div class="pagination" style="justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 13px; color: #71717a;">Show</span>
+          <select class="page-size-select" id="page-size" onchange="changePageSize()">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+          </select>
+          <span style="font-size: 13px; color: #71717a;">per page</span>
+        </div>
         <span class="pagination-info" id="pagination-info">--</span>
-        <button class="btn btn-secondary" id="next-btn" onclick="nextPage()" disabled>Next</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary btn-sm" id="prev-btn" onclick="prevPage()" disabled>Previous</button>
+          <button class="btn btn-secondary btn-sm" id="next-btn" onclick="nextPage()" disabled>Next</button>
+        </div>
       </div>
     </div>
   </div>
   <script>
     const MARKETPLACE_FLAGS = { DE: 'de', FR: 'fr', IT: 'it', ES: 'es', NL: 'nl', BE: 'be', PL: 'pl', SE: 'se', UK: 'gb', CZ: 'cz' };
     const PAYMENT_TERMS_DAYS = 45;
-    const PAGE_SIZE = 50;
 
-    let invoices = [];
+    let allInvoices = [];
+    let filteredInvoices = [];
     let currentOffset = 0;
     let totalInvoices = 0;
     let currentStatusFilter = '';
+    let pageSize = 50;
 
     function getFlagImg(mp) {
       var code = MARKETPLACE_FLAGS[mp];
@@ -123,30 +143,23 @@
 
     function filterByStatus(status) {
       currentStatusFilter = status;
-      currentOffset = 0;
       // Update active state on cards
       document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
       if (status === '') document.getElementById('stat-card-total').classList.add('active');
       else if (status === 'amazon_paid') document.getElementById('stat-card-amazon-paid').classList.add('active');
       else if (status === 'amazon_unpaid') document.getElementById('stat-card-pending').classList.add('active');
       else if (status === 'failed') document.getElementById('stat-card-failed').classList.add('active');
-      loadInvoices();
+      applyFilters();
     }
 
     async function loadInvoices() {
       try {
-        const params = new URLSearchParams();
-        params.append('limit', PAGE_SIZE);
-        params.append('offset', currentOffset);
-
-        const res = await fetch('/api/vendor/invoices/odoo?' + params, { credentials: 'include' });
+        const res = await fetch('/api/vendor/invoices/odoo?limit=1000', { credentials: 'include' });
         if (!res.ok) throw new Error('Failed');
         const data = await res.json();
+        allInvoices = data.invoices || [];
 
-        // Filter by status client-side (since we need all data for stats)
-        let allInvoices = data.invoices || [];
-
-        // Calculate stats based on Amazon payment status (from remittance data)
+        // Calculate stats based on Amazon payment status
         const stats = { total: allInvoices.length, amazon_paid: 0, amazon_unpaid: 0, failed: 0 };
         allInvoices.forEach(inv => {
           const submissionStatus = inv.amazonSubmission?.status || 'not_submitted';
@@ -156,47 +169,77 @@
           else stats.amazon_unpaid++;
         });
 
-        document.getElementById('stat-total').textContent = data.total || stats.total;
+        document.getElementById('stat-total').textContent = stats.total;
         document.getElementById('stat-amazon-paid').textContent = stats.amazon_paid;
         document.getElementById('stat-amazon-unpaid').textContent = stats.amazon_unpaid;
         document.getElementById('stat-failed').textContent = stats.failed;
 
-        // Apply country filter
-        const mpFilter = document.getElementById('filter-country').value;
-        if (mpFilter) {
-          allInvoices = allInvoices.filter(inv => inv.marketplace === mpFilter);
-        }
-
-        // Apply status filter based on Amazon payment status
-        if (currentStatusFilter) {
-          allInvoices = allInvoices.filter(inv => {
-            const submissionStatus = inv.amazonSubmission?.status || 'not_submitted';
-            const isAmazonPaid = inv.amazonPayment?.status === 'paid';
-            if (currentStatusFilter === 'amazon_paid') return isAmazonPaid;
-            if (currentStatusFilter === 'amazon_unpaid') return !isAmazonPaid && submissionStatus !== 'failed';
-            if (currentStatusFilter === 'failed') return submissionStatus === 'failed';
-            return true;
-          });
-        }
-
-        invoices = allInvoices;
-        totalInvoices = data.total || allInvoices.length;
-
-        renderInvoices();
-        updatePagination();
+        applyFilters();
       } catch (e) {
         console.error(e);
         document.getElementById('invoices-table').innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load invoices</div></div></td></tr>';
       }
     }
 
+    function applyFilters() {
+      const search = document.getElementById('filter-search').value.toLowerCase();
+      const country = document.getElementById('filter-country').value;
+      const dateFrom = document.getElementById('filter-date-from').value;
+      const dateTo = document.getElementById('filter-date-to').value;
+
+      filteredInvoices = allInvoices.filter(inv => {
+        // Search filter
+        if (search) {
+          const searchFields = [inv.invoiceNumber, inv.partnerName, inv.marketplace].join(' ').toLowerCase();
+          if (!searchFields.includes(search)) return false;
+        }
+        // Country filter
+        if (country && inv.marketplace !== country) return false;
+        // Date range filter
+        if (dateFrom && inv.invoiceDate && new Date(inv.invoiceDate) < new Date(dateFrom)) return false;
+        if (dateTo && inv.invoiceDate && new Date(inv.invoiceDate) > new Date(dateTo + 'T23:59:59')) return false;
+        // Status filter
+        if (currentStatusFilter) {
+          const submissionStatus = inv.amazonSubmission?.status || 'not_submitted';
+          const isAmazonPaid = inv.amazonPayment?.status === 'paid';
+          if (currentStatusFilter === 'amazon_paid' && !isAmazonPaid) return false;
+          if (currentStatusFilter === 'amazon_unpaid' && (isAmazonPaid || submissionStatus === 'failed')) return false;
+          if (currentStatusFilter === 'failed' && submissionStatus !== 'failed') return false;
+        }
+        return true;
+      });
+
+      currentOffset = 0;
+      totalInvoices = filteredInvoices.length;
+      renderInvoices();
+      updatePagination();
+    }
+
+    function clearFilters() {
+      document.getElementById('filter-search').value = '';
+      document.getElementById('filter-country').value = '';
+      document.getElementById('filter-date-from').value = '';
+      document.getElementById('filter-date-to').value = '';
+      currentStatusFilter = '';
+      document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+      applyFilters();
+    }
+
+    function changePageSize() {
+      pageSize = parseInt(document.getElementById('page-size').value);
+      currentOffset = 0;
+      renderInvoices();
+      updatePagination();
+    }
+
     function renderInvoices() {
       const tbody = document.getElementById('invoices-table');
-      if (invoices.length === 0) {
+      const pageInvoices = filteredInvoices.slice(currentOffset, currentOffset + pageSize);
+      if (pageInvoices.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">description</span><div class="empty-state-title">No invoices found</div></div></td></tr>';
         return;
       }
-      tbody.innerHTML = invoices.map(function(inv) {
+      tbody.innerHTML = pageInvoices.map(function(inv) {
         var mp = inv.marketplace || '-';
         var mpDisplay = getFlagImg(mp);
         var amazonStatus = inv.amazonSubmission?.status || 'not_submitted';
@@ -232,24 +275,26 @@
     }
 
     function updatePagination() {
-      const start = currentOffset + 1;
-      const end = Math.min(currentOffset + invoices.length, totalInvoices);
+      const start = totalInvoices > 0 ? currentOffset + 1 : 0;
+      const end = Math.min(currentOffset + pageSize, totalInvoices);
       document.getElementById('pagination-info').textContent = 'Showing ' + start + '-' + end + ' of ' + totalInvoices;
       document.getElementById('prev-btn').disabled = currentOffset === 0;
-      document.getElementById('next-btn').disabled = currentOffset + PAGE_SIZE >= totalInvoices;
+      document.getElementById('next-btn').disabled = currentOffset + pageSize >= totalInvoices;
     }
 
     function prevPage() {
       if (currentOffset > 0) {
-        currentOffset = Math.max(0, currentOffset - PAGE_SIZE);
-        loadInvoices();
+        currentOffset = Math.max(0, currentOffset - pageSize);
+        renderInvoices();
+        updatePagination();
       }
     }
 
     function nextPage() {
-      if (currentOffset + PAGE_SIZE < totalInvoices) {
-        currentOffset += PAGE_SIZE;
-        loadInvoices();
+      if (currentOffset + pageSize < totalInvoices) {
+        currentOffset += pageSize;
+        renderInvoices();
+        updatePagination();
       }
     }
 
