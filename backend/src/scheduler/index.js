@@ -5,6 +5,7 @@ let shopifyTimer = null;
 let amazonSettlementTimer = null;
 let vendorOrdersTimer = null;
 let productSyncTimer = null;
+let stockSyncTimer = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -115,6 +116,16 @@ function start() {
     setTimeout(syncProductsIncremental, 30000);
     console.log(`[scheduler] Product sync initialized (every ${productSyncMinutes} minutes)`);
   } catch (e) { console.error('[scheduler] Product sync init error', e); }
+
+  // Stock-only sync from Odoo (every 5 minutes - faster, just stock.quant)
+  try {
+    const stockSyncMinutes = Number(process.env.STOCK_SYNC_INTERVAL_MIN || '5');
+    const stockSyncMs = Math.max(1, stockSyncMinutes) * 60 * 1000;
+    stockSyncTimer = setInterval(syncStockOnly, stockSyncMs);
+    // Run initial stock sync after 2 minutes (after product sync has run)
+    setTimeout(syncStockOnly, 120000);
+    console.log(`[scheduler] Stock sync initialized (every ${stockSyncMinutes} minutes)`);
+  } catch (e) { console.error('[scheduler] Stock sync init error', e); }
 }
 
 /**
@@ -242,4 +253,36 @@ async function syncProductsIncremental() {
   }
 }
 
-module.exports = { start, checkAmazonSettlementReminders, pollVendorOrders, syncProductsIncremental };
+/**
+ * Sync stock levels only from Odoo to MongoDB
+ * Faster than full product sync - only fetches stock.quant data
+ * Runs more frequently to keep stock levels up to date
+ */
+async function syncStockOnly() {
+  try {
+    const { getProductSyncService } = require('../services/ProductSyncService');
+    const Product = require('../models/Product');
+
+    // Skip if no products in cache yet (let product sync handle it)
+    const count = await Product.countDocuments();
+    if (count === 0) {
+      return;
+    }
+
+    const syncService = getProductSyncService();
+    const result = await syncService.syncStock();
+
+    if (result.skipped) {
+      // Another sync is running, skip silently
+      return;
+    }
+
+    if (result.updated > 0) {
+      console.log(`[scheduler] Stock sync: ${result.updated} products updated`);
+    }
+  } catch (e) {
+    console.error('[scheduler] Stock sync error:', e?.message || e);
+  }
+}
+
+module.exports = { start, checkAmazonSettlementReminders, pollVendorOrders, syncProductsIncremental, syncStockOnly };
