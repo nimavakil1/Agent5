@@ -184,6 +184,39 @@
     .no-attachments { text-align: center; padding: 40px 20px; color: var(--text-muted); }
     .no-attachments .material-symbols-outlined { font-size: 48px; margin-bottom: 12px; display: block; }
 
+    /* Packaging Table */
+    .packaging-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .packaging-table { width: 100%; border-collapse: collapse; }
+    .packaging-table th { text-align: left; padding: 12px 16px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; background: var(--bg-input); border-bottom: 1px solid var(--border); }
+    .packaging-table td { padding: 14px 16px; font-size: 14px; color: var(--text); border-bottom: 1px solid var(--border); }
+    .packaging-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .packaging-table .name-cell { font-weight: 500; color: #fff; }
+    .packaging-table .qty-cell { font-weight: 600; color: var(--accent); }
+    .packaging-table .barcode-cell { font-family: monospace; font-size: 12px; color: var(--text-muted); }
+    .packaging-table .actions-cell { text-align: right; white-space: nowrap; }
+    .packaging-table .action-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 6px; transition: all 0.15s; }
+    .packaging-table .action-btn:hover { background: var(--bg-card); color: var(--accent); }
+    .packaging-table .action-btn.delete:hover { color: var(--danger); }
+    .packaging-table input { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 14px; width: 100%; }
+    .packaging-table input:focus { outline: none; border-color: var(--accent); }
+    .packaging-table input[type="number"] { width: 80px; text-align: center; }
+    .no-packaging { text-align: center; padding: 32px; color: var(--text-muted); background: var(--bg-input); border-radius: 10px; }
+    .add-packaging-row td { background: var(--bg-input); }
+    .btn-small { padding: 8px 14px; font-size: 12px; border-radius: 6px; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 4000; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: var(--bg-card); border-radius: 16px; padding: 24px; width: 100%; max-width: 400px; animation: modalIn 0.2s ease; }
+    @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 20px; }
+    .modal-field { margin-bottom: 16px; }
+    .modal-field label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+    .modal-field input { width: 100%; padding: 10px 14px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: #fff; font-size: 14px; }
+    .modal-field input:focus { outline: none; border-color: var(--accent); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
+    .modal-actions .btn { flex: 1; justify-content: center; }
+
     /* Loading State */
     .loading-container { display: flex; align-items: center; justify-content: center; min-height: 400px; flex-direction: column; gap: 16px; }
     .loading-container .material-symbols-outlined { font-size: 48px; color: var(--accent); animation: spin 1s linear infinite; }
@@ -231,9 +264,37 @@
     </div>
   </div>
 
+  <!-- Packaging Modal -->
+  <div class="modal-overlay" id="packaging-modal">
+    <div class="modal">
+      <div class="modal-title" id="packaging-modal-title">Add Packaging</div>
+      <div class="modal-field">
+        <label>Name *</label>
+        <input type="text" id="packaging-name" placeholder="e.g., Inner Box, Export Carton, Pallet">
+      </div>
+      <div class="modal-field">
+        <label>Quantity per Package</label>
+        <input type="number" id="packaging-qty" value="1" min="1" step="1">
+      </div>
+      <div class="modal-field">
+        <label>Barcode</label>
+        <input type="text" id="packaging-barcode" placeholder="Optional barcode">
+      </div>
+      <input type="hidden" id="packaging-edit-id">
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closePackagingModal()">Cancel</button>
+        <button class="btn btn-success" onclick="savePackaging()">
+          <span class="material-symbols-outlined">save</span>
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let product = null;
     let attachments = { pictures: [], videos: [], packaging: [], documents: [] };
+    let packagingList = [];
     let activeAttachmentCategory = 'pictures';
     let isEditMode = false;
 
@@ -258,6 +319,7 @@
         product = data.product;
         renderProduct();
         loadAttachments();
+        loadPackaging();
       } catch (error) {
         document.getElementById('content').innerHTML = `
           <div class="loading-container">
@@ -267,6 +329,178 @@
         `;
       }
     }
+
+    // ==================== PACKAGING FUNCTIONS ====================
+
+    async function loadPackaging() {
+      try {
+        const res = await fetch(`/api/odoo/products/${product.id}/packaging`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          packagingList = data.packaging || [];
+          renderPackagingTable();
+        }
+      } catch (error) {
+        console.error('Failed to load packaging:', error);
+        renderPackagingTable();
+      }
+    }
+
+    function renderPackagingTable() {
+      const container = document.getElementById('packaging-container');
+      if (!container) return;
+
+      if (packagingList.length === 0) {
+        container.innerHTML = `
+          <div class="no-packaging">
+            <span class="material-symbols-outlined" style="font-size:32px;margin-bottom:8px;display:block">inventory_2</span>
+            No packaging configured. Click "Add Packaging" to create one.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = `
+        <table class="packaging-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Quantity</th>
+              <th>Barcode</th>
+              <th>Unit</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${packagingList.map(p => `
+              <tr data-id="${p.id}">
+                <td class="name-cell">${escapeHtml(p.name)}</td>
+                <td class="qty-cell">${p.qty} units</td>
+                <td class="barcode-cell">${p.barcode || '—'}</td>
+                <td>${p.uom || '—'}</td>
+                <td class="actions-cell">
+                  <button class="action-btn" onclick="showEditPackagingModal(${p.id})" title="Edit">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="action-btn delete" onclick="deletePackaging(${p.id})" title="Delete">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function showAddPackagingModal() {
+      document.getElementById('packaging-modal-title').textContent = 'Add Packaging';
+      document.getElementById('packaging-name').value = '';
+      document.getElementById('packaging-qty').value = '1';
+      document.getElementById('packaging-barcode').value = '';
+      document.getElementById('packaging-edit-id').value = '';
+      document.getElementById('packaging-modal').classList.add('show');
+      document.getElementById('packaging-name').focus();
+    }
+
+    function showEditPackagingModal(id) {
+      const pkg = packagingList.find(p => p.id === id);
+      if (!pkg) return;
+
+      document.getElementById('packaging-modal-title').textContent = 'Edit Packaging';
+      document.getElementById('packaging-name').value = pkg.name;
+      document.getElementById('packaging-qty').value = pkg.qty;
+      document.getElementById('packaging-barcode').value = pkg.barcode || '';
+      document.getElementById('packaging-edit-id').value = id;
+      document.getElementById('packaging-modal').classList.add('show');
+      document.getElementById('packaging-name').focus();
+    }
+
+    function closePackagingModal() {
+      document.getElementById('packaging-modal').classList.remove('show');
+    }
+
+    async function savePackaging() {
+      const name = document.getElementById('packaging-name').value.trim();
+      const qty = parseInt(document.getElementById('packaging-qty').value) || 1;
+      const barcode = document.getElementById('packaging-barcode').value.trim();
+      const editId = document.getElementById('packaging-edit-id').value;
+
+      if (!name) {
+        showToast('Name is required', 'error');
+        return;
+      }
+
+      const overlay = document.getElementById('saving-overlay');
+      overlay.querySelector('span:last-child').textContent = editId ? 'Updating...' : 'Creating...';
+      overlay.classList.add('show');
+
+      try {
+        let res;
+        if (editId) {
+          // Update existing
+          res = await fetch(`/api/odoo/products/${product.id}/packaging/${editId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ name, qty, barcode })
+          });
+        } else {
+          // Create new
+          res = await fetch(`/api/odoo/products/${product.id}/packaging`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ name, qty, barcode })
+          });
+        }
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Failed to save packaging');
+        }
+
+        closePackagingModal();
+        showToast(editId ? 'Packaging updated' : 'Packaging created', 'success');
+        await loadPackaging();
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        overlay.classList.remove('show');
+      }
+    }
+
+    async function deletePackaging(id) {
+      const pkg = packagingList.find(p => p.id === id);
+      if (!pkg) return;
+
+      if (!confirm(`Delete packaging "${pkg.name}"?`)) return;
+
+      const overlay = document.getElementById('saving-overlay');
+      overlay.querySelector('span:last-child').textContent = 'Deleting...';
+      overlay.classList.add('show');
+
+      try {
+        const res = await fetch(`/api/odoo/products/${product.id}/packaging/${id}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Failed to delete packaging');
+        }
+
+        showToast('Packaging deleted', 'success');
+        await loadPackaging();
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        overlay.classList.remove('show');
+      }
+    }
+
+    // ==================== END PACKAGING FUNCTIONS ====================
 
     async function loadAttachments() {
       try {
@@ -777,14 +1011,20 @@
             </div>
 
             <div class="field-group">
-              <div class="field-group-title">
-                <span class="material-symbols-outlined">inventory_2</span>
-                Packaging
+              <div class="packaging-header">
+                <div class="field-group-title" style="margin-bottom:0">
+                  <span class="material-symbols-outlined">inventory_2</span>
+                  Packaging
+                </div>
+                <button class="btn btn-primary btn-small" onclick="showAddPackagingModal()">
+                  <span class="material-symbols-outlined">add</span>
+                  Add Packaging
+                </button>
               </div>
-              <div class="fields-grid">
-                <div class="field">
-                  <div class="field-label">Packaging Types</div>
-                  <div class="field-value">${p.packagingCount || 0} configured</div>
+              <div id="packaging-container">
+                <div class="loading-container" style="min-height:100px">
+                  <span class="material-symbols-outlined">sync</span>
+                  <div class="loading-text">Loading packaging...</div>
                 </div>
               </div>
             </div>

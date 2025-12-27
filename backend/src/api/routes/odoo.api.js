@@ -493,6 +493,164 @@ router.delete('/products/:id/attachments/:attachmentId', async (req, res) => {
 });
 
 /**
+ * Get product packaging
+ */
+router.get('/products/:id/packaging', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+    const productId = parseInt(req.params.id);
+
+    // Get packaging linked to this product
+    const packaging = await client.searchRead('product.packaging', [
+      ['product_id', '=', productId]
+    ], [
+      'id', 'name', 'qty', 'barcode', 'sequence', 'product_uom_id',
+      'create_date', 'write_date', 'create_uid', 'write_uid'
+    ], { order: 'sequence asc, name asc' });
+
+    res.json({
+      success: true,
+      packaging: packaging.map(p => ({
+        id: p.id,
+        name: p.name,
+        qty: p.qty,
+        barcode: p.barcode || '',
+        sequence: p.sequence || 0,
+        uom: p.product_uom_id ? p.product_uom_id[1] : '',
+        uomId: p.product_uom_id ? p.product_uom_id[0] : null,
+        createdAt: p.create_date,
+        updatedAt: p.write_date,
+        createdBy: p.create_uid ? p.create_uid[1] : null,
+        updatedBy: p.write_uid ? p.write_uid[1] : null
+      }))
+    });
+  } catch (error) {
+    console.error('Odoo packaging fetch error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Create product packaging
+ */
+router.post('/products/:id/packaging', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+    const productId = parseInt(req.params.id);
+    const { name, qty, barcode } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    // Create packaging in Odoo
+    const packagingId = await client.create('product.packaging', {
+      product_id: productId,
+      name: name,
+      qty: qty || 1,
+      barcode: barcode || false
+    });
+
+    // Log the change
+    console.log(`[ProductPackaging] Created packaging "${name}" (ID: ${packagingId}) for product ${productId}`);
+
+    // Fetch the created packaging
+    const created = await client.read('product.packaging', [packagingId], [
+      'id', 'name', 'qty', 'barcode', 'sequence', 'product_uom_id'
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Packaging created successfully',
+      packaging: {
+        id: created[0].id,
+        name: created[0].name,
+        qty: created[0].qty,
+        barcode: created[0].barcode || '',
+        sequence: created[0].sequence || 0,
+        uom: created[0].product_uom_id ? created[0].product_uom_id[1] : ''
+      }
+    });
+  } catch (error) {
+    console.error('Odoo packaging create error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Update product packaging
+ */
+router.put('/products/:id/packaging/:packagingId', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+    const packagingId = parseInt(req.params.packagingId);
+    const { name, qty, barcode } = req.body;
+
+    // Build update object
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (qty !== undefined) updates.qty = qty;
+    if (barcode !== undefined) updates.barcode = barcode || false;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    // Log what we're updating
+    console.log(`[ProductPackaging] Updating packaging ${packagingId}:`, updates);
+
+    // Update in Odoo
+    await client.write('product.packaging', [packagingId], updates);
+
+    // Fetch updated packaging
+    const updated = await client.read('product.packaging', [packagingId], [
+      'id', 'name', 'qty', 'barcode', 'sequence', 'product_uom_id', 'write_date'
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Packaging updated successfully',
+      packaging: {
+        id: updated[0].id,
+        name: updated[0].name,
+        qty: updated[0].qty,
+        barcode: updated[0].barcode || '',
+        sequence: updated[0].sequence || 0,
+        uom: updated[0].product_uom_id ? updated[0].product_uom_id[1] : '',
+        updatedAt: updated[0].write_date
+      }
+    });
+  } catch (error) {
+    console.error('Odoo packaging update error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Delete product packaging
+ */
+router.delete('/products/:id/packaging/:packagingId', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+    const packagingId = parseInt(req.params.packagingId);
+
+    // Get packaging name for logging before deletion
+    const packaging = await client.read('product.packaging', [packagingId], ['name']);
+    const packagingName = packaging.length ? packaging[0].name : 'Unknown';
+
+    // Delete from Odoo
+    await client.unlink('product.packaging', [packagingId]);
+
+    console.log(`[ProductPackaging] Deleted packaging "${packagingName}" (ID: ${packagingId})`);
+
+    res.json({ success: true, message: 'Packaging deleted successfully' });
+  } catch (error) {
+    console.error('Odoo packaging delete error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * Get product categories
  */
 router.get('/categories', async (req, res) => {

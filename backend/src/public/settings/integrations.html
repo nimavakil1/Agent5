@@ -158,33 +158,6 @@
     </header>
 
     <div class="integrations-grid">
-      <!-- Odoo -->
-      <div class="integration-card">
-        <div class="integration-header">
-          <div class="integration-logo">
-            <img src="/assets/logos/odoo.png" alt="Odoo">
-          </div>
-          <div class="integration-info">
-            <h3>Odoo ERP</h3>
-            <p>Enterprise resource planning</p>
-          </div>
-        </div>
-        <div class="integration-status connected" id="odoo-status">
-          <span class="material-symbols-outlined">check_circle</span>
-          Connected
-        </div>
-        <dl class="integration-details">
-          <dt>URL</dt>
-          <dd id="odoo-url">Loading...</dd>
-          <dt>Database</dt>
-          <dd id="odoo-db">Loading...</dd>
-        </dl>
-        <button class="btn btn-secondary" onclick="testOdoo()">
-          <span class="material-symbols-outlined">sync</span>
-          Test Connection
-        </button>
-      </div>
-
       <!-- Amazon SP-API -->
       <div class="integration-card">
         <div class="integration-header">
@@ -239,6 +212,85 @@
         </button>
       </div>
 
+      <!-- Bol.com -->
+      <div class="integration-card">
+        <div class="integration-header">
+          <div class="integration-logo">
+            <img src="/assets/logos/bolcom.png" alt="Bol.com">
+          </div>
+          <div class="integration-info">
+            <h3>Bol.com</h3>
+            <p>Marketplace integration</p>
+          </div>
+        </div>
+        <div class="integration-status disconnected" id="bolcom-status">
+          <span class="material-symbols-outlined">hourglass_empty</span>
+          Checking...
+        </div>
+        <dl class="integration-details">
+          <dt>Client ID</dt>
+          <dd id="bolcom-client">Loading...</dd>
+        </dl>
+        <button class="btn btn-secondary" disabled>
+          <span class="material-symbols-outlined">settings</span>
+          Configure
+        </button>
+      </div>
+
+      <!-- Microsoft 365 -->
+      <div class="integration-card">
+        <div class="integration-header">
+          <div class="integration-logo">
+            <img src="/assets/logos/microsoft.png" alt="Microsoft">
+          </div>
+          <div class="integration-info">
+            <h3>Microsoft 365</h3>
+            <p>Email, Calendar, Teams</p>
+          </div>
+        </div>
+        <div class="integration-status connected" id="ms365-status">
+          <span class="material-symbols-outlined">check_circle</span>
+          Connected
+        </div>
+        <dl class="integration-details">
+          <dt>Services</dt>
+          <dd>Outlook, Calendar, Teams</dd>
+          <dt>Tenant</dt>
+          <dd>ACROPAQ</dd>
+        </dl>
+        <button class="btn btn-secondary" disabled>
+          <span class="material-symbols-outlined">settings</span>
+          Manage
+        </button>
+      </div>
+
+      <!-- Odoo -->
+      <div class="integration-card">
+        <div class="integration-header">
+          <div class="integration-logo">
+            <img src="/assets/logos/odoo.png" alt="Odoo">
+          </div>
+          <div class="integration-info">
+            <h3>Odoo ERP</h3>
+            <p>Enterprise resource planning</p>
+          </div>
+        </div>
+        <div class="integration-status connected" id="odoo-status">
+          <span class="material-symbols-outlined">check_circle</span>
+          Connected
+        </div>
+        <dl class="integration-details">
+          <dt>URL</dt>
+          <dd id="odoo-url">Loading...</dd>
+          <dt>Database</dt>
+          <dd id="odoo-db">Loading...</dd>
+        </dl>
+        <button class="btn btn-secondary" onclick="testOdoo()">
+          <span class="material-symbols-outlined">sync</span>
+          Test Connection
+        </button>
+      </div>
+
       <!-- OpenAI -->
       <div class="integration-card">
         <div class="integration-header">
@@ -290,58 +342,6 @@
         <button class="btn btn-secondary" disabled>
           <span class="material-symbols-outlined">settings</span>
           Manage
-        </button>
-      </div>
-
-      <!-- Microsoft 365 -->
-      <div class="integration-card">
-        <div class="integration-header">
-          <div class="integration-logo">
-            <img src="/assets/logos/microsoft.png" alt="Microsoft">
-          </div>
-          <div class="integration-info">
-            <h3>Microsoft 365</h3>
-            <p>Email, Calendar, Teams</p>
-          </div>
-        </div>
-        <div class="integration-status connected" id="ms365-status">
-          <span class="material-symbols-outlined">check_circle</span>
-          Connected
-        </div>
-        <dl class="integration-details">
-          <dt>Services</dt>
-          <dd>Outlook, Calendar, Teams</dd>
-          <dt>Tenant</dt>
-          <dd>ACROPAQ</dd>
-        </dl>
-        <button class="btn btn-secondary" disabled>
-          <span class="material-symbols-outlined">settings</span>
-          Manage
-        </button>
-      </div>
-
-      <!-- Bol.com -->
-      <div class="integration-card">
-        <div class="integration-header">
-          <div class="integration-logo">
-            <img src="/assets/logos/bolcom.png" alt="Bol.com">
-          </div>
-          <div class="integration-info">
-            <h3>Bol.com</h3>
-            <p>Marketplace integration</p>
-          </div>
-        </div>
-        <div class="integration-status disconnected" id="bolcom-status">
-          <span class="material-symbols-outlined">hourglass_empty</span>
-          Checking...
-        </div>
-        <dl class="integration-details">
-          <dt>Client ID</dt>
-          <dd id="bolcom-client">Loading...</dd>
-        </dl>
-        <button class="btn btn-secondary" disabled>
-          <span class="material-symbols-outlined">settings</span>
-          Configure
         </button>
       </div>
     </div>
