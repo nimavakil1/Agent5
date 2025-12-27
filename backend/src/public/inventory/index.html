@@ -177,8 +177,8 @@
               <td colspan="8">
                 <div class="empty-state">
                   <span class="material-symbols-outlined loading-spinner">sync</span>
-                  <div class="empty-state-title">Loading Products</div>
-                  <div class="empty-state-text">Fetching products from Odoo...</div>
+                  <div class="empty-state-title" id="loading-title">Initializing...</div>
+                  <div class="empty-state-text" id="loading-text">Preparing to load products...</div>
                 </div>
               </td>
             </tr>
@@ -205,6 +205,8 @@
   </div>
 
   <script>
+    console.log('[Inventory] === Script block starting ===');
+
     let allProducts = [];
     let filteredProducts = [];
     let categories = [];
@@ -217,6 +219,11 @@
     let stockByProduct = {};
     let selectedWarehouseIds = [];
     const CW_WAREHOUSE_ID = 1; // Central Warehouse
+
+    // Show early signal in the loading message
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('[Inventory] DOMContentLoaded fired');
+    });
 
     function debounceFilter() {
       clearTimeout(filterTimeout);
@@ -318,11 +325,36 @@
       return warehouseIds.reduce((sum, whId) => sum + (productStock[whId] || 0), 0);
     }
 
+    function updateLoadingStatus(title, text) {
+      const titleEl = document.getElementById('loading-title');
+      const textEl = document.getElementById('loading-text');
+      if (titleEl) titleEl.textContent = title;
+      if (textEl) textEl.textContent = text;
+    }
+
     async function loadProducts() {
       console.log('[Inventory] loadProducts() called');
+      updateLoadingStatus('Loading Products', 'Connecting to server...');
+
       try {
         console.log('[Inventory] Fetching /api/odoo/products?all=true...');
-        const res = await fetch('/api/odoo/products?all=true', { credentials: 'include' });
+        updateLoadingStatus('Loading Products', 'Fetching products from Odoo...');
+
+        // Add timeout to detect hanging requests
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          console.log('[Inventory] Request timeout after 60s');
+          updateLoadingStatus('Timeout', 'Request took too long. Please refresh.');
+          controller.abort();
+        }, 60000);
+
+        const res = await fetch('/api/odoo/products?all=true', {
+          credentials: 'include',
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        updateLoadingStatus('Loading Products', 'Processing response...');
+
         console.log('[Inventory] Fetch response:', res.status, res.statusText);
         if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
         const data = await res.json();
@@ -476,26 +508,35 @@
     // Initialize
     async function init() {
       console.log('[Inventory] init() starting...');
+      updateLoadingStatus('Initializing', 'Starting up...');
 
-      // Load warehouse data in parallel, but don't block products if it fails
-      Promise.all([loadWarehouses(), loadStockByWarehouse()]).then(() => {
-        console.log('[Inventory] Warehouse data loaded');
-        // Re-render products once warehouse data is available
-        if (allProducts.length > 0) {
-          renderProducts();
-        }
-      }).catch(err => {
-        console.error('[Inventory] Failed to load warehouse data:', err);
-      });
+      try {
+        // Load warehouse data in parallel, but don't block products if it fails
+        Promise.all([loadWarehouses(), loadStockByWarehouse()]).then(() => {
+          console.log('[Inventory] Warehouse data loaded');
+          // Re-render products once warehouse data is available
+          if (allProducts.length > 0) {
+            renderProducts();
+          }
+        }).catch(err => {
+          console.error('[Inventory] Failed to load warehouse data:', err);
+        });
 
-      // Load products independently
-      console.log('[Inventory] Starting loadProducts()...');
-      await loadProducts();
-      console.log('[Inventory] loadProducts() completed, allProducts.length =', allProducts.length);
+        // Load products independently
+        console.log('[Inventory] Starting loadProducts()...');
+        await loadProducts();
+        console.log('[Inventory] loadProducts() completed, allProducts.length =', allProducts.length);
+      } catch (err) {
+        console.error('[Inventory] init() error:', err);
+        updateLoadingStatus('Error', err.message || 'Unknown error occurred');
+      }
     }
 
     console.log('[Inventory] Script loaded, calling init()...');
-    init();
+    init().catch(err => {
+      console.error('[Inventory] init() uncaught error:', err);
+      updateLoadingStatus('Fatal Error', err.message || 'Unknown error');
+    });
   </script>
 </body>
 </html>
