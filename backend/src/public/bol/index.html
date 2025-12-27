@@ -547,7 +547,14 @@
         <div class="card-header">
           <div class="card-title">
             <span class="material-symbols-outlined">shopping_cart</span>
-            Open Orders
+            Orders
+          </div>
+          <div class="filters" style="margin: 0;">
+            <select class="filter-select" id="orders-fulfilment-filter" onchange="loadOrders()">
+              <option value="">All</option>
+              <option value="FBR">FBR</option>
+              <option value="FBB">FBB</option>
+            </select>
           </div>
         </div>
         <div class="card-body">
@@ -557,7 +564,7 @@
                 <tr>
                   <th class="filterable">Order ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
                   <th class="filterable">Date<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
-                  <th class="filterable">Fulfilment<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
+                  <th>Fulfilment</th>
                   <th>Items</th>
                   <th>Total</th>
                   <th class="filterable">Status<br><input type="text" class="column-filter" data-column="5" placeholder="Filter..."></th>
@@ -851,8 +858,17 @@
     // Load orders
     async function loadOrders() {
       const tbody = document.getElementById('orders-table');
+      const fulfilmentFilter = document.getElementById('orders-fulfilment-filter')?.value || '';
+
+      // Build query string with fulfilment filter
+      let queryParams = [];
+      if (fulfilmentFilter) {
+        queryParams.push(`fulfilmentMethod=${fulfilmentFilter}`);
+      }
+      const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+
       try {
-        const res = await fetch('/api/bolcom/orders', { credentials: 'include' });
+        const res = await fetch(`/api/bolcom/orders${queryString}`, { credentials: 'include' });
         const data = await res.json();
 
         if (!data.success || !data.orders || data.orders.length === 0) {
@@ -861,8 +877,8 @@
               <td colspan="7">
                 <div class="empty-state">
                   <span class="material-symbols-outlined">inbox</span>
-                  <div class="empty-state-title">No open orders</div>
-                  <div class="empty-state-text">All orders have been processed</div>
+                  <div class="empty-state-title">No orders</div>
+                  <div class="empty-state-text">No orders found</div>
                 </div>
               </td>
             </tr>
@@ -870,21 +886,42 @@
           return;
         }
 
-        tbody.innerHTML = data.orders.map(order => `
-          <tr>
-            <td><span class="order-id">${order.orderId}</span></td>
-            <td>${formatDate(order.orderPlacedDateTime)}</td>
-            <td>${order.orderItems?.[0]?.fulfilmentMethod || '-'}</td>
-            <td>${order.orderItems?.length || 0} items</td>
-            <td>&euro;${calculateTotal(order.orderItems)}</td>
-            <td><span class="badge open">Open</span></td>
-            <td>
-              <button class="btn btn-secondary btn-sm" onclick="viewOrder('${order.orderId}')">
-                <span class="material-symbols-outlined">visibility</span>
-              </button>
-            </td>
-          </tr>
-        `).join('');
+        tbody.innerHTML = data.orders.map(order => {
+          // Determine order status based on items
+          const items = order.orderItems || [];
+          const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+          const shippedQty = items.reduce((sum, i) => sum + (i.quantityShipped || 0), 0);
+          const cancelledQty = items.reduce((sum, i) => sum + (i.quantityCancelled || 0), 0);
+
+          let status = 'Open';
+          let statusClass = 'open';
+          if (shippedQty >= totalQty) {
+            status = 'Shipped';
+            statusClass = 'shipped';
+          } else if (shippedQty > 0) {
+            status = 'Partial';
+            statusClass = 'pending';
+          } else if (cancelledQty >= totalQty) {
+            status = 'Cancelled';
+            statusClass = 'returned';
+          }
+
+          return `
+            <tr>
+              <td><span class="order-id">${order.orderId}</span></td>
+              <td>${formatDate(order.orderPlacedDateTime)}</td>
+              <td>${items[0]?.fulfilmentMethod || '-'}</td>
+              <td>${items.length}</td>
+              <td>&euro;${calculateTotal(items)}</td>
+              <td><span class="badge ${statusClass}">${status}</span></td>
+              <td>
+                <button class="btn btn-secondary btn-sm" onclick="viewOrder('${order.orderId}')">
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
       } catch (e) {
         tbody.innerHTML = `
           <tr>
@@ -935,7 +972,7 @@
               trackUrl = `https://track.bpost.cloud/btr/web/#/search?itemCode=${encodeURIComponent(trackTrace)}&lang=nl`;
               carrierDisplay = 'bpost';
             } else if (carrierLower.includes('gls') || carrierLower === 'gls_nl') {
-              trackUrl = `https://gls-group.com/NL/nl/volg-je-pakket?match=${encodeURIComponent(trackTrace)}`;
+              trackUrl = `https://gls-group.eu/NL/nl/volg-pakket?match=${encodeURIComponent(trackTrace)}`;
               carrierDisplay = 'GLS';
             } else if (carrierLower.includes('dpd') || carrierLower === 'dpd_nl' || carrierLower === 'dpd_be') {
               trackUrl = `https://tracking.dpd.de/status/nl_NL/parcel/${encodeURIComponent(trackTrace)}`;
@@ -1023,7 +1060,7 @@
           const product = ret.productInfo;
           const sku = product?.sku || '';
           const productName = product?.name || '';
-          const imageUrl = product?.image_url;
+          const imageUrl = product?.image;  // Odoo returns 'image' field (base64)
 
           // Build reason display with main reason and detail
           let reasonDisplay = firstItem.returnReason || '-';
@@ -1244,7 +1281,7 @@
             ...item,
             sku: item.sku || product?.sku || '',
             productName: product?.name || item.title || 'Unknown Product',
-            imageUrl: product?.image_url || null
+            imageUrl: product?.image || null  // Odoo returns 'image' field (base64)
           };
         }));
 
