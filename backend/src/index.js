@@ -122,6 +122,17 @@ if (process.env.NODE_ENV !== 'test') {
     } catch (e) {
       console.warn('Seller scheduler initialization skipped:', e.message);
     }
+
+    // Initialize Bol.com sync scheduler if configured
+    try {
+      if (process.env.BOL_CLIENT_ID && process.env.BOL_CLIENT_SECRET) {
+        const BolScheduler = require('./services/bol/BolScheduler');
+        BolScheduler.start();
+        console.log('Bol.com sync scheduler started (nightly at 3:00 AM)');
+      }
+    } catch (e) {
+      console.warn('Bol.com scheduler initialization skipped:', e.message);
+    }
   });
 }
 

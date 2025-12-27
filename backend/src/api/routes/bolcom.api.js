@@ -13,6 +13,23 @@
 const express = require('express');
 const router = express.Router();
 
+// MongoDB models
+const BolOrder = require('../../models/BolOrder');
+const BolShipment = require('../../models/BolShipment');
+const BolReturn = require('../../models/BolReturn');
+const BolInvoice = require('../../models/BolInvoice');
+
+// Sync service
+const BolSyncService = require('../../services/bol/BolSyncService');
+
+// Track ongoing syncs to prevent duplicates
+const ongoingSyncs = {
+  orders: false,
+  shipments: false,
+  returns: false,
+  invoices: false
+};
+
 // Token cache for Retailer API
 let retailerAccessToken = null;
 let retailerTokenExpiry = null;
@@ -277,109 +294,54 @@ router.post('/clear-token', async (req, res) => {
 });
 
 /**
- * Get orders
- * Query params: page, fulfilment-method (FBR/FBB), status, fromDate (YYYY-MM-DD), maxPages
- * Note: The list endpoint doesn't return prices, so we fetch individual order details
- * Default: Fetch orders from 2024-01-01 onwards, up to 10 pages
+ * Get orders - Sync last 30 days then read from MongoDB
+ * Query params: fulfilmentMethod (FBR/FBB), status, skipSync (true to skip sync)
  */
 router.get('/orders', async (req, res) => {
   try {
-    const { page = 1, fulfilmentMethod, status, fromDate = '2024-01-01', maxPages = 10 } = req.query;
-    const fromDateObj = new Date(fromDate);
+    const { fulfilmentMethod, status, skipSync } = req.query;
 
-    // Collect all orders across multiple pages
-    let allOrders = [];
-    let currentPage = parseInt(page, 10);
-    const maxPagesToFetch = Math.min(parseInt(maxPages, 10) || 10, 50); // Cap at 50 pages
-    let reachedDateLimit = false;
-
-    // Fetch multiple pages until we reach the date limit or max pages
-    while (currentPage <= maxPagesToFetch && !reachedDateLimit) {
-      let endpoint = `/orders?page=${currentPage}`;
-      if (fulfilmentMethod) {
-        endpoint += `&fulfilment-method=${fulfilmentMethod}`;
+    // Sync last 30 days from Bol.com (unless skipSync=true or sync already in progress)
+    if (skipSync !== 'true' && !ongoingSyncs.orders) {
+      ongoingSyncs.orders = true;
+      try {
+        await BolSyncService.syncOrders('RECENT');
+      } catch (syncError) {
+        console.error('[BolAPI] Orders sync error:', syncError.message);
+        // Continue with existing data from MongoDB
+      } finally {
+        ongoingSyncs.orders = false;
       }
-      if (status) {
-        endpoint += `&status=${status}`;
-      }
-
-      const data = await bolRequest(endpoint);
-      const ordersList = data.orders || [];
-
-      if (ordersList.length === 0) {
-        break; // No more orders
-      }
-
-      // Check if any order is before our date limit
-      for (const order of ordersList) {
-        const orderDate = new Date(order.orderPlacedDateTime);
-        if (orderDate < fromDateObj) {
-          reachedDateLimit = true;
-          break;
-        }
-        allOrders.push(order);
-      }
-
-      currentPage++;
     }
 
-    // Fetch individual order details to get prices (in parallel, max 5 at a time)
-    const ordersWithDetails = [];
+    // Build query for MongoDB
+    const query = {
+      orderPlacedDateTime: { $gte: new Date('2024-01-01') }
+    };
 
-    // Batch fetch order details (5 at a time to avoid rate limiting)
-    for (let i = 0; i < allOrders.length; i += 5) {
-      const batch = allOrders.slice(i, i + 5);
-      const detailsPromises = batch.map(async (o) => {
-        try {
-          const details = await bolRequest(`/orders/${o.orderId}`);
-          return {
-            orderId: details.orderId || o.orderId,
-            orderPlacedDateTime: details.orderPlacedDateTime || o.orderPlacedDateTime,
-            shipmentMethod: details.shipmentDetails?.shipmentMethod,
-            pickupPoint: details.shipmentDetails?.pickupPointName,
-            orderItems: (details.orderItems || o.orderItems || []).map(item => ({
-              orderItemId: item.orderItemId,
-              ean: item.product?.ean || item.ean || '',
-              sku: item.offer?.reference || item.offerReference || '',
-              title: item.product?.title || '',
-              quantity: item.quantity || 1,
-              quantityShipped: item.quantityShipped || 0,
-              quantityCancelled: item.quantityCancelled || 0,
-              unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
-              totalPrice: typeof item.totalPrice === 'object' ? parseFloat(item.totalPrice?.amount || 0) : parseFloat(item.totalPrice || 0),
-              commission: item.commission,
-              fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod,
-              fulfilmentStatus: item.fulfilmentStatus || 'OPEN',
-              latestDeliveryDate: item.fulfilment?.latestDeliveryDate || item.latestDeliveryDate,
-              cancellationRequest: item.cancellationRequest
-            }))
-          };
-        } catch (err) {
-          // If fetching details fails, return basic info
-          return {
-            orderId: o.orderId,
-            orderPlacedDateTime: o.orderPlacedDateTime,
-            orderItems: (o.orderItems || []).map(item => ({
-              orderItemId: item.orderItemId,
-              ean: item.product?.ean || item.ean || '',
-              quantity: item.quantity || 1,
-              fulfilmentMethod: item.fulfilmentMethod,
-              fulfilmentStatus: item.fulfilmentStatus || 'OPEN'
-            }))
-          };
-        }
-      });
-
-      const batchResults = await Promise.all(detailsPromises);
-      ordersWithDetails.push(...batchResults);
+    if (fulfilmentMethod) {
+      query.fulfilmentMethod = fulfilmentMethod;
     }
+    if (status) {
+      query.status = status.toUpperCase();
+    }
+
+    // Fetch from MongoDB
+    const orders = await BolOrder.find(query)
+      .sort({ orderPlacedDateTime: -1 })
+      .lean();
 
     res.json({
       success: true,
-      count: ordersWithDetails.length,
-      pagesFetched: currentPage - 1,
-      fromDate: fromDate,
-      orders: ordersWithDetails
+      count: orders.length,
+      source: 'mongodb',
+      orders: orders.map(o => ({
+        orderId: o.orderId,
+        orderPlacedDateTime: o.orderPlacedDateTime,
+        shipmentMethod: o.shipmentMethod,
+        pickupPoint: o.pickupPoint,
+        orderItems: o.orderItems
+      }))
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -387,40 +349,63 @@ router.get('/orders', async (req, res) => {
 });
 
 /**
- * Get single order details
+ * Get single order details - Read from MongoDB (with fallback to API)
  */
 router.get('/orders/:orderId', async (req, res) => {
   try {
-    const data = await bolRequest(`/orders/${req.params.orderId}`);
+    // Try to get from MongoDB first
+    let order = await BolOrder.findOne({ orderId: req.params.orderId }).lean();
 
-    res.json({
-      success: true,
-      order: {
+    // If not in MongoDB, fetch from API and store
+    if (!order) {
+      const data = await bolRequest(`/orders/${req.params.orderId}`);
+
+      // Store in MongoDB for future requests
+      const items = (data.orderItems || []).map(item => ({
+        orderItemId: item.orderItemId,
+        ean: item.product?.ean || item.ean || '',
+        sku: item.offer?.reference || item.offerReference || '',
+        title: item.product?.title || '',
+        quantity: item.quantity || 1,
+        quantityShipped: item.quantityShipped || 0,
+        quantityCancelled: item.quantityCancelled || 0,
+        unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
+        totalPrice: typeof item.totalPrice === 'object' ? parseFloat(item.totalPrice?.amount || 0) : parseFloat(item.totalPrice || 0),
+        commission: item.commission,
+        fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod,
+        fulfilmentStatus: item.fulfilmentStatus || 'OPEN',
+        latestDeliveryDate: item.fulfilment?.latestDeliveryDate || item.latestDeliveryDate,
+        cancellationRequest: item.cancellationRequest || false
+      }));
+
+      order = {
         orderId: data.orderId,
         orderPlacedDateTime: data.orderPlacedDateTime,
         shipmentMethod: data.shipmentDetails?.shipmentMethod,
         pickupPoint: data.shipmentDetails?.pickupPointName,
-        billingDetails: data.billingDetails,
         shipmentDetails: data.shipmentDetails,
-        orderItems: (data.orderItems || []).map(item => ({
-          orderItemId: item.orderItemId,
-          // EAN is nested under product object in v10 API
-          ean: item.product?.ean || item.ean || '',
-          // SKU is nested under offer object
-          sku: item.offer?.reference || item.offerReference || '',
-          // Title is nested under product object
-          title: item.product?.title || '',
-          quantity: item.quantity || 1,
-          quantityShipped: item.quantityShipped || 0,
-          quantityCancelled: item.quantityCancelled || 0,
-          unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
-          totalPrice: typeof item.totalPrice === 'object' ? parseFloat(item.totalPrice?.amount || 0) : parseFloat(item.totalPrice || 0),
-          commission: item.commission,
-          fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod,
-          fulfilmentStatus: item.fulfilment?.latestDeliveryDate ? 'Pending' : (item.fulfilmentStatus || 'Open'),
-          latestDeliveryDate: item.fulfilment?.latestDeliveryDate || item.latestDeliveryDate,
-          cancellationRequest: item.cancellationRequest
-        }))
+        billingDetails: data.billingDetails,
+        orderItems: items
+      };
+
+      // Save to MongoDB (fire and forget)
+      BolOrder.findOneAndUpdate(
+        { orderId: data.orderId },
+        { ...order, syncedAt: new Date(), rawResponse: data },
+        { upsert: true }
+      ).catch(err => console.error('[BolAPI] Failed to cache order:', err.message));
+    }
+
+    res.json({
+      success: true,
+      order: {
+        orderId: order.orderId,
+        orderPlacedDateTime: order.orderPlacedDateTime,
+        shipmentMethod: order.shipmentMethod,
+        pickupPoint: order.pickupPoint,
+        billingDetails: order.billingDetails,
+        shipmentDetails: order.shipmentDetails,
+        orderItems: order.orderItems
       }
     });
   } catch (error) {
@@ -429,106 +414,51 @@ router.get('/orders/:orderId', async (req, res) => {
 });
 
 /**
- * Get shipments
- * Query params: page, fulfilment-method, orderId, fromDate (YYYY-MM-DD), maxPages
- * Note: List endpoint only returns basic transport info (transportId), fetch details for full info
- * Default: Fetch shipments from 2024-01-01 onwards, up to 10 pages
+ * Get shipments - Sync last 30 days then read from MongoDB
+ * Query params: orderId, skipSync (true to skip sync)
  */
 router.get('/shipments', async (req, res) => {
   try {
-    const { page = 1, fulfilmentMethod, orderId, fromDate = '2024-01-01', maxPages = 10 } = req.query;
-    const fromDateObj = new Date(fromDate);
+    const { orderId, skipSync } = req.query;
 
-    // Collect all shipments across multiple pages
-    let allShipments = [];
-    let currentPage = parseInt(page, 10);
-    const maxPagesToFetch = Math.min(parseInt(maxPages, 10) || 10, 50);
-    let reachedDateLimit = false;
-
-    while (currentPage <= maxPagesToFetch && !reachedDateLimit) {
-      let endpoint = `/shipments?page=${currentPage}`;
-      if (fulfilmentMethod) {
-        endpoint += `&fulfilment-method=${fulfilmentMethod}`;
+    // Sync last 30 days from Bol.com
+    if (skipSync !== 'true' && !ongoingSyncs.shipments) {
+      ongoingSyncs.shipments = true;
+      try {
+        await BolSyncService.syncShipments('RECENT');
+      } catch (syncError) {
+        console.error('[BolAPI] Shipments sync error:', syncError.message);
+      } finally {
+        ongoingSyncs.shipments = false;
       }
-      if (orderId) {
-        endpoint += `&order-id=${orderId}`;
-      }
-
-      const data = await bolRequest(endpoint);
-      const shipmentsList = data.shipments || [];
-
-      if (shipmentsList.length === 0) {
-        break;
-      }
-
-      for (const shipment of shipmentsList) {
-        const shipmentDate = new Date(shipment.shipmentDateTime);
-        if (shipmentDate < fromDateObj) {
-          reachedDateLimit = true;
-          break;
-        }
-        allShipments.push(shipment);
-      }
-
-      currentPage++;
     }
 
-    // Fetch individual shipment details to get full transport info (in batches of 5)
-    const shipmentsWithDetails = [];
+    // Build query for MongoDB
+    const query = {
+      shipmentDateTime: { $gte: new Date('2024-01-01') }
+    };
 
-    for (let i = 0; i < allShipments.length; i += 5) {
-      const batch = allShipments.slice(i, i + 5);
-      const detailsPromises = batch.map(async (s) => {
-        try {
-          const details = await bolRequest(`/shipments/${s.shipmentId}`);
-          return {
-            shipmentId: details.shipmentId || s.shipmentId,
-            shipmentDateTime: details.shipmentDateTime || s.shipmentDateTime,
-            shipmentReference: details.shipmentReference || s.shipmentReference,
-            orderId: details.order?.orderId || s.order?.orderId || s.shipmentItems?.[0]?.orderId,
-            transport: {
-              transportId: details.transport?.transportId || s.transport?.transportId,
-              transporterCode: details.transport?.transporterCode || '',
-              trackAndTrace: details.transport?.trackAndTrace || ''
-            },
-            shipmentItems: (details.shipmentItems || s.shipmentItems || []).map(item => ({
-              orderItemId: item.orderItemId,
-              orderId: item.orderId,
-              ean: item.product?.ean || item.ean,
-              title: item.product?.title || '',
-              sku: item.offer?.reference || ''
-            }))
-          };
-        } catch (err) {
-          // If fetching details fails, return basic info
-          return {
-            shipmentId: s.shipmentId,
-            shipmentDateTime: s.shipmentDateTime,
-            shipmentReference: s.shipmentReference,
-            orderId: s.order?.orderId || s.shipmentItems?.[0]?.orderId,
-            transport: {
-              transportId: s.transport?.transportId,
-              transporterCode: '',
-              trackAndTrace: ''
-            },
-            shipmentItems: (s.shipmentItems || []).map(item => ({
-              orderItemId: item.orderItemId,
-              ean: item.ean
-            }))
-          };
-        }
-      });
-
-      const batchResults = await Promise.all(detailsPromises);
-      shipmentsWithDetails.push(...batchResults);
+    if (orderId) {
+      query.orderId = orderId;
     }
+
+    // Fetch from MongoDB
+    const shipments = await BolShipment.find(query)
+      .sort({ shipmentDateTime: -1 })
+      .lean();
 
     res.json({
       success: true,
-      count: shipmentsWithDetails.length,
-      pagesFetched: currentPage - 1,
-      fromDate: fromDate,
-      shipments: shipmentsWithDetails
+      count: shipments.length,
+      source: 'mongodb',
+      shipments: shipments.map(s => ({
+        shipmentId: s.shipmentId,
+        shipmentDateTime: s.shipmentDateTime,
+        shipmentReference: s.shipmentReference,
+        orderId: s.orderId,
+        transport: s.transport,
+        shipmentItems: s.shipmentItems
+      }))
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -536,65 +466,68 @@ router.get('/shipments', async (req, res) => {
 });
 
 /**
- * Get single shipment details
+ * Get single shipment details - Read from MongoDB with fallback to API
  */
 router.get('/shipments/:shipmentId', async (req, res) => {
   try {
-    const data = await bolRequest(`/shipments/${req.params.shipmentId}`);
-    res.json({ success: true, shipment: data });
+    let shipment = await BolShipment.findOne({ shipmentId: req.params.shipmentId }).lean();
+
+    if (!shipment) {
+      const data = await bolRequest(`/shipments/${req.params.shipmentId}`);
+      shipment = data;
+    }
+
+    res.json({ success: true, shipment });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 /**
- * Get returns
- * Note: Return items only have ean, not sku/title. We show ean as product identifier.
+ * Get returns - Sync last 30 days then read from MongoDB
+ * Query params: handled (true/false), skipSync
  */
 router.get('/returns', async (req, res) => {
   try {
-    const { page = 1, handled, fulfilmentMethod } = req.query;
+    const { handled, skipSync } = req.query;
 
-    let endpoint = `/returns?page=${page}`;
-    if (handled !== undefined) {
-      endpoint += `&handled=${handled}`;
-    }
-    if (fulfilmentMethod) {
-      endpoint += `&fulfilment-method=${fulfilmentMethod}`;
+    // Sync last 30 days from Bol.com
+    if (skipSync !== 'true' && !ongoingSyncs.returns) {
+      ongoingSyncs.returns = true;
+      try {
+        await BolSyncService.syncReturns('RECENT');
+      } catch (syncError) {
+        console.error('[BolAPI] Returns sync error:', syncError.message);
+      } finally {
+        ongoingSyncs.returns = false;
+      }
     }
 
-    const data = await bolRequest(endpoint);
+    // Build query for MongoDB
+    const query = {
+      registrationDateTime: { $gte: new Date('2024-01-01') }
+    };
+
+    if (handled !== undefined && handled !== '') {
+      query.handled = handled === 'true';
+    }
+
+    // Fetch from MongoDB
+    const returns = await BolReturn.find(query)
+      .sort({ registrationDateTime: -1 })
+      .lean();
 
     res.json({
       success: true,
-      count: data.returns?.length || 0,
-      returns: (data.returns || []).map(r => {
-        // Check if any item is handled
-        const anyHandled = (r.returnItems || []).some(item => item.handled === true);
-
-        return {
-          returnId: r.returnId,
-          registrationDateTime: r.registrationDateTime,
-          fulfilmentMethod: r.fulfilmentMethod,
-          handled: anyHandled,
-          returnItems: (r.returnItems || []).map(item => ({
-            rmaId: item.rmaId,
-            orderId: item.orderId,
-            orderItemId: item.orderItemId,
-            ean: item.ean || '',
-            // Note: Returns API doesn't provide SKU/title - only EAN
-            // Could look up product info by EAN if needed
-            sku: '',
-            title: '',
-            quantity: item.expectedQuantity || item.quantity || 1,
-            returnReason: item.returnReason?.mainReason || '',
-            returnReasonDetail: item.returnReason?.detailedReason || '',
-            returnReasonComments: item.returnReason?.customerComments || '',
-            handled: item.handled || false,
-            handlingResult: item.handlingResult
-          }))
-        };
-      })
+      count: returns.length,
+      source: 'mongodb',
+      returns: returns.map(r => ({
+        returnId: r.returnId,
+        registrationDateTime: r.registrationDateTime,
+        fulfilmentMethod: r.fulfilmentMethod,
+        handled: r.handled,
+        returnItems: r.returnItems
+      }))
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -748,54 +681,48 @@ router.get('/commissions', async (req, res) => {
 });
 
 /**
- * Get invoices
- * Note: Dates are returned as timestamps (milliseconds), amounts are in legalMonetaryTotal
+ * Get invoices - Sync then read from MongoDB
+ * Query params: skipSync (true to skip sync)
  */
 router.get('/invoices', async (req, res) => {
   try {
-    const { periodStartDate, periodEndDate } = req.query;
+    const { skipSync } = req.query;
 
-    let endpoint = '/invoices';
-    if (periodStartDate) {
-      endpoint += `?period-start-date=${periodStartDate}`;
-      if (periodEndDate) {
-        endpoint += `&period-end-date=${periodEndDate}`;
+    // Sync invoices from Bol.com
+    if (skipSync !== 'true' && !ongoingSyncs.invoices) {
+      ongoingSyncs.invoices = true;
+      try {
+        await BolSyncService.syncInvoices();
+      } catch (syncError) {
+        console.error('[BolAPI] Invoices sync error:', syncError.message);
+      } finally {
+        ongoingSyncs.invoices = false;
       }
     }
 
-    const data = await bolRequest(endpoint);
+    // Fetch from MongoDB
+    const invoices = await BolInvoice.find({})
+      .sort({ issueDate: -1 })
+      .lean();
 
     res.json({
       success: true,
-      count: data.invoiceListItems?.length || 0,
-      invoices: (data.invoiceListItems || []).map(inv => {
-        // Convert timestamps to ISO dates
-        const issueDate = inv.issueDate ? new Date(inv.issueDate).toISOString() : null;
-        const periodStart = inv.invoicePeriod?.startDate ? new Date(inv.invoicePeriod.startDate).toISOString() : null;
-        const periodEnd = inv.invoicePeriod?.endDate ? new Date(inv.invoicePeriod.endDate).toISOString() : null;
-
-        // Get amount from legalMonetaryTotal
-        const amountExclVat = inv.legalMonetaryTotal?.taxExclusiveAmount?.amount;
-        const amountInclVat = inv.legalMonetaryTotal?.taxInclusiveAmount?.amount;
-        const currency = inv.legalMonetaryTotal?.taxExclusiveAmount?.currencyID || 'EUR';
-
-        return {
-          invoiceId: inv.invoiceId,
-          issueDate: issueDate,
-          periodStartDate: periodStart,
-          periodEndDate: periodEnd,
-          invoiceType: inv.invoiceType,
-          totalAmountExclVat: amountExclVat,
-          totalAmountInclVat: amountInclVat,
-          currency: currency,
-          openAmount: inv.openAmount,
-          // Available download formats
-          availableFormats: {
-            invoice: inv.invoiceMediaTypes?.availableMediaTypes || [],
-            specification: inv.specificationMediaTypes?.availableMediaTypes || []
-          }
-        };
-      })
+      count: invoices.length,
+      source: 'mongodb',
+      invoices: invoices.map(inv => ({
+        invoiceId: inv.invoiceId,
+        issueDate: inv.issueDate,
+        periodStartDate: inv.periodStartDate,
+        periodEndDate: inv.periodEndDate,
+        invoiceType: inv.invoiceType,
+        totalAmountExclVat: inv.totalAmountExclVat,
+        totalAmountInclVat: inv.totalAmountInclVat,
+        currency: inv.currency,
+        openAmount: inv.openAmount,
+        availableFormats: inv.availableFormats,
+        odooBillId: inv.odoo?.billId,
+        odooBillNumber: inv.odoo?.billNumber
+      }))
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1448,6 +1375,120 @@ router.get('/advertising/overview', async (req, res) => {
         dailyBudget: c.dailyBudget,
         totalBudget: c.totalBudget
       }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// SYNC ENDPOINTS
+// ============================================
+
+/**
+ * Get sync status - shows last sync times and record counts
+ */
+router.get('/sync/status', async (req, res) => {
+  try {
+    const status = await BolSyncService.getSyncStatus();
+    res.json({
+      success: true,
+      status,
+      ongoingSyncs
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Trigger manual sync - syncs last 30 days for all data types
+ */
+router.post('/sync/recent', async (req, res) => {
+  try {
+    const results = await BolSyncService.syncAll('RECENT');
+    res.json({
+      success: true,
+      message: 'Recent sync complete (last 30 days)',
+      results
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Trigger extended sync - syncs last 6 months (for nightly job)
+ */
+router.post('/sync/extended', async (req, res) => {
+  try {
+    const results = await BolSyncService.syncAll('EXTENDED');
+    res.json({
+      success: true,
+      message: 'Extended sync complete (last 6 months)',
+      results
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Trigger historical import - imports all data from 2024-01-01
+ * This is a one-time operation and takes a while
+ */
+router.post('/sync/historical', async (req, res) => {
+  try {
+    // Return immediately and run in background
+    res.json({
+      success: true,
+      message: 'Historical import started. This will take several minutes. Check /sync/status for progress.'
+    });
+
+    // Run in background
+    BolSyncService.syncAll('HISTORICAL')
+      .then(results => {
+        console.log('[BolSync] Historical import complete:', results);
+      })
+      .catch(error => {
+        console.error('[BolSync] Historical import failed:', error);
+      });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Sync specific data type only
+ */
+router.post('/sync/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { mode = 'RECENT' } = req.body;
+
+    let result;
+    switch (type) {
+      case 'orders':
+        result = await BolSyncService.syncOrders(mode);
+        break;
+      case 'shipments':
+        result = await BolSyncService.syncShipments(mode);
+        break;
+      case 'returns':
+        result = await BolSyncService.syncReturns(mode);
+        break;
+      case 'invoices':
+        result = await BolSyncService.syncInvoices();
+        break;
+      default:
+        return res.status(400).json({ success: false, error: `Unknown sync type: ${type}` });
+    }
+
+    res.json({
+      success: true,
+      type,
+      mode,
+      result
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
