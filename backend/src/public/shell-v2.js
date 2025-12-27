@@ -667,7 +667,7 @@
               </div>
             </div>
             <div class="shell-user-dropdown" id="shell-user-dropdown">
-              <a href="/settings/profile" class="shell-dropdown-item">
+              <a href="/settings/profile.html" class="shell-dropdown-item">
                 <span class="material-symbols-outlined">person</span>
                 My Profile
               </a>
