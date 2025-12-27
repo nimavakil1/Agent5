@@ -539,7 +539,7 @@
           </div>
         </div>
         <div class="stat-value" id="stat-offers">--</div>
-        <div class="stat-label">Active Offers</div>
+        <div class="stat-label">Unique Products</div>
       </div>
     </div>
 
@@ -943,8 +943,18 @@
 
         if (ordersRes.ok) {
           const data = await ordersRes.json();
-          const openOrders = (data.orders || []).filter(o => o.status === 'OPEN' || !o.status);
+          const orders = data.orders || [];
+          const openOrders = orders.filter(o => o.status === 'OPEN' || !o.status);
           document.getElementById('stat-orders').textContent = openOrders.length;
+
+          // Count unique EANs across all orders
+          const uniqueEans = new Set();
+          orders.forEach(o => {
+            (o.orderItems || []).forEach(item => {
+              if (item.ean) uniqueEans.add(item.ean);
+            });
+          });
+          document.getElementById('stat-offers').textContent = uniqueEans.size;
         }
         if (shipmentsRes.ok) {
           const data = await shipmentsRes.json();
@@ -955,7 +965,6 @@
           const openReturns = (data.returns || []).filter(r => !r.handled);
           document.getElementById('stat-returns').textContent = openReturns.length;
         }
-        document.getElementById('stat-offers').textContent = '-';
       } catch (e) {
         console.error('Failed to load quick stats:', e);
       }
@@ -964,8 +973,10 @@
     // Load stats - uses already loaded data from paginationState
     function loadStats() {
       try {
+        const orders = paginationState.orders.all || [];
+
         // Count only OPEN orders
-        const openOrders = (paginationState.orders.all || []).filter(o => o.status === 'OPEN' || !o.status);
+        const openOrders = orders.filter(o => o.status === 'OPEN' || !o.status);
         document.getElementById('stat-orders').textContent = openOrders.length;
 
         // All shipments
@@ -975,8 +986,14 @@
         const openReturns = (paginationState.returns.all || []).filter(r => !r.handled);
         document.getElementById('stat-returns').textContent = openReturns.length;
 
-        // Active offers - placeholder (Bol.com doesn't have a simple list endpoint)
-        document.getElementById('stat-offers').textContent = '-';
+        // Unique products (EANs) from orders
+        const uniqueEans = new Set();
+        orders.forEach(o => {
+          (o.orderItems || []).forEach(item => {
+            if (item.ean) uniqueEans.add(item.ean);
+          });
+        });
+        document.getElementById('stat-offers').textContent = uniqueEans.size;
       } catch (e) {
         console.error('Failed to load stats:', e);
       }
