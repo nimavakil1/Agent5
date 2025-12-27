@@ -402,17 +402,16 @@
     // Use 'logo' for PNG image URL, or 'icon' for Material Symbol name
     const MODULES = [
       {
+        id: 'accounting', name: 'Accounting', icon: 'account_balance', color: '#14b8a6',
+        description: 'VCS invoicing, remittances, and chargebacks',
+        path: '/accounting/',
+        notificationEndpoint: '/api/accounting/notifications'
+      },
+      {
         id: 'ai-agents', name: 'AI Agents', icon: 'smart_toy', color: '#6366f1',
-        // logo: '/assets/logos/ai-agents.png',  // Optional: use PNG instead of icon
         description: 'Chat with AI agents, train models, orchestrate workflows',
         path: '/ai/',
         notificationEndpoint: '/api/ai/notifications'
-      },
-      {
-        id: 'call-center', name: 'Call Center', icon: 'headset_mic', color: '#22c55e',
-        description: 'Voice AI calls, campaigns, and contact management',
-        path: '/calls/',
-        notificationEndpoint: '/api/calls/notifications'
       },
       {
         id: 'amazon-seller', name: 'Amazon Seller', icon: 'storefront', color: '#f59e0b',
@@ -429,6 +428,12 @@
         notificationEndpoint: '/api/vendor/notifications'
       },
       {
+        id: 'analytics', name: 'Analytics', icon: 'analytics', color: '#ec4899',
+        description: 'Dashboards, reports, and KPIs',
+        path: '/analytics/',
+        notificationEndpoint: null
+      },
+      {
         id: 'bol', name: 'Bol.com', icon: 'shopping_bag', color: '#0066ff',
         logo: '/assets/logos/bolcom.png',
         description: 'Bol.com orders, shipments, returns, and invoices',
@@ -436,22 +441,16 @@
         notificationEndpoint: null
       },
       {
+        id: 'call-center', name: 'Call Center', icon: 'headset_mic', color: '#22c55e',
+        description: 'Voice AI calls, campaigns, and contact management',
+        path: '/calls/',
+        notificationEndpoint: '/api/calls/notifications'
+      },
+      {
         id: 'inventory', name: 'Inventory', icon: 'inventory_2', color: '#8b5cf6',
         description: 'Products, purchasing intelligence, stock optimization',
         path: '/inventory/',
         notificationEndpoint: '/api/inventory/notifications'
-      },
-      {
-        id: 'accounting', name: 'Accounting', icon: 'account_balance', color: '#14b8a6',
-        description: 'VCS invoicing, remittances, and chargebacks',
-        path: '/accounting/',
-        notificationEndpoint: '/api/accounting/notifications'
-      },
-      {
-        id: 'analytics', name: 'Analytics', icon: 'analytics', color: '#ec4899',
-        description: 'Dashboards, reports, and KPIs',
-        path: '/analytics/',
-        notificationEndpoint: null
       },
       {
         id: 'settings', name: 'Settings', icon: 'settings', color: '#64748b',
