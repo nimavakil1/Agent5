@@ -325,10 +325,10 @@
           align-items: center;
           gap: 8px;
           padding: 6px 14px;
-          background: color-mix(in srgb, var(--shell-module) 15%, transparent);
-          border: 1px solid color-mix(in srgb, var(--shell-module) 30%, transparent);
+          background: transparent;
+          border: 1px solid var(--shell-module);
           border-radius: 8px;
-          color: var(--shell-module);
+          color: var(--shell-text);
           font-weight: 600;
           font-size: 14px;
         }
