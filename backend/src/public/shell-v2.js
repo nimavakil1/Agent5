@@ -324,10 +324,11 @@
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 6px 14px;
+          padding: 6px 14px 8px;
           background: transparent;
-          border: 1px solid var(--shell-module);
-          border-radius: 8px;
+          border: none;
+          border-bottom: 2px solid var(--shell-module);
+          border-radius: 0;
           color: var(--shell-text);
           font-weight: 600;
           font-size: 14px;
@@ -545,7 +546,9 @@
         .shell-subnav-item.active {
           color: var(--shell-text);
           background: transparent;
-          border-color: var(--shell-module);
+          border: none;
+          border-bottom: 2px solid var(--shell-module);
+          border-radius: 0;
         }
 
         .shell-subnav-item .material-symbols-outlined {
