@@ -90,7 +90,7 @@
     .filter-input::placeholder { color: #52525b; }
     .order-id { font-family: monospace; font-size: 12px; }
     .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 600; }
-    .badge-country { background: rgba(113, 113, 122, 0.2); color: #a1a1aa; }
+    .badge-country { display: inline-flex; align-items: center; background: rgba(113, 113, 122, 0.2); color: #a1a1aa; }
     .badge-scheme-oss { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
     .badge-scheme-b2b { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
     .badge-scheme-export { background: rgba(251, 146, 60, 0.2); color: #fb923c; }
@@ -560,6 +560,14 @@
   </div>
 
   <script>
+    // Country flags
+    const COUNTRY_FLAGS = { DE: 'de', FR: 'fr', IT: 'it', ES: 'es', NL: 'nl', BE: 'be', PL: 'pl', SE: 'se', UK: 'gb', GB: 'gb', CZ: 'cz', AT: 'at', CH: 'ch', DK: 'dk', FI: 'fi', IE: 'ie', PT: 'pt', LU: 'lu', GR: 'gr' };
+    function getFlagImg(code) {
+      const flag = COUNTRY_FLAGS[code];
+      if (!flag) return code || '-';
+      return '<img src="https://flagcdn.com/w40/' + flag + '.png" alt="' + code + '" style="width:24px;height:16px;object-fit:cover;border-radius:2px;vertical-align:middle;margin-right:4px;">' + code;
+    }
+
     // State
     let pendingOrders = [];
     let pendingReturns = [];
@@ -1287,7 +1295,7 @@
           </td>
           <td class="order-id">${ret.orderId}</td>
           <td class="text-muted" style="font-size: 12px;">${formatDateLocal(ret.returnDate || ret.shipmentDate)}</td>
-          <td><span class="badge badge-country">${ret.shipToCountry || '-'}</span></td>
+          <td><span class="badge badge-country">${getFlagImg(ret.shipToCountry)}</span></td>
           <td class="text-muted">${ret.items?.length || 0}</td>
           <td class="text-right font-mono" style="color: #fb923c;">-${formatCurrencyLocal(ret.totalExclusive)}</td>
           <td class="text-right font-mono text-muted">-${formatCurrencyLocal(ret.totalTax)}</td>
@@ -1537,7 +1545,7 @@
             </td>
             <td class="order-id">${order.orderId}</td>
             <td>${formatDate(order.orderDate)}</td>
-            <td><span class="badge badge-country">${order.shipToCountry || '-'}</span></td>
+            <td><span class="badge badge-country">${getFlagImg(order.shipToCountry)}</span></td>
             <td><span class="badge ${getSchemeClass(order)}">${getSchemeLabel(order)}</span></td>
             <td>${order.items?.length || 0}</td>
             <td class="text-right font-mono">${formatCurrency(order.totalExclusive, order.currency)}</td>

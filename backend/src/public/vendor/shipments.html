@@ -37,7 +37,7 @@
     .badge-pending { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
     .badge-submitted { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
     .badge-confirmed { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
-    .marketplace-badge { display: inline-flex; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #252532; color: #a1a1aa; }
+    .marketplace-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #252532; color: #a1a1aa; }
     .empty-state { padding: 40px 20px; text-align: center; }
     .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
     .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; }
@@ -84,6 +84,12 @@
     </div>
   </div>
   <script>
+    const MARKETPLACE_FLAGS = { DE: 'de', FR: 'fr', IT: 'it', ES: 'es', NL: 'nl', BE: 'be', PL: 'pl', SE: 'se', UK: 'gb', GB: 'gb', CZ: 'cz', AT: 'at' };
+    function getFlagImg(mp) {
+      const code = MARKETPLACE_FLAGS[mp];
+      if (!code) return mp || '-';
+      return '<img src="https://flagcdn.com/w40/' + code + '.png" alt="' + mp + '" style="width:24px;height:16px;object-fit:cover;border-radius:2px;vertical-align:middle;"> ' + mp;
+    }
     async function init() { await Promise.all([loadReady(), loadShipments()]); }
     async function loadReady() {
       try {
@@ -94,7 +100,7 @@
         document.getElementById('stat-ready').textContent = orders.length;
         const tbody = document.getElementById('ready-table');
         if (orders.length === 0) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">check_circle</span><div class="empty-state-title">No orders ready to ship</div></div></td></tr>'; return; }
-        tbody.innerHTML = orders.map(o => '<tr><td>' + o.purchaseOrderNumber + '</td><td><span class="marketplace-badge">' + o.marketplaceId + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td>' + (o.odoo?.saleOrderName || '-') + '</td><td>' + formatCurrency(o.totals?.totalAmount) + '</td><td><button class="action-btn" onclick="createASN(\'' + o.purchaseOrderNumber + '\')" title="Create ASN"><span class="material-symbols-outlined">local_shipping</span></button></td></tr>').join('');
+        tbody.innerHTML = orders.map(o => '<tr><td>' + o.purchaseOrderNumber + '</td><td><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td>' + (o.odoo?.saleOrderName || '-') + '</td><td>' + formatCurrency(o.totals?.totalAmount) + '</td><td><button class="action-btn" onclick="createASN(\'' + o.purchaseOrderNumber + '\')" title="Create ASN"><span class="material-symbols-outlined">local_shipping</span></button></td></tr>').join('');
       } catch (e) { document.getElementById('ready-table').innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>'; }
     }
     async function loadShipments() {
@@ -107,7 +113,7 @@
         document.getElementById('stat-confirmed').textContent = shipments.filter(s => s.status === 'confirmed').length;
         const tbody = document.getElementById('shipments-table');
         if (shipments.length === 0) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">local_shipping</span><div class="empty-state-title">No shipments yet</div></div></td></tr>'; return; }
-        tbody.innerHTML = shipments.map(s => '<tr><td>' + (s.shipmentId || '-') + '</td><td>' + (s.purchaseOrderNumbers?.join(', ') || s.purchaseOrderNumber || '-') + '</td><td><span class="marketplace-badge">' + (s.marketplaceId || '-') + '</span></td><td><span class="badge badge-' + (s.status || 'pending') + '">' + (s.status || 'pending') + '</span></td><td>' + formatDate(s.shipmentDate || s.createdAt) + '</td><td>' + (s.carrier || '-') + '</td></tr>').join('');
+        tbody.innerHTML = shipments.map(s => '<tr><td>' + (s.shipmentId || '-') + '</td><td>' + (s.purchaseOrderNumbers?.join(', ') || s.purchaseOrderNumber || '-') + '</td><td><span class="marketplace-badge">' + getFlagImg(s.marketplaceId) + '</span></td><td><span class="badge badge-' + (s.status || 'pending') + '">' + (s.status || 'pending') + '</span></td><td>' + formatDate(s.shipmentDate || s.createdAt) + '</td><td>' + (s.carrier || '-') + '</td></tr>').join('');
       } catch (e) { document.getElementById('shipments-table').innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>'; }
     }
     function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-GB') : '-'; }
