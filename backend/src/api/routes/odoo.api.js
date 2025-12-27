@@ -141,43 +141,140 @@ router.get('/products', async (req, res) => {
 router.get('/products/:id', async (req, res) => {
   try {
     const client = await getOdooClient();
-    const products = await client.read('product.product', [parseInt(req.params.id)], [
-      'id', 'name', 'default_code', 'barcode', 'list_price', 'standard_price',
-      'qty_available', 'virtual_available', 'categ_id', 'image_1920',
-      'type', 'uom_id', 'active', 'description_sale', 'weight', 'volume',
-      'sale_ok', 'purchase_ok', 'create_date', 'write_date'
-    ]);
+
+    // Fetch ALL fields for comprehensive product view
+    const allFields = [
+      // Identity
+      'id', 'name', 'display_name', 'default_code', 'barcode', 'active',
+      // Images
+      'image_1920', 'image_128',
+      // Pricing
+      'list_price', 'standard_price', 'lst_price',
+      // Inventory
+      'qty_available', 'virtual_available', 'incoming_qty', 'outgoing_qty',
+      'free_qty', 'reordering_min_qty', 'reordering_max_qty',
+      // Classification
+      'categ_id', 'type', 'detailed_type',
+      // Units
+      'uom_id', 'uom_po_id',
+      // Physical
+      'weight', 'volume',
+      // Sales & Purchase
+      'sale_ok', 'purchase_ok', 'invoice_policy',
+      // Descriptions
+      'description', 'description_sale', 'description_purchase',
+      // Supplier
+      'seller_ids',
+      // Tracking
+      'tracking',
+      // Taxes
+      'taxes_id', 'supplier_taxes_id',
+      // Routes & Warehouse
+      'route_ids', 'responsible_id',
+      // Dates
+      'create_date', 'write_date', 'create_uid', 'write_uid',
+      // Variants
+      'product_tmpl_id', 'product_variant_count', 'attribute_line_ids',
+      // Accounting
+      'property_account_income_id', 'property_account_expense_id',
+      // Extra
+      'company_id', 'currency_id'
+    ];
+
+    const products = await client.read('product.product', [parseInt(req.params.id)], allFields);
 
     if (!products.length) {
       return res.status(404).json({ error: 'Product not found' });
     }
 
     const p = products[0];
+
+    // Return both raw Odoo data and transformed data
     res.json({
       success: true,
       product: {
+        // Core identity
         id: p.id,
         name: p.name,
+        displayName: p.display_name,
         sku: p.default_code || '',
         barcode: p.barcode || '',
-        price: p.list_price,
+        active: p.active,
+        type: p.type,
+        detailedType: p.detailed_type,
+
+        // Images
+        image: p.image_1920 ? `data:image/png;base64,${p.image_1920}` : null,
+        thumbnail: p.image_128 ? `data:image/png;base64,${p.image_128}` : null,
+
+        // Pricing
+        salePrice: p.list_price,
         cost: p.standard_price,
-        stock: p.qty_available,
-        available: p.virtual_available,
+        listPrice: p.lst_price,
+
+        // Inventory
+        qtyOnHand: p.qty_available,
+        qtyForecasted: p.virtual_available,
+        qtyIncoming: p.incoming_qty,
+        qtyOutgoing: p.outgoing_qty,
+        qtyFree: p.free_qty,
+        reorderMin: p.reordering_min_qty,
+        reorderMax: p.reordering_max_qty,
+
+        // Classification
         category: p.categ_id ? p.categ_id[1] : '',
         categoryId: p.categ_id ? p.categ_id[0] : null,
-        image: p.image_1920 ? `data:image/png;base64,${p.image_1920}` : null,
-        type: p.type,
+
+        // Units
         uom: p.uom_id ? p.uom_id[1] : '',
         uomId: p.uom_id ? p.uom_id[0] : null,
-        active: p.active,
-        description: p.description_sale || '',
+        purchaseUom: p.uom_po_id ? p.uom_po_id[1] : '',
+        purchaseUomId: p.uom_po_id ? p.uom_po_id[0] : null,
+
+        // Physical
         weight: p.weight,
         volume: p.volume,
+
+        // Sales & Purchase
         canSell: p.sale_ok,
         canPurchase: p.purchase_ok,
+        invoicePolicy: p.invoice_policy,
+        tracking: p.tracking,
+
+        // Descriptions
+        description: p.description || '',
+        descriptionSale: p.description_sale || '',
+        descriptionPurchase: p.description_purchase || '',
+
+        // Suppliers
+        supplierCount: Array.isArray(p.seller_ids) ? p.seller_ids.length : 0,
+
+        // Taxes
+        salesTaxes: p.taxes_id || [],
+        purchaseTaxes: p.supplier_taxes_id || [],
+
+        // Routes
+        routes: p.route_ids || [],
+        responsible: p.responsible_id ? p.responsible_id[1] : null,
+
+        // Template & Variants
+        templateId: p.product_tmpl_id ? p.product_tmpl_id[0] : null,
+        templateName: p.product_tmpl_id ? p.product_tmpl_id[1] : null,
+        variantCount: p.product_variant_count || 1,
+
+        // Company & Currency
+        company: p.company_id ? p.company_id[1] : null,
+        currency: p.currency_id ? p.currency_id[1] : 'EUR',
+
+        // Accounting
+        incomeAccount: p.property_account_income_id ? p.property_account_income_id[1] : null,
+        expenseAccount: p.property_account_expense_id ? p.property_account_expense_id[1] : null,
+
+        // Audit
         createdAt: p.create_date,
-        updatedAt: p.write_date
+        updatedAt: p.write_date,
+        createdBy: p.create_uid ? p.create_uid[1] : null,
+        updatedBy: p.write_uid ? p.write_uid[1] : null
       }
     });
   } catch (error) {

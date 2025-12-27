@@ -22,14 +22,10 @@
     .btn-sm { padding: 6px 10px; font-size: 12px; }
     .btn .material-symbols-outlined { font-size: 18px; }
 
-    .view-toggle { display: flex; background: #18181f; border: 1px solid #252532; border-radius: 8px; overflow: hidden; }
-    .view-toggle button { padding: 8px 12px; background: transparent; border: none; color: #71717a; cursor: pointer; transition: all 0.15s; }
-    .view-toggle button.active { background: #8b5cf6; color: #fff; }
-    .view-toggle button:hover:not(.active) { background: #222230; }
-
     .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
     @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
-    .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 10px; padding: 12px 16px; }
+    .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 10px; padding: 12px 16px; cursor: pointer; transition: border-color 0.15s; }
+    .stat-card:hover { border-color: #8b5cf6; }
     .stat-value { font-size: 22px; font-weight: 700; color: #fff; }
     .stat-label { font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.02em; }
     .stat-card.success .stat-value { color: #4ade80; }
@@ -37,55 +33,33 @@
     .stat-card.danger .stat-value { color: #f87171; }
     .stat-card.info .stat-value { color: #a78bfa; }
 
-    .filters-bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
-    .search-wrapper { position: relative; flex: 1; min-width: 250px; }
-    .search-wrapper .material-symbols-outlined { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #71717a; font-size: 20px; }
-    .search-input { width: 100%; padding: 10px 14px 10px 40px; background: #18181f; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 13px; }
-    .search-input:focus { outline: none; border-color: #8b5cf6; }
-    .filter-select { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 13px; }
-    .filter-select:focus { outline: none; border-color: #8b5cf6; }
-    .filter-toggle { display: flex; align-items: center; gap: 6px; padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 8px; color: #71717a; font-size: 13px; cursor: pointer; transition: all 0.15s; }
-    .filter-toggle.active { background: rgba(34, 197, 94, 0.1); border-color: #22c55e; color: #22c55e; }
-    .filter-toggle input { display: none; }
-
     .card { background: #18181f; border: 1px solid #252532; border-radius: 12px; overflow: hidden; }
+    .card-header { padding: 12px 16px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; }
+    .card-title { font-size: 14px; font-weight: 600; color: #fff; margin: 0; }
 
-    /* Grid View */
-    .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-    .product-card { background: #18181f; border: 1px solid #252532; border-radius: 12px; overflow: hidden; transition: all 0.15s; cursor: pointer; }
-    .product-card:hover { border-color: #8b5cf6; transform: translateY(-2px); }
-    .product-image { width: 100%; height: 160px; background: #12121a; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    .product-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .product-image .material-symbols-outlined { font-size: 48px; color: #3f3f50; }
-    .product-body { padding: 14px; }
-    .product-sku { font-size: 11px; color: #8b5cf6; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
-    .product-name { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 6px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .product-category { font-size: 11px; color: #71717a; margin-bottom: 10px; }
-    .product-meta { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #252532; }
-    .product-price { font-size: 16px; font-weight: 700; color: #fff; }
-    .product-stock { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; }
-    .product-stock.in-stock { color: #22c55e; }
-    .product-stock.low-stock { color: #f59e0b; }
-    .product-stock.out-of-stock { color: #ef4444; }
-    .stock-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-
-    /* Table View */
     .table-container { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #252532; }
     th { background: #12121a; font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; }
     td { font-size: 13px; color: #e4e4e7; }
-    tr:hover td { background: #1a1a28; }
-    .table-image { width: 36px; height: 36px; border-radius: 6px; background: #252532; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    tbody tr { cursor: pointer; transition: background 0.1s; }
+    tbody tr:hover td { background: rgba(139, 92, 246, 0.08); }
+
+    .filter-row th { padding: 6px 8px; background: #12121a; }
+    .filter-input, .filter-select { padding: 6px 8px; background: #12121a; border: 1px solid #252532; border-radius: 6px; color: #e4e4e7; font-size: 12px; width: 100%; box-sizing: border-box; }
+    .filter-input:focus, .filter-select:focus { outline: none; border-color: #8b5cf6; }
+    .filter-input::placeholder { color: #52525b; }
+
+    .table-image { width: 40px; height: 40px; border-radius: 8px; background: #252532; display: flex; align-items: center; justify-content: center; overflow: hidden; }
     .table-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .table-image .material-symbols-outlined { font-size: 18px; color: #3f3f50; }
-    .table-sku { font-size: 12px; color: #8b5cf6; font-weight: 500; }
+    .table-image .material-symbols-outlined { font-size: 20px; color: #3f3f50; }
+    .table-sku { font-size: 12px; color: #8b5cf6; font-weight: 600; }
+    .table-name { font-weight: 500; }
     .table-stock { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 600; }
     .table-stock.in-stock { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
     .table-stock.low-stock { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
     .table-stock.out-of-stock { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 
-    /* Empty/Loading States */
     .empty-state { padding: 60px 20px; text-align: center; }
     .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 12px; }
     .empty-state-title { font-size: 14px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
@@ -93,37 +67,11 @@
     @keyframes spin { 100% { transform: rotate(360deg); } }
     .loading-spinner { animation: spin 1s linear infinite; }
 
-    /* Modals */
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.2s; }
-    .modal-backdrop.active { opacity: 1; visibility: visible; }
-    .modal { background: #18181f; border: 1px solid #252532; border-radius: 14px; width: 100%; max-width: 500px; max-height: 90vh; overflow: hidden; transform: scale(0.95); transition: transform 0.2s; }
-    .modal-backdrop.active .modal { transform: scale(1); }
-    .modal.edit-modal { max-width: 650px; }
-    .modal-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; align-items: center; justify-content: space-between; }
-    .modal-title { font-size: 16px; font-weight: 600; color: #fff; }
-    .modal-close { background: none; border: none; color: #71717a; cursor: pointer; padding: 4px; }
-    .modal-close:hover { color: #fff; }
-    .modal-body { padding: 20px; max-height: 400px; overflow-y: auto; }
-    .modal-footer { padding: 14px 20px; border-top: 1px solid #252532; display: flex; justify-content: flex-end; gap: 10px; }
+    .pagination { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid #252532; }
+    .pagination-info { font-size: 12px; color: #71717a; }
+    .pagination-buttons { display: flex; gap: 6px; }
 
-    .column-list { display: flex; flex-direction: column; gap: 6px; }
-    .column-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #12121a; border-radius: 6px; cursor: pointer; }
-    .column-item:hover { background: #1a1a28; }
-    .column-item input { width: 16px; height: 16px; accent-color: #8b5cf6; }
-    .column-item label { flex: 1; font-size: 13px; color: #e4e4e7; cursor: pointer; }
-
-    .edit-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-    .form-group { display: flex; flex-direction: column; gap: 5px; }
-    .form-group.full-width { grid-column: 1 / -1; }
-    .form-label { font-size: 12px; font-weight: 500; color: #71717a; }
-    .form-input, .form-select, .form-textarea { padding: 9px 12px; background: #12121a; border: 1px solid #252532; border-radius: 6px; color: #e4e4e7; font-size: 13px; }
-    .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: #8b5cf6; }
-    .form-textarea { resize: vertical; min-height: 70px; }
-    .form-input:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .toast { position: fixed; bottom: 20px; right: 20px; background: #252532; border: 1px solid #3f3f50; border-radius: 10px; padding: 14px 18px; color: #e4e4e7; font-size: 13px; z-index: 2000; display: none; }
-    .toast.success { border-color: #22c55e; }
-    .toast.error { border-color: #ef4444; }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #252532; border: 1px solid #22c55e; border-radius: 10px; padding: 14px 18px; color: #e4e4e7; font-size: 13px; z-index: 2000; display: none; }
     .toast.show { display: flex; align-items: center; gap: 10px; animation: slideIn 0.3s ease-out; }
     @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   </style>
@@ -136,150 +84,98 @@
         <span class="page-badge" id="product-count">Loading...</span>
       </h1>
       <div class="header-actions">
-        <button class="btn btn-secondary btn-sm" onclick="openColumnSettings()">
-          <span class="material-symbols-outlined">view_column</span>Columns
-        </button>
         <button class="btn btn-secondary btn-sm" onclick="exportToExcel()">
-          <span class="material-symbols-outlined">download</span>Export
+          <span class="material-symbols-outlined">download</span>Export Excel
         </button>
-        <div class="view-toggle">
-          <button id="view-grid" class="active" onclick="setView('grid')">
-            <span class="material-symbols-outlined">grid_view</span>
-          </button>
-          <button id="view-list" onclick="setView('list')">
-            <span class="material-symbols-outlined">view_list</span>
-          </button>
-        </div>
       </div>
     </header>
 
     <!-- Stats -->
     <div class="stats-row">
-      <div class="stat-card info">
+      <div class="stat-card info" onclick="filterByStock('')">
         <div class="stat-value" id="stat-total">--</div>
         <div class="stat-label">Total Products</div>
       </div>
-      <div class="stat-card success">
+      <div class="stat-card success" onclick="filterByStock('in')">
         <div class="stat-value" id="stat-in-stock">--</div>
         <div class="stat-label">In Stock</div>
       </div>
-      <div class="stat-card warning">
+      <div class="stat-card warning" onclick="filterByStock('low')">
         <div class="stat-value" id="stat-low-stock">--</div>
         <div class="stat-label">Low Stock</div>
       </div>
-      <div class="stat-card danger">
+      <div class="stat-card danger" onclick="filterByStock('out')">
         <div class="stat-value" id="stat-out-of-stock">--</div>
         <div class="stat-label">Out of Stock</div>
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="filters-bar">
-      <div class="search-wrapper">
-        <span class="material-symbols-outlined">search</span>
-        <input type="text" class="search-input" id="search" placeholder="Search by name, SKU, or barcode...">
+    <!-- Products Table -->
+    <div class="card">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:50px"></th>
+              <th>SKU</th>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Cost</th>
+              <th>Stock</th>
+              <th>Available</th>
+            </tr>
+            <tr class="filter-row">
+              <th></th>
+              <th><input type="text" class="filter-input" id="filter-sku" placeholder="Search..." onkeyup="debounceFilter()"></th>
+              <th><input type="text" class="filter-input" id="filter-name" placeholder="Search..." onkeyup="debounceFilter()"></th>
+              <th>
+                <select class="filter-select" id="filter-category" onchange="filterProducts()">
+                  <option value="">All</option>
+                </select>
+              </th>
+              <th></th>
+              <th></th>
+              <th>
+                <select class="filter-select" id="filter-stock" onchange="filterProducts()">
+                  <option value="">All</option>
+                  <option value="in">In Stock</option>
+                  <option value="low">Low Stock</option>
+                  <option value="out">Out of Stock</option>
+                </select>
+              </th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="products-table">
+            <tr>
+              <td colspan="8">
+                <div class="empty-state">
+                  <span class="material-symbols-outlined loading-spinner">sync</span>
+                  <div class="empty-state-title">Loading Products</div>
+                  <div class="empty-state-text">Fetching products from Odoo...</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <select class="filter-select" id="category-filter">
-        <option value="">All Categories</option>
-      </select>
-      <label class="filter-toggle" id="in-stock-toggle">
-        <input type="checkbox" id="in-stock-filter">
-        <span class="material-symbols-outlined" style="font-size: 16px;">inventory</span>
-        In Stock Only
-      </label>
-    </div>
-
-    <!-- Products Container -->
-    <div id="products-container">
-      <div class="empty-state">
-        <span class="material-symbols-outlined loading-spinner">sync</span>
-        <div class="empty-state-title">Loading Products</div>
-        <div class="empty-state-text">Fetching products from Odoo...</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Column Settings Modal -->
-  <div class="modal-backdrop" id="column-modal">
-    <div class="modal">
-      <div class="modal-header">
-        <div class="modal-title">Column Settings</div>
-        <button class="modal-close" onclick="closeColumnSettings()">
-          <span class="material-symbols-outlined">close</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="column-list" id="column-list"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeColumnSettings()">Cancel</button>
-        <button class="btn btn-primary" onclick="applyColumnSettings()">Apply</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Product Edit Modal -->
-  <div class="modal-backdrop" id="edit-modal">
-    <div class="modal edit-modal">
-      <div class="modal-header">
-        <div class="modal-title">Edit Product</div>
-        <button class="modal-close" onclick="closeEditModal()">
-          <span class="material-symbols-outlined">close</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <form id="edit-form" class="edit-form">
-          <input type="hidden" id="edit-id">
-          <div class="form-group">
-            <label class="form-label">Name</label>
-            <input type="text" class="form-input" id="edit-name" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">SKU / Internal Reference</label>
-            <input type="text" class="form-input" id="edit-sku">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Barcode</label>
-            <input type="text" class="form-input" id="edit-barcode">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Category</label>
-            <select class="form-select" id="edit-category"></select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Sale Price</label>
-            <input type="number" step="0.01" class="form-input" id="edit-price">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Cost</label>
-            <input type="number" step="0.01" class="form-input" id="edit-cost">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Stock (read-only)</label>
-            <input type="number" class="form-input" id="edit-stock" disabled>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Weight (kg)</label>
-            <input type="number" step="0.001" class="form-input" id="edit-weight">
-          </div>
-          <div class="form-group full-width">
-            <label class="form-label">Description</label>
-            <textarea class="form-textarea" id="edit-description"></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveProduct()">
-          <span class="material-symbols-outlined">save</span>
-          Save to Odoo
-        </button>
+      <div class="pagination">
+        <div class="pagination-info" id="pagination-info">--</div>
+        <div class="pagination-buttons">
+          <button class="btn btn-secondary btn-sm" onclick="prevPage()" id="prev-btn" disabled>
+            <span class="material-symbols-outlined">chevron_left</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="nextPage()" id="next-btn" disabled>
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
   <div class="toast" id="toast">
-    <span class="material-symbols-outlined" id="toast-icon">check_circle</span>
+    <span class="material-symbols-outlined" style="color:#22c55e">check_circle</span>
     <span id="toast-message"></span>
   </div>
 
@@ -287,25 +183,17 @@
     let allProducts = [];
     let filteredProducts = [];
     let categories = [];
-    let currentView = 'grid';
+    let currentPage = 1;
+    const pageSize = 50;
+    let filterTimeout = null;
 
-    const allColumns = [
-      { key: 'image', label: 'Image', default: true },
-      { key: 'sku', label: 'SKU', default: true },
-      { key: 'name', label: 'Name', default: true },
-      { key: 'barcode', label: 'Barcode', default: false },
-      { key: 'category', label: 'Category', default: true },
-      { key: 'price', label: 'Sale Price', default: true },
-      { key: 'cost', label: 'Cost', default: false },
-      { key: 'stock', label: 'Stock', default: true },
-      { key: 'available', label: 'Available', default: false },
-      { key: 'type', label: 'Type', default: false },
-      { key: 'uom', label: 'Unit', default: false },
-      { key: 'weight', label: 'Weight', default: false }
-    ];
-
-    let visibleColumns = JSON.parse(localStorage.getItem('productColumns')) ||
-      allColumns.filter(c => c.default).map(c => c.key);
+    function debounceFilter() {
+      clearTimeout(filterTimeout);
+      filterTimeout = setTimeout(() => {
+        currentPage = 1;
+        filterProducts();
+      }, 300);
+    }
 
     async function loadProducts() {
       try {
@@ -314,40 +202,33 @@
         const data = await res.json();
         allProducts = data.products || data;
         updateStats();
-        await loadCategories();
+        extractCategories();
         filterProducts();
       } catch (error) {
         console.error('Failed to load products:', error);
-        document.getElementById('products-container').innerHTML = `
-          <div class="empty-state">
-            <span class="material-symbols-outlined">cloud_off</span>
-            <div class="empty-state-title">Unable to load products</div>
-            <div class="empty-state-text">Please check your Odoo connection in Settings > Integrations</div>
-          </div>
+        document.getElementById('products-table').innerHTML = `
+          <tr><td colspan="8">
+            <div class="empty-state">
+              <span class="material-symbols-outlined">cloud_off</span>
+              <div class="empty-state-title">Unable to load products</div>
+              <div class="empty-state-text">Please check your Odoo connection</div>
+            </div>
+          </td></tr>
         `;
       }
     }
 
-    async function loadCategories() {
-      try {
-        const res = await fetch('/api/odoo/categories', { credentials: 'include' });
-        if (res.ok) {
-          categories = await res.json();
-          const select = document.getElementById('category-filter');
-          const editSelect = document.getElementById('edit-category');
-          categories.forEach(cat => {
-            select.innerHTML += `<option value="${cat.id}">${cat.fullName || cat.name}</option>`;
-            editSelect.innerHTML += `<option value="${cat.id}">${cat.fullName || cat.name}</option>`;
-          });
-        }
-      } catch (e) {
-        console.error('Failed to load categories:', e);
-      }
+    function extractCategories() {
+      const cats = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort();
+      const select = document.getElementById('filter-category');
+      cats.forEach(cat => {
+        select.innerHTML += `<option value="${cat}">${cat}</option>`;
+      });
     }
 
     function updateStats() {
       const total = allProducts.length;
-      const inStock = allProducts.filter(p => p.stock > 0).length;
+      const inStock = allProducts.filter(p => p.stock > 10).length;
       const lowStock = allProducts.filter(p => p.stock > 0 && p.stock <= 10).length;
       const outOfStock = allProducts.filter(p => p.stock <= 0).length;
 
@@ -358,233 +239,105 @@
       document.getElementById('stat-out-of-stock').textContent = outOfStock.toLocaleString();
     }
 
+    function filterByStock(status) {
+      document.getElementById('filter-stock').value = status;
+      document.getElementById('filter-sku').value = '';
+      document.getElementById('filter-name').value = '';
+      document.getElementById('filter-category').value = '';
+      currentPage = 1;
+      filterProducts();
+    }
+
     function filterProducts() {
-      const searchTerm = document.getElementById('search').value.toLowerCase();
-      const categoryId = document.getElementById('category-filter').value;
-      const inStockOnly = document.getElementById('in-stock-filter').checked;
+      const sku = document.getElementById('filter-sku').value.toLowerCase();
+      const name = document.getElementById('filter-name').value.toLowerCase();
+      const category = document.getElementById('filter-category').value;
+      const stockFilter = document.getElementById('filter-stock').value;
 
       filteredProducts = allProducts.filter(p => {
-        if (searchTerm && !(
-          (p.name && p.name.toLowerCase().includes(searchTerm)) ||
-          (p.sku && p.sku.toLowerCase().includes(searchTerm)) ||
-          (p.barcode && p.barcode.toLowerCase().includes(searchTerm))
-        )) return false;
-        if (categoryId && p.categoryId != categoryId) return false;
-        if (inStockOnly && p.stock <= 0) return false;
+        if (sku && !(p.sku && p.sku.toLowerCase().includes(sku))) return false;
+        if (name && !(p.name && p.name.toLowerCase().includes(name))) return false;
+        if (category && p.category !== category) return false;
+        if (stockFilter === 'in' && p.stock <= 10) return false;
+        if (stockFilter === 'low' && (p.stock <= 0 || p.stock > 10)) return false;
+        if (stockFilter === 'out' && p.stock > 0) return false;
         return true;
       });
+
       renderProducts();
+      updatePagination();
     }
 
     function renderProducts() {
-      const container = document.getElementById('products-container');
-      if (filteredProducts.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <span class="material-symbols-outlined">inventory_2</span>
-            <div class="empty-state-title">No products found</div>
-            <div class="empty-state-text">Try adjusting your search or filters</div>
-          </div>
+      const tbody = document.getElementById('products-table');
+      const start = (currentPage - 1) * pageSize;
+      const pageProducts = filteredProducts.slice(start, start + pageSize);
+
+      if (pageProducts.length === 0) {
+        tbody.innerHTML = `
+          <tr><td colspan="8">
+            <div class="empty-state">
+              <span class="material-symbols-outlined">inventory_2</span>
+              <div class="empty-state-title">No products found</div>
+              <div class="empty-state-text">Try adjusting your filters</div>
+            </div>
+          </td></tr>
         `;
         return;
       }
-      if (currentView === 'grid') {
-        renderGridView(container);
-      } else {
-        renderListView(container);
-      }
-    }
 
-    function renderGridView(container) {
-      container.innerHTML = `<div class="products-grid">${filteredProducts.map(product => {
-        const stockClass = product.stock <= 0 ? 'out-of-stock' : product.stock <= 10 ? 'low-stock' : 'in-stock';
-        const stockText = product.stock <= 0 ? 'Out of stock' : product.stock <= 10 ? `${product.stock} left` : `${product.stock} in stock`;
+      tbody.innerHTML = pageProducts.map(p => {
+        const stockClass = p.stock <= 0 ? 'out-of-stock' : p.stock <= 10 ? 'low-stock' : 'in-stock';
         return `
-          <div class="product-card" onclick="openEditModal(${product.id})">
-            <div class="product-image">
-              ${product.image ? `<img src="${product.image}" alt="${product.name}">` : '<span class="material-symbols-outlined">image</span>'}
-            </div>
-            <div class="product-body">
-              <div class="product-sku">${product.sku || 'No SKU'}</div>
-              <div class="product-name">${product.name}</div>
-              <div class="product-category">${product.category || 'Uncategorized'}</div>
-              <div class="product-meta">
-                <div class="product-price">${product.price ? '\u20AC' + product.price.toFixed(2) : '\u2014'}</div>
-                <div class="product-stock ${stockClass}">
-                  <span class="stock-dot"></span>
-                  ${stockText}
-                </div>
+          <tr onclick="window.location.href='/inventory/product.html?id=${p.id}'">
+            <td>
+              <div class="table-image">
+                ${p.image ? `<img src="${p.image}" alt="">` : '<span class="material-symbols-outlined">image</span>'}
               </div>
-            </div>
-          </div>
+            </td>
+            <td><span class="table-sku">${p.sku || '\u2014'}</span></td>
+            <td class="table-name">${p.name}</td>
+            <td>${p.category || '\u2014'}</td>
+            <td>${p.price ? '\u20AC' + p.price.toFixed(2) : '\u2014'}</td>
+            <td>${p.cost ? '\u20AC' + p.cost.toFixed(2) : '\u2014'}</td>
+            <td><span class="table-stock ${stockClass}">${p.stock ?? 0}</span></td>
+            <td>${p.available ?? 0}</td>
+          </tr>
         `;
-      }).join('')}</div>`;
-    }
-
-    function renderListView(container) {
-      const headers = visibleColumns.map(key => {
-        const col = allColumns.find(c => c.key === key);
-        return `<th>${col ? col.label : key}</th>`;
       }).join('');
-
-      const rows = filteredProducts.map(product => {
-        const cells = visibleColumns.map(key => {
-          let value = product[key];
-          if (key === 'image') {
-            return `<td><div class="table-image">${product.image ? `<img src="${product.image}" alt="">` : '<span class="material-symbols-outlined">image</span>'}</div></td>`;
-          }
-          if (key === 'sku') return `<td><span class="table-sku">${value || '\u2014'}</span></td>`;
-          if (key === 'price' || key === 'cost') return `<td>${value ? '\u20AC' + parseFloat(value).toFixed(2) : '\u2014'}</td>`;
-          if (key === 'stock' || key === 'available') {
-            const stockClass = value <= 0 ? 'out-of-stock' : value <= 10 ? 'low-stock' : 'in-stock';
-            return `<td><span class="table-stock ${stockClass}">${value ?? 0}</span></td>`;
-          }
-          if (key === 'weight' && value) return `<td>${value} kg</td>`;
-          return `<td>${value || '\u2014'}</td>`;
-        }).join('');
-        return `<tr onclick="openEditModal(${product.id})" style="cursor:pointer">${cells}</tr>`;
-      }).join('');
-
-      container.innerHTML = `
-        <div class="card">
-          <div class="table-container">
-            <table>
-              <thead><tr>${headers}</tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-        </div>
-      `;
     }
 
-    function setView(view) {
-      currentView = view;
-      document.getElementById('view-grid').classList.toggle('active', view === 'grid');
-      document.getElementById('view-list').classList.toggle('active', view === 'list');
-      renderProducts();
+    function updatePagination() {
+      const total = filteredProducts.length;
+      const start = (currentPage - 1) * pageSize + 1;
+      const end = Math.min(currentPage * pageSize, total);
+      document.getElementById('pagination-info').textContent = total > 0 ? `${start}-${end} of ${total}` : '0 products';
+      document.getElementById('prev-btn').disabled = currentPage <= 1;
+      document.getElementById('next-btn').disabled = end >= total;
     }
 
-    function openColumnSettings() {
-      const list = document.getElementById('column-list');
-      list.innerHTML = allColumns.map(col => `
-        <div class="column-item">
-          <input type="checkbox" id="col-${col.key}" value="${col.key}" ${visibleColumns.includes(col.key) ? 'checked' : ''}>
-          <label for="col-${col.key}">${col.label}</label>
-        </div>
-      `).join('');
-      document.getElementById('column-modal').classList.add('active');
-    }
-
-    function closeColumnSettings() {
-      document.getElementById('column-modal').classList.remove('active');
-    }
-
-    function applyColumnSettings() {
-      visibleColumns = Array.from(document.querySelectorAll('#column-list input:checked')).map(input => input.value);
-      localStorage.setItem('productColumns', JSON.stringify(visibleColumns));
-      closeColumnSettings();
-      renderProducts();
-    }
+    function prevPage() { if (currentPage > 1) { currentPage--; renderProducts(); updatePagination(); } }
+    function nextPage() { currentPage++; renderProducts(); updatePagination(); }
 
     function exportToExcel() {
       const data = filteredProducts.map(p => ({
         'ID': p.id, 'SKU': p.sku, 'Name': p.name, 'Barcode': p.barcode,
         'Category': p.category, 'Sale Price': p.price, 'Cost': p.cost,
-        'Stock': p.stock, 'Available': p.available, 'Type': p.type,
-        'Unit': p.uom, 'Weight': p.weight, 'Description': p.description
+        'Stock': p.stock, 'Available': p.available, 'Type': p.type, 'Unit': p.uom
       }));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Products');
-      XLSX.writeFile(wb, `products_export_${new Date().toISOString().slice(0,10)}.xlsx`);
-      showToast('success', 'Excel file downloaded');
+      XLSX.writeFile(wb, `products_${new Date().toISOString().slice(0,10)}.xlsx`);
+      showToast('Excel file downloaded');
     }
 
-    async function openEditModal(productId) {
-      try {
-        const res = await fetch(`/api/odoo/products/${productId}`, { credentials: 'include' });
-        const data = await res.json();
-        const product = data.product || data;
-
-        document.getElementById('edit-id').value = product.id;
-        document.getElementById('edit-name').value = product.name || '';
-        document.getElementById('edit-sku').value = product.sku || '';
-        document.getElementById('edit-barcode').value = product.barcode || '';
-        document.getElementById('edit-category').value = product.categoryId || '';
-        document.getElementById('edit-price').value = product.price || '';
-        document.getElementById('edit-cost').value = product.cost || '';
-        document.getElementById('edit-stock').value = product.stock || 0;
-        document.getElementById('edit-weight').value = product.weight || '';
-        document.getElementById('edit-description').value = product.description || '';
-
-        document.getElementById('edit-modal').classList.add('active');
-      } catch (e) {
-        showToast('error', 'Failed to load product details');
-      }
-    }
-
-    function closeEditModal() {
-      document.getElementById('edit-modal').classList.remove('active');
-    }
-
-    async function saveProduct() {
-      const productId = document.getElementById('edit-id').value;
-      const updates = {
-        name: document.getElementById('edit-name').value,
-        sku: document.getElementById('edit-sku').value,
-        barcode: document.getElementById('edit-barcode').value,
-        categoryId: parseInt(document.getElementById('edit-category').value) || null,
-        price: parseFloat(document.getElementById('edit-price').value) || 0,
-        cost: parseFloat(document.getElementById('edit-cost').value) || 0,
-        weight: parseFloat(document.getElementById('edit-weight').value) || 0,
-        description: document.getElementById('edit-description').value
-      };
-
-      try {
-        const res = await fetch(`/api/odoo/products/${productId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(updates)
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast('success', 'Product saved to Odoo');
-          closeEditModal();
-          const idx = allProducts.findIndex(p => p.id == productId);
-          if (idx !== -1) Object.assign(allProducts[idx], data.product);
-          filterProducts();
-        } else {
-          showToast('error', data.error || 'Failed to save');
-        }
-      } catch (e) {
-        showToast('error', 'Failed to save product');
-      }
-    }
-
-    function showToast(type, message) {
+    function showToast(message) {
       const toast = document.getElementById('toast');
-      const icon = document.getElementById('toast-icon');
-      const msg = document.getElementById('toast-message');
-      toast.className = `toast ${type} show`;
-      icon.textContent = type === 'success' ? 'check_circle' : 'error';
-      icon.style.color = type === 'success' ? '#22c55e' : '#ef4444';
-      msg.textContent = message;
+      document.getElementById('toast-message').textContent = message;
+      toast.classList.add('show');
       setTimeout(() => toast.classList.remove('show'), 3000);
     }
-
-    document.getElementById('search').addEventListener('input', filterProducts);
-    document.getElementById('category-filter').addEventListener('change', filterProducts);
-    document.getElementById('in-stock-filter').addEventListener('change', function() {
-      document.getElementById('in-stock-toggle').classList.toggle('active', this.checked);
-      filterProducts();
-    });
-
-    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-      backdrop.addEventListener('click', (e) => {
-        if (e.target === backdrop) backdrop.classList.remove('active');
-      });
-    });
 
     loadProducts();
   </script>
