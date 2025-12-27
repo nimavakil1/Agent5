@@ -102,6 +102,9 @@
         <span class="page-badge" id="product-count">Loading...</span>
       </h1>
       <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" onclick="syncStock()" id="sync-btn" title="Sync stock levels from Odoo">
+          <span class="material-symbols-outlined">sync</span>Sync Stock
+        </button>
         <button class="btn btn-secondary btn-sm" onclick="exportToExcel()">
           <span class="material-symbols-outlined">download</span>Export Excel
         </button>
@@ -205,8 +208,6 @@
   </div>
 
   <script>
-    console.log('[Inventory] === Script block starting ===');
-
     let allProducts = [];
     let filteredProducts = [];
     let categories = [];
@@ -219,11 +220,6 @@
     let stockByProduct = {};
     let selectedWarehouseIds = [];
     const CW_WAREHOUSE_ID = 1; // Central Warehouse
-
-    // Show early signal in the loading message
-    document.addEventListener('DOMContentLoaded', () => {
-      console.log('[Inventory] DOMContentLoaded fired');
-    });
 
     function debounceFilter() {
       clearTimeout(filterTimeout);
@@ -250,16 +246,7 @@
       }
     }
 
-    async function loadStockByWarehouse() {
-      try {
-        const res = await fetch('/api/odoo/products/stock-by-warehouse', { credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to fetch stock');
-        const data = await res.json();
-        stockByProduct = data.stockByProduct || {};
-      } catch (error) {
-        console.error('Failed to load stock by warehouse:', error);
-      }
-    }
+    // Stock data is now included in the products from MongoDB - no separate call needed
 
     function renderWarehouseOptions() {
       const container = document.getElementById('warehouse-options');
@@ -333,33 +320,30 @@
     }
 
     async function loadProducts() {
-      console.log('[Inventory] loadProducts() called');
-      updateLoadingStatus('Loading Products', 'Connecting to server...');
+      updateLoadingStatus('Loading Products', 'Fetching from cache...');
 
       try {
-        console.log('[Inventory] Fetching /api/odoo/products?all=true...');
-        updateLoadingStatus('Loading Products', 'Fetching products from Odoo...');
+        // Use MongoDB cached endpoint - much faster!
+        const res = await fetch('/api/odoo/products/all', { credentials: 'include' });
 
-        // Add timeout to detect hanging requests
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          console.log('[Inventory] Request timeout after 60s');
-          updateLoadingStatus('Timeout', 'Request took too long. Please refresh.');
-          controller.abort();
-        }, 60000);
-
-        const res = await fetch('/api/odoo/products?all=true', {
-          credentials: 'include',
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        updateLoadingStatus('Loading Products', 'Processing response...');
-
-        console.log('[Inventory] Fetch response:', res.status, res.statusText);
         if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
         const data = await res.json();
-        console.log('[Inventory] Got data, products count:', data.products?.length || data.length || 0);
-        allProducts = data.products || data;
+
+        // Check if sync is required
+        if (data.syncRequired) {
+          showSyncRequired();
+          return;
+        }
+
+        allProducts = data.products || [];
+
+        // Build stockByProduct from the products data (already includes stockByWarehouse)
+        allProducts.forEach(p => {
+          if (p.stockByWarehouse) {
+            stockByProduct[p.id] = p.stockByWarehouse;
+          }
+        });
+
         updateStats();
         extractCategories();
         filterProducts();
@@ -370,11 +354,72 @@
             <div class="empty-state">
               <span class="material-symbols-outlined">cloud_off</span>
               <div class="empty-state-title">Unable to load products</div>
-              <div class="empty-state-text">${error.message || 'Please check your Odoo connection'}</div>
+              <div class="empty-state-text">${error.message || 'Please check your connection'}</div>
             </div>
           </td></tr>
         `;
       }
+    }
+
+    function showSyncRequired() {
+      document.getElementById('products-table').innerHTML = `
+        <tr><td colspan="8">
+          <div class="empty-state">
+            <span class="material-symbols-outlined">sync</span>
+            <div class="empty-state-title">Product sync required</div>
+            <div class="empty-state-text">Click below to sync products from Odoo (takes ~30 seconds)</div>
+            <button class="btn btn-primary" onclick="triggerFullSync()" style="margin-top: 16px;">
+              <span class="material-symbols-outlined">cloud_sync</span>
+              Sync Products from Odoo
+            </button>
+          </div>
+        </td></tr>
+      `;
+    }
+
+    async function triggerFullSync() {
+      try {
+        document.getElementById('products-table').innerHTML = `
+          <tr><td colspan="8">
+            <div class="empty-state">
+              <span class="material-symbols-outlined loading-spinner">sync</span>
+              <div class="empty-state-title">Syncing Products</div>
+              <div class="empty-state-text">Importing products from Odoo...</div>
+            </div>
+          </td></tr>
+        `;
+
+        const res = await fetch('/api/odoo/products/sync/full', {
+          method: 'POST',
+          credentials: 'include'
+        });
+
+        if (!res.ok) throw new Error('Sync failed');
+
+        // Poll for completion
+        await pollSyncStatus();
+      } catch (error) {
+        showToast('Sync failed: ' + error.message);
+        showSyncRequired();
+      }
+    }
+
+    async function pollSyncStatus() {
+      for (let i = 0; i < 60; i++) {  // Max 2 minutes
+        await new Promise(r => setTimeout(r, 2000));
+
+        const res = await fetch('/api/odoo/products/sync/status', { credentials: 'include' });
+        const status = await res.json();
+
+        if (!status.isRunning) {
+          // Sync complete, reload products
+          await loadProducts();
+          showToast('Products synced successfully!');
+          return;
+        }
+      }
+
+      showToast('Sync taking too long, please refresh the page');
     }
 
     function extractCategories() {
@@ -387,11 +432,13 @@
 
     function updateStats() {
       const total = allProducts.length;
-      const inStock = allProducts.filter(p => p.stock > 10).length;
-      const lowStock = allProducts.filter(p => p.stock > 0 && p.stock <= 10).length;
-      const outOfStock = allProducts.filter(p => p.stock <= 0).length;
+      // Use totalStock or stock field (both are set)
+      const getStock = p => p.stock || p.totalStock || 0;
+      const inStock = allProducts.filter(p => getStock(p) > 10).length;
+      const lowStock = allProducts.filter(p => getStock(p) > 0 && getStock(p) <= 10).length;
+      const outOfStock = allProducts.filter(p => getStock(p) <= 0).length;
 
-      document.getElementById('product-count').textContent = `${total} from Odoo`;
+      document.getElementById('product-count').textContent = `${total} products`;
       document.getElementById('stat-total').textContent = total.toLocaleString();
       document.getElementById('stat-in-stock').textContent = inStock.toLocaleString();
       document.getElementById('stat-low-stock').textContent = lowStock.toLocaleString();
@@ -505,38 +552,45 @@
       setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
-    // Initialize
-    async function init() {
-      console.log('[Inventory] init() starting...');
-      updateLoadingStatus('Initializing', 'Starting up...');
+    async function syncStock() {
+      const btn = document.getElementById('sync-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined loading-spinner">sync</span>Syncing...';
 
       try {
-        // Load warehouse data in parallel, but don't block products if it fails
-        Promise.all([loadWarehouses(), loadStockByWarehouse()]).then(() => {
-          console.log('[Inventory] Warehouse data loaded');
-          // Re-render products once warehouse data is available
-          if (allProducts.length > 0) {
-            renderProducts();
-          }
-        }).catch(err => {
-          console.error('[Inventory] Failed to load warehouse data:', err);
+        const res = await fetch('/api/odoo/products/sync/stock', {
+          method: 'POST',
+          credentials: 'include'
         });
 
-        // Load products independently
-        console.log('[Inventory] Starting loadProducts()...');
+        if (!res.ok) throw new Error('Sync failed');
+
+        // Reload products to get updated stock
         await loadProducts();
-        console.log('[Inventory] loadProducts() completed, allProducts.length =', allProducts.length);
+        showToast('Stock levels synced successfully!');
+      } catch (error) {
+        showToast('Sync failed: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined">sync</span>Sync Stock';
+      }
+    }
+
+    // Initialize - simple and fast!
+    async function init() {
+      try {
+        // Load warehouses for the filter dropdown
+        await loadWarehouses();
+
+        // Load products from MongoDB cache (fast!)
+        await loadProducts();
       } catch (err) {
-        console.error('[Inventory] init() error:', err);
+        console.error('Inventory init error:', err);
         updateLoadingStatus('Error', err.message || 'Unknown error occurred');
       }
     }
 
-    console.log('[Inventory] Script loaded, calling init()...');
-    init().catch(err => {
-      console.error('[Inventory] init() uncaught error:', err);
-      updateLoadingStatus('Fatal Error', err.message || 'Unknown error');
-    });
+    init();
   </script>
 </body>
 </html>

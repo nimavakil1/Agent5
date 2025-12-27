@@ -193,6 +193,226 @@ router.get('/products/stock-by-warehouse', async (req, res) => {
   }
 });
 
+// ==================== PRODUCT SYNC (MongoDB Cache) ====================
+// IMPORTANT: These routes MUST come before /products/:id
+
+const { getProductSyncService } = require('../../services/ProductSyncService');
+const Product = require('../../models/Product');
+
+/**
+ * Get all products from MongoDB (for inventory page) - FAST!
+ */
+router.get('/products/all', async (req, res) => {
+  try {
+    const count = await Product.countDocuments();
+
+    if (count === 0) {
+      return res.json({
+        success: false,
+        message: 'Product cache is empty. Please trigger a sync first.',
+        syncRequired: true,
+        products: []
+      });
+    }
+
+    const products = await Product.find({ active: true, canSell: true })
+      .sort({ name: 1 })
+      .lean();
+
+    const transformed = products.map(p => ({
+      id: p.odooId,
+      name: p.name,
+      sku: p.sku,
+      barcode: p.barcode,
+      price: p.salePrice,
+      cost: p.cost,
+      stock: p.totalStock,
+      available: p.totalStock,
+      category: p.category,
+      categoryId: p.categoryId,
+      image: p.image,
+      type: p.type,
+      uom: p.uom,
+      active: p.active,
+      stockByWarehouse: p.stockByWarehouse instanceof Map
+        ? Object.fromEntries(p.stockByWarehouse)
+        : p.stockByWarehouse,
+      cwStock: p.cwStock
+    }));
+
+    res.json({
+      success: true,
+      count: transformed.length,
+      products: transformed
+    });
+  } catch (error) {
+    console.error('Products all error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Get products from MongoDB cache with search/filter
+ */
+router.get('/products/cached', async (req, res) => {
+  try {
+    const { q, limit = 100, offset = 0, in_stock } = req.query;
+
+    const count = await Product.countDocuments();
+
+    if (count === 0) {
+      return res.json({
+        success: false,
+        message: 'Product cache is empty. Please trigger a sync first.',
+        syncRequired: true,
+        count: 0,
+        products: []
+      });
+    }
+
+    const query = { active: true, canSell: true };
+
+    if (q) {
+      query.$or = [
+        { name: { $regex: q, $options: 'i' } },
+        { sku: { $regex: q, $options: 'i' } },
+        { barcode: { $regex: q, $options: 'i' } }
+      ];
+    }
+
+    if (in_stock === '1' || in_stock === 'true') {
+      query.totalStock = { $gt: 0 };
+    }
+
+    const products = await Product.find(query)
+      .sort({ name: 1 })
+      .skip(parseInt(offset))
+      .limit(parseInt(limit))
+      .lean();
+
+    const transformed = products.map(p => ({
+      id: p.odooId,
+      name: p.name,
+      sku: p.sku,
+      barcode: p.barcode,
+      price: p.salePrice,
+      cost: p.cost,
+      stock: p.totalStock,
+      available: p.totalStock,
+      category: p.category,
+      categoryId: p.categoryId,
+      image: p.image,
+      type: p.type,
+      uom: p.uom,
+      active: p.active,
+      stockByWarehouse: p.stockByWarehouse instanceof Map
+        ? Object.fromEntries(p.stockByWarehouse)
+        : p.stockByWarehouse,
+      cwStock: p.cwStock
+    }));
+
+    res.json({
+      success: true,
+      count: transformed.length,
+      total: count,
+      products: transformed
+    });
+  } catch (error) {
+    console.error('Product cache error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Get product sync status
+ */
+router.get('/products/sync/status', async (req, res) => {
+  try {
+    const syncService = getProductSyncService();
+    const status = await syncService.getStatus();
+    res.json({ success: true, ...status });
+  } catch (error) {
+    console.error('Product sync status error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Trigger full product sync from Odoo
+ */
+router.post('/products/sync/full', async (req, res) => {
+  try {
+    const syncService = getProductSyncService();
+
+    if (syncService.isRunning) {
+      return res.json({
+        success: false,
+        message: 'Sync already in progress',
+        isRunning: true
+      });
+    }
+
+    // Start sync in background
+    syncService.fullSync().catch(err => {
+      console.error('[ProductSync] Full sync error:', err);
+    });
+
+    res.json({
+      success: true,
+      message: 'Full sync started in background'
+    });
+  } catch (error) {
+    console.error('Product full sync error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Trigger incremental product sync
+ */
+router.post('/products/sync/incremental', async (req, res) => {
+  try {
+    const syncService = getProductSyncService();
+
+    if (syncService.isRunning) {
+      return res.json({
+        success: false,
+        message: 'Sync already in progress',
+        isRunning: true
+      });
+    }
+
+    const result = await syncService.incrementalSync();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Product incremental sync error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Trigger stock-only sync
+ */
+router.post('/products/sync/stock', async (req, res) => {
+  try {
+    const syncService = getProductSyncService();
+
+    if (syncService.isRunning) {
+      return res.json({
+        success: false,
+        message: 'Sync already in progress',
+        isRunning: true
+      });
+    }
+
+    const result = await syncService.syncStock();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Product stock sync error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /**
  * Get single product with all details
  */
