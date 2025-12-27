@@ -984,31 +984,28 @@
         tbody.innerHTML = data.returns.map(ret => {
           const firstItem = ret.returnItems?.[0] || {};
           const orderId = firstItem.orderId || '-';
-          const reason = firstItem.returnReason || '-';
           const ean = firstItem.ean || '-';
-          const sku = firstItem.sku || '';
-          const title = firstItem.title || '';
-          const imageUrl = firstItem.productImageUrl;
 
-          // Build product display: SKU first (if available), then EAN
-          let productDisplay = '';
-          if (title) {
-            productDisplay = `<div style="font-size: 13px; color: #e4e4e7; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${title}</div>`;
+          // Build reason display with main reason and detail
+          let reasonDisplay = firstItem.returnReason || '-';
+          if (firstItem.returnReasonDetail) {
+            reasonDisplay += `<br><span style="font-size: 11px; color: #71717a;">${firstItem.returnReasonDetail}</span>`;
           }
-          if (sku) {
-            productDisplay += `<div style="font-size: 11px; color: #a1a1aa; font-family: monospace;">SKU: ${sku}</div>`;
+
+          // Build product display: show EAN (Bol.com returns don't include SKU/title)
+          let productDisplay = `<div style="font-size: 13px; color: #e4e4e7; font-family: monospace;">${ean}</div>`;
+          if (firstItem.quantity > 1) {
+            productDisplay += `<div style="font-size: 11px; color: #71717a;">Qty: ${firstItem.quantity}</div>`;
           }
-          productDisplay += `<div style="font-size: 11px; color: #71717a; font-family: monospace;">EAN: ${ean}</div>`;
 
           return `
             <tr>
               <td><span class="order-id">${ret.returnId}</span></td>
               <td><span class="order-id">${orderId}</span></td>
               <td>${formatDate(ret.registrationDateTime)}</td>
-              <td>${reason}</td>
+              <td>${reasonDisplay}</td>
               <td>
                 <div class="return-product">
-                  ${imageUrl ? `<img src="${imageUrl}" class="return-thumb" onerror="this.style.display='none'">` : ''}
                   <div>${productDisplay}</div>
                 </div>
               </td>

@@ -279,6 +279,7 @@ router.post('/clear-token', async (req, res) => {
 /**
  * Get orders
  * Query params: page, fulfilment-method (FBR/FBB), status
+ * Note: The list endpoint doesn't return prices, so we fetch individual order details
  */
 router.get('/orders', async (req, res) => {
   try {
@@ -294,32 +295,62 @@ router.get('/orders', async (req, res) => {
 
     const data = await bolRequest(endpoint);
 
+    // Fetch individual order details to get prices (in parallel, max 5 at a time)
+    const ordersWithDetails = [];
+    const ordersList = data.orders || [];
+
+    // Batch fetch order details (5 at a time to avoid rate limiting)
+    for (let i = 0; i < ordersList.length; i += 5) {
+      const batch = ordersList.slice(i, i + 5);
+      const detailsPromises = batch.map(async (o) => {
+        try {
+          const details = await bolRequest(`/orders/${o.orderId}`);
+          return {
+            orderId: details.orderId || o.orderId,
+            orderPlacedDateTime: details.orderPlacedDateTime || o.orderPlacedDateTime,
+            shipmentMethod: details.shipmentDetails?.shipmentMethod,
+            pickupPoint: details.shipmentDetails?.pickupPointName,
+            orderItems: (details.orderItems || o.orderItems || []).map(item => ({
+              orderItemId: item.orderItemId,
+              ean: item.ean,
+              sku: item.offer?.reference || item.offerReference || '',
+              title: item.product?.title || '',
+              quantity: item.quantity || 1,
+              quantityShipped: item.quantityShipped || 0,
+              quantityCancelled: item.quantityCancelled || 0,
+              unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
+              totalPrice: typeof item.totalPrice === 'object' ? parseFloat(item.totalPrice?.amount || 0) : parseFloat(item.totalPrice || 0),
+              commission: item.commission,
+              fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod,
+              fulfilmentStatus: item.fulfilmentStatus || 'OPEN',
+              latestDeliveryDate: item.fulfilment?.latestDeliveryDate || item.latestDeliveryDate,
+              cancellationRequest: item.cancellationRequest
+            }))
+          };
+        } catch (err) {
+          // If fetching details fails, return basic info
+          return {
+            orderId: o.orderId,
+            orderPlacedDateTime: o.orderPlacedDateTime,
+            orderItems: (o.orderItems || []).map(item => ({
+              orderItemId: item.orderItemId,
+              ean: item.ean,
+              quantity: item.quantity || 1,
+              fulfilmentMethod: item.fulfilmentMethod,
+              fulfilmentStatus: item.fulfilmentStatus || 'OPEN'
+            }))
+          };
+        }
+      });
+
+      const batchResults = await Promise.all(detailsPromises);
+      ordersWithDetails.push(...batchResults);
+    }
+
     res.json({
       success: true,
-      count: data.orders?.length || 0,
-      orders: (data.orders || []).map(o => ({
-        orderId: o.orderId,
-        orderPlacedDateTime: o.orderPlacedDateTime,
-        shipmentMethod: o.shipmentDetails?.shipmentMethod,
-        pickupPoint: o.shipmentDetails?.pickupPointName,
-        orderItems: (o.orderItems || []).map(item => ({
-          orderItemId: item.orderItemId,
-          ean: item.ean,
-          sku: item.offer?.reference || item.offerReference || '',
-          title: item.product?.title,
-          quantity: item.quantity,
-          quantityShipped: item.quantityShipped,
-          quantityCancelled: item.quantityCancelled,
-          // unitPrice can be a number or object with amount/currency
-          unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
-          totalPrice: typeof item.totalPrice === 'object' ? parseFloat(item.totalPrice?.amount || 0) : parseFloat(item.totalPrice || 0),
-          commission: item.commission,
-          fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod,
-          fulfilmentStatus: item.fulfilment?.latestDeliveryDate ? 'Pending' : (item.fulfilmentStatus || 'Open'),
-          latestDeliveryDate: item.fulfilment?.latestDeliveryDate || item.latestDeliveryDate,
-          cancellationRequest: item.cancellationRequest
-        }))
-      }))
+      count: ordersWithDetails.length,
+      orders: ordersWithDetails
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -367,6 +398,7 @@ router.get('/orders/:orderId', async (req, res) => {
 
 /**
  * Get shipments
+ * Note: List endpoint only returns basic transport info (transportId), fetch details for full info
  */
 router.get('/shipments', async (req, res) => {
   try {
@@ -382,32 +414,61 @@ router.get('/shipments', async (req, res) => {
 
     const data = await bolRequest(endpoint);
 
+    // Fetch individual shipment details to get full transport info (in batches of 5)
+    const shipmentsWithDetails = [];
+    const shipmentsList = data.shipments || [];
+
+    for (let i = 0; i < shipmentsList.length; i += 5) {
+      const batch = shipmentsList.slice(i, i + 5);
+      const detailsPromises = batch.map(async (s) => {
+        try {
+          const details = await bolRequest(`/shipments/${s.shipmentId}`);
+          return {
+            shipmentId: details.shipmentId || s.shipmentId,
+            shipmentDateTime: details.shipmentDateTime || s.shipmentDateTime,
+            shipmentReference: details.shipmentReference || s.shipmentReference,
+            orderId: details.order?.orderId || s.order?.orderId || s.shipmentItems?.[0]?.orderId,
+            transport: {
+              transportId: details.transport?.transportId || s.transport?.transportId,
+              transporterCode: details.transport?.transporterCode || '',
+              trackAndTrace: details.transport?.trackAndTrace || ''
+            },
+            shipmentItems: (details.shipmentItems || s.shipmentItems || []).map(item => ({
+              orderItemId: item.orderItemId,
+              orderId: item.orderId,
+              ean: item.product?.ean || item.ean,
+              title: item.product?.title || '',
+              sku: item.offer?.reference || ''
+            }))
+          };
+        } catch (err) {
+          // If fetching details fails, return basic info
+          return {
+            shipmentId: s.shipmentId,
+            shipmentDateTime: s.shipmentDateTime,
+            shipmentReference: s.shipmentReference,
+            orderId: s.order?.orderId || s.shipmentItems?.[0]?.orderId,
+            transport: {
+              transportId: s.transport?.transportId,
+              transporterCode: '',
+              trackAndTrace: ''
+            },
+            shipmentItems: (s.shipmentItems || []).map(item => ({
+              orderItemId: item.orderItemId,
+              ean: item.ean
+            }))
+          };
+        }
+      });
+
+      const batchResults = await Promise.all(detailsPromises);
+      shipmentsWithDetails.push(...batchResults);
+    }
+
     res.json({
       success: true,
-      count: data.shipments?.length || 0,
-      shipments: (data.shipments || []).map(s => ({
-        shipmentId: s.shipmentId,
-        shipmentDateTime: s.shipmentDateTime,
-        shipmentReference: s.shipmentReference,
-        // Transport info - may be at root level or nested
-        transport: s.transport || {
-          transporterCode: s.transporterCode,
-          trackAndTrace: s.trackAndTrace
-        },
-        // Get order ID from order object or first shipment item
-        orderId: s.order?.orderId || s.shipmentItems?.[0]?.orderId || s.orderId,
-        shipmentItems: (s.shipmentItems || []).map(item => ({
-          orderItemId: item.orderItemId,
-          orderId: item.orderId,
-          ean: item.product?.ean || item.ean,
-          title: item.product?.title || item.title,
-          sku: item.offer?.reference || item.offerReference || '',
-          quantity: item.quantity,
-          quantityShipped: item.quantityShipped,
-          unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
-          fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod
-        }))
-      }))
+      count: shipmentsWithDetails.length,
+      shipments: shipmentsWithDetails
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -428,6 +489,7 @@ router.get('/shipments/:shipmentId', async (req, res) => {
 
 /**
  * Get returns
+ * Note: Return items only have ean, not sku/title. We show ean as product identifier.
  */
 router.get('/returns', async (req, res) => {
   try {
@@ -446,26 +508,33 @@ router.get('/returns', async (req, res) => {
     res.json({
       success: true,
       count: data.returns?.length || 0,
-      returns: (data.returns || []).map(r => ({
-        returnId: r.returnId,
-        registrationDateTime: r.registrationDateTime,
-        fulfilmentMethod: r.fulfilmentMethod,
-        handled: r.handled,
-        returnItems: (r.returnItems || []).map(item => ({
-          rmaId: item.rmaId,
-          orderId: item.orderId,
-          orderItemId: item.orderItemId,
-          ean: item.ean,
-          sku: item.offer?.reference || item.offerReference || item.reference || '',
-          title: item.title,
-          quantity: item.quantity || item.expectedQuantity || 1,
-          returnReason: item.returnReason?.mainReason || item.returnReason,
-          returnReasonComments: item.returnReason?.customerComments || item.customerComments,
-          handlingResult: item.handlingResult,
-          // Try to get product image from product info
-          productImageUrl: item.product?.mediaUrl || null
-        }))
-      }))
+      returns: (data.returns || []).map(r => {
+        // Check if any item is handled
+        const anyHandled = (r.returnItems || []).some(item => item.handled === true);
+
+        return {
+          returnId: r.returnId,
+          registrationDateTime: r.registrationDateTime,
+          fulfilmentMethod: r.fulfilmentMethod,
+          handled: anyHandled,
+          returnItems: (r.returnItems || []).map(item => ({
+            rmaId: item.rmaId,
+            orderId: item.orderId,
+            orderItemId: item.orderItemId,
+            ean: item.ean || '',
+            // Note: Returns API doesn't provide SKU/title - only EAN
+            // Could look up product info by EAN if needed
+            sku: '',
+            title: '',
+            quantity: item.expectedQuantity || item.quantity || 1,
+            returnReason: item.returnReason?.mainReason || '',
+            returnReasonDetail: item.returnReason?.detailedReason || '',
+            returnReasonComments: item.returnReason?.customerComments || '',
+            handled: item.handled || false,
+            handlingResult: item.handlingResult
+          }))
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -620,6 +689,7 @@ router.get('/commissions', async (req, res) => {
 
 /**
  * Get invoices
+ * Note: Dates are returned as timestamps (milliseconds), amounts are in legalMonetaryTotal
  */
 router.get('/invoices', async (req, res) => {
   try {
@@ -638,14 +708,34 @@ router.get('/invoices', async (req, res) => {
     res.json({
       success: true,
       count: data.invoiceListItems?.length || 0,
-      invoices: (data.invoiceListItems || []).map(inv => ({
-        invoiceId: inv.invoiceId,
-        issueDate: inv.issueDate,
-        periodStartDate: inv.periodStartDate,
-        periodEndDate: inv.periodEndDate,
-        totalAmountExclVat: inv.invoiceTotals?.totalAmountExclVat,
-        totalAmountInclVat: inv.invoiceTotals?.totalAmountInclVat
-      }))
+      invoices: (data.invoiceListItems || []).map(inv => {
+        // Convert timestamps to ISO dates
+        const issueDate = inv.issueDate ? new Date(inv.issueDate).toISOString() : null;
+        const periodStart = inv.invoicePeriod?.startDate ? new Date(inv.invoicePeriod.startDate).toISOString() : null;
+        const periodEnd = inv.invoicePeriod?.endDate ? new Date(inv.invoicePeriod.endDate).toISOString() : null;
+
+        // Get amount from legalMonetaryTotal
+        const amountExclVat = inv.legalMonetaryTotal?.taxExclusiveAmount?.amount;
+        const amountInclVat = inv.legalMonetaryTotal?.taxInclusiveAmount?.amount;
+        const currency = inv.legalMonetaryTotal?.taxExclusiveAmount?.currencyID || 'EUR';
+
+        return {
+          invoiceId: inv.invoiceId,
+          issueDate: issueDate,
+          periodStartDate: periodStart,
+          periodEndDate: periodEnd,
+          invoiceType: inv.invoiceType,
+          totalAmountExclVat: amountExclVat,
+          totalAmountInclVat: amountInclVat,
+          currency: currency,
+          openAmount: inv.openAmount,
+          // Available download formats
+          availableFormats: {
+            invoice: inv.invoiceMediaTypes?.availableMediaTypes || [],
+            specification: inv.specificationMediaTypes?.availableMediaTypes || []
+          }
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
