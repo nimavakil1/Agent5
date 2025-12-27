@@ -628,9 +628,9 @@
           </div>
           <div class="filters" style="margin: 0;">
             <select class="filter-select" id="returns-filter" onchange="loadReturns()">
+              <option value="">All Returns</option>
               <option value="false">Open Returns</option>
               <option value="true">Handled Returns</option>
-              <option value="">All Returns</option>
             </select>
           </div>
         </div>
@@ -679,8 +679,9 @@
               <thead>
                 <tr>
                   <th class="filterable">Invoice ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
-                  <th class="filterable">Period<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
-                  <th class="filterable">Issue Date<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
+                  <th class="filterable">Odoo Bill<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
+                  <th class="filterable">Period<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
+                  <th class="filterable">Issue Date<br><input type="text" class="column-filter" data-column="3" placeholder="Filter..."></th>
                   <th>Amount (excl. VAT)</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -688,7 +689,7 @@
               </thead>
               <tbody id="invoices-table">
                 <tr>
-                  <td colspan="6">
+                  <td colspan="7">
                     <div class="loading">
                       <div class="spinner"></div>
                       Loading invoices...
@@ -924,15 +925,36 @@
 
           // Build tracking URL based on carrier
           let trackUrl = '';
-          if (trackTrace !== '-') {
-            if (carrier.toLowerCase().includes('bpost') || carrier.toLowerCase().includes('postnl')) {
-              trackUrl = `https://tracking.bpost.be/btr/web/#/search?itemCode=${trackTrace}`;
-            } else if (carrier.toLowerCase().includes('dhl')) {
-              trackUrl = `https://www.dhl.com/nl-nl/home/tracking.html?tracking-id=${trackTrace}`;
-            } else if (carrier.toLowerCase().includes('dpd')) {
-              trackUrl = `https://tracking.dpd.de/status/nl_NL/parcel/${trackTrace}`;
+          let carrierDisplay = carrier;
+          if (trackTrace && trackTrace !== '-') {
+            const carrierLower = carrier.toLowerCase();
+            if (carrierLower.includes('postnl') || carrierLower === 'pnl' || carrierLower === 'postnl_nl') {
+              trackUrl = `https://postnl.nl/tracktrace/?B=${encodeURIComponent(trackTrace)}`;
+              carrierDisplay = 'PostNL';
+            } else if (carrierLower.includes('bpost') || carrierLower === 'bpost_be') {
+              trackUrl = `https://track.bpost.cloud/btr/web/#/search?itemCode=${encodeURIComponent(trackTrace)}&lang=nl`;
+              carrierDisplay = 'bpost';
+            } else if (carrierLower.includes('gls') || carrierLower === 'gls_nl') {
+              trackUrl = `https://gls-group.com/NL/nl/volg-je-pakket?match=${encodeURIComponent(trackTrace)}`;
+              carrierDisplay = 'GLS';
+            } else if (carrierLower.includes('dpd') || carrierLower === 'dpd_nl' || carrierLower === 'dpd_be') {
+              trackUrl = `https://tracking.dpd.de/status/nl_NL/parcel/${encodeURIComponent(trackTrace)}`;
+              carrierDisplay = 'DPD';
+            } else if (carrierLower.includes('dhl') || carrierLower === 'dhl_nl' || carrierLower === 'dhl_de') {
+              trackUrl = `https://www.dhl.com/nl-nl/home/tracking.html?tracking-id=${encodeURIComponent(trackTrace)}`;
+              carrierDisplay = 'DHL';
+            } else if (carrierLower.includes('ups')) {
+              trackUrl = `https://www.ups.com/track?tracknum=${encodeURIComponent(trackTrace)}`;
+              carrierDisplay = 'UPS';
+            } else if (carrierLower.includes('fedex')) {
+              trackUrl = `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(trackTrace)}`;
+              carrierDisplay = 'FedEx';
+            } else if (carrierLower.includes('tnt')) {
+              trackUrl = `https://www.tnt.com/express/nl_nl/site/shipping-tools/tracking.html?searchType=con&cons=${encodeURIComponent(trackTrace)}`;
+              carrierDisplay = 'TNT';
             } else {
-              trackUrl = `https://www.google.com/search?q=${encodeURIComponent(trackTrace)}+tracking`;
+              // Generic tracking search
+              trackUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackTrace)}`;
             }
           }
 
@@ -941,8 +963,8 @@
               <td><span class="order-id">${shipment.shipmentId}</span></td>
               <td><span class="order-id">${orderId}</span></td>
               <td>${formatDate(shipment.shipmentDateTime)}</td>
-              <td>${carrier}</td>
-              <td>${trackTrace !== '-' ? `<a href="${trackUrl}" target="_blank" style="color: #60a5fa;">${trackTrace}</a>` : '-'}</td>
+              <td>${carrierDisplay}</td>
+              <td>${trackTrace && trackTrace !== '-' ? `<a href="${trackUrl}" target="_blank" style="color: #60a5fa;">${trackTrace}</a>` : '-'}</td>
               <td><span class="badge shipped">Shipped</span></td>
             </tr>
           `;
@@ -981,10 +1003,27 @@
           return;
         }
 
-        tbody.innerHTML = data.returns.map(ret => {
+        // Fetch product info for all returns (for SKU and thumbnail)
+        const returnsWithProducts = await Promise.all(data.returns.map(async (ret) => {
+          const firstItem = ret.returnItems?.[0] || {};
+          if (firstItem.ean) {
+            const product = await lookupProductByEan(firstItem.ean);
+            return {
+              ...ret,
+              productInfo: product
+            };
+          }
+          return ret;
+        }));
+
+        tbody.innerHTML = returnsWithProducts.map(ret => {
           const firstItem = ret.returnItems?.[0] || {};
           const orderId = firstItem.orderId || '-';
           const ean = firstItem.ean || '-';
+          const product = ret.productInfo;
+          const sku = product?.sku || '';
+          const productName = product?.name || '';
+          const imageUrl = product?.image_url;
 
           // Build reason display with main reason and detail
           let reasonDisplay = firstItem.returnReason || '-';
@@ -992,8 +1031,15 @@
             reasonDisplay += `<br><span style="font-size: 11px; color: #71717a;">${firstItem.returnReasonDetail}</span>`;
           }
 
-          // Build product display: show EAN (Bol.com returns don't include SKU/title)
-          let productDisplay = `<div style="font-size: 13px; color: #e4e4e7; font-family: monospace;">${ean}</div>`;
+          // Build product display with thumbnail, SKU and EAN
+          let productDisplay = '';
+          if (productName) {
+            productDisplay += `<div style="font-size: 13px; color: #e4e4e7; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${productName}</div>`;
+          }
+          if (sku) {
+            productDisplay += `<div style="font-size: 11px; color: #a1a1aa; font-family: monospace;">SKU: ${sku}</div>`;
+          }
+          productDisplay += `<div style="font-size: 11px; color: #71717a; font-family: monospace;">EAN: ${ean}</div>`;
           if (firstItem.quantity > 1) {
             productDisplay += `<div style="font-size: 11px; color: #71717a;">Qty: ${firstItem.quantity}</div>`;
           }
@@ -1006,6 +1052,7 @@
               <td>${reasonDisplay}</td>
               <td>
                 <div class="return-product">
+                  ${imageUrl ? `<img src="${imageUrl}" class="return-thumb" onerror="this.style.display='none'">` : ''}
                   <div>${productDisplay}</div>
                 </div>
               </td>
@@ -1039,7 +1086,7 @@
         if (!data.success || !data.invoices || data.invoices.length === 0) {
           tbody.innerHTML = `
             <tr>
-              <td colspan="6">
+              <td colspan="7">
                 <div class="empty-state">
                   <span class="material-symbols-outlined">receipt_long</span>
                   <div class="empty-state-title">No invoices</div>
@@ -1058,9 +1105,12 @@
           const amount = inv.totalAmountExclVat != null
             ? `€${Number(inv.totalAmountExclVat).toFixed(2)}`
             : '-';
+          // Odoo Bill - placeholder until invoice import tool is built
+          const odooBill = inv.odooBillNumber || '-';
           return `
             <tr>
               <td><span class="order-id">${inv.invoiceId}</span></td>
+              <td>${odooBill !== '-' ? `<a href="https://acropaq.odoo.com/web#id=${inv.odooBillId}&model=account.move&view_type=form" target="_blank" style="color: #60a5fa;">${odooBill}</a>` : '<span style="color: #52525b;">-</span>'}</td>
               <td>${period}</td>
               <td>${formatDate(inv.issueDate)}</td>
               <td>${amount}</td>
@@ -1079,7 +1129,7 @@
       } catch (e) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="6" style="color: #ef4444; padding: 20px;">Error loading invoices: ${e.message}</td>
+            <td colspan="7" style="color: #ef4444; padding: 20px;">Error loading invoices: ${e.message}</td>
           </tr>
         `;
       }
@@ -1147,6 +1197,26 @@
       });
     }
 
+    // Cache for product info lookups (by EAN)
+    const productCache = {};
+
+    async function lookupProductByEan(ean) {
+      if (!ean) return null;
+      if (productCache[ean]) return productCache[ean];
+
+      try {
+        const res = await fetch(`/api/odoo/products?q=${encodeURIComponent(ean)}&limit=1`, { credentials: 'include' });
+        const data = await res.json();
+        if (data.success && data.products?.length > 0) {
+          productCache[ean] = data.products[0];
+          return data.products[0];
+        }
+      } catch (e) {
+        console.error('Product lookup error:', e);
+      }
+      return null;
+    }
+
     async function viewOrder(orderId) {
       const modal = document.getElementById('order-modal');
       const body = document.getElementById('order-modal-body');
@@ -1166,6 +1236,17 @@
         const order = data.order;
         const ship = order.shipmentDetails || {};
         const bill = order.billingDetails || {};
+
+        // Lookup product info for all items (for SKU and thumbnail)
+        const itemsWithProducts = await Promise.all((order.orderItems || []).map(async (item) => {
+          const product = await lookupProductByEan(item.ean);
+          return {
+            ...item,
+            sku: item.sku || product?.sku || '',
+            productName: product?.name || item.title || 'Unknown Product',
+            imageUrl: product?.image_url || null
+          };
+        }));
 
         body.innerHTML = `
           <div class="order-detail-row">
@@ -1189,11 +1270,13 @@
           </div>
 
           <div class="order-items-list">
-            <h4 style="color: #fff; margin-bottom: 12px;">Order Items (${order.orderItems?.length || 0})</h4>
-            ${(order.orderItems || []).map(item => `
+            <h4 style="color: #fff; margin-bottom: 12px;">Order Items (${itemsWithProducts.length})</h4>
+            ${itemsWithProducts.map(item => `
               <div class="order-item">
+                ${item.imageUrl ? `<img src="${item.imageUrl}" class="order-item-image" onerror="this.style.display='none'">` : '<div class="order-item-image" style="display:flex;align-items:center;justify-content:center;"><span class="material-symbols-outlined" style="color:#3f3f50;">inventory_2</span></div>'}
                 <div class="order-item-info">
-                  <div class="order-item-title">${item.title || 'Unknown Product'}</div>
+                  <div class="order-item-title">${item.productName}</div>
+                  ${item.sku ? `<div style="font-size: 12px; color: #a1a1aa; font-family: monospace;">SKU: ${item.sku}</div>` : ''}
                   <div class="order-item-ean">EAN: ${item.ean || '-'}</div>
                   <div style="font-size: 12px; color: #71717a; margin-top: 4px;">
                     Qty: ${item.quantity || 1} | ${item.fulfilmentMethod || '-'} | ${item.fulfilmentStatus || '-'}
