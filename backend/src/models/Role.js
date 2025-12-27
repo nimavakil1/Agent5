@@ -6,6 +6,7 @@ const AVAILABLE_MODULES = [
   'call-center',
   'amazon-seller',
   'amazon-vendor',
+  'bol',
   'inventory',
   'accounting',
   'analytics',
