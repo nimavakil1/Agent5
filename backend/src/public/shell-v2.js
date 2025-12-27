@@ -139,7 +139,7 @@
     const rawNext = nextUrl || (location.pathname + location.search + location.hash);
     try { sessionStorage.setItem('next_url', rawNext); } catch (_) {}
     const next = encodeURIComponent(rawNext);
-    location.href = `/app/login?next=${next}`;
+    location.href = `/login?next=${next}`;
   }
 
   function ensureIconFont() {
@@ -734,7 +734,7 @@
         try {
           await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
         } catch (_) {}
-        location.href = '/app/login';
+        location.href = '/login';
       };
     }
 
