@@ -178,7 +178,12 @@ router.get('/products/:id', async (req, res) => {
       // Accounting
       'property_account_income_id', 'property_account_expense_id',
       // Extra
-      'company_id', 'currency_id'
+      'company_id', 'currency_id',
+      // Logistics - customs & shipping
+      'hs_code', 'origin_country_id',
+      'sale_delay', 'produce_delay',
+      // Packaging
+      'packaging_ids'
     ];
 
     const products = await client.read('product.product', [parseInt(req.params.id)], allFields);
@@ -270,6 +275,14 @@ router.get('/products/:id', async (req, res) => {
         incomeAccount: p.property_account_income_id ? p.property_account_income_id[1] : null,
         expenseAccount: p.property_account_expense_id ? p.property_account_expense_id[1] : null,
 
+        // Logistics
+        hsCode: p.hs_code || '',
+        originCountry: p.origin_country_id ? p.origin_country_id[1] : null,
+        originCountryId: p.origin_country_id ? p.origin_country_id[0] : null,
+        saleDelay: p.sale_delay || 0,
+        produceDelay: p.produce_delay || 0,
+        packagingCount: Array.isArray(p.packaging_ids) ? p.packaging_ids.length : 0,
+
         // Audit
         createdAt: p.create_date,
         updatedAt: p.write_date,
@@ -297,15 +310,21 @@ router.put('/products/:id', async (req, res) => {
       name: 'name',
       sku: 'default_code',
       barcode: 'barcode',
-      price: 'list_price',
+      salePrice: 'list_price',
       cost: 'standard_price',
-      description: 'description_sale',
+      descriptionSale: 'description_sale',
+      descriptionPurchase: 'description_purchase',
       weight: 'weight',
       volume: 'volume',
       active: 'active',
       categoryId: 'categ_id',
       canSell: 'sale_ok',
-      canPurchase: 'purchase_ok'
+      canPurchase: 'purchase_ok',
+      hsCode: 'hs_code',
+      saleDelay: 'sale_delay',
+      produceDelay: 'produce_delay',
+      tracking: 'tracking',
+      invoicePolicy: 'invoice_policy'
     };
 
     // Build Odoo update object
@@ -352,6 +371,129 @@ router.put('/products/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Odoo product update error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Get product attachments
+ */
+router.get('/products/:id/attachments', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+    const productId = parseInt(req.params.id);
+
+    // Get attachments linked to this product
+    const attachments = await client.searchRead('ir.attachment', [
+      ['res_model', '=', 'product.product'],
+      ['res_id', '=', productId]
+    ], [
+      'id', 'name', 'mimetype', 'file_size', 'create_date', 'create_uid',
+      'datas', 'type', 'url', 'description'
+    ], { order: 'create_date desc' });
+
+    // Also check product.template attachments
+    const products = await client.read('product.product', [productId], ['product_tmpl_id']);
+    if (products.length && products[0].product_tmpl_id) {
+      const templateId = products[0].product_tmpl_id[0];
+      const templateAttachments = await client.searchRead('ir.attachment', [
+        ['res_model', '=', 'product.template'],
+        ['res_id', '=', templateId]
+      ], [
+        'id', 'name', 'mimetype', 'file_size', 'create_date', 'create_uid',
+        'datas', 'type', 'url', 'description'
+      ], { order: 'create_date desc' });
+      attachments.push(...templateAttachments);
+    }
+
+    // Categorize attachments
+    const categorized = {
+      pictures: [],
+      videos: [],
+      packaging: [],
+      documents: []
+    };
+
+    attachments.forEach(a => {
+      const item = {
+        id: a.id,
+        name: a.name,
+        mimetype: a.mimetype,
+        size: a.file_size,
+        createdAt: a.create_date,
+        createdBy: a.create_uid ? a.create_uid[1] : null,
+        description: a.description || '',
+        url: a.type === 'url' ? a.url : null,
+        data: a.datas ? `data:${a.mimetype};base64,${a.datas}` : null
+      };
+
+      const mime = a.mimetype || '';
+      const name = (a.name || '').toLowerCase();
+
+      if (mime.startsWith('image/')) {
+        categorized.pictures.push(item);
+      } else if (mime.startsWith('video/')) {
+        categorized.videos.push(item);
+      } else if (name.includes('packaging') || name.includes('package') || name.includes('box') || name.includes('carton')) {
+        categorized.packaging.push(item);
+      } else {
+        categorized.documents.push(item);
+      }
+    });
+
+    res.json({ success: true, attachments: categorized, total: attachments.length });
+  } catch (error) {
+    console.error('Odoo attachments error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Upload attachment to product
+ */
+router.post('/products/:id/attachments', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+    const productId = parseInt(req.params.id);
+    const { name, data, mimetype, category, description } = req.body;
+
+    if (!name || !data) {
+      return res.status(400).json({ error: 'Name and data are required' });
+    }
+
+    // Extract base64 data
+    const base64Data = data.includes(',') ? data.split(',')[1] : data;
+
+    // Create attachment in Odoo
+    const attachmentId = await client.create('ir.attachment', {
+      name: category ? `[${category}] ${name}` : name,
+      datas: base64Data,
+      res_model: 'product.product',
+      res_id: productId,
+      mimetype: mimetype || 'application/octet-stream',
+      description: description || ''
+    });
+
+    res.json({ success: true, attachmentId, message: 'Attachment uploaded' });
+  } catch (error) {
+    console.error('Odoo attachment upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Delete attachment
+ */
+router.delete('/products/:id/attachments/:attachmentId', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+    const attachmentId = parseInt(req.params.attachmentId);
+
+    await client.unlink('ir.attachment', [attachmentId]);
+
+    res.json({ success: true, message: 'Attachment deleted' });
+  } catch (error) {
+    console.error('Odoo attachment delete error:', error);
     res.status(500).json({ error: error.message });
   }
 });
