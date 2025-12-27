@@ -61,10 +61,7 @@
       id: 'bol', name: 'Bol.com', icon: 'shopping_bag', color: '#0066ff',
       basePath: '/bol',
       pages: [
-        { id: 'orders', path: '/bol/', name: 'Dashboard', icon: 'dashboard' },
-        { id: 'shipments', path: '/bol/shipments.html', name: 'Shipments', icon: 'local_shipping' },
-        { id: 'returns', path: '/bol/returns.html', name: 'Returns', icon: 'assignment_return' },
-        { id: 'invoices', path: '/bol/invoices.html', name: 'Invoices', icon: 'receipt_long' }
+        { id: 'dashboard', path: '/bol/', name: 'Dashboard', icon: 'dashboard' }
       ]
     },
     'inventory': {
