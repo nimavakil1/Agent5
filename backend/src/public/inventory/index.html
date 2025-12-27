@@ -319,22 +319,26 @@
     }
 
     async function loadProducts() {
+      console.log('[Inventory] loadProducts() called');
       try {
+        console.log('[Inventory] Fetching /api/odoo/products?all=true...');
         const res = await fetch('/api/odoo/products?all=true', { credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to fetch products');
+        console.log('[Inventory] Fetch response:', res.status, res.statusText);
+        if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
         const data = await res.json();
+        console.log('[Inventory] Got data, products count:', data.products?.length || data.length || 0);
         allProducts = data.products || data;
         updateStats();
         extractCategories();
         filterProducts();
       } catch (error) {
-        console.error('Failed to load products:', error);
+        console.error('[Inventory] Failed to load products:', error);
         document.getElementById('products-table').innerHTML = `
           <tr><td colspan="8">
             <div class="empty-state">
               <span class="material-symbols-outlined">cloud_off</span>
               <div class="empty-state-title">Unable to load products</div>
-              <div class="empty-state-text">Please check your Odoo connection</div>
+              <div class="empty-state-text">${error.message || 'Please check your Odoo connection'}</div>
             </div>
           </td></tr>
         `;
@@ -471,20 +475,26 @@
 
     // Initialize
     async function init() {
+      console.log('[Inventory] init() starting...');
+
       // Load warehouse data in parallel, but don't block products if it fails
       Promise.all([loadWarehouses(), loadStockByWarehouse()]).then(() => {
+        console.log('[Inventory] Warehouse data loaded');
         // Re-render products once warehouse data is available
         if (allProducts.length > 0) {
           renderProducts();
         }
       }).catch(err => {
-        console.error('Failed to load warehouse data:', err);
+        console.error('[Inventory] Failed to load warehouse data:', err);
       });
 
       // Load products independently
+      console.log('[Inventory] Starting loadProducts()...');
       await loadProducts();
+      console.log('[Inventory] loadProducts() completed, allProducts.length =', allProducts.length);
     }
 
+    console.log('[Inventory] Script loaded, calling init()...');
     init();
   </script>
 </body>
