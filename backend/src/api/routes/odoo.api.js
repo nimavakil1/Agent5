@@ -179,9 +179,6 @@ router.get('/products/:id', async (req, res) => {
       'property_account_income_id', 'property_account_expense_id',
       // Extra
       'company_id', 'currency_id',
-      // Logistics - customs & shipping
-      'hs_code',
-      'sale_delay', 'produce_delay',
       // Packaging
       'packaging_ids'
     ];
@@ -275,12 +272,12 @@ router.get('/products/:id', async (req, res) => {
         incomeAccount: p.property_account_income_id ? p.property_account_income_id[1] : null,
         expenseAccount: p.property_account_expense_id ? p.property_account_expense_id[1] : null,
 
-        // Logistics
-        hsCode: p.hs_code || '',
+        // Logistics (these fields may not exist in all Odoo instances)
+        hsCode: '',
         originCountry: null,
         originCountryId: null,
-        saleDelay: p.sale_delay || 0,
-        produceDelay: p.produce_delay || 0,
+        saleDelay: 0,
+        produceDelay: 0,
         packagingCount: Array.isArray(p.packaging_ids) ? p.packaging_ids.length : 0,
 
         // Audit
@@ -320,9 +317,6 @@ router.put('/products/:id', async (req, res) => {
       categoryId: 'categ_id',
       canSell: 'sale_ok',
       canPurchase: 'purchase_ok',
-      hsCode: 'hs_code',
-      saleDelay: 'sale_delay',
-      produceDelay: 'produce_delay',
       tracking: 'tracking',
       invoicePolicy: 'invoice_policy'
     };
