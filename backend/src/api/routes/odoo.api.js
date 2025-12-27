@@ -136,6 +136,64 @@ router.get('/products', async (req, res) => {
 });
 
 /**
+ * Get stock by warehouse for all products
+ * Returns { productId: { warehouseId: qty, ... }, ... }
+ * NOTE: This route MUST be defined before /products/:id to avoid being caught by the param route
+ */
+router.get('/products/stock-by-warehouse', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+
+    // Get all warehouses with their stock locations
+    const warehouses = await client.searchRead('stock.warehouse', [], [
+      'id', 'name', 'code', 'lot_stock_id'
+    ], { order: 'id asc' });
+
+    const warehouseMap = {};
+    const locationToWarehouse = {};
+    for (const w of warehouses) {
+      if (w.lot_stock_id) {
+        warehouseMap[w.id] = { id: w.id, name: w.name, code: w.code, locationId: w.lot_stock_id[0] };
+        locationToWarehouse[w.lot_stock_id[0]] = w.id;
+      }
+    }
+
+    // Get all stock quants for internal locations
+    const locationIds = Object.keys(locationToWarehouse).map(Number);
+    const quants = await client.searchRead('stock.quant', [
+      ['location_id', 'in', locationIds],
+      ['quantity', '!=', 0]
+    ], [
+      'product_id', 'location_id', 'quantity'
+    ], { limit: 100000 });
+
+    // Build stock map: { productId: { warehouseId: qty } }
+    const stockByProduct = {};
+    for (const q of quants) {
+      const productId = q.product_id[0];
+      const locationId = q.location_id[0];
+      const warehouseId = locationToWarehouse[locationId];
+
+      if (!warehouseId) continue;
+
+      if (!stockByProduct[productId]) {
+        stockByProduct[productId] = {};
+      }
+      stockByProduct[productId][warehouseId] = (stockByProduct[productId][warehouseId] || 0) + q.quantity;
+    }
+
+    res.json({
+      success: true,
+      warehouses: Object.values(warehouseMap),
+      stockByProduct
+    });
+  } catch (error) {
+    console.error('Odoo stock by warehouse error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * Get single product with all details
  */
 router.get('/products/:id', async (req, res) => {
@@ -803,63 +861,6 @@ router.get('/warehouses', async (req, res) => {
     });
   } catch (error) {
     console.error('Odoo warehouses error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Get stock by warehouse for all products
- * Returns { productId: { warehouseId: qty, ... }, ... }
- */
-router.get('/products/stock-by-warehouse', async (req, res) => {
-  try {
-    const client = await getOdooClient();
-
-    // Get all warehouses with their stock locations
-    const warehouses = await client.searchRead('stock.warehouse', [], [
-      'id', 'name', 'code', 'lot_stock_id'
-    ], { order: 'id asc' });
-
-    const warehouseMap = {};
-    const locationToWarehouse = {};
-    for (const w of warehouses) {
-      if (w.lot_stock_id) {
-        warehouseMap[w.id] = { id: w.id, name: w.name, code: w.code, locationId: w.lot_stock_id[0] };
-        locationToWarehouse[w.lot_stock_id[0]] = w.id;
-      }
-    }
-
-    // Get all stock quants for internal locations
-    const locationIds = Object.keys(locationToWarehouse).map(Number);
-    const quants = await client.searchRead('stock.quant', [
-      ['location_id', 'in', locationIds],
-      ['quantity', '!=', 0]
-    ], [
-      'product_id', 'location_id', 'quantity'
-    ], { limit: 100000 });
-
-    // Build stock map: { productId: { warehouseId: qty } }
-    const stockByProduct = {};
-    for (const q of quants) {
-      const productId = q.product_id[0];
-      const locationId = q.location_id[0];
-      const warehouseId = locationToWarehouse[locationId];
-
-      if (!warehouseId) continue;
-
-      if (!stockByProduct[productId]) {
-        stockByProduct[productId] = {};
-      }
-      stockByProduct[productId][warehouseId] = (stockByProduct[productId][warehouseId] || 0) + q.quantity;
-    }
-
-    res.json({
-      success: true,
-      warehouses: Object.values(warehouseMap),
-      stockByProduct
-    });
-  } catch (error) {
-    console.error('Odoo stock by warehouse error:', error);
     res.status(500).json({ error: error.message });
   }
 });
