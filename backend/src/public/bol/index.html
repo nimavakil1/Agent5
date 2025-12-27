@@ -678,6 +678,47 @@
     </div>
   </div>
 
+  <!-- Order Detail Modal -->
+  <div class="modal-overlay" id="order-modal" onclick="if(event.target===this)closeOrderModal()">
+    <div class="modal" style="max-width: 700px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Order Details</h2>
+        <button class="modal-close" onclick="closeOrderModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body" id="order-modal-body">
+        <div class="loading">
+          <div class="spinner"></div>
+          Loading order details...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; width: 90%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column; }
+    .modal-header { padding: 20px 24px; border-bottom: 1px solid #252532; display: flex; align-items: center; justify-content: space-between; }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; margin: 0; }
+    .modal-close { background: none; border: none; color: #71717a; cursor: pointer; padding: 4px; }
+    .modal-close:hover { color: #fff; }
+    .modal-body { padding: 24px; overflow-y: auto; }
+    .order-detail-row { display: flex; gap: 16px; margin-bottom: 12px; }
+    .order-detail-label { color: #71717a; font-size: 13px; min-width: 120px; }
+    .order-detail-value { color: #e4e4e7; font-size: 14px; }
+    .order-items-list { margin-top: 20px; }
+    .order-item { display: flex; gap: 12px; padding: 12px; background: #12121a; border-radius: 10px; margin-bottom: 8px; }
+    .order-item-image { width: 50px; height: 50px; border-radius: 8px; background: #252532; object-fit: cover; }
+    .order-item-info { flex: 1; }
+    .order-item-title { font-size: 14px; color: #e4e4e7; margin-bottom: 4px; }
+    .order-item-ean { font-size: 12px; color: #71717a; font-family: monospace; }
+    .order-item-price { font-size: 14px; color: #fff; font-weight: 600; }
+    .return-product { display: flex; align-items: center; gap: 10px; }
+    .return-thumb { width: 36px; height: 36px; border-radius: 6px; background: #252532; object-fit: cover; }
+  </style>
+
   <script>
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
@@ -688,6 +729,24 @@
         document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
       });
     });
+
+    // Wait for shell to be ready then initialize
+    async function init() {
+      // Wait for shell authentication
+      await new Promise(resolve => {
+        const check = () => {
+          if (window.Agent5Shell && window.Agent5Shell.getCurrentUser()) {
+            resolve();
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        check();
+      });
+
+      // Now check Bol.com connection and load data
+      await checkStatus();
+    }
 
     // Check connection status
     async function checkStatus() {
@@ -706,7 +765,7 @@
           title.textContent = 'Connected to Bol.com';
           desc.textContent = `Client ID: ${data.clientId}`;
           statsGrid.style.display = 'grid';
-          loadAllData();
+          await loadAllData();
         } else if (data.configured) {
           banner.className = 'status-banner error';
           banner.querySelector('.material-symbols-outlined').textContent = 'error';
@@ -789,7 +848,7 @@
           <tr>
             <td><span class="order-id">${order.orderId}</span></td>
             <td>${formatDate(order.orderPlacedDateTime)}</td>
-            <td>${order.shipmentDetails?.salutation || ''} ${order.shipmentDetails?.firstName || ''} ${order.shipmentDetails?.surname || ''}</td>
+            <td>${order.orderItems?.[0]?.fulfilmentMethod || '-'}</td>
             <td>${order.orderItems?.length || 0} items</td>
             <td>&euro;${calculateTotal(order.orderItems)}</td>
             <td><span class="badge open">Open</span></td>
@@ -831,16 +890,21 @@
           return;
         }
 
-        tbody.innerHTML = data.shipments.map(shipment => `
-          <tr>
-            <td><span class="order-id">${shipment.shipmentId}</span></td>
-            <td>${shipment.orderId || '-'}</td>
-            <td>${formatDate(shipment.shipmentDateTime)}</td>
-            <td>${shipment.transport?.transporterCode || '-'}</td>
-            <td>${shipment.transport?.trackAndTrace || '-'}</td>
-            <td><span class="badge shipped">Shipped</span></td>
-          </tr>
-        `).join('');
+        tbody.innerHTML = data.shipments.map(shipment => {
+          const orderId = shipment.orderItems?.[0]?.orderId || '-';
+          const carrier = shipment.transport?.transporterCode || '-';
+          const trackTrace = shipment.transport?.trackAndTrace || '-';
+          return `
+            <tr>
+              <td><span class="order-id">${shipment.shipmentId}</span></td>
+              <td><span class="order-id">${orderId}</span></td>
+              <td>${formatDate(shipment.shipmentDateTime)}</td>
+              <td>${carrier}</td>
+              <td>${trackTrace !== '-' ? `<a href="https://tracking.bpost.be/btr/web/#/search?itemCode=${trackTrace}" target="_blank" style="color: #60a5fa;">${trackTrace}</a>` : '-'}</td>
+              <td><span class="badge shipped">Shipped</span></td>
+            </tr>
+          `;
+        }).join('');
       } catch (e) {
         tbody.innerHTML = `
           <tr>
@@ -875,23 +939,37 @@
           return;
         }
 
-        tbody.innerHTML = data.returns.map(ret => `
-          <tr>
-            <td><span class="order-id">${ret.returnId}</span></td>
-            <td>${ret.orderId || '-'}</td>
-            <td>${formatDate(ret.registrationDateTime)}</td>
-            <td>${ret.returnReason || '-'}</td>
-            <td>${ret.returnItems?.[0]?.ean || '-'}</td>
-            <td><span class="badge ${ret.handled ? 'shipped' : 'returned'}">${ret.handled ? 'Handled' : 'Open'}</span></td>
-            <td>
-              ${!ret.handled ? `
-                <button class="btn btn-secondary btn-sm" onclick="handleReturn('${ret.returnId}')">
-                  <span class="material-symbols-outlined">check</span>
-                </button>
-              ` : ''}
-            </td>
-          </tr>
-        `).join('');
+        tbody.innerHTML = data.returns.map(ret => {
+          const firstItem = ret.returnItems?.[0] || {};
+          const orderId = firstItem.orderId || '-';
+          const reason = firstItem.returnReason || '-';
+          const ean = firstItem.ean || '-';
+          const title = firstItem.title || '';
+          return `
+            <tr>
+              <td><span class="order-id">${ret.returnId}</span></td>
+              <td><span class="order-id">${orderId}</span></td>
+              <td>${formatDate(ret.registrationDateTime)}</td>
+              <td>${reason}</td>
+              <td>
+                <div class="return-product">
+                  <div>
+                    <div style="font-size: 13px; color: #e4e4e7;">${title || ean}</div>
+                    <div style="font-size: 11px; color: #71717a; font-family: monospace;">${ean}</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="badge ${ret.handled ? 'shipped' : 'returned'}">${ret.handled ? 'Handled' : 'Open'}</span></td>
+              <td>
+                ${!ret.handled ? `
+                  <button class="btn btn-secondary btn-sm" onclick="handleReturn('${firstItem.rmaId}')">
+                    <span class="material-symbols-outlined">check</span>
+                  </button>
+                ` : ''}
+              </td>
+            </tr>
+          `;
+        }).join('');
       } catch (e) {
         tbody.innerHTML = `
           <tr>
@@ -923,20 +1001,28 @@
           return;
         }
 
-        tbody.innerHTML = data.invoices.map(inv => `
-          <tr>
-            <td><span class="order-id">${inv.invoiceId}</span></td>
-            <td>${inv.periodStartDate || '-'} - ${inv.periodEndDate || '-'}</td>
-            <td>${formatDate(inv.issueDate)}</td>
-            <td>&euro;${inv.totalAmountExclVat?.toFixed(2) || '0.00'}</td>
-            <td><span class="badge shipped">Paid</span></td>
-            <td>
-              <a href="${inv.invoiceMediaUrl || '#'}" target="_blank" class="btn btn-secondary btn-sm">
-                <span class="material-symbols-outlined">download</span>
-              </a>
-            </td>
-          </tr>
-        `).join('');
+        tbody.innerHTML = data.invoices.map(inv => {
+          const period = inv.periodStartDate && inv.periodEndDate
+            ? `${formatDate(inv.periodStartDate)} - ${formatDate(inv.periodEndDate)}`
+            : '-';
+          const amount = inv.totalAmountExclVat != null
+            ? `€${Number(inv.totalAmountExclVat).toFixed(2)}`
+            : '-';
+          return `
+            <tr>
+              <td><span class="order-id">${inv.invoiceId}</span></td>
+              <td>${period}</td>
+              <td>${formatDate(inv.issueDate)}</td>
+              <td>${amount}</td>
+              <td><span class="badge shipped">Paid</span></td>
+              <td>
+                <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')">
+                  <span class="material-symbols-outlined">download</span>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
       } catch (e) {
         tbody.innerHTML = `
           <tr>
@@ -955,19 +1041,115 @@
 
     function calculateTotal(items) {
       if (!items || !items.length) return '0.00';
-      return items.reduce((sum, item) => sum + (parseFloat(item.unitPrice) || 0), 0).toFixed(2);
+      return items.reduce((sum, item) => {
+        const price = parseFloat(item.unitPrice) || 0;
+        const qty = parseInt(item.quantity) || 1;
+        return sum + (price * qty);
+      }, 0).toFixed(2);
     }
 
-    function viewOrder(orderId) {
-      alert('Order details for: ' + orderId);
-      // TODO: Implement order detail modal
-    }
+    async function viewOrder(orderId) {
+      const modal = document.getElementById('order-modal');
+      const body = document.getElementById('order-modal-body');
 
-    function handleReturn(returnId) {
-      if (confirm('Mark this return as handled?')) {
-        // TODO: Implement return handling
-        alert('Return handling for: ' + returnId);
+      modal.classList.add('open');
+      body.innerHTML = '<div class="loading"><div class="spinner"></div>Loading order details...</div>';
+
+      try {
+        const res = await fetch(`/api/bolcom/orders/${orderId}`, { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.order) {
+          body.innerHTML = '<p style="color: #ef4444;">Failed to load order details</p>';
+          return;
+        }
+
+        const order = data.order;
+        const ship = order.shipmentDetails || {};
+        const bill = order.billingDetails || {};
+
+        body.innerHTML = `
+          <div class="order-detail-row">
+            <span class="order-detail-label">Order ID</span>
+            <span class="order-detail-value" style="font-family: monospace;">${order.orderId}</span>
+          </div>
+          <div class="order-detail-row">
+            <span class="order-detail-label">Order Date</span>
+            <span class="order-detail-value">${formatDate(order.orderPlacedDateTime)}</span>
+          </div>
+          <div class="order-detail-row">
+            <span class="order-detail-label">Shipping</span>
+            <span class="order-detail-value">${ship.salutation || ''} ${ship.firstName || ''} ${ship.surname || ''}<br>
+              ${ship.streetName || ''} ${ship.houseNumber || ''}${ship.houseNumberExtension || ''}<br>
+              ${ship.zipCode || ''} ${ship.city || ''}, ${ship.countryCode || ''}
+            </span>
+          </div>
+          <div class="order-detail-row">
+            <span class="order-detail-label">Delivery</span>
+            <span class="order-detail-value">${order.shipmentMethod || '-'}</span>
+          </div>
+
+          <div class="order-items-list">
+            <h4 style="color: #fff; margin-bottom: 12px;">Order Items (${order.orderItems?.length || 0})</h4>
+            ${(order.orderItems || []).map(item => `
+              <div class="order-item">
+                <div class="order-item-info">
+                  <div class="order-item-title">${item.title || 'Unknown Product'}</div>
+                  <div class="order-item-ean">EAN: ${item.ean || '-'}</div>
+                  <div style="font-size: 12px; color: #71717a; margin-top: 4px;">
+                    Qty: ${item.quantity || 1} | ${item.fulfilmentMethod || '-'} | ${item.fulfilmentStatus || '-'}
+                  </div>
+                </div>
+                <div class="order-item-price">€${(parseFloat(item.unitPrice) || 0).toFixed(2)}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #252532; text-align: right;">
+            <span style="color: #71717a;">Total:</span>
+            <span style="color: #fff; font-size: 18px; font-weight: 600; margin-left: 8px;">€${calculateTotal(order.orderItems)}</span>
+          </div>
+        `;
+      } catch (e) {
+        body.innerHTML = `<p style="color: #ef4444;">Error: ${e.message}</p>`;
       }
+    }
+
+    function closeOrderModal() {
+      document.getElementById('order-modal').classList.remove('open');
+    }
+
+    async function handleReturn(rmaId) {
+      if (!rmaId) {
+        alert('Invalid return ID');
+        return;
+      }
+      if (!confirm('Mark this return as handled (accept return)?')) return;
+
+      try {
+        const res = await fetch(`/api/bolcom/returns/${rmaId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ handlingResult: 'RETURN_RECEIVED', quantityReturned: 1 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('Return marked as handled');
+          loadReturns();
+          loadStats();
+        } else {
+          alert('Failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function downloadInvoice(invoiceId) {
+      // Bol.com invoices need to be fetched via their API - open in new tab
+      // The actual PDF would require a backend endpoint to proxy the download
+      window.open(`/api/bolcom/invoices/${invoiceId}/download`, '_blank');
     }
 
     function refreshData() {
@@ -975,7 +1157,7 @@
     }
 
     // Initialize
-    checkStatus();
+    init();
   </script>
 </body>
 </html>

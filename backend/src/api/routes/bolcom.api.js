@@ -626,6 +626,50 @@ router.get('/invoices', async (req, res) => {
 });
 
 /**
+ * Download invoice PDF
+ */
+router.get('/invoices/:invoiceId/download', async (req, res) => {
+  try {
+    const token = await getRetailerAccessToken();
+
+    // Get invoice specification to find the PDF URL
+    const specResponse = await fetch(`https://api.bol.com/retailer/invoices/${req.params.invoiceId}/specification`, {
+      headers: {
+        'Accept': 'application/vnd.retailer.v10+pdf',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!specResponse.ok) {
+      // Try getting as JSON to see the invoice details
+      const invoiceRes = await fetch(`https://api.bol.com/retailer/invoices/${req.params.invoiceId}`, {
+        headers: {
+          'Accept': 'application/vnd.retailer.v10+json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (invoiceRes.ok) {
+        const invoice = await invoiceRes.json();
+        // Redirect to Bol.com seller portal for manual download
+        return res.redirect(`https://partner.bol.com/sdd/orders/invoices`);
+      }
+
+      throw new Error('Invoice not found');
+    }
+
+    // Stream the PDF response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="bol-invoice-${req.params.invoiceId}.pdf"`);
+
+    const buffer = await specResponse.arrayBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * Get retailer information
  */
 router.get('/retailer', async (req, res) => {
