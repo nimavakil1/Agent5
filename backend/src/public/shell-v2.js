@@ -57,6 +57,16 @@
         { id: 'settings', path: '/vendor/settings.html', name: 'Settings', icon: 'settings' }
       ]
     },
+    'bol': {
+      id: 'bol', name: 'Bol.com', icon: 'shopping_bag', color: '#0066ff',
+      basePath: '/bol',
+      pages: [
+        { id: 'orders', path: '/bol/', name: 'Dashboard', icon: 'dashboard' },
+        { id: 'shipments', path: '/bol/shipments.html', name: 'Shipments', icon: 'local_shipping' },
+        { id: 'returns', path: '/bol/returns.html', name: 'Returns', icon: 'assignment_return' },
+        { id: 'invoices', path: '/bol/invoices.html', name: 'Invoices', icon: 'receipt_long' }
+      ]
+    },
     'inventory': {
       id: 'inventory', name: 'Inventory', icon: 'inventory_2', color: '#8b5cf6',
       basePath: '/inventory',

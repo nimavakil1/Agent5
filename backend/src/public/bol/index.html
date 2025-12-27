@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bol.com - ACROPAQ</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    .page-subtitle {
+      font-size: 14px;
+      color: #71717a;
+      margin-top: 4px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 24px;
+      width: fit-content;
+    }
+
+    .tab {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #71717a;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tab:hover {
+      color: #a1a1aa;
+    }
+
+    .tab.active {
+      background: #252532;
+      color: #fff;
+    }
+
+    .tab .material-symbols-outlined {
+      font-size: 20px;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .stat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .stat-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stat-icon .material-symbols-outlined {
+      font-size: 22px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #71717a;
+      margin-top: 4px;
+    }
+
+    /* Status Banner */
+    .status-banner {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+
+    .status-banner.connected {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    .status-banner.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .status-banner.warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .status-banner .material-symbols-outlined {
+      font-size: 24px;
+    }
+
+    .status-banner.connected .material-symbols-outlined { color: #22c55e; }
+    .status-banner.error .material-symbols-outlined { color: #ef4444; }
+    .status-banner.warning .material-symbols-outlined { color: #f59e0b; }
+
+    .status-info {
+      flex: 1;
+    }
+
+    .status-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .status-desc {
+      font-size: 13px;
+      color: #a1a1aa;
+      margin-top: 2px;
+    }
+
+    /* Card */
+    .card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid #252532;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title .material-symbols-outlined {
+      font-size: 20px;
+      color: #0066ff;
+    }
+
+    .card-body {
+      padding: 24px;
+    }
+
+    /* Table */
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: #12121a;
+      border-bottom: 1px solid #252532;
+    }
+
+    td {
+      padding: 14px 16px;
+      font-size: 14px;
+      color: #e4e4e7;
+      border-bottom: 1px solid #252532;
+    }
+
+    tr:hover td {
+      background: rgba(99, 102, 241, 0.05);
+    }
+
+    .order-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: #0066ff;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge.open {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+    }
+
+    .badge.shipped {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+    }
+
+    .badge.returned {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: #6366f1;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #4f46e5;
+    }
+
+    .btn-secondary {
+      background: #252532;
+      color: #e4e4e7;
+      border: 1px solid #3f3f50;
+    }
+
+    .btn-secondary:hover {
+      background: #2a2a3a;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .btn .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    /* Empty State */
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+    }
+
+    .empty-state .material-symbols-outlined {
+      font-size: 48px;
+      color: #3f3f50;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e4e4e7;
+      margin-bottom: 4px;
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+      color: #71717a;
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #71717a;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #252532;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 12px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Filters */
+    .filters {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .filter-input {
+      padding: 10px 14px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #e4e4e7;
+      font-size: 14px;
+      outline: none;
+      min-width: 200px;
+    }
+
+    .filter-input:focus {
+      border-color: #6366f1;
+    }
+
+    .filter-select {
+      padding: 10px 14px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #e4e4e7;
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Product info */
+    .product-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .product-image {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: #252532;
+      object-fit: cover;
+    }
+
+    .product-title {
+      font-size: 14px;
+      color: #e4e4e7;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .product-ean {
+      font-size: 12px;
+      color: #71717a;
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">Bol.com</h1>
+        <p class="page-subtitle">Manage orders, shipments, returns, and offers</p>
+      </div>
+      <button class="btn btn-primary" onclick="refreshData()">
+        <span class="material-symbols-outlined">refresh</span>
+        Refresh
+      </button>
+    </header>
+
+    <!-- Status Banner -->
+    <div class="status-banner warning" id="status-banner">
+      <span class="material-symbols-outlined">hourglass_empty</span>
+      <div class="status-info">
+        <div class="status-title" id="status-title">Checking connection...</div>
+        <div class="status-desc" id="status-desc">Verifying Bol.com API credentials</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid" style="display: none;">
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon" style="background: rgba(59, 130, 246, 0.15);">
+            <span class="material-symbols-outlined" style="color: #60a5fa;">shopping_cart</span>
+          </div>
+        </div>
+        <div class="stat-value" id="stat-orders">--</div>
+        <div class="stat-label">Open Orders</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon" style="background: rgba(34, 197, 94, 0.15);">
+            <span class="material-symbols-outlined" style="color: #4ade80;">local_shipping</span>
+          </div>
+        </div>
+        <div class="stat-value" id="stat-shipments">--</div>
+        <div class="stat-label">Shipments</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15);">
+            <span class="material-symbols-outlined" style="color: #fbbf24;">assignment_return</span>
+          </div>
+        </div>
+        <div class="stat-value" id="stat-returns">--</div>
+        <div class="stat-label">Open Returns</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon" style="background: rgba(139, 92, 246, 0.15);">
+            <span class="material-symbols-outlined" style="color: #a78bfa;">inventory_2</span>
+          </div>
+        </div>
+        <div class="stat-value" id="stat-offers">--</div>
+        <div class="stat-label">Active Offers</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="orders">
+        <span class="material-symbols-outlined">shopping_cart</span>
+        Orders
+      </button>
+      <button class="tab" data-tab="shipments">
+        <span class="material-symbols-outlined">local_shipping</span>
+        Shipments
+      </button>
+      <button class="tab" data-tab="returns">
+        <span class="material-symbols-outlined">assignment_return</span>
+        Returns
+      </button>
+      <button class="tab" data-tab="invoices">
+        <span class="material-symbols-outlined">receipt_long</span>
+        Invoices
+      </button>
+    </div>
+
+    <!-- Orders Tab -->
+    <div class="tab-content active" id="tab-orders">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-outlined">shopping_cart</span>
+            Open Orders
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Items</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="orders-table">
+                <tr>
+                  <td colspan="7">
+                    <div class="loading">
+                      <div class="spinner"></div>
+                      Loading orders...
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shipments Tab -->
+    <div class="tab-content" id="tab-shipments">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-outlined">local_shipping</span>
+            Recent Shipments
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Shipment ID</th>
+                  <th>Order ID</th>
+                  <th>Date</th>
+                  <th>Carrier</th>
+                  <th>Track & Trace</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="shipments-table">
+                <tr>
+                  <td colspan="6">
+                    <div class="loading">
+                      <div class="spinner"></div>
+                      Loading shipments...
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Returns Tab -->
+    <div class="tab-content" id="tab-returns">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-outlined">assignment_return</span>
+            Returns
+          </div>
+          <div class="filters" style="margin: 0;">
+            <select class="filter-select" id="returns-filter" onchange="loadReturns()">
+              <option value="false">Open Returns</option>
+              <option value="true">Handled Returns</option>
+              <option value="">All Returns</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Return ID</th>
+                  <th>Order ID</th>
+                  <th>Date</th>
+                  <th>Reason</th>
+                  <th>Product</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="returns-table">
+                <tr>
+                  <td colspan="7">
+                    <div class="loading">
+                      <div class="spinner"></div>
+                      Loading returns...
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Invoices Tab -->
+    <div class="tab-content" id="tab-invoices">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-outlined">receipt_long</span>
+            Invoices
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Invoice ID</th>
+                  <th>Period</th>
+                  <th>Issue Date</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="invoices-table">
+                <tr>
+                  <td colspan="6">
+                    <div class="loading">
+                      <div class="spinner"></div>
+                      Loading invoices...
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Check connection status
+    async function checkStatus() {
+      const banner = document.getElementById('status-banner');
+      const title = document.getElementById('status-title');
+      const desc = document.getElementById('status-desc');
+      const statsGrid = document.getElementById('stats-grid');
+
+      try {
+        const res = await fetch('/api/bolcom/status', { credentials: 'include' });
+        const data = await res.json();
+
+        if (data.connected) {
+          banner.className = 'status-banner connected';
+          banner.querySelector('.material-symbols-outlined').textContent = 'check_circle';
+          title.textContent = 'Connected to Bol.com';
+          desc.textContent = `Client ID: ${data.clientId}`;
+          statsGrid.style.display = 'grid';
+          loadAllData();
+        } else if (data.configured) {
+          banner.className = 'status-banner error';
+          banner.querySelector('.material-symbols-outlined').textContent = 'error';
+          title.textContent = 'Connection Failed';
+          desc.textContent = data.error || 'Could not connect to Bol.com API';
+        } else {
+          banner.className = 'status-banner warning';
+          banner.querySelector('.material-symbols-outlined').textContent = 'warning';
+          title.textContent = 'Not Configured';
+          desc.textContent = 'Add BOL_CLIENT_ID and BOL_CLIENT_SECRET to .env file';
+        }
+      } catch (e) {
+        banner.className = 'status-banner error';
+        banner.querySelector('.material-symbols-outlined').textContent = 'error';
+        title.textContent = 'Error';
+        desc.textContent = e.message;
+      }
+    }
+
+    // Load all data
+    async function loadAllData() {
+      await Promise.all([
+        loadStats(),
+        loadOrders(),
+        loadShipments(),
+        loadReturns(),
+        loadInvoices()
+      ]);
+    }
+
+    // Load stats
+    async function loadStats() {
+      try {
+        const [ordersRes, shipmentsRes, returnsRes] = await Promise.all([
+          fetch('/api/bolcom/orders', { credentials: 'include' }),
+          fetch('/api/bolcom/shipments', { credentials: 'include' }),
+          fetch('/api/bolcom/returns?handled=false', { credentials: 'include' })
+        ]);
+
+        if (ordersRes.ok) {
+          const data = await ordersRes.json();
+          document.getElementById('stat-orders').textContent = data.count || 0;
+        }
+        if (shipmentsRes.ok) {
+          const data = await shipmentsRes.json();
+          document.getElementById('stat-shipments').textContent = data.count || 0;
+        }
+        if (returnsRes.ok) {
+          const data = await returnsRes.json();
+          document.getElementById('stat-returns').textContent = data.count || 0;
+        }
+      } catch (e) {
+        console.error('Failed to load stats:', e);
+      }
+    }
+
+    // Load orders
+    async function loadOrders() {
+      const tbody = document.getElementById('orders-table');
+      try {
+        const res = await fetch('/api/bolcom/orders', { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.orders || data.orders.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <span class="material-symbols-outlined">inbox</span>
+                  <div class="empty-state-title">No open orders</div>
+                  <div class="empty-state-text">All orders have been processed</div>
+                </div>
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = data.orders.map(order => `
+          <tr>
+            <td><span class="order-id">${order.orderId}</span></td>
+            <td>${formatDate(order.orderPlacedDateTime)}</td>
+            <td>${order.shipmentDetails?.salutation || ''} ${order.shipmentDetails?.firstName || ''} ${order.shipmentDetails?.surname || ''}</td>
+            <td>${order.orderItems?.length || 0} items</td>
+            <td>&euro;${calculateTotal(order.orderItems)}</td>
+            <td><span class="badge open">Open</span></td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="viewOrder('${order.orderId}')">
+                <span class="material-symbols-outlined">visibility</span>
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="color: #ef4444; padding: 20px;">Error loading orders: ${e.message}</td>
+          </tr>
+        `;
+      }
+    }
+
+    // Load shipments
+    async function loadShipments() {
+      const tbody = document.getElementById('shipments-table');
+      try {
+        const res = await fetch('/api/bolcom/shipments', { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.shipments || data.shipments.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6">
+                <div class="empty-state">
+                  <span class="material-symbols-outlined">local_shipping</span>
+                  <div class="empty-state-title">No shipments</div>
+                  <div class="empty-state-text">No shipments found</div>
+                </div>
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = data.shipments.map(shipment => `
+          <tr>
+            <td><span class="order-id">${shipment.shipmentId}</span></td>
+            <td>${shipment.orderId || '-'}</td>
+            <td>${formatDate(shipment.shipmentDateTime)}</td>
+            <td>${shipment.transport?.transporterCode || '-'}</td>
+            <td>${shipment.transport?.trackAndTrace || '-'}</td>
+            <td><span class="badge shipped">Shipped</span></td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="color: #ef4444; padding: 20px;">Error loading shipments: ${e.message}</td>
+          </tr>
+        `;
+      }
+    }
+
+    // Load returns
+    async function loadReturns() {
+      const tbody = document.getElementById('returns-table');
+      const handled = document.getElementById('returns-filter').value;
+      const query = handled !== '' ? `?handled=${handled}` : '';
+
+      try {
+        const res = await fetch(`/api/bolcom/returns${query}`, { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.returns || data.returns.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <span class="material-symbols-outlined">assignment_return</span>
+                  <div class="empty-state-title">No returns</div>
+                  <div class="empty-state-text">No returns found</div>
+                </div>
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = data.returns.map(ret => `
+          <tr>
+            <td><span class="order-id">${ret.returnId}</span></td>
+            <td>${ret.orderId || '-'}</td>
+            <td>${formatDate(ret.registrationDateTime)}</td>
+            <td>${ret.returnReason || '-'}</td>
+            <td>${ret.returnItems?.[0]?.ean || '-'}</td>
+            <td><span class="badge ${ret.handled ? 'shipped' : 'returned'}">${ret.handled ? 'Handled' : 'Open'}</span></td>
+            <td>
+              ${!ret.handled ? `
+                <button class="btn btn-secondary btn-sm" onclick="handleReturn('${ret.returnId}')">
+                  <span class="material-symbols-outlined">check</span>
+                </button>
+              ` : ''}
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="color: #ef4444; padding: 20px;">Error loading returns: ${e.message}</td>
+          </tr>
+        `;
+      }
+    }
+
+    // Load invoices
+    async function loadInvoices() {
+      const tbody = document.getElementById('invoices-table');
+      try {
+        const res = await fetch('/api/bolcom/invoices', { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.invoices || data.invoices.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6">
+                <div class="empty-state">
+                  <span class="material-symbols-outlined">receipt_long</span>
+                  <div class="empty-state-title">No invoices</div>
+                  <div class="empty-state-text">No invoices found</div>
+                </div>
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = data.invoices.map(inv => `
+          <tr>
+            <td><span class="order-id">${inv.invoiceId}</span></td>
+            <td>${inv.periodStartDate || '-'} - ${inv.periodEndDate || '-'}</td>
+            <td>${formatDate(inv.issueDate)}</td>
+            <td>&euro;${inv.totalAmountExclVat?.toFixed(2) || '0.00'}</td>
+            <td><span class="badge shipped">Paid</span></td>
+            <td>
+              <a href="${inv.invoiceMediaUrl || '#'}" target="_blank" class="btn btn-secondary btn-sm">
+                <span class="material-symbols-outlined">download</span>
+              </a>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="color: #ef4444; padding: 20px;">Error loading invoices: ${e.message}</td>
+          </tr>
+        `;
+      }
+    }
+
+    // Helper functions
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function calculateTotal(items) {
+      if (!items || !items.length) return '0.00';
+      return items.reduce((sum, item) => sum + (parseFloat(item.unitPrice) || 0), 0).toFixed(2);
+    }
+
+    function viewOrder(orderId) {
+      alert('Order details for: ' + orderId);
+      // TODO: Implement order detail modal
+    }
+
+    function handleReturn(returnId) {
+      if (confirm('Mark this return as handled?')) {
+        // TODO: Implement return handling
+        alert('Return handling for: ' + returnId);
+      }
+    }
+
+    function refreshData() {
+      checkStatus();
+    }
+
+    // Initialize
+    checkStatus();
+  </script>
+</body>
+</html>
