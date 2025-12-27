@@ -70,6 +70,8 @@ router.get('/orders', async (req, res) => {
     const importer = await getImporter();
 
     const filters = {};
+    if (req.query.orderId) filters.orderId = req.query.orderId;
+    if (req.query.customer) filters.customer = req.query.customer;
     if (req.query.marketplace) filters.marketplace = req.query.marketplace.toUpperCase();
     if (req.query.status) filters.status = req.query.status;
     if (req.query.fulfillmentChannel) filters.fulfillmentChannel = req.query.fulfillmentChannel;

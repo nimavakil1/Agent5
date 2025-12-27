@@ -36,8 +36,10 @@
     .stat-card.success .stat-value { color: #4ade80; }
     .stat-card.info .stat-value { color: #60a5fa; }
     .filters-bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
-    .filter-select, .filter-input { padding: 8px 12px; background: #18181f; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 13px; }
+    .filter-select, .filter-input { padding: 6px 8px; background: #12121a; border: 1px solid #252532; border-radius: 6px; color: #e4e4e7; font-size: 12px; width: 100%; box-sizing: border-box; }
     .filter-select:focus, .filter-input:focus { outline: none; border-color: #f59e0b; }
+    .filter-row th { padding: 6px 8px; background: #12121a; vertical-align: middle; }
+    .filter-input::placeholder { color: #52525b; }
     .card { background: #18181f; border: 1px solid #252532; border-radius: 12px; overflow: hidden; }
     .card-header { padding: 12px 16px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
     .card-title { font-size: 14px; font-weight: 600; color: #fff; margin: 0; }
@@ -139,42 +141,18 @@
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="filters-bar">
-      <select class="filter-select" id="filter-marketplace" onchange="loadOrders()">
-        <option value="">All Marketplaces</option>
-        <option value="FR">France</option>
-        <option value="DE">Germany</option>
-        <option value="NL">Netherlands</option>
-        <option value="ES">Spain</option>
-        <option value="IT">Italy</option>
-        <option value="BE">Belgium</option>
-        <option value="UK">United Kingdom</option>
-        <option value="PL">Poland</option>
-        <option value="SE">Sweden</option>
-      </select>
-      <select class="filter-select" id="filter-fulfillment" onchange="loadOrders()">
-        <option value="">All Types</option>
-        <option value="AFN">FBA</option>
-        <option value="MFN">FBM</option>
-      </select>
-      <select class="filter-select" id="filter-odoo" onchange="loadOrders()">
-        <option value="">Odoo Status</option>
-        <option value="false">Not in Odoo</option>
-        <option value="true">In Odoo</option>
-      </select>
-      <button class="btn btn-success btn-sm" onclick="createPendingOrders()" id="create-pending-btn">
-        <span class="material-symbols-outlined">add_circle</span>Create Pending Odoo Orders
-      </button>
-    </div>
-
     <!-- Orders Table -->
     <div class="card">
       <div class="card-header">
         <h2 class="card-title">Orders</h2>
-        <button class="btn btn-secondary btn-sm" onclick="loadOrders()">
-          <span class="material-symbols-outlined">refresh</span>Refresh
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-success btn-sm" onclick="createPendingOrders()" id="create-pending-btn">
+            <span class="material-symbols-outlined">add_circle</span>Create Pending Odoo Orders
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="loadOrders()">
+            <span class="material-symbols-outlined">refresh</span>Refresh
+          </button>
+        </div>
       </div>
       <div class="table-container">
         <table>
@@ -189,6 +167,49 @@
               <th>Total</th>
               <th>Odoo</th>
               <th>Actions</th>
+            </tr>
+            <tr class="filter-row">
+              <th><input type="text" class="filter-input" id="filter-order-id" placeholder="Search..." onkeyup="debounceFilter()"></th>
+              <th></th>
+              <th><input type="text" class="filter-input" id="filter-customer" placeholder="Search..." onkeyup="debounceFilter()"></th>
+              <th>
+                <select class="filter-select" id="filter-marketplace" onchange="loadOrders()">
+                  <option value="">All</option>
+                  <option value="FR">FR</option>
+                  <option value="DE">DE</option>
+                  <option value="NL">NL</option>
+                  <option value="ES">ES</option>
+                  <option value="IT">IT</option>
+                  <option value="BE">BE</option>
+                  <option value="UK">UK</option>
+                  <option value="PL">PL</option>
+                  <option value="SE">SE</option>
+                </select>
+              </th>
+              <th>
+                <select class="filter-select" id="filter-fulfillment" onchange="loadOrders()">
+                  <option value="">All</option>
+                  <option value="AFN">FBA</option>
+                  <option value="MFN">FBM</option>
+                </select>
+              </th>
+              <th>
+                <select class="filter-select" id="filter-status" onchange="loadOrders()">
+                  <option value="">All</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Shipped">Shipped</option>
+                  <option value="Canceled">Canceled</option>
+                </select>
+              </th>
+              <th></th>
+              <th>
+                <select class="filter-select" id="filter-odoo" onchange="loadOrders()">
+                  <option value="">All</option>
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="orders-table">
@@ -224,6 +245,15 @@
     let currentPage = 1;
     const pageSize = 25;
     let totalOrders = 0;
+    let filterTimeout = null;
+
+    function debounceFilter() {
+      clearTimeout(filterTimeout);
+      filterTimeout = setTimeout(() => {
+        currentPage = 1;
+        loadOrders();
+      }, 300);
+    }
 
     async function init() {
       await Promise.all([loadStatus(), loadStats(), loadOrders()]);
@@ -288,13 +318,19 @@
 
     async function loadOrders() {
       try {
+        const orderId = document.getElementById('filter-order-id').value.trim();
+        const customer = document.getElementById('filter-customer').value.trim();
         const marketplace = document.getElementById('filter-marketplace').value;
         const fulfillment = document.getElementById('filter-fulfillment').value;
+        const status = document.getElementById('filter-status').value;
         const odooFilter = document.getElementById('filter-odoo').value;
 
         let url = `/api/seller/orders?limit=${pageSize}&skip=${(currentPage - 1) * pageSize}`;
+        if (orderId) url += `&orderId=${encodeURIComponent(orderId)}`;
+        if (customer) url += `&customer=${encodeURIComponent(customer)}`;
         if (marketplace) url += `&marketplace=${marketplace}`;
         if (fulfillment) url += `&fulfillmentChannel=${fulfillment}`;
+        if (status) url += `&status=${status}`;
         if (odooFilter !== '') url += `&hasOdooOrder=${odooFilter}`;
 
         const res = await fetch(url);
@@ -318,25 +354,26 @@
     }
 
     function filterOrders(filter) {
-      const odooSelect = document.getElementById('filter-odoo');
-      const fulfillmentSelect = document.getElementById('filter-fulfillment');
-
-      // Reset filters
-      odooSelect.value = '';
-      fulfillmentSelect.value = '';
+      // Reset all filters
+      document.getElementById('filter-order-id').value = '';
+      document.getElementById('filter-customer').value = '';
+      document.getElementById('filter-marketplace').value = '';
+      document.getElementById('filter-fulfillment').value = '';
+      document.getElementById('filter-status').value = '';
+      document.getElementById('filter-odoo').value = '';
 
       switch (filter) {
         case 'fba':
-          fulfillmentSelect.value = 'AFN';
+          document.getElementById('filter-fulfillment').value = 'AFN';
           break;
         case 'fbm':
-          fulfillmentSelect.value = 'MFN';
+          document.getElementById('filter-fulfillment').value = 'MFN';
           break;
         case 'pending-odoo':
-          odooSelect.value = 'false';
+          document.getElementById('filter-odoo').value = 'false';
           break;
         case 'with-odoo':
-          odooSelect.value = 'true';
+          document.getElementById('filter-odoo').value = 'true';
           break;
       }
 

@@ -435,6 +435,17 @@ class SellerOrderImporter {
   buildQuery(filters) {
     const query = {};
 
+    if (filters.orderId) {
+      query.amazonOrderId = { $regex: filters.orderId, $options: 'i' };
+    }
+
+    if (filters.customer) {
+      query.$or = [
+        { 'shippingAddress.name': { $regex: filters.customer, $options: 'i' } },
+        { buyerName: { $regex: filters.customer, $options: 'i' } }
+      ];
+    }
+
     if (filters.marketplace) {
       query.marketplaceCountry = filters.marketplace;
     }
