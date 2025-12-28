@@ -24,20 +24,24 @@ const CENTRAL_WAREHOUSE_ID = 1;
 
 // Country code to Odoo country ID mapping
 const COUNTRY_IDS = {
-  'NL': 166,
-  'BE': 21,
-  'DE': 58,
-  'FR': 76
+  'NL': 165,  // Netherlands
+  'BE': 20,   // Belgium
+  'DE': 57,   // Germany
+  'FR': 75    // France
 };
+
+// Sales Team ID for Bol.com orders
+const BOL_TEAM_ID = 10;
 
 // Tax configuration based on fulfillment method and destination
 // Key format: "{shipFrom}->{shipTo}"
 // FBB ships from NL (Bol warehouse), FBR ships from BE (our warehouse)
+// Journal codes: VBE (Belgium), VNL (Netherlands), VOS (OSS)
 const TAX_CONFIG = {
-  'NL->NL': { taxId: 150, journalCode: 'INV*NL' },   // FBB to NL: National NL
-  'NL->BE': { taxId: 147, journalCode: 'INV*BE' },   // FBB to BE: National BE
-  'BE->NL': { taxId: 153, journalCode: 'INV*OSS' },  // FBR to NL: Belgium OSS
-  'BE->BE': { taxId: 147, journalCode: 'INV*BE' },   // FBR to BE: National BE
+  'NL->NL': { taxId: 150, journalCode: 'VNL', journalId: 16 },   // FBB to NL: National NL
+  'NL->BE': { taxId: 147, journalCode: 'VBE', journalId: 1 },    // FBB to BE: National BE
+  'BE->NL': { taxId: 153, journalCode: 'VOS', journalId: 12 },   // FBR to NL: Belgium OSS
+  'BE->BE': { taxId: 147, journalCode: 'VBE', journalId: 1 },    // FBR to BE: National BE
 };
 
 class BolOrderCreator {
@@ -360,8 +364,8 @@ class BolOrderCreator {
         return result;
       }
 
-      // Step 7: Get journal ID for the order
-      const journalId = await this.getJournalId(taxConfig.journalCode);
+      // Step 7: Get journal ID for the order (use hardcoded ID or lookup by code)
+      const journalId = taxConfig.journalId || await this.getJournalId(taxConfig.journalCode);
 
       // Step 8: Prepare order data
       const orderDate = bolOrder.orderPlacedDateTime
@@ -375,6 +379,7 @@ class BolOrderCreator {
         client_order_ref: orderRef,
         date_order: orderDate,
         warehouse_id: CENTRAL_WAREHOUSE_ID,
+        team_id: BOL_TEAM_ID,            // Sales Team: BOL
         order_line: orderLines,
         note: this.buildOrderNotes(bolOrder, prefix, taxConfig)
       };
