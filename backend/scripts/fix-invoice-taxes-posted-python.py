@@ -100,10 +100,14 @@ def main():
 
         print(f'  Found {len(invoices)} posted {prefix} invoices')
 
-        for invoice in invoices:
+        for idx, invoice in enumerate(invoices):
             stats['checked'] += 1
             invoice_id = invoice['id']
             invoice_name = invoice['name']
+
+            # Show progress every 100 invoices
+            if (idx + 1) % 100 == 0:
+                print(f'    Progress: {idx + 1}/{len(invoices)} checked, fixed: {stats["posted_fixed"]}, skipped: {stats["skipped"]}')
 
             try:
                 # Get invoice lines with their current taxes

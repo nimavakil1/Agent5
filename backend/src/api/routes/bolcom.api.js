@@ -1988,6 +1988,32 @@ router.post('/sync/odoo', async (req, res) => {
 });
 
 /**
+ * Sync full invoice history from 2024-01-01 (one-time backfill)
+ * This fetches all historical invoices in 30-day chunks to avoid rate limits
+ * Only needed once - after that, regular sync fetches last 30 days only
+ */
+router.post('/sync/invoices-history', async (req, res) => {
+  try {
+    // Return immediately and run in background
+    res.json({
+      success: true,
+      message: 'Invoice history import started. This will take several minutes. Check /sync/status for progress.'
+    });
+
+    // Run in background
+    BolSyncService.syncInvoicesFullHistory()
+      .then(result => {
+        console.log('[BolSync] Invoice history import complete:', result);
+      })
+      .catch(error => {
+        console.error('[BolSync] Invoice history import failed:', error);
+      });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * Sync specific data type only
  */
 router.post('/sync/:type', async (req, res) => {
