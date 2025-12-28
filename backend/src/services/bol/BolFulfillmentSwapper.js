@@ -226,10 +226,23 @@ class BolFulfillmentSwapper {
 
   /**
    * Check process status
+   * Note: Uses shared/process-status endpoint, not retailer endpoint
    */
   async getProcessStatus(processStatusId) {
-    const result = await this.bolRequest(`/process-status/${processStatusId}`);
-    return result;
+    const token = await this.getAccessToken();
+    const response = await fetch(`https://api.bol.com/shared/process-status/${processStatusId}`, {
+      headers: {
+        'Accept': 'application/vnd.retailer.v10+json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `Failed to get process status: ${response.status}`);
+    }
+
+    return response.json();
   }
 
   /**
