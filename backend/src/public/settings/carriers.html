@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carriers - Settings</title>
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    .page-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .carriers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .carrier-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      padding: 24px;
+      transition: border-color 0.2s;
+    }
+
+    .carrier-card:hover {
+      border-color: #3f3f50;
+    }
+
+    .carrier-card.inactive {
+      opacity: 0.5;
+    }
+
+    .carrier-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .carrier-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      flex-shrink: 0;
+    }
+
+    .carrier-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .carrier-logo .material-symbols-outlined {
+      font-size: 32px;
+      color: #333;
+    }
+
+    .carrier-logo.no-logo {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    }
+
+    .carrier-logo.no-logo .carrier-initial {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .carrier-info h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      margin: 0 0 4px 0;
+    }
+
+    .carrier-info .bol-code {
+      font-size: 12px;
+      color: #71717a;
+      font-family: monospace;
+      background: #252532;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .carrier-type {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-top: 8px;
+    }
+
+    .carrier-type.PARCEL { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .carrier-type.EXPRESS { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
+    .carrier-type.SAME_DAY { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .carrier-type.MAIL { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+    .carrier-type.FREIGHT { background: rgba(234, 179, 8, 0.15); color: #facc15; }
+
+    .carrier-countries {
+      display: flex;
+      gap: 6px;
+      margin: 12px 0;
+      flex-wrap: wrap;
+    }
+
+    .country-flag {
+      font-size: 18px;
+    }
+
+    .carrier-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+
+    .carrier-status.connected {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+    }
+
+    .carrier-status.not-configured {
+      background: rgba(113, 113, 122, 0.15);
+      color: #a1a1aa;
+    }
+
+    .carrier-status .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    .carrier-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.1);
+    }
+
+    .btn-secondary {
+      background: #252532;
+      color: #e4e4e7;
+      border: 1px solid #3f3f50;
+    }
+
+    .btn-secondary:hover {
+      background: #2a2a3a;
+    }
+
+    .btn-sm {
+      padding: 8px 14px;
+      font-size: 13px;
+    }
+
+    .btn .material-symbols-outlined {
+      font-size: 20px;
+    }
+
+    .btn-sm .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px;
+      border-bottom: 1px solid #252532;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: #71717a;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    .modal-close:hover {
+      color: #fff;
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid #252532;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #a1a1aa;
+      margin-bottom: 8px;
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 12px 16px;
+      background: #0f0f12;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 2000;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .toast.success {
+      border-color: #22c55e;
+    }
+
+    .toast.error {
+      border-color: #ef4444;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #71717a;
+    }
+
+    .empty-state .material-symbols-outlined {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">Shipping Carriers</h1>
+      <div class="page-actions">
+        <button class="btn btn-secondary" onclick="seedCarriers()">
+          <span class="material-symbols-outlined">download</span>
+          Load Defaults
+        </button>
+        <button class="btn btn-primary" onclick="openAddModal()">
+          <span class="material-symbols-outlined">add</span>
+          Add Carrier
+        </button>
+      </div>
+    </header>
+
+    <div id="carriers-grid" class="carriers-grid">
+      <div class="empty-state">
+        <span class="material-symbols-outlined">local_shipping</span>
+        <p>Loading carriers...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Carrier Modal -->
+  <div class="modal-overlay" id="carrier-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">Add Carrier</h2>
+        <button class="modal-close" onclick="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="carrier-id">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Carrier Name *</label>
+            <input type="text" id="carrier-name" placeholder="e.g., PostNL">
+          </div>
+          <div class="form-group">
+            <label>Code *</label>
+            <input type="text" id="carrier-code" placeholder="e.g., POSTNL" style="text-transform: uppercase;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Bol.com Transporter Code *</label>
+          <select id="carrier-bol-code">
+            <option value="">Select a code...</option>
+            <option value="TNT">TNT (PostNL)</option>
+            <option value="TNT-EXTRA">TNT-EXTRA (PostNL Extra@Home)</option>
+            <option value="TNT_BRIEF">TNT_BRIEF (PostNL Briefpost)</option>
+            <option value="TNT-EXPRESS">TNT-EXPRESS</option>
+            <option value="DHL">DHL</option>
+            <option value="DHLFORYOU">DHLFORYOU</option>
+            <option value="DHL_DE">DHL_DE (DHL Germany)</option>
+            <option value="DHL-GLOBAL-MAIL">DHL-GLOBAL-MAIL</option>
+            <option value="DHL-SD">DHL-SD (Same Day)</option>
+            <option value="DPD-NL">DPD-NL</option>
+            <option value="DPD-BE">DPD-BE</option>
+            <option value="GLS">GLS</option>
+            <option value="UPS">UPS</option>
+            <option value="BPOST_BE">BPOST_BE</option>
+            <option value="BPOST_BRIEF">BPOST_BRIEF</option>
+            <option value="FEDEX_NL">FEDEX_NL</option>
+            <option value="FEDEX_BE">FEDEX_BE</option>
+            <option value="BUDBEE">BUDBEE</option>
+            <option value="TRUNKRS">TRUNKRS</option>
+            <option value="BRIEFPOST">BRIEFPOST</option>
+            <option value="DYL">DYL (Dynalogic)</option>
+            <option value="TRANSMISSION">TRANSMISSION</option>
+            <option value="PARCEL-NL">PARCEL-NL</option>
+            <option value="OTHER">OTHER</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Type</label>
+            <select id="carrier-type">
+              <option value="PARCEL">Parcel</option>
+              <option value="EXPRESS">Express</option>
+              <option value="SAME_DAY">Same Day</option>
+              <option value="MAIL">Mail/Briefpost</option>
+              <option value="FREIGHT">Freight</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Brand Color</label>
+            <input type="color" id="carrier-color" value="#3b82f6">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Logo URL</label>
+          <input type="text" id="carrier-logo" placeholder="https://example.com/logo.png">
+        </div>
+
+        <div class="form-group">
+          <label>Countries (comma-separated)</label>
+          <input type="text" id="carrier-countries" placeholder="NL, BE, DE">
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #252532; margin: 24px 0;">
+
+        <h3 style="color: #fff; font-size: 14px; margin-bottom: 16px;">
+          <span class="material-symbols-outlined" style="vertical-align: middle;">api</span>
+          API Connection (Optional)
+        </h3>
+
+        <div class="form-group">
+          <label>Provider</label>
+          <select id="carrier-provider">
+            <option value="">Not configured</option>
+            <option value="postnl">PostNL API</option>
+            <option value="dhl">DHL API</option>
+            <option value="dpd">DPD API</option>
+            <option value="sendcloud">SendCloud</option>
+            <option value="shippo">Shippo</option>
+            <option value="easypost">EasyPost</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>API Key</label>
+            <input type="password" id="carrier-api-key" placeholder="Enter API key">
+          </div>
+          <div class="form-group">
+            <label>API Secret</label>
+            <input type="password" id="carrier-api-secret" placeholder="Enter API secret">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveCarrier()">Save Carrier</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast">
+    <span class="material-symbols-outlined" id="toast-icon">check_circle</span>
+    <span id="toast-message">Success!</span>
+  </div>
+
+  <script>
+    const API_BASE = '/api/carriers';
+    let carriers = [];
+
+    // Country flag mapping
+    const FLAGS = {
+      'NL': '🇳🇱',
+      'BE': '🇧🇪',
+      'DE': '🇩🇪',
+      'FR': '🇫🇷',
+      'LU': '🇱🇺',
+      'AT': '🇦🇹',
+      'ES': '🇪🇸',
+      'IT': '🇮🇹',
+      'UK': '🇬🇧',
+      'US': '🇺🇸'
+    };
+
+    // Load carriers on page load
+    document.addEventListener('DOMContentLoaded', loadCarriers);
+
+    async function loadCarriers() {
+      try {
+        const res = await fetch(API_BASE);
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        carriers = data.carriers;
+        renderCarriers();
+      } catch (err) {
+        showToast('Failed to load carriers: ' + err.message, 'error');
+      }
+    }
+
+    function renderCarriers() {
+      const grid = document.getElementById('carriers-grid');
+
+      if (carriers.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state" style="grid-column: 1/-1;">
+            <span class="material-symbols-outlined">local_shipping</span>
+            <p>No carriers configured yet.</p>
+            <p style="margin-top: 8px;">Click "Load Defaults" to add common carriers, or "Add Carrier" to create one manually.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = carriers.map(carrier => `
+        <div class="carrier-card ${carrier.isActive ? '' : 'inactive'}">
+          <div class="carrier-header">
+            <div class="carrier-logo ${carrier.logo ? '' : 'no-logo'}" style="${carrier.logo ? '' : 'background: ' + (carrier.color || '#3b82f6')}">
+              ${carrier.logo
+                ? `<img src="${carrier.logo}" alt="${carrier.name}" onerror="this.parentElement.innerHTML='<span class=\\'carrier-initial\\'>${carrier.name[0]}</span>'; this.parentElement.classList.add('no-logo');">`
+                : `<span class="carrier-initial">${carrier.name[0]}</span>`
+              }
+            </div>
+            <div class="carrier-info">
+              <h3>${carrier.name}</h3>
+              <span class="bol-code">${carrier.bolTransporterCode}</span>
+              <div class="carrier-type ${carrier.type}">${carrier.type?.replace('_', ' ') || 'PARCEL'}</div>
+            </div>
+          </div>
+
+          <div class="carrier-countries">
+            ${(carrier.countries || []).map(c => `<span class="country-flag" title="${c}">${FLAGS[c] || c}</span>`).join('')}
+          </div>
+
+          <div class="carrier-status ${carrier.apiConfig?.isConnected ? 'connected' : 'not-configured'}">
+            <span class="material-symbols-outlined">${carrier.apiConfig?.isConnected ? 'check_circle' : 'settings'}</span>
+            ${carrier.apiConfig?.isConnected ? 'API Connected' : (carrier.apiConfig?.provider ? 'API Not Connected' : 'No API Configured')}
+          </div>
+
+          <div class="carrier-actions">
+            <button class="btn btn-secondary btn-sm" onclick="editCarrier('${carrier._id}')">
+              <span class="material-symbols-outlined">edit</span>
+              Edit
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="toggleActive('${carrier._id}')">
+              <span class="material-symbols-outlined">${carrier.isActive ? 'visibility_off' : 'visibility'}</span>
+              ${carrier.isActive ? 'Disable' : 'Enable'}
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openAddModal() {
+      document.getElementById('modal-title').textContent = 'Add Carrier';
+      document.getElementById('carrier-id').value = '';
+      document.getElementById('carrier-name').value = '';
+      document.getElementById('carrier-code').value = '';
+      document.getElementById('carrier-bol-code').value = '';
+      document.getElementById('carrier-type').value = 'PARCEL';
+      document.getElementById('carrier-color').value = '#3b82f6';
+      document.getElementById('carrier-logo').value = '';
+      document.getElementById('carrier-countries').value = '';
+      document.getElementById('carrier-provider').value = '';
+      document.getElementById('carrier-api-key').value = '';
+      document.getElementById('carrier-api-secret').value = '';
+      document.getElementById('carrier-modal').classList.add('active');
+    }
+
+    function editCarrier(id) {
+      const carrier = carriers.find(c => c._id === id);
+      if (!carrier) return;
+
+      document.getElementById('modal-title').textContent = 'Edit Carrier';
+      document.getElementById('carrier-id').value = carrier._id;
+      document.getElementById('carrier-name').value = carrier.name || '';
+      document.getElementById('carrier-code').value = carrier.code || '';
+      document.getElementById('carrier-bol-code').value = carrier.bolTransporterCode || '';
+      document.getElementById('carrier-type').value = carrier.type || 'PARCEL';
+      document.getElementById('carrier-color').value = carrier.color || '#3b82f6';
+      document.getElementById('carrier-logo').value = carrier.logo || '';
+      document.getElementById('carrier-countries').value = (carrier.countries || []).join(', ');
+      document.getElementById('carrier-provider').value = carrier.apiConfig?.provider || '';
+      document.getElementById('carrier-api-key').value = carrier.apiConfig?.apiKey || '';
+      document.getElementById('carrier-api-secret').value = carrier.apiConfig?.apiSecret || '';
+      document.getElementById('carrier-modal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('carrier-modal').classList.remove('active');
+    }
+
+    async function saveCarrier() {
+      const id = document.getElementById('carrier-id').value;
+      const data = {
+        name: document.getElementById('carrier-name').value,
+        code: document.getElementById('carrier-code').value.toUpperCase(),
+        bolTransporterCode: document.getElementById('carrier-bol-code').value,
+        type: document.getElementById('carrier-type').value,
+        color: document.getElementById('carrier-color').value,
+        logo: document.getElementById('carrier-logo').value || null,
+        countries: document.getElementById('carrier-countries').value.split(',').map(c => c.trim().toUpperCase()).filter(Boolean),
+        apiConfig: {
+          provider: document.getElementById('carrier-provider').value || null,
+          apiKey: document.getElementById('carrier-api-key').value || null,
+          apiSecret: document.getElementById('carrier-api-secret').value || null
+        }
+      };
+
+      if (!data.name || !data.code || !data.bolTransporterCode) {
+        showToast('Please fill in all required fields', 'error');
+        return;
+      }
+
+      try {
+        const url = id ? `${API_BASE}/${id}` : API_BASE;
+        const method = id ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await res.json();
+        if (!result.success) throw new Error(result.error);
+
+        showToast(result.message, 'success');
+        closeModal();
+        loadCarriers();
+      } catch (err) {
+        showToast('Failed to save: ' + err.message, 'error');
+      }
+    }
+
+    async function toggleActive(id) {
+      try {
+        const res = await fetch(`${API_BASE}/${id}/toggle-active`, { method: 'POST' });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.error);
+
+        showToast(result.message, 'success');
+        loadCarriers();
+      } catch (err) {
+        showToast('Failed to toggle: ' + err.message, 'error');
+      }
+    }
+
+    async function seedCarriers() {
+      try {
+        const res = await fetch(`${API_BASE}/seed`, { method: 'POST' });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.error);
+
+        showToast(result.message, 'success');
+        loadCarriers();
+      } catch (err) {
+        showToast('Failed to seed: ' + err.message, 'error');
+      }
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const icon = document.getElementById('toast-icon');
+      const msg = document.getElementById('toast-message');
+
+      toast.className = 'toast ' + type;
+      icon.textContent = type === 'success' ? 'check_circle' : 'error';
+      msg.textContent = message;
+
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 4000);
+    }
+  </script>
+</body>
+</html>

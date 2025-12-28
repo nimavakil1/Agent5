@@ -6,6 +6,10 @@ let amazonSettlementTimer = null;
 let vendorOrdersTimer = null;
 let productSyncTimer = null;
 let stockSyncTimer = null;
+let bolOrderSyncTimer = null;
+let bolStockSyncTimer = null;
+let bolShipmentCheckTimer = null;
+let bolCancellationCheckTimer = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -126,6 +130,32 @@ function start() {
     setTimeout(syncStockOnly, 120000);
     console.log(`[scheduler] Stock sync initialized (every ${stockSyncMinutes} minutes)`);
   } catch (e) { console.error('[scheduler] Stock sync init error', e); }
+
+  // Bol.com integration syncs (15 minute intervals)
+  try {
+    if (process.env.BOL_SYNC_ENABLED === '1') {
+      const bolSyncMinutes = Number(process.env.BOL_SYNC_INTERVAL_MIN || '15');
+      const bolSyncMs = Math.max(5, bolSyncMinutes) * 60 * 1000;
+
+      // Order sync and auto-creation (every 15 minutes)
+      bolOrderSyncTimer = setInterval(syncBolOrders, bolSyncMs);
+      setTimeout(syncBolOrders, 45000); // Initial run after 45s
+
+      // Stock sync to Bol.com (every 15 minutes)
+      bolStockSyncTimer = setInterval(syncBolStock, bolSyncMs);
+      setTimeout(syncBolStock, 90000); // Initial run after 1.5min
+
+      // Shipment check (every 5 minutes)
+      bolShipmentCheckTimer = setInterval(checkBolShipments, 5 * 60 * 1000);
+      setTimeout(checkBolShipments, 180000); // Initial run after 3min
+
+      // Cancellation check (every 5 minutes)
+      bolCancellationCheckTimer = setInterval(checkBolCancellations, 5 * 60 * 1000);
+      setTimeout(checkBolCancellations, 240000); // Initial run after 4min
+
+      console.log(`[scheduler] Bol.com sync initialized (orders/stock every ${bolSyncMinutes} min, shipments/cancellations every 5 min)`);
+    }
+  } catch (e) { console.error('[scheduler] Bol.com sync init error', e); }
 }
 
 /**
@@ -285,4 +315,86 @@ async function syncStockOnly() {
   }
 }
 
-module.exports = { start, checkAmazonSettlementReminders, pollVendorOrders, syncProductsIncremental, syncStockOnly };
+/**
+ * Sync Bol.com orders and auto-create Odoo orders
+ */
+async function syncBolOrders() {
+  try {
+    const BolSyncService = require('../services/bol/BolSyncService');
+    const { getBolOrderCreator } = require('../services/bol/BolOrderCreator');
+
+    // Sync recent orders from Bol.com
+    const syncResult = await BolSyncService.syncOrders('RECENT');
+    console.log(`[scheduler] Bol orders synced: ${syncResult.synced} orders`);
+
+    // Auto-create Odoo orders for new orders
+    const creator = await getBolOrderCreator();
+    const createResult = await creator.createPendingOrders({ limit: 20 });
+
+    if (createResult.created > 0) {
+      console.log(`[scheduler] Bol -> Odoo: ${createResult.created} orders created`);
+    }
+  } catch (e) {
+    console.error('[scheduler] Bol order sync error:', e?.message || e);
+  }
+}
+
+/**
+ * Sync stock from Odoo to Bol.com
+ */
+async function syncBolStock() {
+  try {
+    const { runStockSync } = require('../services/bol/BolStockSync');
+    const result = await runStockSync();
+
+    if (result.updated > 0) {
+      console.log(`[scheduler] Bol stock sync: ${result.updated} offers updated`);
+    }
+  } catch (e) {
+    console.error('[scheduler] Bol stock sync error:', e?.message || e);
+  }
+}
+
+/**
+ * Check Odoo pickings and confirm shipments to Bol.com
+ */
+async function checkBolShipments() {
+  try {
+    const { runShipmentSync } = require('../services/bol/BolShipmentSync');
+    const result = await runShipmentSync();
+
+    if (result.confirmed > 0) {
+      console.log(`[scheduler] Bol shipments confirmed: ${result.confirmed}`);
+    }
+  } catch (e) {
+    console.error('[scheduler] Bol shipment check error:', e?.message || e);
+  }
+}
+
+/**
+ * Check and process Bol.com cancellation requests
+ */
+async function checkBolCancellations() {
+  try {
+    const { runCancellationCheck } = require('../services/bol/BolCancellationHandler');
+    const result = await runCancellationCheck();
+
+    if (result.accepted > 0 || result.rejected > 0) {
+      console.log(`[scheduler] Bol cancellations: ${result.accepted} accepted, ${result.rejected} rejected`);
+    }
+  } catch (e) {
+    console.error('[scheduler] Bol cancellation check error:', e?.message || e);
+  }
+}
+
+module.exports = {
+  start,
+  checkAmazonSettlementReminders,
+  pollVendorOrders,
+  syncProductsIncremental,
+  syncStockOnly,
+  syncBolOrders,
+  syncBolStock,
+  checkBolShipments,
+  checkBolCancellations
+};

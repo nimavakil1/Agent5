@@ -96,6 +96,7 @@
         { id: 'users', path: '/settings/', name: 'Users', icon: 'group' },
         { id: 'roles', path: '/settings/roles.html', name: 'Roles', icon: 'admin_panel_settings' },
         { id: 'integrations', path: '/settings/integrations.html', name: 'Integrations', icon: 'hub' },
+        { id: 'carriers', path: '/settings/carriers.html', name: 'Carriers', icon: 'local_shipping' },
         { id: 'profile', path: '/settings/profile.html', name: 'Profile', icon: 'person' }
       ],
       adminOnly: true

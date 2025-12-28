@@ -40,6 +40,7 @@ const sellerRouter = require('./api/routes/seller.api');
 const odooRouter = require('./api/routes/odoo.api');
 const ms365Router = require('./api/routes/ms365.api');
 const bolcomRouter = require('./api/routes/bolcom.api');
+const carriersRouter = require('./api/routes/carriers.api');
 const purchasingRouter = require('./api/routes/purchasing.api');
 const { syncRouter: odooSyncRouter } = require('./api/routes/purchasing.api');
 const inventoryRouter = require('./api/routes/inventory.api');
@@ -335,6 +336,7 @@ app.use('/api/seller', requireSession, sellerRouter); // Seller Central requires
 app.use('/api/odoo', requireSession, odooRouter);
 app.use('/api/ms365', requireSession, ms365Router);
 app.use('/api/bolcom', requireSession, bolcomRouter);
+app.use('/api/carriers', requireSession, carriersRouter);
 // Odoo sync endpoints without auth (internal use)
 app.use('/api/odoo-sync', odooSyncRouter);
 // Purchasing endpoints require session

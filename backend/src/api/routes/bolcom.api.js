@@ -905,6 +905,441 @@ router.delete('/orders/:orderId/items/:orderItemId', async (req, res) => {
 });
 
 // ============================================
+// ODOO ORDER CREATION ENDPOINTS
+// ============================================
+
+/**
+ * Create Odoo sale.order for a single Bol order
+ * POST /api/bolcom/orders/:orderId/create-odoo
+ */
+router.post('/orders/:orderId/create-odoo', async (req, res) => {
+  try {
+    const { dryRun = false, autoConfirm = true } = req.body;
+    const { getBolOrderCreator } = require('../../services/bol/BolOrderCreator');
+
+    const creator = await getBolOrderCreator();
+    const result = await creator.createOrder(req.params.orderId, { dryRun, autoConfirm });
+
+    res.json({
+      success: result.success,
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Create Odoo sale.orders for all pending Bol orders (without Odoo link)
+ * POST /api/bolcom/orders/create-odoo-bulk
+ */
+router.post('/orders/create-odoo-bulk', async (req, res) => {
+  try {
+    const { limit = 50, dryRun = false, autoConfirm = true } = req.body;
+    const { getBolOrderCreator } = require('../../services/bol/BolOrderCreator');
+
+    const creator = await getBolOrderCreator();
+    const results = await creator.createPendingOrders({ limit, dryRun, autoConfirm });
+
+    res.json({
+      success: true,
+      message: `Processed ${results.processed} orders: ${results.created} created, ${results.skipped} skipped, ${results.failed} failed`,
+      ...results
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get orders pending Odoo creation
+ * GET /api/bolcom/orders/pending-odoo
+ */
+router.get('/orders/pending-odoo', async (req, res) => {
+  try {
+    const { limit = 50 } = req.query;
+
+    // Find orders without Odoo link
+    const pendingOrders = await BolOrder.find({
+      $or: [
+        { 'odoo.saleOrderId': { $exists: false } },
+        { 'odoo.saleOrderId': null }
+      ]
+    })
+      .sort({ orderPlacedDateTime: -1 })
+      .limit(parseInt(limit, 10))
+      .select('orderId orderPlacedDateTime fulfilmentMethod totalAmount orderItems shipmentDetails')
+      .lean();
+
+    res.json({
+      success: true,
+      count: pendingOrders.length,
+      orders: pendingOrders.map(o => ({
+        orderId: o.orderId,
+        orderPlacedDateTime: o.orderPlacedDateTime,
+        fulfilmentMethod: o.fulfilmentMethod,
+        totalAmount: o.totalAmount,
+        itemCount: o.orderItems?.length || 0,
+        customerName: o.shipmentDetails
+          ? `${o.shipmentDetails.firstName || ''} ${o.shipmentDetails.surname || ''}`.trim()
+          : 'Unknown'
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// INVOICE JOURNAL UPDATE ENDPOINTS
+// ============================================
+
+/**
+ * Update invoice journal for a single Bol order
+ * POST /api/bolcom/orders/:orderId/update-invoice-journal
+ */
+router.post('/orders/:orderId/update-invoice-journal', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { getBolOrderCreator } = require('../../services/bol/BolOrderCreator');
+
+    const creator = await getBolOrderCreator();
+    const result = await creator.updateInvoiceJournal(orderId);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json({
+      success: true,
+      message: `Updated ${result.updated} invoice(s) to journal ${result.journalCode}`,
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Update invoice journals for all Bol orders
+ * POST /api/bolcom/orders/update-invoice-journals-bulk
+ */
+router.post('/orders/update-invoice-journals-bulk', async (req, res) => {
+  try {
+    const { limit = 100 } = req.body;
+    const { getBolOrderCreator } = require('../../services/bol/BolOrderCreator');
+
+    const creator = await getBolOrderCreator();
+    const results = await creator.updateAllInvoiceJournals({ limit });
+
+    res.json({
+      success: true,
+      message: `Processed ${results.processed} orders: ${results.updated} invoices updated, ${results.noInvoice} without invoices`,
+      ...results
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get tax configuration info for an order
+ * GET /api/bolcom/orders/:orderId/tax-config
+ */
+router.get('/orders/:orderId/tax-config', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { getBolOrderCreator, TAX_CONFIG } = require('../../services/bol/BolOrderCreator');
+
+    const bolOrder = await BolOrder.findOne({ orderId }).lean();
+    if (!bolOrder) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    const creator = await getBolOrderCreator();
+    const fulfilmentMethod = bolOrder.fulfilmentMethod || 'FBR';
+    const destCountry = bolOrder.shipmentDetails?.countryCode || 'NL';
+    const shipFrom = fulfilmentMethod === 'FBB' ? 'NL' : 'BE';
+    const taxConfig = creator.getTaxConfig(fulfilmentMethod, destCountry);
+
+    res.json({
+      success: true,
+      orderId,
+      fulfilmentMethod,
+      route: `${shipFrom} -> ${destCountry}`,
+      taxId: taxConfig.taxId,
+      journalCode: taxConfig.journalCode,
+      allConfigs: TAX_CONFIG
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// STOCK SYNC ENDPOINTS
+// ============================================
+
+/**
+ * Trigger stock sync from Odoo to Bol.com
+ * POST /api/bolcom/sync/stock
+ */
+router.post('/sync/stock', async (req, res) => {
+  try {
+    const { getBolStockSync } = require('../../services/bol/BolStockSync');
+    const stockSync = await getBolStockSync();
+    const result = await stockSync.syncFromOrders();
+
+    res.json({
+      success: result.success,
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get stock sync status
+ * GET /api/bolcom/sync/stock/status
+ */
+router.get('/sync/stock/status', async (req, res) => {
+  try {
+    const { getBolStockSync } = require('../../services/bol/BolStockSync');
+    const stockSync = await getBolStockSync();
+    const status = stockSync.getStatus();
+
+    res.json({
+      success: true,
+      ...status
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// SHIPMENT SYNC ENDPOINTS
+// ============================================
+
+/**
+ * Trigger shipment sync - check Odoo pickings and confirm to Bol.com
+ * POST /api/bolcom/sync/shipments
+ */
+router.post('/sync/shipments', async (req, res) => {
+  try {
+    const { getBolShipmentSync } = require('../../services/bol/BolShipmentSync');
+    const shipmentSync = await getBolShipmentSync();
+    const result = await shipmentSync.syncAll();
+
+    res.json({
+      success: result.success,
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Confirm shipment for a single order
+ * POST /api/bolcom/orders/:orderId/confirm-shipment
+ */
+router.post('/orders/:orderId/confirm-shipment', async (req, res) => {
+  try {
+    const { getBolShipmentSync } = require('../../services/bol/BolShipmentSync');
+    const shipmentSync = await getBolShipmentSync();
+    const result = await shipmentSync.confirmSingleOrder(req.params.orderId);
+
+    res.json({
+      success: result.success,
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get shipment sync status
+ * GET /api/bolcom/sync/shipments/status
+ */
+router.get('/sync/shipments/status', async (req, res) => {
+  try {
+    const { getBolShipmentSync } = require('../../services/bol/BolShipmentSync');
+    const shipmentSync = await getBolShipmentSync();
+    const status = shipmentSync.getStatus();
+
+    res.json({
+      success: true,
+      ...status
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// CANCELLATION ENDPOINTS
+// ============================================
+
+/**
+ * Process all pending cancellation requests
+ * POST /api/bolcom/cancellations/process
+ */
+router.post('/cancellations/process', async (req, res) => {
+  try {
+    const { getBolCancellationHandler } = require('../../services/bol/BolCancellationHandler');
+    const handler = await getBolCancellationHandler();
+    const result = await handler.processAllCancellations();
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Check cancellation status for a single order
+ * GET /api/bolcom/orders/:orderId/cancellation-status
+ */
+router.get('/orders/:orderId/cancellation-status', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { getBolCancellationHandler } = require('../../services/bol/BolCancellationHandler');
+
+    const handler = await getBolCancellationHandler();
+    const result = await handler.checkOrder(orderId);
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get cancellation handler status
+ * GET /api/bolcom/cancellations/status
+ */
+router.get('/cancellations/status', async (req, res) => {
+  try {
+    const { getBolCancellationHandler } = require('../../services/bol/BolCancellationHandler');
+    const handler = await getBolCancellationHandler();
+    const status = handler.getStatus();
+
+    res.json({
+      success: true,
+      ...status
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get orders with cancellation requests
+ * GET /api/bolcom/cancellations/pending
+ */
+router.get('/cancellations/pending', async (req, res) => {
+  try {
+    const { limit = 50 } = req.query;
+
+    const ordersWithCancellation = await BolOrder.find({
+      'orderItems.cancellationRequest': true,
+      status: { $nin: ['CANCELLED', 'SHIPPED'] }
+    })
+      .sort({ orderPlacedDateTime: -1 })
+      .limit(parseInt(limit, 10))
+      .select('orderId orderPlacedDateTime fulfilmentMethod totalAmount orderItems odoo status')
+      .lean();
+
+    res.json({
+      success: true,
+      count: ordersWithCancellation.length,
+      orders: ordersWithCancellation.map(o => ({
+        orderId: o.orderId,
+        orderPlacedDateTime: o.orderPlacedDateTime,
+        fulfilmentMethod: o.fulfilmentMethod,
+        totalAmount: o.totalAmount,
+        odooOrderId: o.odoo?.saleOrderId,
+        odooOrderName: o.odoo?.saleOrderName,
+        status: o.status,
+        itemsWithCancellation: o.orderItems?.filter(i => i.cancellationRequest)?.length || 0
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// FBB INVENTORY ENDPOINTS
+// ============================================
+
+/**
+ * Get FBB (Fulfillment by Bol) inventory
+ * GET /api/bolcom/fbb/inventory
+ */
+router.get('/fbb/inventory', async (req, res) => {
+  try {
+    const { limit = 500, minStock } = req.query;
+    const { getBolFBBInventorySync } = require('../../services/bol/BolFBBInventorySync');
+
+    const fbbSync = await getBolFBBInventorySync();
+    const inventory = await fbbSync.getInventory({
+      limit: parseInt(limit, 10),
+      minStock: minStock ? parseInt(minStock, 10) : null
+    });
+
+    res.json({
+      success: true,
+      count: inventory.length,
+      inventory
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Sync FBB inventory from Bol.com
+ * POST /api/bolcom/fbb/sync
+ */
+router.post('/fbb/sync', async (req, res) => {
+  try {
+    const { getBolFBBInventorySync } = require('../../services/bol/BolFBBInventorySync');
+    const fbbSync = await getBolFBBInventorySync();
+    const result = await fbbSync.sync();
+
+    res.json({
+      success: result.success,
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get FBB inventory stats
+ * GET /api/bolcom/fbb/stats
+ */
+router.get('/fbb/stats', async (req, res) => {
+  try {
+    const { getBolFBBInventorySync } = require('../../services/bol/BolFBBInventorySync');
+    const fbbSync = await getBolFBBInventorySync();
+    const stats = await fbbSync.getStats();
+
+    res.json({
+      success: true,
+      ...stats
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
 // ADVERTISING API ENDPOINTS
 // ============================================
 

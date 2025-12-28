@@ -78,6 +78,15 @@ const bolOrderSchema = new mongoose.Schema({
     syncError: { type: String }
   },
 
+  // Shipment confirmation to Bol.com
+  shipmentConfirmedAt: { type: Date },
+  shipmentReference: { type: String },
+  trackingCode: { type: String },
+
+  // Cancellation tracking
+  cancelledAt: { type: Date },
+  cancellationReason: { type: String },
+
   // Sync metadata
   syncedAt: { type: Date, default: Date.now, index: true },
   rawResponse: { type: mongoose.Schema.Types.Mixed } // Store raw API response
