@@ -15,6 +15,9 @@ const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
 
+// Local invoice files directory
+const INVOICE_FILES_DIR = path.join(__dirname, '../../..', 'uploads/bol_invoices');
+
 // Bol.com API configuration
 const BOL_API_BASE = 'https://api.bol.com/retailer';
 
@@ -94,9 +97,26 @@ async function getAccessToken() {
 }
 
 /**
- * Download invoice PDF from Bol.com API
+ * Download invoice PDF - check local files first, then Bol.com API
  */
 async function downloadInvoicePdf(invoiceId) {
+  // Check for local file first
+  const localPatterns = [
+    `invoice_${invoiceId}_r1150905.pdf`,
+    `bol-invoice-${invoiceId}.pdf`,
+    `invoice_${invoiceId}.pdf`
+  ];
+
+  for (const pattern of localPatterns) {
+    const localPath = path.join(INVOICE_FILES_DIR, pattern);
+    if (fs.existsSync(localPath)) {
+      console.log(`[BolInvoiceBooker] Using local PDF: ${pattern}`);
+      return fs.readFileSync(localPath);
+    }
+  }
+
+  // Fall back to Bol.com API
+  console.log(`[BolInvoiceBooker] Local PDF not found, downloading from Bol.com API...`);
   const token = await getAccessToken();
 
   const response = await fetch(`${BOL_API_BASE}/invoices/${invoiceId}`, {
@@ -114,9 +134,27 @@ async function downloadInvoicePdf(invoiceId) {
 }
 
 /**
- * Download invoice specification Excel from Bol.com API
+ * Download invoice specification Excel - check local files first, then Bol.com API
  */
 async function downloadInvoiceExcel(invoiceId) {
+  // Check for local file first
+  const localPatterns = [
+    `invoice_specification_${invoiceId}_r1150905.xlsx`,
+    `bol-invoice-spec-${invoiceId}.xlsx`,
+    `bol-invoice-spec-${invoiceId} (1).xlsx`,
+    `invoice_specification_${invoiceId}.xlsx`
+  ];
+
+  for (const pattern of localPatterns) {
+    const localPath = path.join(INVOICE_FILES_DIR, pattern);
+    if (fs.existsSync(localPath)) {
+      console.log(`[BolInvoiceBooker] Using local Excel: ${pattern}`);
+      return fs.readFileSync(localPath);
+    }
+  }
+
+  // Fall back to Bol.com API
+  console.log(`[BolInvoiceBooker] Local Excel not found, downloading from Bol.com API...`);
   const token = await getAccessToken();
 
   const response = await fetch(`${BOL_API_BASE}/invoices/${invoiceId}/specification`, {
