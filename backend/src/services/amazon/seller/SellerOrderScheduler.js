@@ -19,7 +19,6 @@ const { getSellerInventoryExport } = require('./SellerInventoryExport');
 const { getSellerFbaReportsSync } = require('./SellerFbaReportsSync');
 const { getSellerInboundShipmentSync } = require('./SellerInboundShipmentSync');
 const { getSellerFulfillmentSync } = require('./SellerFulfillmentSync');
-const { getSellerReviewsSync } = require('./SellerReviewsSync');
 
 // Default polling interval: 15 minutes
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
@@ -252,19 +251,6 @@ class SellerOrderScheduler {
       } catch (mcfError) {
         console.error('[SellerOrderScheduler] MCF order sync error:', mcfError.message);
         pollResult.mcfOrderError = mcfError.message;
-      }
-
-      // Sync seller reviews/feedback (daily - only process pending reports)
-      try {
-        const reviewsSync = await getSellerReviewsSync();
-        const reviewsResult = await reviewsSync.processReports();
-        if (reviewsResult.processed > 0 || reviewsResult.reviewsImported > 0) {
-          console.log(`[SellerOrderScheduler] Reviews: ${reviewsResult.reviewsImported} imported`);
-        }
-        pollResult.reviewsImported = reviewsResult.reviewsImported;
-      } catch (reviewsError) {
-        console.error('[SellerOrderScheduler] Reviews sync error:', reviewsError.message);
-        pollResult.reviewsError = reviewsError.message;
       }
 
       return pollResult;

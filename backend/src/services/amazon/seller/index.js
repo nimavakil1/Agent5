@@ -51,7 +51,6 @@ const { SellerInventoryExport, getSellerInventoryExport, INVENTORY_FEED_TYPE } =
 const { SellerFbaReportsSync, getSellerFbaReportsSync, STOCK_ADJUSTMENT_REPORT, REMOVAL_ORDER_REPORT } = require('./SellerFbaReportsSync');
 const { SellerInboundShipmentSync, getSellerInboundShipmentSync, SHIPMENT_STATUSES } = require('./SellerInboundShipmentSync');
 const { SellerFulfillmentSync, getSellerFulfillmentSync } = require('./SellerFulfillmentSync');
-const { SellerReviewsSync, getSellerReviewsSync, FEEDBACK_REPORT, REVIEWS_COLLECTION } = require('./SellerReviewsSync');
 
 module.exports = {
   // Client
@@ -110,12 +109,6 @@ module.exports = {
   // Fulfillment Centers & MCF
   SellerFulfillmentSync,
   getSellerFulfillmentSync,
-
-  // Reviews/Feedback Sync
-  SellerReviewsSync,
-  getSellerReviewsSync,
-  FEEDBACK_REPORT,
-  REVIEWS_COLLECTION,
 
   // Marketplace Config
   MARKETPLACE_IDS,

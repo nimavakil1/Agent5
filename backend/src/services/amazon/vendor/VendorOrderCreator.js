@@ -56,15 +56,19 @@ const MARKETPLACE_WAREHOUSE = {
 /**
  * Sales Team IDs for Vendor Central (different from Seller Central)
  */
+// Amazon Vendor sales team ID (same for all marketplaces)
+const AMAZON_VENDOR_TEAM_ID = 6;
+
 const VENDOR_SALES_TEAMS = {
-  'DE': null,  // Will need to be configured
-  'FR': null,
-  'NL': null,
-  'UK': null,
-  'IT': null,
-  'ES': null,
-  'SE': null,
-  'PL': null,
+  'DE': AMAZON_VENDOR_TEAM_ID,
+  'FR': AMAZON_VENDOR_TEAM_ID,
+  'NL': AMAZON_VENDOR_TEAM_ID,
+  'UK': AMAZON_VENDOR_TEAM_ID,
+  'IT': AMAZON_VENDOR_TEAM_ID,
+  'ES': AMAZON_VENDOR_TEAM_ID,
+  'SE': AMAZON_VENDOR_TEAM_ID,
+  'PL': AMAZON_VENDOR_TEAM_ID,
+  'BE': AMAZON_VENDOR_TEAM_ID,
 };
 
 class VendorOrderCreator {
