@@ -230,11 +230,14 @@
     }
 
     async function loadWarehouses() {
+      console.log('[Inventory] Loading warehouses...');
+      updateLoadingStatus('Loading Warehouses', 'Fetching warehouse data...');
       try {
-        console.log('[Inventory] Loading warehouses...');
-        // Add 10 second timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => {
+          console.log('[Inventory] Warehouses request timeout, aborting...');
+          controller.abort();
+        }, 10000);
 
         const res = await fetch('/api/odoo/warehouses', {
           credentials: 'include',
@@ -247,14 +250,11 @@
         warehouses = data.warehouses || [];
         console.log('[Inventory] Loaded', warehouses.length, 'warehouses');
 
-        // Select all warehouses by default
         selectedWarehouseIds = warehouses.map(w => w.id);
-
-        // Render warehouse options
         renderWarehouseOptions();
       } catch (error) {
         console.error('[Inventory] Failed to load warehouses:', error);
-        // Use default warehouse if Odoo call fails
+        // Use default warehouse on any error (including timeout)
         warehouses = [{ id: 1, name: 'Central Warehouse', code: 'CW' }];
         selectedWarehouseIds = [1];
         renderWarehouseOptions();
@@ -335,20 +335,23 @@
     }
 
     async function loadProducts() {
-      updateLoadingStatus('Loading Products', 'Fetching from cache...');
+      updateLoadingStatus('Loading Products', 'Fetching product data...');
       console.log('[Inventory] Loading products...');
 
       try {
-        // Use MongoDB cached endpoint - much faster!
-        // Add 30 second timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => {
+          console.log('[Inventory] Products request timeout after 30s, aborting...');
+          controller.abort();
+        }, 30000);
 
+        console.log('[Inventory] Fetching /api/odoo/products/all...');
         const res = await fetch('/api/odoo/products/all', {
           credentials: 'include',
           signal: controller.signal
         });
         clearTimeout(timeoutId);
+        console.log('[Inventory] Products fetch response:', res.status);
 
         if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
         const data = await res.json();

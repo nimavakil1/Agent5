@@ -135,11 +135,10 @@ def main():
                             [[invoice_id]]
                         )
                         reset_succeeded = True
-                    except Exception as reset_error:
+                    except xmlrpc.client.Fault as fault_error:
                         # Odoo server has allow_none=False, so it fails to serialize None returns
-                        # Check if the error is about None marshalling - if so, the operation likely succeeded
-                        error_str = str(reset_error)
-                        if 'cannot marshal None' in error_str:
+                        # Check the faultString for the None marshalling error
+                        if 'cannot marshal None' in fault_error.faultString:
                             # Operation probably succeeded, verify state
                             check = models.execute_kw(
                                 ODOO_DB, uid, ODOO_PASSWORD,
@@ -155,8 +154,12 @@ def main():
                                 continue
                         else:
                             stats['reset_errors'] += 1
-                            print(f'    ERROR resetting {invoice_name} to draft: {error_str}')
+                            print(f'    ERROR resetting {invoice_name} to draft: {fault_error.faultString}')
                             continue
+                    except Exception as reset_error:
+                        stats['reset_errors'] += 1
+                        print(f'    ERROR resetting {invoice_name} to draft: {reset_error}')
+                        continue
 
                     if not reset_succeeded:
                         continue
@@ -183,10 +186,9 @@ def main():
                             'account.move', 'action_post',
                             [[invoice_id]]
                         )
-                    except Exception as repost_error:
+                    except xmlrpc.client.Fault as fault_error:
                         # Handle Odoo's allow_none=False issue
-                        error_str = str(repost_error)
-                        if 'cannot marshal None' in error_str:
+                        if 'cannot marshal None' in fault_error.faultString:
                             # Check if posted successfully
                             check = models.execute_kw(
                                 ODOO_DB, uid, ODOO_PASSWORD,
@@ -199,7 +201,10 @@ def main():
                                 print(f'    ERROR re-posting {invoice_name}: state not posted after action_post')
                         else:
                             stats['repost_errors'] += 1
-                            print(f'    ERROR re-posting {invoice_name}: {error_str}')
+                            print(f'    ERROR re-posting {invoice_name}: {fault_error.faultString}')
+                    except Exception as repost_error:
+                        stats['repost_errors'] += 1
+                        print(f'    ERROR re-posting {invoice_name}: {repost_error}')
 
                 if lines_fixed_this_invoice > 0:
                     stats['posted_fixed'] += 1
