@@ -207,9 +207,21 @@
     }
 
     .order-id {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 13px;
-      color: #0066ff;
+      font-size: 14px;
+      color: #60a5fa;
+    }
+
+    .order-id:hover {
+      text-decoration: underline;
+    }
+
+    .date-cell {
+      line-height: 1.4;
+    }
+
+    .date-time {
+      font-size: 12px;
+      color: #71717a;
     }
 
     .badge {
@@ -898,10 +910,13 @@
           odooCell = odooContent;
         }
 
+        // Bol.com order URL
+        const bolOrderUrl = `https://partner.bol.com/sdd/orders/details/${order.orderId}`;
+
         return `
           <tr>
-            <td><span class="order-id">${order.orderId}</span></td>
-            <td>${formatDate(order.orderPlacedDateTime)}</td>
+            <td><a href="${bolOrderUrl}" target="_blank" class="order-id">${order.orderId}</a></td>
+            <td class="date-cell">${formatDate(order.orderPlacedDateTime)}<br><span class="date-time">${formatTime(order.orderPlacedDateTime)}</span></td>
             <td>${odooCell}</td>
             <td>${items[0]?.fulfilmentMethod || '-'}</td>
             <td>${items.length}</td>
@@ -1231,6 +1246,12 @@
       if (!dateStr) return '-';
       const date = new Date(dateStr);
       return date.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function formatTime(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
     }
 
     function calculateTotal(items) {
