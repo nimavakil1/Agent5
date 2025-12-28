@@ -203,7 +203,23 @@ class BolFulfillmentSwapper {
    */
   async requestOfferExport() {
     console.log('[BolFulfillmentSwapper] Requesting offer export...');
-    const result = await this.bolRequest('/offers/export', 'POST');
+
+    // POST request to trigger export (no body needed)
+    const token = await this.getAccessToken();
+    const response = await fetch('https://api.bol.com/retailer/offers/export', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/vnd.retailer.v10+json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `Failed to request offer export: ${response.status}`);
+    }
+
+    const result = await response.json();
     return result.processStatusId;
   }
 
