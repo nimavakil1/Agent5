@@ -1215,9 +1215,12 @@
         }
 
         // Render carrier as logo or text fallback
-        const carrierCell = carrierLogo
-          ? `<img src="/assets/logos/${carrierLogo}.png" alt="${carrierDisplay}" title="${carrierDisplay}" style="height: 24px; max-width: 80px; object-fit: contain;">`
-          : carrierDisplay;
+        let carrierCell;
+        if (carrierLogo) {
+          carrierCell = `<img src="/assets/logos/${carrierLogo}.png" alt="${carrierDisplay}" title="${carrierDisplay}" style="height: 24px; max-width: 80px; object-fit: contain;" onerror="this.style.display='none';this.nextSibling.style.display='inline'"><span style="display:none">${carrierDisplay}</span>`;
+        } else {
+          carrierCell = carrierDisplay || carrier || '-';
+        }
 
         return `
           <tr>
