@@ -198,55 +198,132 @@ class BolFulfillmentSwapper {
   }
 
   /**
-   * Get offers by EAN from Bol.com
-   * Since Bol.com doesn't have a "list all offers" endpoint,
-   * we query offers by EAN for each item in FBB inventory
+   * Request an offer export from Bol.com
+   * This is an async operation - returns a process status ID
    */
-  async getOffersByEans(eans) {
-    console.log(`[BolFulfillmentSwapper] Looking up offers for ${eans.length} EANs...`);
+  async requestOfferExport() {
+    console.log('[BolFulfillmentSwapper] Requesting offer export...');
+    const result = await this.bolRequest('/offers/export', 'POST');
+    return result.processStatusId;
+  }
 
-    const offers = [];
-    let found = 0;
-    let notFound = 0;
+  /**
+   * Check process status
+   */
+  async getProcessStatus(processStatusId) {
+    const result = await this.bolRequest(`/process-status/${processStatusId}`);
+    return result;
+  }
 
-    for (const ean of eans) {
-      try {
-        const response = await this.bolRequest(`/offers?ean=${ean}`);
-        const items = response.offers || [];
+  /**
+   * Wait for offer export to complete and get the report ID
+   */
+  async waitForOfferExport(processStatusId, maxWaitMs = 120000) {
+    const startTime = Date.now();
+    const pollInterval = 5000; // Check every 5 seconds
 
-        for (const item of items) {
-          offers.push({
-            offerId: item.offerId,
-            ean: item.ean,
-            reference: item.reference,
-            fulfillmentMethod: item.fulfilment?.method || 'FBR'
-          });
-          found++;
+    while (Date.now() - startTime < maxWaitMs) {
+      const status = await this.getProcessStatus(processStatusId);
+      console.log(`[BolFulfillmentSwapper] Export status: ${status.status}`);
+
+      if (status.status === 'SUCCESS') {
+        // Find the entityId (report ID) in the links
+        const reportLink = status.links?.find(l => l.rel === 'self' || l.href?.includes('export'));
+        if (reportLink) {
+          // Extract report ID from href like /offers/export/12345
+          const match = reportLink.href?.match(/export\/(\d+)/);
+          if (match) return match[1];
         }
-
-        if (items.length === 0) {
-          notFound++;
-        }
-
-        // Rate limiting
-        await this.sleep(REQUEST_DELAY_MS);
-
-      } catch (error) {
-        // Offer not found for this EAN is expected
-        if (!error.message.includes('404')) {
-          console.error(`[BolFulfillmentSwapper] Error fetching offer for EAN ${ean}:`, error.message);
-        }
-        notFound++;
+        // Fallback: return the entityId if available
+        return status.entityId;
       }
 
-      // Log progress every 100 EANs
-      if ((found + notFound) % 100 === 0) {
-        console.log(`[BolFulfillmentSwapper] Progress: ${found} found, ${notFound} not found`);
+      if (status.status === 'FAILURE' || status.status === 'TIMEOUT') {
+        throw new Error(`Offer export failed: ${status.errorMessage || status.status}`);
       }
+
+      await this.sleep(pollInterval);
     }
 
-    console.log(`[BolFulfillmentSwapper] Total offers found: ${offers.length} (${notFound} EANs without offers)`);
+    throw new Error('Offer export timed out');
+  }
+
+  /**
+   * Download and parse the offer export CSV
+   */
+  async getOfferExportCsv(reportId) {
+    console.log(`[BolFulfillmentSwapper] Downloading offer export ${reportId}...`);
+
+    const token = await this.getAccessToken();
+    const response = await fetch(`https://api.bol.com/retailer/offers/export/${reportId}`, {
+      headers: {
+        'Accept': 'application/vnd.retailer.v10+csv',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download offer export: ${response.status}`);
+    }
+
+    const csv = await response.text();
+    return this.parseOfferCsv(csv);
+  }
+
+  /**
+   * Parse offer export CSV
+   * CSV columns typically include: offerId, ean, referenceCode, fulfilmentMethod, etc.
+   */
+  parseOfferCsv(csv) {
+    const lines = csv.trim().split('\n');
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const offers = [];
+
+    // Find column indices
+    const offerIdIdx = headers.findIndex(h => h.toLowerCase().includes('offerid'));
+    const eanIdx = headers.findIndex(h => h.toLowerCase() === 'ean');
+    const refIdx = headers.findIndex(h => h.toLowerCase().includes('reference'));
+    const fulfillmentIdx = headers.findIndex(h => h.toLowerCase().includes('fulfilment') || h.toLowerCase().includes('fulfillment'));
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+      if (values.length < headers.length) continue;
+
+      offers.push({
+        offerId: values[offerIdIdx] || '',
+        ean: values[eanIdx] || '',
+        reference: values[refIdx] || '',
+        fulfillmentMethod: values[fulfillmentIdx] || 'FBR'
+      });
+    }
+
+    console.log(`[BolFulfillmentSwapper] Parsed ${offers.length} offers from CSV`);
     return offers;
+  }
+
+  /**
+   * Get all offers using the export feature
+   */
+  async getAllOffers() {
+    try {
+      // Step 1: Request export
+      const processStatusId = await this.requestOfferExport();
+      console.log(`[BolFulfillmentSwapper] Export requested, process ID: ${processStatusId}`);
+
+      // Step 2: Wait for export to complete
+      const reportId = await this.waitForOfferExport(processStatusId);
+      console.log(`[BolFulfillmentSwapper] Export ready, report ID: ${reportId}`);
+
+      // Step 3: Download and parse CSV
+      const offers = await this.getOfferExportCsv(reportId);
+      return offers;
+
+    } catch (error) {
+      console.error('[BolFulfillmentSwapper] Failed to get offers:', error.message);
+      return [];
+    }
   }
 
   /**
@@ -359,24 +436,24 @@ class BolFulfillmentSwapper {
 
       // Step 1: Get FBB inventory from Bol.com
       const fbbInventory = await this.getFbbInventory();
-      const fbbEans = Object.keys(fbbInventory);
 
-      if (fbbEans.length === 0) {
+      if (Object.keys(fbbInventory).length === 0) {
         console.log('[BolFulfillmentSwapper] No FBB inventory found');
         return { success: true, ...results, message: 'No FBB inventory' };
       }
 
-      // Step 2: Get local warehouse stock for FBB EANs
-      const localStock = await this.getLocalStock(fbbEans);
-      console.log(`[BolFulfillmentSwapper] Got local stock for ${Object.keys(localStock).length} products`);
-
-      // Step 3: Get offers for FBB EANs (this is the slow part due to API rate limits)
-      const offers = await this.getOffersByEans(fbbEans);
+      // Step 2: Get all offers via export (async process)
+      const offers = await this.getAllOffers();
 
       if (offers.length === 0) {
-        console.log('[BolFulfillmentSwapper] No offers found for FBB EANs');
+        console.log('[BolFulfillmentSwapper] No offers found');
         return { success: true, ...results, message: 'No offers found' };
       }
+
+      // Step 3: Get local warehouse stock for all offer EANs
+      const allEans = offers.map(o => o.ean).filter(Boolean);
+      const localStock = await this.getLocalStock(allEans);
+      console.log(`[BolFulfillmentSwapper] Got local stock for ${Object.keys(localStock).length} products`);
 
       console.log(`[BolFulfillmentSwapper] Checking ${offers.length} offers...`);
 
