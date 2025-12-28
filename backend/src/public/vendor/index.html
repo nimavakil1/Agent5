@@ -111,29 +111,6 @@
       <div class="stat-card success" onclick="filterByStat('closed')" id="stat-closed"><div class="stat-value" id="stat-closed-value">--</div><div class="stat-label">Closed</div></div>
     </div>
     <div class="filters-bar">
-      <select class="filter-select" id="filter-country" onchange="loadOrders()">
-        <option value="">All Countries</option>
-        <option value="DE">Germany (DE)</option>
-        <option value="FR">France (FR)</option>
-        <option value="IT">Italy (IT)</option>
-        <option value="ES">Spain (ES)</option>
-        <option value="NL">Netherlands (NL)</option>
-        <option value="BE">Belgium (BE)</option>
-        <option value="PL">Poland (PL)</option>
-        <option value="SE">Sweden (SE)</option>
-      </select>
-      <select class="filter-select" id="filter-state" onchange="loadOrders()">
-        <option value="">All States</option>
-        <option value="New">New</option>
-        <option value="Acknowledged">Acknowledged</option>
-        <option value="Closed">Closed</option>
-      </select>
-      <select class="filter-select" id="filter-shipping" onchange="loadOrders()">
-        <option value="">All Shipping</option>
-        <option value="not-shipped">Not Shipped</option>
-        <option value="open">Open (Partial)</option>
-        <option value="shipped">Fully Shipped</option>
-      </select>
       <input type="date" class="filter-input" id="filter-date-from" onchange="loadOrders()">
       <input type="date" class="filter-input" id="filter-date-to" onchange="loadOrders()">
       <button class="btn btn-secondary btn-sm" onclick="clearFilters()"><span class="material-symbols-outlined">clear</span>Clear</button>
@@ -166,13 +143,21 @@
                   <option value="Closed">Closed</option>
                 </select>
               </th>
+              <th class="filterable">Shipping<br>
+                <select class="column-filter" id="col-filter-shipping" onchange="applyColumnFilters()">
+                  <option value="">All</option>
+                  <option value="Not Shipped">Not Shipped</option>
+                  <option value="Partial">Partial</option>
+                  <option value="Shipped">Shipped</option>
+                </select>
+              </th>
               <th>Items</th>
               <th>Total</th>
               <th class="filterable">Odoo Order<br><input type="text" class="column-filter" id="col-filter-odoo" placeholder="Filter..." oninput="applyColumnFilters()"></th>
               <th>Actions</th>
             </tr>
           </thead>
-          <tbody id="orders-table"><tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading orders...</div></div></td></tr></tbody>
+          <tbody id="orders-table"><tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading orders...</div></div></td></tr></tbody>
         </table>
       </div>
       <div class="pagination">
@@ -204,9 +189,9 @@
     }
     let orders = [], stats = {}, currentPage = 0, pageSize = 50, totalOrders = 0, currentPO = null, currentStatFilter = null;
     async function init() {
-      // Set default filter: New + Not Shipped
-      document.getElementById('filter-state').value = 'New';
-      document.getElementById('filter-shipping').value = 'not-shipped';
+      // Set default column filters: New + Not Shipped
+      document.getElementById('col-filter-state').value = 'New';
+      document.getElementById('col-filter-shipping').value = 'Not Shipped';
       await Promise.all([loadStats(), loadOrders()]);
     }
     async function loadStats() {
@@ -229,14 +214,8 @@
         params.append('skip', currentPage * pageSize);
         if (currentStatFilter) { params.append('statFilter', currentStatFilter); }
         else {
-          const country = document.getElementById('filter-country').value;
-          const st = document.getElementById('filter-state').value;
-          const ship = document.getElementById('filter-shipping').value;
           const df = document.getElementById('filter-date-from').value;
           const dt = document.getElementById('filter-date-to').value;
-          if (country) params.append('marketplace', country);
-          if (st) params.append('state', st);
-          if (ship) params.append('shippingStatus', ship);
           if (df) params.append('dateFrom', df);
           if (dt) params.append('dateTo', dt);
         }
@@ -249,13 +228,25 @@
         updatePagination();
       } catch (e) {
         console.error('Error:', e);
-        document.getElementById('orders-table').innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>';
+        document.getElementById('orders-table').innerHTML = '<tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>';
       }
+    }
+    function getShippingStatus(o) {
+      const shipped = o.shippedQuantity || 0;
+      const ordered = o.orderedQuantity || 0;
+      if (shipped === 0) return 'Not Shipped';
+      if (shipped >= ordered) return 'Shipped';
+      return 'Partial';
     }
     function renderOrders() {
       const tbody = document.getElementById('orders-table');
-      if (orders.length === 0) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span><div class="empty-state-title">No orders found</div></div></td></tr>'; return; }
-      tbody.innerHTML = orders.map(o => '<tr><td><a href="#" class="po-number" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\'); return false;">' + o.purchaseOrderNumber + '</a></td><td><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></td><td>' + o.itemCount + ' items</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td><td>' + (o.odoo?.saleOrderName ? '<a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link">' + o.odoo.saleOrderName + '</a>' : '-') + '</td><td><div class="actions"><button class="action-btn" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\')" title="View"><span class="material-symbols-outlined">visibility</span></button><button class="action-btn" onclick="createOdooOrder(\'' + o.purchaseOrderNumber + '\')" title="Create Odoo" ' + (o.odoo?.saleOrderId ? 'disabled' : '') + '><span class="material-symbols-outlined">add_shopping_cart</span></button><button class="action-btn" onclick="acknowledgePO(\'' + o.purchaseOrderNumber + '\')" title="Acknowledge" ' + (o.acknowledgment?.acknowledged ? 'disabled' : '') + '><span class="material-symbols-outlined">check_circle</span></button></div></td></tr>').join('');
+      if (orders.length === 0) { tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span><div class="empty-state-title">No orders found</div></div></td></tr>'; return; }
+      tbody.innerHTML = orders.map(o => {
+        const shipStatus = getShippingStatus(o);
+        const shipClass = shipStatus === 'Shipped' ? 'badge-acknowledged' : (shipStatus === 'Partial' ? 'badge-new' : 'badge-closed');
+        return '<tr><td><a href="#" class="po-number" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\'); return false;">' + o.purchaseOrderNumber + '</a></td><td><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></td><td><span class="badge ' + shipClass + '">' + shipStatus + '</span></td><td>' + o.itemCount + ' items</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td><td>' + (o.odoo?.saleOrderName ? '<a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link">' + o.odoo.saleOrderName + '</a>' : '-') + '</td><td><div class="actions"><button class="action-btn" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\')" title="View"><span class="material-symbols-outlined">visibility</span></button><button class="action-btn" onclick="createOdooOrder(\'' + o.purchaseOrderNumber + '\')" title="Create Odoo" ' + (o.odoo?.saleOrderId ? 'disabled' : '') + '><span class="material-symbols-outlined">add_shopping_cart</span></button><button class="action-btn" onclick="acknowledgePO(\'' + o.purchaseOrderNumber + '\')" title="Acknowledge" ' + (o.acknowledgment?.acknowledged ? 'disabled' : '') + '><span class="material-symbols-outlined">check_circle</span></button></div></td></tr>';
+      }).join('');
+      applyColumnFilters();
     }
     function formatDate(d) { return d ? new Date(d).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'; }
     function formatCurrency(a, c) { return a != null ? new Intl.NumberFormat('en-EU', { style: 'currency', currency: c || 'EUR' }).format(a) : '-'; }
@@ -273,14 +264,12 @@
       currentPage = 0; loadOrders();
     }
     function clearFilters() {
-      document.getElementById('filter-country').value = '';
-      document.getElementById('filter-state').value = '';
-      document.getElementById('filter-shipping').value = '';
       document.getElementById('filter-date-from').value = '';
       document.getElementById('filter-date-to').value = '';
       document.getElementById('col-filter-po').value = '';
       document.getElementById('col-filter-marketplace').value = '';
       document.getElementById('col-filter-state').value = '';
+      document.getElementById('col-filter-shipping').value = '';
       document.getElementById('col-filter-odoo').value = '';
       document.querySelectorAll('.stat-card').forEach(el => el.classList.remove('active'));
       currentStatFilter = null; currentPage = 0; loadOrders();
@@ -289,21 +278,24 @@
       const poFilter = document.getElementById('col-filter-po').value.toLowerCase();
       const mpFilter = document.getElementById('col-filter-marketplace').value;
       const stateFilter = document.getElementById('col-filter-state').value;
+      const shippingFilter = document.getElementById('col-filter-shipping').value;
       const odooFilter = document.getElementById('col-filter-odoo').value.toLowerCase();
       const tbody = document.getElementById('orders-table');
       const rows = tbody.querySelectorAll('tr');
       rows.forEach(row => {
         if (row.querySelector('.empty-state')) return;
         const cells = row.querySelectorAll('td');
-        if (cells.length < 7) return;
+        if (cells.length < 8) return;
         const po = cells[0].textContent.toLowerCase();
         const mp = cells[1].textContent.trim();
         const state = cells[3].textContent.trim();
-        const odoo = cells[6].textContent.toLowerCase();
+        const shipping = cells[4].textContent.trim();
+        const odoo = cells[7].textContent.toLowerCase();
         let visible = true;
         if (poFilter && !po.includes(poFilter)) visible = false;
         if (mpFilter && !mp.includes(mpFilter)) visible = false;
         if (stateFilter && state !== stateFilter) visible = false;
+        if (shippingFilter && shipping !== shippingFilter) visible = false;
         if (odooFilter && !odoo.includes(odooFilter)) visible = false;
         row.style.display = visible ? '' : 'none';
       });
