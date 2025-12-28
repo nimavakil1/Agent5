@@ -474,7 +474,9 @@
     }
 
     function filterByStock(status) {
-      document.getElementById('filter-stock')?.value = status;
+      // Note: filter-stock element doesn't exist, this just resets other filters
+      const stockFilter = document.getElementById('filter-stock');
+      if (stockFilter) stockFilter.value = status;
       document.getElementById('filter-sku').value = '';
       document.getElementById('filter-name').value = '';
       document.getElementById('filter-category').value = '';
