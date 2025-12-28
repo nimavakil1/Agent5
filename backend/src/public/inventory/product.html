@@ -792,10 +792,6 @@
               <span class="material-symbols-outlined">history</span>
               History
             </button>
-            <button class="tab-btn" onclick="showTab('reviews')">
-              <span class="material-symbols-outlined" style="color: #fbbf24;">star</span>
-              Reviews
-            </button>
           </div>
 
           <!-- Overview Tab -->
@@ -1239,15 +1235,6 @@
             </div>
           </div>
 
-          <!-- Reviews Tab -->
-          <div class="tab-content" id="tab-reviews">
-            <div id="reviews-content">
-              <div class="loading-container" style="min-height:200px">
-                <span class="material-symbols-outlined">sync</span>
-                <div class="loading-text">Loading reviews...</div>
-              </div>
-            </div>
-          </div>
         </div>
       `;
     }
@@ -1488,153 +1475,6 @@
       tab.classList.add('active');
       if (isEditMode) tab.classList.add('edit-mode');
 
-      // Load reviews tab content when selected
-      if (tabId === 'reviews' && !reviewsLoaded) {
-        loadReviews();
-      }
-    }
-
-    // Reviews handling
-    const FLAGS = { DE: '🇩🇪', FR: '🇫🇷', IT: '🇮🇹', ES: '🇪🇸', NL: '🇳🇱', BE: '🇧🇪', PL: '🇵🇱', SE: '🇸🇪', UK: '🇬🇧' };
-    let reviewsLoaded = false;
-    let productReviews = { reviews: [], summary: {} };
-
-    async function loadReviews() {
-      const container = document.getElementById('reviews-content');
-
-      // Try to get ASIN from product barcodes (EAN-13 can be used to find ASIN)
-      // Or use SKU to find product in seller_orders
-      const barcode = product?.barcode || '';
-      const sku = product?.sku || '';
-
-      if (!barcode && !sku) {
-        container.innerHTML = `
-          <div class="no-reviews">
-            <span class="material-symbols-outlined">star_border</span>
-            <div>No barcode or SKU available to fetch reviews</div>
-          </div>
-        `;
-        return;
-      }
-
-      try {
-        // Try to find reviews by product barcode (which might be an ASIN)
-        const res = await fetch(`/api/seller/reviews/product/${encodeURIComponent(barcode || sku)}`);
-        const data = await res.json();
-
-        if (data.success) {
-          productReviews = data;
-          reviewsLoaded = true;
-          renderReviewsTab();
-        } else {
-          throw new Error(data.error);
-        }
-      } catch (error) {
-        container.innerHTML = `
-          <div class="no-reviews">
-            <span class="material-symbols-outlined">star_border</span>
-            <div>No reviews found for this product</div>
-            <div style="font-size: 12px; margin-top: 8px; opacity: 0.7;">Reviews are imported from Amazon Seller Feedback data</div>
-          </div>
-        `;
-      }
-    }
-
-    function renderReviewsTab() {
-      const container = document.getElementById('reviews-content');
-      const { summary, reviews } = productReviews;
-
-      if (!reviews || reviews.length === 0) {
-        container.innerHTML = `
-          <div class="no-reviews">
-            <span class="material-symbols-outlined">star_border</span>
-            <div>No reviews found for this product</div>
-            <div style="font-size: 12px; margin-top: 8px; opacity: 0.7;">Reviews are imported from Amazon Seller Feedback data</div>
-          </div>
-        `;
-        return;
-      }
-
-      // Render rating summary
-      const avgRating = parseFloat(summary.avgRating) || 0;
-      const fullStars = Math.floor(avgRating);
-      const totalReviews = summary.total || 0;
-
-      const starsHtml = Array(5).fill(0).map((_, i) =>
-        `<span class="material-symbols-outlined">${i < fullStars ? 'star' : 'star_border'}</span>`
-      ).join('');
-
-      // Rating distribution
-      const byRating = summary.byRating || {};
-      const distHtml = [5, 4, 3, 2, 1].map(star => {
-        const count = byRating[star] || 0;
-        const pct = totalReviews > 0 ? (count / totalReviews * 100) : 0;
-        const starIcons = Array(star).fill('<span class="material-symbols-outlined">star</span>').join('');
-        return `
-          <div class="reviews-dist-row">
-            <div class="reviews-dist-stars">${starIcons}</div>
-            <div class="reviews-dist-bar">
-              <div class="reviews-dist-fill" style="width: ${pct}%"></div>
-            </div>
-            <div class="reviews-dist-count">${count}</div>
-          </div>
-        `;
-      }).join('');
-
-      // Marketplace chips
-      const byMarketplace = summary.byMarketplace || [];
-      const marketplaceHtml = byMarketplace.map(mp => `
-        <div class="marketplace-chip">
-          <span class="flag">${FLAGS[mp.country] || mp.country}</span>
-          <span class="rating">
-            <span class="material-symbols-outlined">star</span>
-            ${mp.avgRating}
-          </span>
-          <span class="count">(${mp.count})</span>
-        </div>
-      `).join('');
-
-      // Reviews list
-      const reviewsHtml = reviews.map(r => {
-        const stars = Array(5).fill(0).map((_, i) =>
-          `<span class="material-symbols-outlined ${i < r.rating ? 'filled' : 'empty'}">star</span>`
-        ).join('');
-        const commentClass = r.rating >= 4 ? 'positive' : (r.rating <= 2 ? 'negative' : '');
-        const date = r.feedbackDate ? new Date(r.feedbackDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
-
-        return `
-          <div class="review-item">
-            <div class="review-header">
-              <div class="review-stars">${stars}</div>
-              <div class="review-meta">
-                <span class="review-order" onclick="window.open('/seller/?orderId=${r.orderId}', '_blank')">${r.orderId}</span>
-                ${r.marketplaceCountry ? `<span>${FLAGS[r.marketplaceCountry] || ''} ${r.marketplaceCountry}</span>` : ''}
-                <span>${date}</span>
-              </div>
-            </div>
-            ${r.comments ? `<div class="review-comment ${commentClass}">${escapeHtml(r.comments)}</div>` : ''}
-          </div>
-        `;
-      }).join('');
-
-      container.innerHTML = `
-        <div class="reviews-summary">
-          <div class="reviews-rating-big">
-            <div class="reviews-rating-value">${summary.avgRating || '0.0'}</div>
-            <div class="reviews-rating-stars">${starsHtml}</div>
-            <div class="reviews-rating-count">${totalReviews} reviews</div>
-          </div>
-          <div class="reviews-distribution">${distHtml}</div>
-        </div>
-        ${byMarketplace.length > 0 ? `<div class="reviews-by-marketplace">${marketplaceHtml}</div>` : ''}
-        <div class="field-group">
-          <div class="field-group-title">
-            <span class="material-symbols-outlined">reviews</span>
-            Customer Feedback
-          </div>
-          <div class="reviews-list">${reviewsHtml}</div>
-        </div>
-      `;
     }
 
     function formatType(type) {
