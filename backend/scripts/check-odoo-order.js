@@ -17,9 +17,9 @@ async function main() {
     const odoo = new OdooDirectClient();
     await odoo.authenticate();
 
-    const orders = await odoo.searchRead('sale.order', [['id', '=', parseInt(orderId)]], {
-      fields: ['name', 'client_order_ref', 'partner_id', 'state', 'date_order']
-    });
+    const orders = await odoo.searchRead('sale.order', [['id', '=', parseInt(orderId)]],
+      ['name', 'client_order_ref', 'partner_id', 'state', 'date_order']
+    );
 
     if (orders.length === 0) {
       console.log(`Order ${orderId} not found in Odoo`);
