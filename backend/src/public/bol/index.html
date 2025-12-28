@@ -769,7 +769,14 @@
         if (ordersRes.ok) {
           const data = await ordersRes.json();
           const orders = data.orders || [];
-          const openOrders = orders.filter(o => o.status === 'OPEN' || !o.status);
+          // Count orders where not all items are shipped
+          const openOrders = orders.filter(o => {
+            const items = o.orderItems || [];
+            const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+            const shippedQty = items.reduce((sum, i) => sum + (i.quantityShipped || 0), 0);
+            const cancelledQty = items.reduce((sum, i) => sum + (i.quantityCancelled || 0), 0);
+            return shippedQty < totalQty && cancelledQty < totalQty;
+          });
           document.getElementById('stat-orders').textContent = openOrders.length;
 
           // Count unique EANs across all orders
@@ -800,8 +807,14 @@
       try {
         const orders = paginationState.orders.all || [];
 
-        // Count only OPEN orders
-        const openOrders = orders.filter(o => o.status === 'OPEN' || !o.status);
+        // Count orders where not all items are shipped
+        const openOrders = orders.filter(o => {
+          const items = o.orderItems || [];
+          const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+          const shippedQty = items.reduce((sum, i) => sum + (i.quantityShipped || 0), 0);
+          const cancelledQty = items.reduce((sum, i) => sum + (i.quantityCancelled || 0), 0);
+          return shippedQty < totalQty && cancelledQty < totalQty;
+        });
         document.getElementById('stat-orders').textContent = openOrders.length;
 
         // All shipments
