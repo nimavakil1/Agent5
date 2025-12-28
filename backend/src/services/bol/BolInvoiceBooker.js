@@ -185,11 +185,13 @@ function parseInvoiceExcel(excelBuffer, invoiceType) {
   // Convert to JSON, trying to detect header row
   const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
+  console.log(`[BolInvoiceBooker] Excel has ${rawData.length} rows, ${workbook.SheetNames.length} sheets`);
+
   // Find header row (contains 'Type' or 'Bedrag')
-  let headerRowIdx = 0;
+  let headerRowIdx = -1;
   for (let i = 0; i < Math.min(15, rawData.length); i++) {
     const row = rawData[i] || [];
-    const rowStr = row.join(' ').toLowerCase();
+    const rowStr = row.map(c => String(c || '')).join(' ').toLowerCase();
     if (rowStr.includes('type') && rowStr.includes('bedrag')) {
       headerRowIdx = i;
       break;
@@ -200,26 +202,41 @@ function parseInvoiceExcel(excelBuffer, invoiceType) {
     }
   }
 
+  // If no header found, try default positions
+  if (headerRowIdx === -1) {
+    headerRowIdx = 7; // Default for Bol invoices
+  }
+
   // Get headers and data
-  const headers = (rawData[headerRowIdx] || []).map(h => String(h || '').trim().replace(/\n/g, ' '));
+  const headerRow = rawData[headerRowIdx] || [];
+  const headers = headerRow.map(h => String(h || '').trim().replace(/\n/g, ' '));
   const data = rawData.slice(headerRowIdx + 1);
+
+  console.log(`[BolInvoiceBooker] Header row ${headerRowIdx}: ${headers.join(', ')}`);
 
   // Find column indices
   let typeColIdx = -1;
   let amountColIdx = -1;
 
   for (let i = 0; i < headers.length; i++) {
-    const h = headers[i].toLowerCase();
-    if (h === 'type' || h === 'product') typeColIdx = i;
+    const h = (headers[i] || '').toLowerCase();
+    if ((h === 'type' || h.startsWith('product')) && typeColIdx === -1) typeColIdx = i;
     if (h.includes('bedrag') && !h.includes('incl') && !h.includes('btw') && amountColIdx === -1) {
       amountColIdx = i;
     }
   }
 
-  // For advertising invoices, first column is product type
-  if (invoiceType === 'ADVERTISING' && typeColIdx === -1) {
-    typeColIdx = 0;
+  // Fallback for advertising invoices: first column is product type, bedrag column
+  if (invoiceType === 'ADVERTISING') {
+    if (typeColIdx === -1) typeColIdx = 0;
+    if (amountColIdx === -1) amountColIdx = 3; // Usually 4th column
+  } else {
+    // SALES invoice defaults
+    if (typeColIdx === -1) typeColIdx = 0;
+    if (amountColIdx === -1) amountColIdx = 9; // Usually 10th column
   }
+
+  console.log(`[BolInvoiceBooker] Type column: ${typeColIdx}, Amount column: ${amountColIdx}`)
 
   const chargesByAccount = {};
   let verkoopprijs = 0;
