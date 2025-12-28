@@ -159,7 +159,7 @@
         document.getElementById('stat-ready').textContent = orders.length;
         const tbody = document.getElementById('ready-table');
         if (orders.length === 0) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">check_circle</span><div class="empty-state-title">No orders ready to ship</div></div></td></tr>'; return; }
-        tbody.innerHTML = orders.map(o => '<tr><td>' + o.purchaseOrderNumber + '</td><td><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td>' + (o.odoo?.saleOrderName || '-') + '</td><td>' + formatCurrency(o.totals?.totalAmount) + '</td><td><button class="action-btn" onclick="createASN(\'' + o.purchaseOrderNumber + '\')" title="Create ASN"><span class="material-symbols-outlined">local_shipping</span></button></td></tr>').join('');
+        tbody.innerHTML = orders.map(o => '<tr><td>' + o.purchaseOrderNumber + '</td><td><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td>' + (o.odoo?.saleOrderName || '-') + '</td><td>' + formatCurrency(o.totals?.totalAmount) + '</td><td><button class="action-btn" onclick="createASN(\'' + o.purchaseOrderNumber + '\')" data-tooltip="Create ASN"><span class="material-symbols-outlined">local_shipping</span></button></td></tr>').join('');
       } catch (e) { document.getElementById('ready-table').innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>'; }
     }
     async function loadShipments() {

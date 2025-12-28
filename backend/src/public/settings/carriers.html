@@ -569,7 +569,7 @@
           </div>
 
           <div class="carrier-countries">
-            ${(carrier.countries || []).map(c => `<span class="country-flag" title="${c}">${FLAGS[c] || c}</span>`).join('')}
+            ${(carrier.countries || []).map(c => `<span class="country-flag" data-tooltip="${c}">${FLAGS[c] || c}</span>`).join('')}
           </div>
 
           <div class="carrier-status ${carrier.apiConfig?.isConnected ? 'connected' : 'not-configured'}">

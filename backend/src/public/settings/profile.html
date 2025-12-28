@@ -321,11 +321,11 @@
         <div class="profile-header">
           <div class="profile-avatar-container">
             <div class="profile-avatar" id="profile-avatar">?</div>
-            <label class="avatar-upload-btn" title="Upload photo">
+            <label class="avatar-upload-btn" data-tooltip="Upload photo">
               <span class="material-symbols-outlined">photo_camera</span>
               <input type="file" id="avatar-input" accept="image/*" onchange="uploadAvatar(this)">
             </label>
-            <button class="avatar-delete-btn" id="avatar-delete-btn" title="Remove photo" onclick="deleteAvatar()">
+            <button class="avatar-delete-btn" id="avatar-delete-btn" data-tooltip="Remove photo" onclick="deleteAvatar()">
               <span class="material-symbols-outlined">close</span>
             </button>
           </div>

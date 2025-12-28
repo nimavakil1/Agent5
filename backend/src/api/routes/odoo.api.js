@@ -1110,19 +1110,19 @@ router.get('/dashboard', async (req, res) => {
   try {
     const client = await getOdooClient();
 
-    // Get counts in parallel
+    // Get counts in parallel using searchCount (not search which has a limit)
     const [products, orders, customers, invoices] = await Promise.all([
-      client.search('product.product', [['sale_ok', '=', true], ['active', '=', true]]),
-      client.search('sale.order', [['state', 'in', ['sale', 'done']]]),
-      client.search('res.partner', [['customer_rank', '>', 0]]),
-      client.search('account.move', [['move_type', '=', 'out_invoice'], ['state', '=', 'posted'], ['payment_state', '!=', 'paid']])
+      client.searchCount('product.product', [['sale_ok', '=', true], ['active', '=', true]]),
+      client.searchCount('sale.order', [['state', 'in', ['sale', 'done']]]),
+      client.searchCount('res.partner', [['customer_rank', '>', 0]]),
+      client.searchCount('account.move', [['move_type', '=', 'out_invoice'], ['state', '=', 'posted'], ['payment_state', '!=', 'paid']])
     ]);
 
     res.json({
-      products: products.length,
-      orders: orders.length,
-      customers: customers.length,
-      unpaidInvoices: invoices.length
+      products: products,
+      orders: orders,
+      customers: customers,
+      unpaidInvoices: invoices
     });
   } catch (error) {
     console.error('Odoo dashboard error:', error);

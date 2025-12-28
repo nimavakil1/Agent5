@@ -265,8 +265,8 @@
             '<td>' + getFlagImg(mp) + ' ' + mp + '</td>' +
             '<td>' + (m.odooPartnerId ? (m.odooPartnerName || '') + ' (' + m.odooPartnerId + ')' : '<span class="badge badge-warning">Not linked</span>') + '</td>' +
             '<td><div class="action-btns">' +
-              '<button class="action-btn" onclick="editMapping(\'' + pid + '\')" title="Edit"><span class="material-symbols-outlined">edit</span></button>' +
-              '<button class="action-btn danger" onclick="deleteMapping(\'' + pid + '\')" title="Delete"><span class="material-symbols-outlined">delete</span></button>' +
+              '<button class="action-btn" onclick="editMapping(\'' + pid + '\')" data-tooltip="Edit Mapping"><span class="material-symbols-outlined">edit</span></button>' +
+              '<button class="action-btn danger" onclick="deleteMapping(\'' + pid + '\')" data-tooltip="Delete Mapping"><span class="material-symbols-outlined">delete</span></button>' +
             '</div></td>' +
           '</tr>';
         }).join('');
@@ -292,7 +292,7 @@
             '<td>' + (u.partyName || '-') + '</td>' +
             '<td>' + getFlagImg(mp) + ' ' + mp + '</td>' +
             '<td>' + formatDate(u.lastSeen) + '</td>' +
-            '<td><div class="action-btns"><button class="action-btn" onclick="mapParty(\'' + pid + '\', \'' + (u.partyName || '').replace(/'/g, "\\'") + '\', \'' + mp + '\')" title="Map"><span class="material-symbols-outlined">link</span></button></div></td>' +
+            '<td><div class="action-btns"><button class="action-btn" onclick="mapParty(\'' + pid + '\', \'' + (u.partyName || '').replace(/'/g, "\\'") + '\', \'' + mp + '\')" data-tooltip="Link to Odoo"><span class="material-symbols-outlined">link</span></button></div></td>' +
           '</tr>';
         }).join('');
       } catch (e) { console.error(e); }

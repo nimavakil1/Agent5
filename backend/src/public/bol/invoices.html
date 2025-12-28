@@ -252,10 +252,10 @@
           <td>${amount}</td>
           <td><span class="badge shipped">Paid</span></td>
           <td style="display: flex; gap: 6px;">
-            <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')" title="Download PDF">
+            <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')" data-tooltip="Download PDF">
               <span class="material-symbols-outlined">picture_as_pdf</span>
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="downloadSpecification('${inv.invoiceId}')" title="Download Specification (Excel)">
+            <button class="btn btn-secondary btn-sm" onclick="downloadSpecification('${inv.invoiceId}')" data-tooltip="Download Specification (Excel)">
               <span class="material-symbols-outlined">table_chart</span>
             </button>
           </td>

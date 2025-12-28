@@ -641,6 +641,90 @@
             display: none;
           }
         }
+
+        /* Global Tooltip Styles */
+        [data-tooltip] {
+          position: relative;
+        }
+        [data-tooltip]::after {
+          content: attr(data-tooltip);
+          position: absolute;
+          bottom: calc(100% + 8px);
+          left: 50%;
+          transform: translateX(-50%);
+          padding: 6px 10px;
+          background: #1f1f2e;
+          color: #e4e4e7;
+          font-size: 12px;
+          font-weight: 500;
+          white-space: nowrap;
+          border-radius: 6px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          opacity: 0;
+          visibility: hidden;
+          transition: opacity 0.15s, visibility 0.15s;
+          z-index: 9999;
+          pointer-events: none;
+        }
+        [data-tooltip]::before {
+          content: '';
+          position: absolute;
+          bottom: calc(100% + 2px);
+          left: 50%;
+          transform: translateX(-50%);
+          border: 6px solid transparent;
+          border-top-color: #1f1f2e;
+          opacity: 0;
+          visibility: hidden;
+          transition: opacity 0.15s, visibility 0.15s;
+          z-index: 9999;
+          pointer-events: none;
+        }
+        [data-tooltip]:hover::after,
+        [data-tooltip]:hover::before {
+          opacity: 1;
+          visibility: visible;
+        }
+        [data-tooltip-pos="bottom"]::after {
+          bottom: auto;
+          top: calc(100% + 8px);
+        }
+        [data-tooltip-pos="bottom"]::before {
+          bottom: auto;
+          top: calc(100% + 2px);
+          border-top-color: transparent;
+          border-bottom-color: #1f1f2e;
+        }
+        [data-tooltip-pos="left"]::after {
+          bottom: auto;
+          top: 50%;
+          left: auto;
+          right: calc(100% + 8px);
+          transform: translateY(-50%);
+        }
+        [data-tooltip-pos="left"]::before {
+          bottom: auto;
+          top: 50%;
+          left: auto;
+          right: calc(100% + 2px);
+          transform: translateY(-50%);
+          border-top-color: transparent;
+          border-left-color: #1f1f2e;
+        }
+        [data-tooltip-pos="right"]::after {
+          bottom: auto;
+          top: 50%;
+          left: calc(100% + 8px);
+          transform: translateY(-50%);
+        }
+        [data-tooltip-pos="right"]::before {
+          bottom: auto;
+          top: 50%;
+          left: calc(100% + 2px);
+          transform: translateY(-50%);
+          border-top-color: transparent;
+          border-right-color: #1f1f2e;
+        }
       </style>
 
       <!-- Top Bar -->

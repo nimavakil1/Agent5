@@ -319,7 +319,7 @@
             </span>
           </td>
           <td class="actions-cell">
-            <button class="btn-icon" onclick="toggleActive('${c._id}')" title="${c.isActive ? 'Hide from filters' : 'Show in filters'}">
+            <button class="btn-icon" onclick="toggleActive('${c._id}')" data-tooltip="${c.isActive ? 'Hide from filters' : 'Show in filters'}">
               <span class="material-symbols-outlined">${c.isActive ? 'visibility_off' : 'visibility'}</span>
             </button>
           </td>

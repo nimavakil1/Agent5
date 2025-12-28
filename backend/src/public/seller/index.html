@@ -489,7 +489,7 @@
         const shortCustomer = customerName.length > 25 ? customerName.substring(0, 25) + '...' : customerName;
 
         const createBtn = !order.odoo?.saleOrderId
-          ? `<button class="btn btn-success btn-sm" onclick="createOdooOrder('${order.amazonOrderId}')" title="Create Odoo Order">
+          ? `<button class="btn btn-success btn-sm" onclick="createOdooOrder('${order.amazonOrderId}')" data-tooltip="Create Odoo Order">
                <span class="material-symbols-outlined">add</span>
              </button>`
           : '';
@@ -498,7 +498,7 @@
           <tr>
             <td><span class="order-id" onclick="viewOrder('${order.amazonOrderId}')">${order.amazonOrderId || '-'}</span></td>
             <td>${date}</td>
-            <td title="${customerName}">${shortCustomer}</td>
+            <td data-tooltip="${customerName}">${shortCustomer}</td>
             <td>${order.marketplaceCountry || '-'}</td>
             <td><span class="badge ${typeClass}">${typeLabel}</span></td>
             <td><span class="badge ${statusClass}">${order.orderStatus || 'Unknown'}</span></td>

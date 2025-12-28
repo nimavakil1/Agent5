@@ -914,7 +914,7 @@
           // Add invoice icon if invoiced
           if (order.odoo.invoiceId) {
             const invoiceUrl = `https://acropaq.odoo.com/web#id=${order.odoo.invoiceId}&model=account.move&view_type=form`;
-            odooContent += ` <a href="${invoiceUrl}" target="_blank" title="${order.odoo.invoiceName}" style="color: #4ade80;"><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">receipt</span></a>`;
+            odooContent += ` <a href="${invoiceUrl}" target="_blank" data-tooltip="${order.odoo.invoiceName}" style="color: #4ade80;"><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">receipt</span></a>`;
           }
           odooCell = odooContent;
         }
@@ -1235,10 +1235,10 @@
             <td>${amount}</td>
             <td><span class="badge shipped">Paid</span></td>
             <td style="display: flex; gap: 6px;">
-              <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')" title="Download PDF">
+              <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')" data-tooltip="Download PDF">
                 <span class="material-symbols-outlined">picture_as_pdf</span>
               </button>
-              <button class="btn btn-secondary btn-sm" onclick="downloadSpecification('${inv.invoiceId}')" title="Download Specification (Excel)">
+              <button class="btn btn-secondary btn-sm" onclick="downloadSpecification('${inv.invoiceId}')" data-tooltip="Download Specification (Excel)">
                 <span class="material-symbols-outlined">table_chart</span>
               </button>
             </td>

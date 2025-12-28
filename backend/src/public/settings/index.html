@@ -680,19 +680,19 @@
             <td>
               <div class="actions">
                 ${isPending ? `
-                  <button class="action-btn resend" onclick="resendInvitation('${user._id}', '${user.email}')" title="Resend Invitation">
+                  <button class="action-btn resend" onclick="resendInvitation('${user._id}', '${user.email}')" data-tooltip="Resend Invitation">
                     <span class="material-symbols-outlined">forward_to_inbox</span>
                   </button>
                 ` : `
-                  <button class="action-btn" onclick="editUser('${user._id}')" title="Edit">
+                  <button class="action-btn" onclick="editUser('${user._id}')" data-tooltip="Edit User">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="action-btn" onclick="openPasswordModal('${user._id}', '${user.email}')" title="Reset Password">
+                  <button class="action-btn" onclick="openPasswordModal('${user._id}', '${user.email}')" data-tooltip="Reset Password">
                     <span class="material-symbols-outlined">key</span>
                   </button>
                 `}
                 ${user.role !== 'superadmin' ? `
-                  <button class="action-btn delete" onclick="deleteUser('${user._id}', '${user.email}')" title="Delete">
+                  <button class="action-btn delete" onclick="deleteUser('${user._id}', '${user.email}')" data-tooltip="Delete User">
                     <span class="material-symbols-outlined">delete</span>
                   </button>
                 ` : ''}
