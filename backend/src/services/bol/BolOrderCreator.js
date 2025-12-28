@@ -37,11 +37,12 @@ const BOL_TEAM_ID = 10;
 // Key format: "{shipFrom}->{shipTo}"
 // FBB ships from NL (Bol warehouse), FBR ships from BE (our warehouse)
 // Journal codes: VBE (Belgium), VNL (Netherlands), VOS (OSS)
+// Fiscal positions: Using (TxIn) versions since Bol prices include tax
 const TAX_CONFIG = {
-  'NL->NL': { taxId: 150, journalCode: 'VNL', journalId: 16 },   // FBB to NL: National NL
-  'NL->BE': { taxId: 147, journalCode: 'VBE', journalId: 1 },    // FBB to BE: National BE
-  'BE->NL': { taxId: 153, journalCode: 'VOS', journalId: 12 },   // FBR to NL: Belgium OSS
-  'BE->BE': { taxId: 147, journalCode: 'VBE', journalId: 1 },    // FBR to BE: National BE
+  'NL->NL': { taxId: 150, journalCode: 'VNL', journalId: 16, fiscalPositionId: 42 },   // FBB to NL: NL*VAT | Régime National (TxIn)
+  'NL->BE': { taxId: 147, journalCode: 'VBE', journalId: 1, fiscalPositionId: 40 },    // FBB to BE: BE*OSS | B2C Belgium (TxIn)
+  'BE->NL': { taxId: 153, journalCode: 'VOS', journalId: 12, fiscalPositionId: 46 },   // FBR to NL: NL*OSS | B2C Netherlands (TxIn)
+  'BE->BE': { taxId: 147, journalCode: 'VBE', journalId: 1, fiscalPositionId: 41 },    // FBR to BE: BE*VAT | Régime National (TxIn)
 };
 
 class BolOrderCreator {
@@ -384,6 +385,12 @@ class BolOrderCreator {
         note: this.buildOrderNotes(bolOrder, prefix, taxConfig)
       };
 
+      // Set fiscal position for correct tax mapping
+      if (taxConfig.fiscalPositionId) {
+        orderData.fiscal_position_id = taxConfig.fiscalPositionId;
+        console.log(`[BolOrderCreator] Setting fiscal_position_id=${taxConfig.fiscalPositionId}`);
+      }
+
       // Set journal_id on sales order (inherits to invoice)
       if (journalId) {
         orderData.journal_id = journalId;
@@ -408,7 +415,7 @@ class BolOrderCreator {
       result.success = true;
       result.odooOrderId = saleOrderId;
       result.odooOrderName = orderName;
-      result.taxConfig = { taxId: taxConfig.taxId, journal: taxConfig.journalCode };
+      result.taxConfig = { taxId: taxConfig.taxId, journal: taxConfig.journalCode, fiscalPositionId: taxConfig.fiscalPositionId };
       result.journalId = createdOrder[0]?.journal_id?.[0] || journalId;
 
       // Step 10: Update MongoDB
