@@ -552,17 +552,21 @@ async function syncInvoicesFullHistory(onProgress = null) {
 
   try {
     let allInvoices = [];
-    const startDate = new Date('2024-01-01');
-    const endDate = new Date();
-    const periodDays = 30;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed
 
-    let currentStart = new Date(startDate);
-    while (currentStart < endDate) {
-      const currentEnd = new Date(currentStart);
-      currentEnd.setDate(currentEnd.getDate() + periodDays);
-      if (currentEnd > endDate) currentEnd.setTime(endDate.getTime());
+    // Query per calendar month: 1st to 28th of each month
+    // Start from January 2024
+    let year = 2024;
+    let month = 0; // January
 
-      const periodStr = `${currentStart.toISOString().split('T')[0]}/${currentEnd.toISOString().split('T')[0]}`;
+    while (year < currentYear || (year === currentYear && month <= currentMonth)) {
+      // Format: YYYY-MM-DD
+      const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const endStr = `${year}-${String(month + 1).padStart(2, '0')}-28`;
+      const periodStr = `${startStr}/${endStr}`;
+
       console.log(`[BolSync] Fetching invoices for period: ${periodStr}`);
 
       await sleep(RATE_LIMIT.REQUEST_DELAY_MS);
@@ -577,7 +581,12 @@ async function syncInvoicesFullHistory(onProgress = null) {
         }
       }
 
-      currentStart.setDate(currentStart.getDate() + periodDays);
+      // Move to next month
+      month++;
+      if (month > 11) {
+        month = 0;
+        year++;
+      }
     }
 
     // Deduplicate
