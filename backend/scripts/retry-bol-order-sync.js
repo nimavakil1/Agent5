@@ -31,7 +31,7 @@ async function main() {
     console.log(`Sync error: ${order.odoo?.syncError || 'none'}`);
 
     const creator = await getBolOrderCreator();
-    const result = await creator.createOrLink(order);
+    const result = await creator.createOrder(orderId);
     console.log('Result:', JSON.stringify(result, null, 2));
 
     // Check the order again
