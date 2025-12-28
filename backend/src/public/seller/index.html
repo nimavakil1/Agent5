@@ -47,6 +47,10 @@
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #252532; }
     th { background: #12121a; font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; }
+    th[data-sort] { cursor: pointer; }
+    th[data-sort]:hover { color: #f59e0b; }
+    th.sorted { color: #f59e0b; }
+    th .sort-icon { font-size: 12px; vertical-align: middle; margin-left: 2px; }
     td { font-size: 13px; color: #e4e4e7; }
     tr:hover td { background: #1a1a28; }
     .order-id { font-weight: 600; color: #f59e0b; cursor: pointer; }
@@ -158,13 +162,13 @@
         <table>
           <thead>
             <tr>
-              <th>Order ID</th>
-              <th>Date</th>
-              <th>Customer</th>
-              <th>Marketplace</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Total</th>
+              <th data-sort="amazonOrderId" onclick="sortOrders('amazonOrderId')">Order ID <span class="sort-icon"></span></th>
+              <th data-sort="purchaseDate" onclick="sortOrders('purchaseDate')">Date <span class="sort-icon"></span></th>
+              <th data-sort="buyerName" onclick="sortOrders('buyerName')">Customer <span class="sort-icon"></span></th>
+              <th data-sort="marketplaceCountry" onclick="sortOrders('marketplaceCountry')">Marketplace <span class="sort-icon"></span></th>
+              <th data-sort="fulfillmentChannel" onclick="sortOrders('fulfillmentChannel')">Type <span class="sort-icon"></span></th>
+              <th data-sort="orderStatus" onclick="sortOrders('orderStatus')">Status <span class="sort-icon"></span></th>
+              <th data-sort="orderTotal" onclick="sortOrders('orderTotal')">Total <span class="sort-icon"></span></th>
               <th>Odoo</th>
               <th>Actions</th>
             </tr>
@@ -246,6 +250,8 @@
     const pageSize = 25;
     let totalOrders = 0;
     let filterTimeout = null;
+    let sortColumn = 'purchaseDate';
+    let sortDirection = 'desc';
 
     function debounceFilter() {
       clearTimeout(filterTimeout);
@@ -337,8 +343,7 @@
         const data = await res.json();
         orders = data.orders || [];
         totalOrders = data.total || orders.length;
-        renderOrders();
-        updatePagination();
+        applySortAndRender();
       } catch (e) {
         console.error('Error loading orders:', e);
         document.getElementById('orders-table').innerHTML = `
@@ -379,6 +384,61 @@
 
       currentPage = 1;
       loadOrders();
+    }
+
+    function sortOrders(column) {
+      if (sortColumn === column) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = column;
+        sortDirection = column === 'purchaseDate' ? 'desc' : 'asc';
+      }
+      applySortAndRender();
+      updateSortIndicators();
+    }
+
+    function applySortAndRender() {
+      if (sortColumn && orders.length > 0) {
+        orders.sort((a, b) => {
+          let valA, valB;
+
+          if (sortColumn === 'orderTotal') {
+            valA = a.orderTotal?.amount || 0;
+            valB = b.orderTotal?.amount || 0;
+          } else if (sortColumn === 'buyerName') {
+            valA = a.shippingAddress?.name || a.buyerName || '';
+            valB = b.shippingAddress?.name || b.buyerName || '';
+          } else {
+            valA = a[sortColumn];
+            valB = b[sortColumn];
+          }
+
+          if (valA == null) valA = '';
+          if (valB == null) valB = '';
+
+          if (typeof valA === 'string') valA = valA.toLowerCase();
+          if (typeof valB === 'string') valB = valB.toLowerCase();
+
+          if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+          if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+      renderOrders();
+      updatePagination();
+    }
+
+    function updateSortIndicators() {
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.classList.remove('sorted');
+        const icon = th.querySelector('.sort-icon');
+        if (th.dataset.sort === sortColumn) {
+          th.classList.add('sorted');
+          icon.textContent = sortDirection === 'asc' ? '▲' : '▼';
+        } else {
+          icon.textContent = '';
+        }
+      });
     }
 
     function renderOrders() {

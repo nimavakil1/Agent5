@@ -238,6 +238,11 @@
       border-bottom: 1px solid #252532;
     }
 
+    th[data-sort] { cursor: pointer; }
+    th[data-sort]:hover { color: #818cf8; }
+    th.sorted { color: #6366f1; }
+    th .sort-icon { font-size: 11px; vertical-align: middle; margin-left: 3px; }
+
     td {
       padding: 14px 16px;
       font-size: 14px;
@@ -581,8 +586,8 @@
             <table id="orders-table-element">
               <thead>
                 <tr>
-                  <th class="filterable">Order ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
-                  <th class="filterable">Date<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
+                  <th class="filterable" data-sort="orderId" onclick="sortTable('orders', 'orderId')">Order ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="0" placeholder="Filter..." onclick="event.stopPropagation()"></th>
+                  <th class="filterable" data-sort="orderPlacedDateTime" onclick="sortTable('orders', 'orderPlacedDateTime')">Date <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="1" placeholder="Filter..." onclick="event.stopPropagation()"></th>
                   <th class="filterable">Odoo<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
                   <th class="filterable">Fulfilment<br>
                     <select class="column-filter" id="orders-fulfilment-filter" onchange="loadOrders()" style="padding: 4px 8px;">
@@ -591,9 +596,9 @@
                       <option value="FBB">FBB</option>
                     </select>
                   </th>
-                  <th>Items</th>
-                  <th>Total</th>
-                  <th class="filterable">Status<br><input type="text" class="column-filter" data-column="6" placeholder="Filter..."></th>
+                  <th data-sort="itemCount" onclick="sortTable('orders', 'itemCount')">Items <span class="sort-icon"></span></th>
+                  <th data-sort="total" onclick="sortTable('orders', 'total')">Total <span class="sort-icon"></span></th>
+                  <th class="filterable">Status<br><input type="text" class="column-filter" data-column="6" placeholder="Filter..." onclick="event.stopPropagation()"></th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -643,9 +648,9 @@
             <table id="shipments-table-element">
               <thead>
                 <tr>
-                  <th class="filterable">Shipment ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
-                  <th class="filterable">Order ID<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
-                  <th class="filterable">Date<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
+                  <th class="filterable" data-sort="shipmentId" onclick="sortTable('shipments', 'shipmentId')">Shipment ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="0" placeholder="Filter..." onclick="event.stopPropagation()"></th>
+                  <th class="filterable" data-sort="orderId" onclick="sortTable('shipments', 'orderId')">Order ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="1" placeholder="Filter..." onclick="event.stopPropagation()"></th>
+                  <th class="filterable" data-sort="shipmentDateTime" onclick="sortTable('shipments', 'shipmentDateTime')">Date <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="2" placeholder="Filter..." onclick="event.stopPropagation()"></th>
                   <th class="filterable">Carrier<br><input type="text" class="column-filter" data-column="3" placeholder="Filter..."></th>
                   <th class="filterable">Track & Trace<br><input type="text" class="column-filter" data-column="4" placeholder="Filter..."></th>
                   <th>Status</th>
@@ -704,9 +709,9 @@
             <table id="returns-table-element">
               <thead>
                 <tr>
-                  <th class="filterable">Return ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
-                  <th class="filterable">Order ID<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
-                  <th class="filterable">Date<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
+                  <th class="filterable" data-sort="returnId" onclick="sortTable('returns', 'returnId')">Return ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="0" placeholder="Filter..." onclick="event.stopPropagation()"></th>
+                  <th class="filterable" data-sort="orderId" onclick="sortTable('returns', 'orderId')">Order ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="1" placeholder="Filter..." onclick="event.stopPropagation()"></th>
+                  <th class="filterable" data-sort="registrationDateTime" onclick="sortTable('returns', 'registrationDateTime')">Date <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="2" placeholder="Filter..." onclick="event.stopPropagation()"></th>
                   <th class="filterable">Reason<br><input type="text" class="column-filter" data-column="3" placeholder="Filter..."></th>
                   <th class="filterable">Product<br><input type="text" class="column-filter" data-column="4" placeholder="Filter..."></th>
                   <th>Status</th>
@@ -759,11 +764,11 @@
             <table id="invoices-table-element">
               <thead>
                 <tr>
-                  <th class="filterable">Invoice ID<br><input type="text" class="column-filter" data-column="0" placeholder="Filter..."></th>
+                  <th class="filterable" data-sort="invoiceId" onclick="sortTable('invoices', 'invoiceId')">Invoice ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="0" placeholder="Filter..." onclick="event.stopPropagation()"></th>
                   <th class="filterable">Odoo Bill<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
                   <th class="filterable">Period<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
-                  <th class="filterable">Issue Date<br><input type="text" class="column-filter" data-column="3" placeholder="Filter..."></th>
-                  <th>Amount (excl. VAT)</th>
+                  <th class="filterable" data-sort="issueDate" onclick="sortTable('invoices', 'issueDate')">Issue Date <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="3" placeholder="Filter..." onclick="event.stopPropagation()"></th>
+                  <th data-sort="totalAmountExclVat" onclick="sortTable('invoices', 'totalAmountExclVat')">Amount (excl. VAT) <span class="sort-icon"></span></th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -850,6 +855,88 @@
       returns: { all: [], filtered: [], offset: 0, pageSize: 25 },
       invoices: { all: [], filtered: [], offset: 0, pageSize: 25 }
     };
+
+    // Sort state for each table
+    const sortState = {
+      orders: { column: 'orderPlacedDateTime', direction: 'desc' },
+      shipments: { column: 'shipmentDateTime', direction: 'desc' },
+      returns: { column: 'registrationDateTime', direction: 'desc' },
+      invoices: { column: 'issueDate', direction: 'desc' }
+    };
+
+    function sortTable(type, column) {
+      const state = sortState[type];
+      if (state.column === column) {
+        state.direction = state.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.column = column;
+        state.direction = column.includes('Date') || column.includes('DateTime') ? 'desc' : 'asc';
+      }
+      applySortToTable(type);
+      updateTableSortIndicators(type);
+    }
+
+    function applySortToTable(type) {
+      const state = sortState[type];
+      const data = paginationState[type];
+
+      if (data.filtered.length > 0 && state.column) {
+        data.filtered.sort((a, b) => {
+          let valA, valB;
+
+          // Special handling for computed fields
+          if (state.column === 'orderId' && type === 'shipments') {
+            valA = a.orderId || a.shipmentItems?.[0]?.orderId || '';
+            valB = b.orderId || b.shipmentItems?.[0]?.orderId || '';
+          } else if (state.column === 'orderId' && type === 'returns') {
+            valA = a.returnItems?.[0]?.orderId || '';
+            valB = b.returnItems?.[0]?.orderId || '';
+          } else if (state.column === 'itemCount') {
+            valA = (a.orderItems || []).length;
+            valB = (b.orderItems || []).length;
+          } else if (state.column === 'total') {
+            valA = (a.orderItems || []).reduce((s, i) => s + (i.totalPrice || (i.unitPrice * (i.quantity || 1)) || 0), 0);
+            valB = (b.orderItems || []).reduce((s, i) => s + (i.totalPrice || (i.unitPrice * (i.quantity || 1)) || 0), 0);
+          } else {
+            valA = a[state.column];
+            valB = b[state.column];
+          }
+
+          if (valA == null) valA = '';
+          if (valB == null) valB = '';
+
+          if (typeof valA === 'string') valA = valA.toLowerCase();
+          if (typeof valB === 'string') valB = valB.toLowerCase();
+
+          if (valA < valB) return state.direction === 'asc' ? -1 : 1;
+          if (valA > valB) return state.direction === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+
+      data.offset = 0;
+      renderTable(type);
+    }
+
+    function updateTableSortIndicators(type) {
+      const tableId = `${type}-table-element`;
+      const table = document.getElementById(tableId);
+      if (!table) return;
+
+      const state = sortState[type];
+      table.querySelectorAll('th[data-sort]').forEach(th => {
+        th.classList.remove('sorted');
+        const icon = th.querySelector('.sort-icon');
+        if (icon) {
+          if (th.dataset.sort === state.column) {
+            th.classList.add('sorted');
+            icon.textContent = state.direction === 'asc' ? '▲' : '▼';
+          } else {
+            icon.textContent = '';
+          }
+        }
+      });
+    }
 
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {

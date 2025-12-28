@@ -42,6 +42,9 @@
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #252532; }
     th { background: #12121a; font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; }
+    th[data-sort]:hover { color: #a78bfa; }
+    th.sorted { color: #8b5cf6; }
+    th .sort-icon { font-size: 12px; vertical-align: middle; margin-left: 2px; }
     td { font-size: 13px; color: #e4e4e7; }
     tbody tr { cursor: pointer; transition: background 0.1s; }
     tbody tr:hover td { background: rgba(139, 92, 246, 0.08); }
@@ -139,13 +142,13 @@
           <thead>
             <tr>
               <th style="width:50px"></th>
-              <th>SKU</th>
-              <th>Name</th>
-              <th>Category</th>
-              <th>Price</th>
-              <th>Cost</th>
-              <th>All Warehouses</th>
-              <th>CW</th>
+              <th data-sort="sku" onclick="sortProducts('sku')" style="cursor:pointer">SKU <span class="sort-icon"></span></th>
+              <th data-sort="name" onclick="sortProducts('name')" style="cursor:pointer">Name <span class="sort-icon"></span></th>
+              <th data-sort="category" onclick="sortProducts('category')" style="cursor:pointer">Category <span class="sort-icon"></span></th>
+              <th data-sort="price" onclick="sortProducts('price')" style="cursor:pointer">Price <span class="sort-icon"></span></th>
+              <th data-sort="cost" onclick="sortProducts('cost')" style="cursor:pointer">Cost <span class="sort-icon"></span></th>
+              <th data-sort="stock" onclick="sortProducts('stock')" style="cursor:pointer">Warehouse <span class="sort-icon"></span></th>
+              <th data-sort="cwStock" onclick="sortProducts('cwStock')" style="cursor:pointer">CW <span class="sort-icon"></span></th>
             </tr>
             <tr class="filter-row">
               <th></th>
@@ -216,6 +219,8 @@
     const pageSize = 50;
     let filterTimeout = null;
     let currentStockFilter = ''; // '', 'in', 'low', 'out'
+    let sortColumn = null;
+    let sortDirection = 'asc';
 
     // Warehouse data
     let warehouses = [];
@@ -511,8 +516,66 @@
         return true;
       });
 
+      sortAndRender();
+    }
+
+    function sortProducts(column) {
+      if (sortColumn === column) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = column;
+        sortDirection = 'asc';
+      }
+      sortAndRender();
+      updateSortIndicators();
+    }
+
+    function sortAndRender() {
+      if (sortColumn) {
+        filteredProducts.sort((a, b) => {
+          let valA, valB;
+
+          // Get values based on column
+          if (sortColumn === 'stock') {
+            valA = getWarehouseStock(a.id, selectedWarehouseIds);
+            valB = getWarehouseStock(b.id, selectedWarehouseIds);
+          } else if (sortColumn === 'cwStock') {
+            valA = getWarehouseStock(a.id, [CW_WAREHOUSE_ID]);
+            valB = getWarehouseStock(b.id, [CW_WAREHOUSE_ID]);
+          } else {
+            valA = a[sortColumn];
+            valB = b[sortColumn];
+          }
+
+          // Handle nulls
+          if (valA == null) valA = sortColumn === 'price' || sortColumn === 'cost' ? -Infinity : '';
+          if (valB == null) valB = sortColumn === 'price' || sortColumn === 'cost' ? -Infinity : '';
+
+          // String comparison
+          if (typeof valA === 'string') valA = valA.toLowerCase();
+          if (typeof valB === 'string') valB = valB.toLowerCase();
+
+          if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+          if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+
       renderProducts();
       updatePagination();
+    }
+
+    function updateSortIndicators() {
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.classList.remove('sorted');
+        const icon = th.querySelector('.sort-icon');
+        if (th.dataset.sort === sortColumn) {
+          th.classList.add('sorted');
+          icon.textContent = sortDirection === 'asc' ? '▲' : '▼';
+        } else {
+          icon.textContent = '';
+        }
+      });
     }
 
     function renderProducts() {

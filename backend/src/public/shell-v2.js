@@ -68,7 +68,8 @@
       id: 'inventory', name: 'Inventory', icon: 'inventory_2', color: '#8b5cf6',
       basePath: '/inventory',
       pages: [
-        { id: 'products', path: '/inventory/', name: 'Products', icon: 'category' }
+        { id: 'products', path: '/inventory/', name: 'Products', icon: 'category' },
+        { id: 'categories', path: '/inventory/categories.html', name: 'Categories', icon: 'folder' }
       ]
     },
     'accounting': {
