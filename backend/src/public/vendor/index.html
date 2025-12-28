@@ -199,12 +199,12 @@
         const res = await fetch('/api/vendor/stats', { credentials: 'include' });
         if (!res.ok) throw new Error('Failed');
         const data = await res.json();
-        stats = data.stats || {};
-        document.getElementById('stat-new-value').textContent = stats.newOrders || 0;
-        document.getElementById('stat-action-value').textContent = stats.actionRequired || 0;
-        document.getElementById('stat-ship-value').textContent = stats.notShipped || 0;
-        document.getElementById('stat-invoice-value').textContent = stats.invoicePending || 0;
-        document.getElementById('stat-closed-value').textContent = stats.closed || 0;
+        const summary = data.stats?.summary || {};
+        document.getElementById('stat-new-value').textContent = summary.new || 0;
+        document.getElementById('stat-action-value').textContent = (summary.new || 0) + (summary.openOrders || 0);
+        document.getElementById('stat-ship-value').textContent = summary.notShipped || 0;
+        document.getElementById('stat-invoice-value').textContent = summary.invoicePending || 0;
+        document.getElementById('stat-closed-value').textContent = summary.closed || 0;
       } catch (e) { console.error('Error loading stats:', e); }
     }
     async function loadOrders() {
