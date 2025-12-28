@@ -198,19 +198,20 @@ class BolFulfillmentSwapper {
   }
 
   /**
-   * Get all offers from Bol.com (paginated)
-   * Returns array of offers with their fulfillment method
+   * Get offers by EAN from Bol.com
+   * Since Bol.com doesn't have a "list all offers" endpoint,
+   * we query offers by EAN for each item in FBB inventory
    */
-  async getOffers() {
-    console.log('[BolFulfillmentSwapper] Fetching offers...');
+  async getOffersByEans(eans) {
+    console.log(`[BolFulfillmentSwapper] Looking up offers for ${eans.length} EANs...`);
 
     const offers = [];
-    let page = 1;
-    let hasMore = true;
+    let found = 0;
+    let notFound = 0;
 
-    while (hasMore) {
+    for (const ean of eans) {
       try {
-        const response = await this.bolRequest(`/offers?page=${page}`);
+        const response = await this.bolRequest(`/offers?ean=${ean}`);
         const items = response.offers || [];
 
         for (const item of items) {
@@ -220,23 +221,31 @@ class BolFulfillmentSwapper {
             reference: item.reference,
             fulfillmentMethod: item.fulfilment?.method || 'FBR'
           });
+          found++;
         }
 
-        console.log(`[BolFulfillmentSwapper] Page ${page}: ${items.length} offers`);
-
-        if (items.length < 50) {
-          hasMore = false;
-        } else {
-          page++;
-          await this.sleep(REQUEST_DELAY_MS);
+        if (items.length === 0) {
+          notFound++;
         }
+
+        // Rate limiting
+        await this.sleep(REQUEST_DELAY_MS);
+
       } catch (error) {
-        console.error(`[BolFulfillmentSwapper] Error fetching offers page ${page}:`, error.message);
-        hasMore = false;
+        // Offer not found for this EAN is expected
+        if (!error.message.includes('404')) {
+          console.error(`[BolFulfillmentSwapper] Error fetching offer for EAN ${ean}:`, error.message);
+        }
+        notFound++;
+      }
+
+      // Log progress every 100 EANs
+      if ((found + notFound) % 100 === 0) {
+        console.log(`[BolFulfillmentSwapper] Progress: ${found} found, ${notFound} not found`);
       }
     }
 
-    console.log(`[BolFulfillmentSwapper] Total offers: ${offers.length}`);
+    console.log(`[BolFulfillmentSwapper] Total offers found: ${offers.length} (${notFound} EANs without offers)`);
     return offers;
   }
 
@@ -350,18 +359,24 @@ class BolFulfillmentSwapper {
 
       // Step 1: Get FBB inventory from Bol.com
       const fbbInventory = await this.getFbbInventory();
+      const fbbEans = Object.keys(fbbInventory);
 
-      // Step 2: Get all offers
-      const offers = await this.getOffers();
-
-      if (offers.length === 0) {
-        console.log('[BolFulfillmentSwapper] No offers found');
-        return { success: true, ...results, message: 'No offers found' };
+      if (fbbEans.length === 0) {
+        console.log('[BolFulfillmentSwapper] No FBB inventory found');
+        return { success: true, ...results, message: 'No FBB inventory' };
       }
 
-      // Step 3: Get local warehouse stock for all EANs
-      const allEans = offers.map(o => o.ean).filter(Boolean);
-      const localStock = await this.getLocalStock(allEans);
+      // Step 2: Get local warehouse stock for FBB EANs
+      const localStock = await this.getLocalStock(fbbEans);
+      console.log(`[BolFulfillmentSwapper] Got local stock for ${Object.keys(localStock).length} products`);
+
+      // Step 3: Get offers for FBB EANs (this is the slow part due to API rate limits)
+      const offers = await this.getOffersByEans(fbbEans);
+
+      if (offers.length === 0) {
+        console.log('[BolFulfillmentSwapper] No offers found for FBB EANs');
+        return { success: true, ...results, message: 'No offers found' };
+      }
 
       console.log(`[BolFulfillmentSwapper] Checking ${offers.length} offers...`);
 
