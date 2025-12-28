@@ -3806,4 +3806,320 @@ router.post('/vcs/create-orders', async (req, res) => {
   }
 });
 
+// ==================== SETTLEMENT REPORT SYNC (SP-API) ====================
+
+const { getSellerFinanceClient } = require('../../services/amazon/seller/SellerFinanceClient');
+
+/**
+ * @route GET /api/amazon/finance/status
+ * @desc Check Finance API connection status
+ */
+router.get('/finance/status', async (req, res) => {
+  try {
+    const financeClient = getSellerFinanceClient();
+    const result = await financeClient.testConnection();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/finance/settlements
+ * @desc Get list of available settlement reports from SP-API
+ */
+router.get('/finance/settlements', async (req, res) => {
+  try {
+    const { pageSize = 10, createdAfter } = req.query;
+    const financeClient = getSellerFinanceClient();
+
+    const reports = await financeClient.getSettlementReports({
+      pageSize: parseInt(pageSize),
+      createdAfter: createdAfter ? new Date(createdAfter) : undefined
+    });
+
+    // Check which ones are already imported
+    const db = getDb();
+    const existingIds = await db.collection('amazon_settlements')
+      .find({ spApiReportId: { $in: reports.map(r => r.reportId) } })
+      .project({ spApiReportId: 1 })
+      .toArray();
+
+    const existingSet = new Set(existingIds.map(e => e.spApiReportId));
+
+    const enrichedReports = reports.map(r => ({
+      reportId: r.reportId,
+      createdTime: r.createdTime,
+      dataStartTime: r.dataStartTime,
+      dataEndTime: r.dataEndTime,
+      processingStatus: r.processingStatus,
+      imported: existingSet.has(r.reportId)
+    }));
+
+    res.json({ reports: enrichedReports, total: enrichedReports.length });
+  } catch (error) {
+    console.error('[Finance API] Error fetching settlements:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/finance/settlements/sync
+ * @desc Sync settlement reports from SP-API
+ * @body reportIds - Optional array of specific report IDs to sync
+ * @body syncAll - If true, sync all new reports
+ */
+router.post('/finance/settlements/sync', async (req, res) => {
+  try {
+    const { reportIds, syncAll = false, pageSize = 10 } = req.body;
+    const financeClient = getSellerFinanceClient();
+    const db = getDb();
+
+    let reportsToSync = [];
+
+    if (reportIds && reportIds.length > 0) {
+      // Sync specific reports
+      reportsToSync = reportIds;
+    } else if (syncAll) {
+      // Get all available reports and filter out already imported
+      const allReports = await financeClient.getSettlementReports({ pageSize: parseInt(pageSize) });
+
+      const existingIds = await db.collection('amazon_settlements')
+        .find({ spApiReportId: { $in: allReports.map(r => r.reportId) } })
+        .project({ spApiReportId: 1 })
+        .toArray();
+
+      const existingSet = new Set(existingIds.map(e => e.spApiReportId));
+      reportsToSync = allReports
+        .filter(r => !existingSet.has(r.reportId))
+        .map(r => r.reportId);
+    }
+
+    if (reportsToSync.length === 0) {
+      return res.json({ success: true, message: 'No new reports to sync', synced: 0 });
+    }
+
+    const results = [];
+
+    for (const reportId of reportsToSync) {
+      try {
+        console.log(`[Finance API] Downloading settlement report ${reportId}...`);
+        const parsed = await financeClient.downloadSettlementReport(reportId);
+
+        // Aggregate fees and order totals
+        const feesByMarketplace = aggregateSettlementFees(parsed.transactions);
+        const ordersByMarketplace = aggregateSettlementOrders(parsed.transactions);
+
+        // Store in MongoDB
+        const settlementDoc = {
+          spApiReportId: reportId,
+          settlementId: parsed.settlementId,
+          settlementStartDate: parsed.dataStartTime ? new Date(parsed.dataStartTime) : null,
+          settlementEndDate: parsed.dataEndTime ? new Date(parsed.dataEndTime) : null,
+          depositDate: null, // Will be in transaction data
+          totalAmount: parsed.totalAmount,
+          currency: parsed.currency,
+          transactionCount: parsed.transactionCount,
+          feesByMarketplace,
+          ordersByMarketplace,
+          source: 'sp-api-sync',
+          syncedAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        await db.collection('amazon_settlements').updateOne(
+          { spApiReportId: reportId },
+          { $set: settlementDoc, $setOnInsert: { createdAt: new Date() } },
+          { upsert: true }
+        );
+
+        results.push({
+          reportId,
+          settlementId: parsed.settlementId,
+          success: true,
+          transactionCount: parsed.transactionCount,
+          totalAmount: parsed.totalAmount,
+          currency: parsed.currency
+        });
+
+        console.log(`[Finance API] Synced settlement ${parsed.settlementId}: ${parsed.transactionCount} transactions`);
+
+      } catch (err) {
+        console.error(`[Finance API] Error syncing report ${reportId}:`, err.message);
+        results.push({ reportId, success: false, error: err.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      synced: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+      results
+    });
+
+  } catch (error) {
+    console.error('[Finance API] Sync error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/finance/settlements/:reportId
+ * @desc Download and return a specific settlement report
+ */
+router.get('/finance/settlements/:reportId', async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const financeClient = getSellerFinanceClient();
+
+    const parsed = await financeClient.downloadSettlementReport(reportId);
+
+    res.json({
+      reportId,
+      settlementId: parsed.settlementId,
+      currency: parsed.currency,
+      totalAmount: parsed.totalAmount,
+      transactionCount: parsed.transactionCount,
+      dataStartTime: parsed.dataStartTime,
+      dataEndTime: parsed.dataEndTime,
+      transactions: parsed.transactions
+    });
+
+  } catch (error) {
+    console.error('[Finance API] Download error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/finance/event-groups
+ * @desc Get financial event groups (settlement periods)
+ */
+router.get('/finance/event-groups', async (req, res) => {
+  try {
+    const { startedAfter, maxResults = 10 } = req.query;
+    const financeClient = getSellerFinanceClient();
+
+    const groups = await financeClient.getFinancialEventGroups({
+      startedAfter: startedAfter ? new Date(startedAfter) : undefined,
+      maxResults: parseInt(maxResults)
+    });
+
+    res.json({ groups, total: groups.length });
+  } catch (error) {
+    console.error('[Finance API] Event groups error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/finance/events
+ * @desc Get recent financial events
+ */
+router.get('/finance/events', async (req, res) => {
+  try {
+    const { postedAfter, maxResults = 100 } = req.query;
+    const financeClient = getSellerFinanceClient();
+
+    const events = await financeClient.getFinancialEvents({
+      postedAfter: postedAfter ? new Date(postedAfter) : undefined,
+      maxResults: parseInt(maxResults)
+    });
+
+    // Count events by type
+    const summary = {};
+    for (const [key, value] of Object.entries(events)) {
+      if (Array.isArray(value) && value.length > 0) {
+        summary[key] = value.length;
+      }
+    }
+
+    res.json({ events, summary });
+  } catch (error) {
+    console.error('[Finance API] Events error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper functions for settlement aggregation
+function aggregateSettlementFees(transactions) {
+  const feesByMarketplace = {};
+
+  for (const tx of transactions) {
+    const txType = tx.transactionType || '';
+    const amountType = tx.amountType || '';
+    const marketplace = tx.marketplaceCountry || 'EU';
+    const amount = tx.amount || 0;
+
+    // Skip order-related transactions
+    if (['Order', 'Refund', 'Chargeback'].some(t => txType.includes(t))) {
+      continue;
+    }
+
+    if (!feesByMarketplace[marketplace]) {
+      feesByMarketplace[marketplace] = {
+        commission: 0, fbaFulfillment: 0, fbaStorage: 0,
+        fbaInbound: 0, fbaRemoval: 0, subscription: 0,
+        advertising: 0, liquidations: 0, other: 0, total: 0
+      };
+    }
+
+    if (amountType.includes('Commission')) {
+      feesByMarketplace[marketplace].commission += amount;
+    } else if (amountType.includes('FBAPerOrder') || amountType.includes('FBAPerUnit') || amountType.includes('FBAWeight')) {
+      feesByMarketplace[marketplace].fbaFulfillment += amount;
+    } else if (amountType.includes('Storage')) {
+      feesByMarketplace[marketplace].fbaStorage += amount;
+    } else if (amountType.includes('Inbound') || amountType.includes('Transportation')) {
+      feesByMarketplace[marketplace].fbaInbound += amount;
+    } else if (amountType.includes('Removal') || amountType.includes('Disposal')) {
+      feesByMarketplace[marketplace].fbaRemoval += amount;
+    } else if (amountType.includes('Subscription')) {
+      feesByMarketplace[marketplace].subscription += amount;
+    } else if (amountType.includes('Advertising') || txType.includes('Advertising')) {
+      feesByMarketplace[marketplace].advertising += amount;
+    } else if (amountType.includes('Liquidation')) {
+      feesByMarketplace[marketplace].liquidations += amount;
+    } else {
+      feesByMarketplace[marketplace].other += amount;
+    }
+
+    feesByMarketplace[marketplace].total += amount;
+  }
+
+  return feesByMarketplace;
+}
+
+function aggregateSettlementOrders(transactions) {
+  const ordersByMarketplace = {};
+
+  for (const tx of transactions) {
+    const txType = tx.transactionType || '';
+    const marketplace = tx.marketplaceCountry || 'EU';
+    const amount = tx.amount || 0;
+
+    if (!['Order', 'Refund', 'Chargeback'].some(t => txType.includes(t))) {
+      continue;
+    }
+
+    if (!ordersByMarketplace[marketplace]) {
+      ordersByMarketplace[marketplace] = {
+        orders: 0, refunds: 0, chargebacks: 0, total: 0
+      };
+    }
+
+    if (txType.includes('Order')) {
+      ordersByMarketplace[marketplace].orders += amount;
+    } else if (txType.includes('Refund')) {
+      ordersByMarketplace[marketplace].refunds += amount;
+    } else if (txType.includes('Chargeback')) {
+      ordersByMarketplace[marketplace].chargebacks += amount;
+    }
+
+    ordersByMarketplace[marketplace].total += amount;
+  }
+
+  return ordersByMarketplace;
+}
+
 module.exports = router;

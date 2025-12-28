@@ -187,53 +187,26 @@ function parseInvoiceExcel(excelBuffer, invoiceType) {
 
   console.log(`[BolInvoiceBooker] Excel has ${rawData.length} rows, ${workbook.SheetNames.length} sheets`);
 
-  // Find header row (contains 'Type' or 'Bedrag')
-  let headerRowIdx = -1;
-  for (let i = 0; i < Math.min(15, rawData.length); i++) {
-    const row = rawData[i] || [];
-    const rowStr = row.map(c => String(c || '')).join(' ').toLowerCase();
-    if (rowStr.includes('type') && rowStr.includes('bedrag')) {
-      headerRowIdx = i;
-      break;
-    }
-    if (rowStr.includes('product') && rowStr.includes('bedrag')) {
-      headerRowIdx = i;
-      break;
-    }
-  }
+  // Different parsing logic for ADVERTISING vs SALES invoices
+  let data;
+  let typeColIdx;
+  let amountColIdx;
 
-  // If no header found, try default positions
-  if (headerRowIdx === -1) {
-    headerRowIdx = 7; // Default for Bol invoices
-  }
-
-  // Get headers and data
-  const headerRow = rawData[headerRowIdx] || [];
-  const headers = headerRow.map(h => String(h || '').trim().replace(/\n/g, ' '));
-  const data = rawData.slice(headerRowIdx + 1);
-
-  console.log(`[BolInvoiceBooker] Header row ${headerRowIdx}: ${headers.join(', ')}`);
-
-  // Find column indices
-  let typeColIdx = -1;
-  let amountColIdx = -1;
-
-  for (let i = 0; i < headers.length; i++) {
-    const h = (headers[i] || '').toLowerCase();
-    if ((h === 'type' || h.startsWith('product')) && typeColIdx === -1) typeColIdx = i;
-    if (h.includes('bedrag') && !h.includes('incl') && !h.includes('btw') && amountColIdx === -1) {
-      amountColIdx = i;
-    }
-  }
-
-  // Fallback for advertising invoices: first column is product type, bedrag column
   if (invoiceType === 'ADVERTISING') {
-    if (typeColIdx === -1) typeColIdx = 0;
-    if (amountColIdx === -1) amountColIdx = 3; // Usually 4th column
+    // Advertising invoices have no header row - data starts at row 0
+    // Format: [Type, Date, Campaign, Amount, 0, 0, Amount]
+    data = rawData;
+    typeColIdx = 0;
+    amountColIdx = 3; // Amount is in column 3
+    console.log(`[BolInvoiceBooker] Advertising invoice: using all ${data.length} rows, type col 0, amount col 3`);
   } else {
-    // SALES invoice defaults
-    if (typeColIdx === -1) typeColIdx = 0;
-    if (amountColIdx === -1) amountColIdx = 9; // Usually 10th column
+    // SALES invoices - look for header row or default to no header
+    // Format: [Type, EAN, ProductTitle, ..., Amount in col 9]
+    // Note: SALES invoices may have duplicate "Totaal" rows that should be skipped
+    data = rawData;
+    typeColIdx = 0;
+    amountColIdx = 9; // Amount is in column 9
+    console.log(`[BolInvoiceBooker] Marketplace invoice: using all ${data.length} rows, type col 0, amount col 9`);
   }
 
   console.log(`[BolInvoiceBooker] Type column: ${typeColIdx}, Amount column: ${amountColIdx}`)
@@ -304,17 +277,18 @@ async function initOdooCache(odooClient) {
 
   console.log('[BolInvoiceBooker] Initializing Odoo cache...');
 
-  // Get bol.com partner
+  // Get BOL.COM supplier partner (ID 2994)
+  // Search by VAT number to ensure we get the correct supplier, not a customer
   const partners = await odooClient.searchRead('res.partner',
-    [['name', 'ilike', 'bol.com']],
+    [['vat', '=', 'NL820471616B01']],
     ['id', 'name'],
     { limit: 1 }
   );
   if (partners.length === 0) {
-    throw new Error('bol.com partner not found in Odoo');
+    throw new Error('BOL.COM supplier partner not found in Odoo (VAT: NL820471616B01)');
   }
   odooCache.partnerId = partners[0].id;
-  console.log(`[BolInvoiceBooker] Found bol.com partner ID: ${odooCache.partnerId}`);
+  console.log(`[BolInvoiceBooker] Found BOL.COM partner: ${partners[0].name} (ID: ${odooCache.partnerId})`);
 
   // Get BOL analytic account
   const analyticAccounts = await odooClient.searchRead('account.analytic.account',
@@ -385,6 +359,24 @@ async function createVendorBill(invoice, parsedCharges, pdfBuffer) {
     throw new Error('No valid invoice lines to create');
   }
 
+  // Check for existing bill with same reference (prevent duplicates)
+  const existingBills = await odooClient.searchRead('account.move',
+    [['ref', '=', invoice.invoiceId], ['move_type', '=', 'in_invoice']],
+    ['id', 'name', 'state', 'amount_total'],
+    { limit: 1 }
+  );
+
+  if (existingBills.length > 0) {
+    const existing = existingBills[0];
+    console.log(`[BolInvoiceBooker] Bill already exists in Odoo: ${existing.name || 'DRAFT'} (ID: ${existing.id}, €${existing.amount_total})`);
+    return {
+      billId: existing.id,
+      billNumber: existing.name || 'DRAFT',
+      total: existing.amount_total,
+      alreadyExisted: true
+    };
+  }
+
   // Create the vendor bill
   const billData = {
     move_type: 'in_invoice',
@@ -398,9 +390,10 @@ async function createVendorBill(invoice, parsedCharges, pdfBuffer) {
   const billId = await odooClient.create('account.move', billData);
   console.log(`[BolInvoiceBooker] Created bill ID: ${billId}`);
 
-  // Get the bill number
-  const [bill] = await odooClient.read('account.move', [billId], ['name', 'amount_total']);
-  console.log(`[BolInvoiceBooker] Bill number: ${bill.name}, Total: €${bill.amount_total}`);
+  // Get the bill info (draft bills don't have a sequence number yet - name is false)
+  const [bill] = await odooClient.read('account.move', [billId], ['name', 'amount_total', 'state']);
+  const billNumber = bill.name || 'DRAFT';
+  console.log(`[BolInvoiceBooker] Bill ID: ${billId}, Status: ${bill.state}, Total: €${bill.amount_total}`);
 
   // Attach PDF
   if (pdfBuffer) {
@@ -419,7 +412,7 @@ async function createVendorBill(invoice, parsedCharges, pdfBuffer) {
 
   return {
     billId,
-    billNumber: bill.name,
+    billNumber,
     total: bill.amount_total
   };
 }
@@ -470,7 +463,7 @@ async function bookInvoice(invoiceId) {
       console.log(`  Verkoopprijs (pass-through): €${parsedCharges.verkoopprijs.toFixed(2)}`);
     }
 
-    // Create vendor bill in Odoo
+    // Create vendor bill in Odoo (or get existing one)
     const billResult = await createVendorBill(invoice, parsedCharges, pdfBuffer);
 
     // Update MongoDB
@@ -480,20 +473,25 @@ async function bookInvoice(invoiceId) {
         $set: {
           'odoo.billId': billResult.billId,
           'odoo.billNumber': billResult.billNumber,
-          'odoo.createdAt': new Date(),
+          'odoo.createdAt': billResult.alreadyExisted ? undefined : new Date(),
           'odoo.syncError': null
         }
       }
     );
 
-    console.log(`[BolInvoiceBooker] ✅ Invoice ${invoiceId} booked as ${billResult.billNumber}`);
+    if (billResult.alreadyExisted) {
+      console.log(`[BolInvoiceBooker] ⚠️ Invoice ${invoiceId} already exists as ${billResult.billNumber} - linked to MongoDB`);
+    } else {
+      console.log(`[BolInvoiceBooker] ✅ Invoice ${invoiceId} booked as ${billResult.billNumber}`);
+    }
 
     return {
       success: true,
       invoiceId,
       billId: billResult.billId,
       billNumber: billResult.billNumber,
-      total: billResult.total
+      total: billResult.total,
+      alreadyExisted: billResult.alreadyExisted || false
     };
 
   } catch (error) {

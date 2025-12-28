@@ -1304,6 +1304,51 @@ router.get('/cancellations/pending', async (req, res) => {
 });
 
 // ============================================
+// FULFILLMENT SWAP ENDPOINTS (FBB <-> FBR)
+// ============================================
+
+/**
+ * Trigger FBB/FBR fulfillment swap check
+ * Swaps offers based on stock availability:
+ * - FBB with no stock + local stock available → swap to FBR
+ * - FBR with FBB stock available → swap to FBB
+ * POST /api/bolcom/fulfillment/swap
+ */
+router.post('/fulfillment/swap', async (req, res) => {
+  try {
+    const { getBolFulfillmentSwapper } = require('../../services/bol/BolFulfillmentSwapper');
+    const swapper = getBolFulfillmentSwapper();
+    const result = await swapper.run();
+
+    res.json({
+      success: result.success,
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get fulfillment swap status
+ * GET /api/bolcom/fulfillment/status
+ */
+router.get('/fulfillment/status', async (req, res) => {
+  try {
+    const { getBolFulfillmentSwapper } = require('../../services/bol/BolFulfillmentSwapper');
+    const swapper = getBolFulfillmentSwapper();
+    const status = swapper.getStatus();
+
+    res.json({
+      success: true,
+      ...status
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
 // FBB INVENTORY ENDPOINTS
 // ============================================
 
