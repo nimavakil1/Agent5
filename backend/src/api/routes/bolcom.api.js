@@ -12,6 +12,11 @@
 
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+
+// Local invoice files directory
+const INVOICE_FILES_DIR = path.join(__dirname, '../../..', 'uploads/bol_invoices');
 
 // MongoDB models
 const BolOrder = require('../../models/BolOrder');
@@ -732,13 +737,26 @@ router.get('/invoices', async (req, res) => {
 
 /**
  * Download invoice PDF
+ * First checks for local file, then falls back to Bol.com API
  */
 router.get('/invoices/:invoiceId/download', async (req, res) => {
   try {
-    const token = await getRetailerAccessToken();
+    const invoiceId = req.params.invoiceId;
 
-    // Try to get the invoice PDF directly
-    const pdfResponse = await fetch(`https://api.bol.com/retailer/invoices/${req.params.invoiceId}`, {
+    // First check for local file
+    const invoice = await BolInvoice.findOne({ invoiceId });
+    if (invoice?.pdfFile) {
+      const localPath = path.join(INVOICE_FILES_DIR, invoice.pdfFile);
+      if (fs.existsSync(localPath)) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="bol-invoice-${invoiceId}.pdf"`);
+        return res.sendFile(localPath);
+      }
+    }
+
+    // Fall back to Bol.com API
+    const token = await getRetailerAccessToken();
+    const pdfResponse = await fetch(`https://api.bol.com/retailer/invoices/${invoiceId}`, {
       headers: {
         'Accept': 'application/vnd.retailer.v10+pdf',
         'Authorization': `Bearer ${token}`
@@ -746,17 +764,15 @@ router.get('/invoices/:invoiceId/download', async (req, res) => {
     });
 
     if (pdfResponse.ok) {
-      // Stream the PDF response
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="bol-invoice-${req.params.invoiceId}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename="bol-invoice-${invoiceId}.pdf"`);
       const buffer = await pdfResponse.arrayBuffer();
       return res.send(Buffer.from(buffer));
     }
 
-    // PDF not available - return error with helpful message
     res.status(404).json({
       success: false,
-      error: 'Invoice PDF not available via API. Please download from the Bol.com Partner Portal.',
+      error: 'Invoice PDF not available.',
       partnerPortalUrl: 'https://partner.bol.com/sdd/orders/invoices'
     });
   } catch (error) {
@@ -766,11 +782,28 @@ router.get('/invoices/:invoiceId/download', async (req, res) => {
 
 /**
  * Download invoice specification (Excel)
+ * First checks for local file, then falls back to Bol.com API
  */
 router.get('/invoices/:invoiceId/specification', async (req, res) => {
   try {
-    const token = await getRetailerAccessToken();
+    const invoiceId = req.params.invoiceId;
     const { format = 'excel' } = req.query;
+
+    // For Excel format, first check for local file
+    if (format !== 'json') {
+      const invoice = await BolInvoice.findOne({ invoiceId });
+      if (invoice?.excelFile) {
+        const localPath = path.join(INVOICE_FILES_DIR, invoice.excelFile);
+        if (fs.existsSync(localPath)) {
+          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          res.setHeader('Content-Disposition', `attachment; filename="bol-invoice-spec-${invoiceId}.xlsx"`);
+          return res.sendFile(localPath);
+        }
+      }
+    }
+
+    // Fall back to Bol.com API
+    const token = await getRetailerAccessToken();
 
     let acceptHeader;
     let filename;
@@ -778,16 +811,15 @@ router.get('/invoices/:invoiceId/specification', async (req, res) => {
 
     if (format === 'json') {
       acceptHeader = 'application/vnd.retailer.v10+json';
-      filename = `bol-invoice-spec-${req.params.invoiceId}.json`;
+      filename = `bol-invoice-spec-${invoiceId}.json`;
       contentType = 'application/json';
     } else {
-      // Default to Excel format
       acceptHeader = 'application/vnd.retailer.v10+openxmlformats-officedocument.spreadsheetml.sheet';
-      filename = `bol-invoice-spec-${req.params.invoiceId}.xlsx`;
+      filename = `bol-invoice-spec-${invoiceId}.xlsx`;
       contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     }
 
-    const specResponse = await fetch(`https://api.bol.com/retailer/invoices/${req.params.invoiceId}/specification`, {
+    const specResponse = await fetch(`https://api.bol.com/retailer/invoices/${invoiceId}/specification`, {
       headers: {
         'Accept': acceptHeader,
         'Authorization': `Bearer ${token}`
@@ -804,7 +836,6 @@ router.get('/invoices/:invoiceId/specification', async (req, res) => {
       return res.json({ success: true, specification: data });
     }
 
-    // Stream the Excel file
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     const buffer = await specResponse.arrayBuffer();
