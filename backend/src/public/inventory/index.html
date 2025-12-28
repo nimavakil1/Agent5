@@ -231,10 +231,21 @@
 
     async function loadWarehouses() {
       try {
-        const res = await fetch('/api/odoo/warehouses', { credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to fetch warehouses');
+        console.log('[Inventory] Loading warehouses...');
+        // Add 10 second timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const res = await fetch('/api/odoo/warehouses', {
+          credentials: 'include',
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error('Failed to fetch warehouses: ' + res.status);
         const data = await res.json();
         warehouses = data.warehouses || [];
+        console.log('[Inventory] Loaded', warehouses.length, 'warehouses');
 
         // Select all warehouses by default
         selectedWarehouseIds = warehouses.map(w => w.id);
@@ -242,7 +253,11 @@
         // Render warehouse options
         renderWarehouseOptions();
       } catch (error) {
-        console.error('Failed to load warehouses:', error);
+        console.error('[Inventory] Failed to load warehouses:', error);
+        // Use default warehouse if Odoo call fails
+        warehouses = [{ id: 1, name: 'Central Warehouse', code: 'CW' }];
+        selectedWarehouseIds = [1];
+        renderWarehouseOptions();
       }
     }
 
@@ -321,13 +336,23 @@
 
     async function loadProducts() {
       updateLoadingStatus('Loading Products', 'Fetching from cache...');
+      console.log('[Inventory] Loading products...');
 
       try {
         // Use MongoDB cached endpoint - much faster!
-        const res = await fetch('/api/odoo/products/all', { credentials: 'include' });
+        // Add 30 second timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const res = await fetch('/api/odoo/products/all', {
+          credentials: 'include',
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
 
         if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
         const data = await res.json();
+        console.log('[Inventory] Products response:', data.products?.length || 0, 'products');
 
         // Check if sync is required
         if (data.syncRequired) {
@@ -578,14 +603,17 @@
 
     // Initialize - simple and fast!
     async function init() {
+      console.log('[Inventory] Init starting...');
       try {
         // Load warehouses for the filter dropdown
         await loadWarehouses();
+        console.log('[Inventory] Warehouses loaded, loading products...');
 
         // Load products from MongoDB cache (fast!)
         await loadProducts();
+        console.log('[Inventory] Init complete');
       } catch (err) {
-        console.error('Inventory init error:', err);
+        console.error('[Inventory] Init error:', err);
         updateLoadingStatus('Error', err.message || 'Unknown error occurred');
       }
     }

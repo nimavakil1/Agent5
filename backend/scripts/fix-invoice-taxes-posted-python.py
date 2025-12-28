@@ -134,9 +134,27 @@ def main():
                             [[invoice_id]]
                         )
                     except Exception as reset_error:
-                        stats['reset_errors'] += 1
-                        print(f'    ERROR resetting {invoice_name} to draft: {reset_error}')
-                        continue
+                        # Odoo server has allow_none=False, so it fails to serialize None returns
+                        # Check if the error is about None marshalling - if so, the operation likely succeeded
+                        error_str = str(reset_error)
+                        if 'cannot marshal None' in error_str:
+                            # Operation probably succeeded, verify state
+                            check = models.execute_kw(
+                                ODOO_DB, uid, ODOO_PASSWORD,
+                                'account.move', 'search_read',
+                                [[['id', '=', invoice_id]]],
+                                {'fields': ['state']}
+                            )
+                            if check and check[0].get('state') == 'draft':
+                                pass  # Success, continue with fix
+                            else:
+                                stats['reset_errors'] += 1
+                                print(f'    ERROR resetting {invoice_name} to draft: state not draft after reset')
+                                continue
+                        else:
+                            stats['reset_errors'] += 1
+                            print(f'    ERROR resetting {invoice_name} to draft: {reset_error}')
+                            continue
 
                 # Fix all lines with wrong tax
                 lines_fixed_this_invoice = 0
@@ -161,8 +179,22 @@ def main():
                             [[invoice_id]]
                         )
                     except Exception as repost_error:
-                        stats['repost_errors'] += 1
-                        print(f'    ERROR re-posting {invoice_name}: {repost_error}')
+                        # Handle Odoo's allow_none=False issue
+                        error_str = str(repost_error)
+                        if 'cannot marshal None' in error_str:
+                            # Check if posted successfully
+                            check = models.execute_kw(
+                                ODOO_DB, uid, ODOO_PASSWORD,
+                                'account.move', 'search_read',
+                                [[['id', '=', invoice_id]]],
+                                {'fields': ['state']}
+                            )
+                            if not check or check[0].get('state') != 'posted':
+                                stats['repost_errors'] += 1
+                                print(f'    ERROR re-posting {invoice_name}: state not posted after action_post')
+                        else:
+                            stats['repost_errors'] += 1
+                            print(f'    ERROR re-posting {invoice_name}: {repost_error}')
                         # Invoice is now in draft with correct taxes - continue anyway
 
                 if lines_fixed_this_invoice > 0:
