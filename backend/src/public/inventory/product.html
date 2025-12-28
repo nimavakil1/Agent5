@@ -208,6 +208,45 @@
     .add-packaging-row td { background: var(--bg-input); }
     .btn-small { padding: 8px 14px; font-size: 12px; border-radius: 6px; }
 
+    /* Reviews Tab */
+    .reviews-summary { display: grid; grid-template-columns: 200px 1fr; gap: 24px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+    @media (max-width: 600px) { .reviews-summary { grid-template-columns: 1fr; } }
+    .reviews-rating-big { text-align: center; padding: 24px; background: var(--bg-input); border-radius: 12px; }
+    .reviews-rating-value { font-size: 48px; font-weight: 700; color: #fbbf24; line-height: 1; margin-bottom: 8px; }
+    .reviews-rating-stars { display: flex; justify-content: center; gap: 4px; margin-bottom: 8px; color: #fbbf24; }
+    .reviews-rating-stars .material-symbols-outlined { font-size: 24px; font-variation-settings: 'FILL' 1; }
+    .reviews-rating-count { font-size: 13px; color: var(--text-muted); }
+    .reviews-distribution { display: flex; flex-direction: column; gap: 8px; }
+    .reviews-dist-row { display: flex; align-items: center; gap: 12px; }
+    .reviews-dist-stars { width: 60px; display: flex; gap: 2px; color: #fbbf24; font-size: 12px; }
+    .reviews-dist-stars .material-symbols-outlined { font-size: 14px; font-variation-settings: 'FILL' 1; }
+    .reviews-dist-bar { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .reviews-dist-fill { height: 100%; background: #fbbf24; border-radius: 4px; }
+    .reviews-dist-count { width: 40px; text-align: right; font-size: 12px; color: var(--text-muted); }
+    .reviews-by-marketplace { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+    .marketplace-chip { display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: var(--bg-input); border-radius: 8px; cursor: pointer; transition: all 0.15s; border: 1px solid var(--border); }
+    .marketplace-chip:hover, .marketplace-chip.active { border-color: var(--accent); background: var(--accent-soft); }
+    .marketplace-chip .flag { font-size: 16px; }
+    .marketplace-chip .rating { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: #fbbf24; }
+    .marketplace-chip .rating .material-symbols-outlined { font-size: 14px; font-variation-settings: 'FILL' 1; }
+    .marketplace-chip .count { font-size: 12px; color: var(--text-muted); }
+    .reviews-list { }
+    .review-item { padding: 16px; background: var(--bg-input); border-radius: 10px; margin-bottom: 12px; }
+    .review-item:last-child { margin-bottom: 0; }
+    .review-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+    .review-stars { display: flex; gap: 2px; color: #fbbf24; }
+    .review-stars .material-symbols-outlined { font-size: 16px; }
+    .review-stars .material-symbols-outlined.filled { font-variation-settings: 'FILL' 1; }
+    .review-stars .material-symbols-outlined.empty { color: #3f3f50; }
+    .review-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+    .review-order { color: var(--accent); cursor: pointer; }
+    .review-order:hover { text-decoration: underline; }
+    .review-comment { font-size: 14px; color: var(--text); line-height: 1.5; margin-top: 8px; padding: 12px; background: var(--bg-card); border-radius: 8px; border-left: 3px solid #3f3f50; }
+    .review-comment.positive { border-left-color: var(--success); }
+    .review-comment.negative { border-left-color: var(--danger); }
+    .no-reviews { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+    .no-reviews .material-symbols-outlined { font-size: 48px; margin-bottom: 12px; display: block; }
+
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 4000; }
     .modal-overlay.show { display: flex; }
@@ -753,6 +792,10 @@
               <span class="material-symbols-outlined">history</span>
               History
             </button>
+            <button class="tab-btn" onclick="showTab('reviews')">
+              <span class="material-symbols-outlined" style="color: #fbbf24;">star</span>
+              Reviews
+            </button>
           </div>
 
           <!-- Overview Tab -->
@@ -1195,6 +1238,16 @@
               </div>
             </div>
           </div>
+
+          <!-- Reviews Tab -->
+          <div class="tab-content" id="tab-reviews">
+            <div id="reviews-content">
+              <div class="loading-container" style="min-height:200px">
+                <span class="material-symbols-outlined">sync</span>
+                <div class="loading-text">Loading reviews...</div>
+              </div>
+            </div>
+          </div>
         </div>
       `;
     }
@@ -1434,6 +1487,154 @@
       const tab = document.getElementById(`tab-${tabId}`);
       tab.classList.add('active');
       if (isEditMode) tab.classList.add('edit-mode');
+
+      // Load reviews tab content when selected
+      if (tabId === 'reviews' && !reviewsLoaded) {
+        loadReviews();
+      }
+    }
+
+    // Reviews handling
+    const FLAGS = { DE: '🇩🇪', FR: '🇫🇷', IT: '🇮🇹', ES: '🇪🇸', NL: '🇳🇱', BE: '🇧🇪', PL: '🇵🇱', SE: '🇸🇪', UK: '🇬🇧' };
+    let reviewsLoaded = false;
+    let productReviews = { reviews: [], summary: {} };
+
+    async function loadReviews() {
+      const container = document.getElementById('reviews-content');
+
+      // Try to get ASIN from product barcodes (EAN-13 can be used to find ASIN)
+      // Or use SKU to find product in seller_orders
+      const barcode = product?.barcode || '';
+      const sku = product?.sku || '';
+
+      if (!barcode && !sku) {
+        container.innerHTML = `
+          <div class="no-reviews">
+            <span class="material-symbols-outlined">star_border</span>
+            <div>No barcode or SKU available to fetch reviews</div>
+          </div>
+        `;
+        return;
+      }
+
+      try {
+        // Try to find reviews by product barcode (which might be an ASIN)
+        const res = await fetch(`/api/seller/reviews/product/${encodeURIComponent(barcode || sku)}`);
+        const data = await res.json();
+
+        if (data.success) {
+          productReviews = data;
+          reviewsLoaded = true;
+          renderReviewsTab();
+        } else {
+          throw new Error(data.error);
+        }
+      } catch (error) {
+        container.innerHTML = `
+          <div class="no-reviews">
+            <span class="material-symbols-outlined">star_border</span>
+            <div>No reviews found for this product</div>
+            <div style="font-size: 12px; margin-top: 8px; opacity: 0.7;">Reviews are imported from Amazon Seller Feedback data</div>
+          </div>
+        `;
+      }
+    }
+
+    function renderReviewsTab() {
+      const container = document.getElementById('reviews-content');
+      const { summary, reviews } = productReviews;
+
+      if (!reviews || reviews.length === 0) {
+        container.innerHTML = `
+          <div class="no-reviews">
+            <span class="material-symbols-outlined">star_border</span>
+            <div>No reviews found for this product</div>
+            <div style="font-size: 12px; margin-top: 8px; opacity: 0.7;">Reviews are imported from Amazon Seller Feedback data</div>
+          </div>
+        `;
+        return;
+      }
+
+      // Render rating summary
+      const avgRating = parseFloat(summary.avgRating) || 0;
+      const fullStars = Math.floor(avgRating);
+      const totalReviews = summary.total || 0;
+
+      const starsHtml = Array(5).fill(0).map((_, i) =>
+        `<span class="material-symbols-outlined">${i < fullStars ? 'star' : 'star_border'}</span>`
+      ).join('');
+
+      // Rating distribution
+      const byRating = summary.byRating || {};
+      const distHtml = [5, 4, 3, 2, 1].map(star => {
+        const count = byRating[star] || 0;
+        const pct = totalReviews > 0 ? (count / totalReviews * 100) : 0;
+        const starIcons = Array(star).fill('<span class="material-symbols-outlined">star</span>').join('');
+        return `
+          <div class="reviews-dist-row">
+            <div class="reviews-dist-stars">${starIcons}</div>
+            <div class="reviews-dist-bar">
+              <div class="reviews-dist-fill" style="width: ${pct}%"></div>
+            </div>
+            <div class="reviews-dist-count">${count}</div>
+          </div>
+        `;
+      }).join('');
+
+      // Marketplace chips
+      const byMarketplace = summary.byMarketplace || [];
+      const marketplaceHtml = byMarketplace.map(mp => `
+        <div class="marketplace-chip">
+          <span class="flag">${FLAGS[mp.country] || mp.country}</span>
+          <span class="rating">
+            <span class="material-symbols-outlined">star</span>
+            ${mp.avgRating}
+          </span>
+          <span class="count">(${mp.count})</span>
+        </div>
+      `).join('');
+
+      // Reviews list
+      const reviewsHtml = reviews.map(r => {
+        const stars = Array(5).fill(0).map((_, i) =>
+          `<span class="material-symbols-outlined ${i < r.rating ? 'filled' : 'empty'}">star</span>`
+        ).join('');
+        const commentClass = r.rating >= 4 ? 'positive' : (r.rating <= 2 ? 'negative' : '');
+        const date = r.feedbackDate ? new Date(r.feedbackDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+
+        return `
+          <div class="review-item">
+            <div class="review-header">
+              <div class="review-stars">${stars}</div>
+              <div class="review-meta">
+                <span class="review-order" onclick="window.open('/seller/?orderId=${r.orderId}', '_blank')">${r.orderId}</span>
+                ${r.marketplaceCountry ? `<span>${FLAGS[r.marketplaceCountry] || ''} ${r.marketplaceCountry}</span>` : ''}
+                <span>${date}</span>
+              </div>
+            </div>
+            ${r.comments ? `<div class="review-comment ${commentClass}">${escapeHtml(r.comments)}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="reviews-summary">
+          <div class="reviews-rating-big">
+            <div class="reviews-rating-value">${summary.avgRating || '0.0'}</div>
+            <div class="reviews-rating-stars">${starsHtml}</div>
+            <div class="reviews-rating-count">${totalReviews} reviews</div>
+          </div>
+          <div class="reviews-distribution">${distHtml}</div>
+        </div>
+        ${byMarketplace.length > 0 ? `<div class="reviews-by-marketplace">${marketplaceHtml}</div>` : ''}
+        <div class="field-group">
+          <div class="field-group-title">
+            <span class="material-symbols-outlined">reviews</span>
+            Customer Feedback
+          </div>
+          <div class="reviews-list">${reviewsHtml}</div>
+        </div>
+      `;
     }
 
     function formatType(type) {

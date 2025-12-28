@@ -370,6 +370,8 @@ class BolOrderCreator {
 
       const orderData = {
         partner_id: partnerId,
+        partner_invoice_id: partnerId,   // Required: Invoice address
+        partner_shipping_id: partnerId,  // Required: Delivery address
         client_order_ref: orderRef,
         date_order: orderDate,
         warehouse_id: CENTRAL_WAREHOUSE_ID,
