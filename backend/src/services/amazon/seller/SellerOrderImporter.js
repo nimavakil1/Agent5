@@ -455,7 +455,12 @@ class SellerOrderImporter {
     }
 
     if (filters.status) {
-      query.orderStatus = filters.status;
+      // Support negation with ! prefix (e.g., "!Pending" means not Pending)
+      if (filters.status.startsWith('!')) {
+        query.orderStatus = { $ne: filters.status.substring(1) };
+      } else {
+        query.orderStatus = filters.status;
+      }
     }
 
     if (filters.fulfillmentChannel) {

@@ -128,7 +128,7 @@
 
     <!-- Stats -->
     <div class="stats-row">
-      <div class="stat-card" onclick="filterOrders('')">
+      <div class="stat-card" onclick="filterOrders('all')">
         <div class="stat-value" id="stat-total">--</div>
         <div class="stat-label">Total Orders</div>
       </div>
@@ -205,8 +205,10 @@
               <th>
                 <select class="filter-select" id="filter-status" onchange="loadOrders()">
                   <option value="">All</option>
-                  <option value="Pending">Pending</option>
+                  <option value="!Pending" selected>Not Pending</option>
+                  <option value="Unshipped">Unshipped</option>
                   <option value="Shipped">Shipped</option>
+                  <option value="Pending">Pending</option>
                   <option value="Canceled">Canceled</option>
                 </select>
               </th>
@@ -364,12 +366,12 @@
     }
 
     function filterOrders(filter) {
-      // Reset all filters
+      // Reset all filters to defaults
       document.getElementById('filter-order-id').value = '';
       document.getElementById('filter-customer').value = '';
       document.getElementById('filter-marketplace').value = '';
       document.getElementById('filter-fulfillment').value = '';
-      document.getElementById('filter-status').value = '';
+      document.getElementById('filter-status').value = '!Pending'; // Default: exclude Pending
       document.getElementById('filter-odoo').value = '';
 
       switch (filter) {
@@ -384,6 +386,9 @@
           break;
         case 'with-odoo':
           document.getElementById('filter-odoo').value = 'true';
+          break;
+        case 'all':
+          document.getElementById('filter-status').value = ''; // Show all including Pending
           break;
       }
 
