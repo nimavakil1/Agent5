@@ -26,6 +26,7 @@
     @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
     .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 10px; padding: 12px 16px; cursor: pointer; transition: border-color 0.15s; }
     .stat-card:hover { border-color: #8b5cf6; }
+    .stat-card.active { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3); }
     .stat-value { font-size: 22px; font-weight: 700; color: #fff; }
     .stat-label { font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.02em; }
     .stat-card.success .stat-value { color: #4ade80; }
@@ -113,19 +114,19 @@
 
     <!-- Stats -->
     <div class="stats-row">
-      <div class="stat-card info" onclick="filterByStock('')">
+      <div class="stat-card info active" id="card-all" onclick="filterByStock('')">
         <div class="stat-value" id="stat-total">--</div>
         <div class="stat-label">Total Products</div>
       </div>
-      <div class="stat-card success" onclick="filterByStock('in')">
+      <div class="stat-card success" id="card-in" onclick="filterByStock('in')">
         <div class="stat-value" id="stat-in-stock">--</div>
         <div class="stat-label">In Stock</div>
       </div>
-      <div class="stat-card warning" onclick="filterByStock('low')">
+      <div class="stat-card warning" id="card-low" onclick="filterByStock('low')">
         <div class="stat-value" id="stat-low-stock">--</div>
         <div class="stat-label">Low Stock</div>
       </div>
-      <div class="stat-card danger" onclick="filterByStock('out')">
+      <div class="stat-card danger" id="card-out" onclick="filterByStock('out')">
         <div class="stat-value" id="stat-out-of-stock">--</div>
         <div class="stat-label">Out of Stock</div>
       </div>
@@ -214,6 +215,7 @@
     let currentPage = 1;
     const pageSize = 50;
     let filterTimeout = null;
+    let currentStockFilter = ''; // '', 'in', 'low', 'out'
 
     // Warehouse data
     let warehouses = [];
@@ -474,9 +476,14 @@
     }
 
     function filterByStock(status) {
-      // Note: filter-stock element doesn't exist, this just resets other filters
-      const stockFilter = document.getElementById('filter-stock');
-      if (stockFilter) stockFilter.value = status;
+      currentStockFilter = status;
+
+      // Update active card styling
+      document.querySelectorAll('.stat-card').forEach(card => card.classList.remove('active'));
+      const cardId = status ? `card-${status}` : 'card-all';
+      document.getElementById(cardId)?.classList.add('active');
+
+      // Reset text filters when clicking stat cards
       document.getElementById('filter-sku').value = '';
       document.getElementById('filter-name').value = '';
       document.getElementById('filter-category').value = '';
@@ -490,9 +497,17 @@
       const category = document.getElementById('filter-category').value;
 
       filteredProducts = allProducts.filter(p => {
+        // Text filters
         if (sku && !(p.sku && p.sku.toLowerCase().includes(sku))) return false;
         if (name && !(p.name && p.name.toLowerCase().includes(name))) return false;
         if (category && p.category !== category) return false;
+
+        // Stock filter
+        const stock = p.stock || p.totalStock || 0;
+        if (currentStockFilter === 'in' && stock <= 10) return false;
+        if (currentStockFilter === 'low' && (stock <= 0 || stock > 10)) return false;
+        if (currentStockFilter === 'out' && stock > 0) return false;
+
         return true;
       });
 
