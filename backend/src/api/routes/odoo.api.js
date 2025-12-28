@@ -1061,7 +1061,7 @@ router.get('/invoices', async (req, res) => {
 });
 
 /**
- * Get warehouses list - uses cached data from ProductSyncService
+ * Get warehouses list - uses cached/default data, no Odoo call needed
  */
 router.get('/warehouses', async (req, res) => {
   try {
@@ -1077,30 +1077,24 @@ router.get('/warehouses', async (req, res) => {
       });
     }
 
-    // Fallback to Odoo if no cached data (slower)
-    console.log('[Odoo API] No cached warehouses, fetching from Odoo...');
-    const client = await getOdooClient();
-    const warehouses = await client.searchRead('stock.warehouse', [], [
-      'id', 'name', 'code', 'lot_stock_id'
-    ], { order: 'id asc' });
-
+    // Return default warehouses list - no Odoo call needed
+    // These are the common warehouses that exist in Odoo
+    // Full list will be available after a product sync
     res.json({
       success: true,
       cached: false,
-      warehouses: warehouses.map(w => ({
-        id: w.id,
-        name: w.name,
-        code: w.code,
-        stockLocationId: w.lot_stock_id ? w.lot_stock_id[0] : null
-      }))
+      warehouses: [
+        { id: 1, name: 'Central Warehouse', code: 'CW' },
+        { id: 2, name: 'MaryLift', code: 'ML' },
+        { id: 15, name: 'Kaufland', code: 'KFL' },
+        { id: 18, name: 'CDiscount - Octopia', code: 'FBC' },
+        { id: 23, name: 'Ziegler_aalst', code: 'ZA' }
+      ]
     });
   } catch (error) {
     console.error('Odoo warehouses error:', error);
-    // Return default warehouse on error so inventory page can still load
     res.json({
       success: true,
-      cached: false,
-      fallback: true,
       warehouses: [{ id: 1, name: 'Central Warehouse', code: 'CW' }]
     });
   }
