@@ -5,13 +5,30 @@
  * - Order import and management
  * - Odoo order creation
  * - Polling control
+ * - FBM TSV import
  *
  * @module api/seller
  */
 
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const { getDb } = require('../../db');
+
+// Configure multer for FBM TSV file uploads
+const storage = multer.memoryStorage();
+const uploadFbm = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ['text/csv', 'text/tab-separated-values', 'text/plain', 'application/vnd.ms-excel'];
+    if (allowedMimes.includes(file.mimetype) || file.originalname.endsWith('.txt') || file.originalname.endsWith('.tsv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only TSV/TXT files are allowed'));
+    }
+  }
+});
 
 // Lazy-load seller services to avoid initialization issues
 let sellerOrderImporter = null;
@@ -243,6 +260,102 @@ router.post('/orders/create-pending', async (req, res) => {
     });
   } catch (error) {
     console.error('[SellerAPI] POST /orders/create-pending error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/seller/orders/create-fba
+ * @desc Create Odoo orders for FBA orders only (uses generic customers)
+ * @body limit - Optional: max orders to process (default 100)
+ * @body dryRun - Optional: simulate without creating (default false)
+ */
+router.post('/orders/create-fba', async (req, res) => {
+  try {
+    const creator = await getCreator();
+
+    const results = await creator.createFbaOrders({
+      limit: req.body.limit || 100,
+      dryRun: req.body.dryRun || false
+    });
+
+    res.json({
+      success: true,
+      ...results
+    });
+  } catch (error) {
+    console.error('[SellerAPI] POST /orders/create-fba error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== FBM TSV IMPORT ====================
+
+/**
+ * @route POST /api/seller/orders/import-fbm
+ * @desc Import FBM orders from Amazon "Unshipped Orders" TSV file
+ * @body file - TSV file with customer names and addresses
+ */
+router.post('/orders/import-fbm', uploadFbm.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const { getFbmOrderImporter } = require('../../services/amazon/seller/FbmOrderImporter');
+    const importer = await getFbmOrderImporter();
+
+    const tsvContent = req.file.buffer.toString('utf-8');
+    const results = await importer.importFromTsv(tsvContent);
+
+    res.json({
+      success: true,
+      filename: req.file.originalname,
+      ...results
+    });
+  } catch (error) {
+    console.error('[SellerAPI] POST /orders/import-fbm error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/seller/orders/preview-fbm
+ * @desc Preview FBM orders from TSV without importing
+ * @body file - TSV file
+ */
+router.post('/orders/preview-fbm', uploadFbm.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const { FbmOrderImporter } = require('../../services/amazon/seller/FbmOrderImporter');
+    const importer = new FbmOrderImporter();
+
+    const tsvContent = req.file.buffer.toString('utf-8');
+    const orders = importer.parseTsv(tsvContent);
+    const orderList = Object.values(orders);
+
+    res.json({
+      success: true,
+      filename: req.file.originalname,
+      count: orderList.length,
+      orders: orderList.map(o => ({
+        orderId: o.orderId,
+        customer: o.recipientName,
+        city: o.city,
+        country: o.country,
+        itemCount: o.items.length,
+        items: o.items.map(i => ({
+          sku: i.sku,
+          resolvedSku: i.resolvedSku,
+          quantity: i.quantity
+        }))
+      }))
+    });
+  } catch (error) {
+    console.error('[SellerAPI] POST /orders/preview-fbm error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

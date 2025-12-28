@@ -284,7 +284,7 @@ class SellerOrderCreator {
   }
 
   /**
-   * Find existing order in Odoo by Amazon Order ID
+   * Find existing VALID (non-cancelled) order in Odoo by Amazon Order ID
    */
   async findExistingOrder(amazonOrderId) {
     // Try with both prefix variations
@@ -292,14 +292,14 @@ class SellerOrderCreator {
     for (const prefix of prefixes) {
       const searchRef = prefix + amazonOrderId;
       const orders = await this.odoo.searchRead('sale.order',
-        [['client_order_ref', '=', searchRef]],
+        [['client_order_ref', '=', searchRef], ['state', '!=', 'cancel']],
         ['id', 'name', 'state']
       );
       if (orders.length > 0) return orders[0];
 
       // Also try by name
       const ordersByName = await this.odoo.searchRead('sale.order',
-        [['name', '=', searchRef]],
+        [['name', '=', searchRef], ['state', '!=', 'cancel']],
         ['id', 'name', 'state']
       );
       if (ordersByName.length > 0) return ordersByName[0];
@@ -307,10 +307,73 @@ class SellerOrderCreator {
 
     // Try just the order ID
     const orders = await this.odoo.searchRead('sale.order',
-      [['client_order_ref', '=', amazonOrderId]],
+      [['client_order_ref', '=', amazonOrderId], ['state', '!=', 'cancel']],
       ['id', 'name', 'state']
     );
     return orders.length > 0 ? orders[0] : null;
+  }
+
+  /**
+   * Create orders for FBA orders only (uses generic customers)
+   * @param {Object} options - Creation options
+   */
+  async createFbaOrders(options = {}) {
+    await this.init();
+
+    const limit = options.limit || 100;
+
+    // Get FBA orders pending Odoo creation
+    const db = getDb();
+    const pendingOrders = await db.collection('seller_orders').find({
+      'odoo.saleOrderId': null,
+      autoImportEligible: true,
+      fulfillmentChannel: 'AFN', // FBA only
+      orderStatus: { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
+      itemsFetched: true
+    })
+      .sort({ purchaseDate: -1 })
+      .limit(limit)
+      .toArray();
+
+    const results = {
+      processed: 0,
+      created: 0,
+      skipped: 0,
+      errors: [],
+      orders: []
+    };
+
+    console.log(`[SellerOrderCreator] Processing ${pendingOrders.length} FBA orders`);
+
+    for (const order of pendingOrders) {
+      results.processed++;
+
+      try {
+        const result = await this.createOrder(order.amazonOrderId, {
+          dryRun: options.dryRun,
+          autoConfirm: options.autoConfirm !== false
+        });
+
+        if (result.success && !result.skipped) {
+          results.created++;
+        } else if (result.skipped) {
+          results.skipped++;
+        }
+
+        results.orders.push({
+          amazonOrderId: order.amazonOrderId,
+          ...result
+        });
+
+      } catch (error) {
+        results.errors.push({
+          amazonOrderId: order.amazonOrderId,
+          error: error.message
+        });
+      }
+    }
+
+    return results;
   }
 
   /**
