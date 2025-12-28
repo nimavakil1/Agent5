@@ -114,6 +114,7 @@ class SellerOrderImporter {
           lastUpdatedAfter: lastUpdatedAfter.toISOString(),
           marketplaceIds: options.marketplaceIds || getAllMarketplaceIds(),
           maxResultsPerPage: 100,
+          includePII: true,  // Request buyer name and shipping address via RDT
           ...(nextToken && { nextToken })
         });
 
@@ -351,7 +352,8 @@ class SellerOrderImporter {
           const orders = await this.client.getAllOrders({
             createdAfter: currentStart.toISOString(),
             createdBefore: currentEnd.toISOString(),
-            marketplaceIds: getAllMarketplaceIds()
+            marketplaceIds: getAllMarketplaceIds(),
+            includePII: true  // Request buyer name and shipping address via RDT
           });
 
           result.ordersFound += orders.length;

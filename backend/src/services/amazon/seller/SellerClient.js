@@ -72,6 +72,51 @@ class SellerClient {
     return this.client;
   }
 
+  // ==================== RESTRICTED DATA TOKEN ====================
+
+  /**
+   * Create a Restricted Data Token (RDT) for accessing PII
+   * Required for buyer info, shipping address, etc.
+   * @param {string[]} orderIds - Optional specific order IDs (if empty, uses path-based)
+   */
+  async createRestrictedDataToken(orderIds = []) {
+    const client = await this.getClient();
+
+    // Define restricted resources we need access to
+    const restrictedResources = [
+      {
+        method: 'GET',
+        path: '/orders/v0/orders',
+        dataElements: ['buyerInfo', 'shippingAddress']
+      },
+      {
+        method: 'GET',
+        path: '/orders/v0/orders/{orderId}',
+        dataElements: ['buyerInfo', 'shippingAddress']
+      },
+      {
+        method: 'GET',
+        path: '/orders/v0/orders/{orderId}/orderItems',
+        dataElements: ['buyerInfo']
+      }
+    ];
+
+    try {
+      const response = await client.callAPI({
+        operation: 'tokens.createRestrictedDataToken',
+        body: {
+          restrictedResources
+        }
+      });
+
+      return response.restrictedDataToken;
+    } catch (error) {
+      console.error('[SellerClient] Failed to create RDT:', error.message);
+      // Return null - we'll fetch without PII
+      return null;
+    }
+  }
+
   // ==================== ORDERS API ====================
 
   /**
@@ -86,6 +131,7 @@ class SellerClient {
    * @param {string[]} params.fulfillmentChannels - Filter by fulfillment channel ('AFN' or 'MFN')
    * @param {number} params.maxResultsPerPage - Max results per page (default 100)
    * @param {string} params.nextToken - Pagination token
+   * @param {boolean} params.includePII - Whether to request PII (buyer info, shipping address)
    */
   async getOrders(params = {}) {
     const client = await this.getClient();
@@ -105,10 +151,20 @@ class SellerClient {
       ...(params.nextToken && { NextToken: params.nextToken })
     };
 
-    return client.callAPI({
+    const options = {
       operation: 'orders.getOrders',
       query: queryParams
-    });
+    };
+
+    // If PII requested, get a restricted data token
+    if (params.includePII) {
+      const rdt = await this.createRestrictedDataToken();
+      if (rdt) {
+        options.options = { restricted_data_token: rdt };
+      }
+    }
+
+    return client.callAPI(options);
   }
 
   /**
