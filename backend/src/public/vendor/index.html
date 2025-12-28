@@ -232,11 +232,10 @@
       }
     }
     function getShippingStatus(o) {
-      const shipped = o.shippedQuantity || 0;
-      const ordered = o.orderedQuantity || 0;
-      if (shipped === 0) return 'Not Shipped';
-      if (shipped >= ordered) return 'Shipped';
-      return 'Partial';
+      const status = o.shipmentStatus || 'not_shipped';
+      if (status === 'fully_shipped') return 'Shipped';
+      if (status === 'partially_shipped') return 'Partial';
+      return 'Not Shipped';
     }
     function renderOrders() {
       const tbody = document.getElementById('orders-table');
