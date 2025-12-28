@@ -15,7 +15,7 @@ async function main() {
 
   try {
     const odoo = new OdooDirectClient();
-    await odoo.connect();
+    await odoo.authenticate();
 
     const orders = await odoo.searchRead('sale.order', [[['id', '=', parseInt(orderId)]]], {
       fields: ['name', 'client_order_ref', 'partner_id', 'state', 'date_order']
