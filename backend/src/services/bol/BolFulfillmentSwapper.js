@@ -204,14 +204,15 @@ class BolFulfillmentSwapper {
   async requestOfferExport() {
     console.log('[BolFulfillmentSwapper] Requesting offer export...');
 
-    // POST request to trigger export (no body needed)
     const token = await this.getAccessToken();
     const response = await fetch('https://api.bol.com/retailer/offers/export', {
       method: 'POST',
       headers: {
         'Accept': 'application/vnd.retailer.v10+json',
+        'Content-Type': 'application/vnd.retailer.v10+json',
         'Authorization': `Bearer ${token}`
-      }
+      },
+      body: JSON.stringify({ format: 'CSV' })
     });
 
     if (!response.ok) {
