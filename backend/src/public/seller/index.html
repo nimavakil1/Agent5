@@ -205,7 +205,7 @@
               <th>
                 <select class="filter-select" id="filter-status" onchange="loadOrders()">
                   <option value="">All</option>
-                  <option value="!Pending" selected>Not Pending</option>
+                  <option value="Unshipped,Shipped" selected>Active</option>
                   <option value="Unshipped">Unshipped</option>
                   <option value="Shipped">Shipped</option>
                   <option value="Pending">Pending</option>
@@ -371,7 +371,7 @@
       document.getElementById('filter-customer').value = '';
       document.getElementById('filter-marketplace').value = '';
       document.getElementById('filter-fulfillment').value = '';
-      document.getElementById('filter-status').value = '!Pending'; // Default: exclude Pending
+      document.getElementById('filter-status').value = 'Unshipped,Shipped'; // Default: Active (exclude Pending & Canceled)
       document.getElementById('filter-odoo').value = '';
 
       switch (filter) {

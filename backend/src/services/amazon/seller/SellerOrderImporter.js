@@ -455,8 +455,12 @@ class SellerOrderImporter {
     }
 
     if (filters.status) {
+      // Support comma-separated values (e.g., "Unshipped,Shipped")
+      if (filters.status.includes(',')) {
+        query.orderStatus = { $in: filters.status.split(',') };
+      }
       // Support negation with ! prefix (e.g., "!Pending" means not Pending)
-      if (filters.status.startsWith('!')) {
+      else if (filters.status.startsWith('!')) {
         query.orderStatus = { $ne: filters.status.substring(1) };
       } else {
         query.orderStatus = filters.status;
