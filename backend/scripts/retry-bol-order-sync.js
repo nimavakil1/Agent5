@@ -5,7 +5,7 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const BolOrderCreator = require('../src/services/bol/BolOrderCreator');
+const { getBolOrderCreator } = require('../src/services/bol/BolOrderCreator');
 
 async function main() {
   const orderId = process.argv[2];
@@ -30,7 +30,7 @@ async function main() {
     console.log(`Current Odoo ID: ${order.odoo?.id || 'none'}`);
     console.log(`Sync error: ${order.odoo?.syncError || 'none'}`);
 
-    const creator = new BolOrderCreator();
+    const creator = await getBolOrderCreator();
     const result = await creator.createOrLink(order);
     console.log('Result:', JSON.stringify(result, null, 2));
 
