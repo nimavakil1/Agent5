@@ -6,6 +6,7 @@
  */
 
 const BolSyncService = require('./BolSyncService');
+const BolInvoiceBooker = require('./BolInvoiceBooker');
 
 let nightlySyncJob = null;
 
@@ -33,9 +34,20 @@ async function runNightlySync() {
   const startTime = Date.now();
 
   try {
-    const results = await BolSyncService.syncAll('EXTENDED');
+    // Step 1: Sync data from Bol.com API
+    const syncResults = await BolSyncService.syncAll('EXTENDED');
+    console.log('[BolScheduler] Sync complete:', syncResults);
+
+    // Step 2: Book any new invoices to Odoo
+    console.log('[BolScheduler] Booking unbooked invoices to Odoo...');
+    const bookingResults = await BolInvoiceBooker.bookAllUnbooked();
+    console.log('[BolScheduler] Invoice booking complete:', bookingResults);
+
     const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-    console.log(`[BolScheduler] Nightly sync complete in ${duration} minutes:`, results);
+    console.log(`[BolScheduler] Nightly sync complete in ${duration} minutes:`, {
+      sync: syncResults,
+      booking: bookingResults
+    });
   } catch (error) {
     console.error('[BolScheduler] Nightly sync failed:', error);
   }

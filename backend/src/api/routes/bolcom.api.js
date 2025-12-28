@@ -2081,4 +2081,63 @@ router.post('/sync/:type', async (req, res) => {
   }
 });
 
+// Invoice booking service
+const BolInvoiceBooker = require('../../services/bol/BolInvoiceBooker');
+
+/**
+ * Book a single invoice to Odoo
+ * POST /api/bolcom/invoices/:invoiceId/book
+ */
+router.post('/invoices/:invoiceId/book', async (req, res) => {
+  try {
+    const { invoiceId } = req.params;
+    const result = await BolInvoiceBooker.bookInvoice(invoiceId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error(`[BolComAPI] Error booking invoice ${req.params.invoiceId}:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Book all unbooked invoices to Odoo
+ * POST /api/bolcom/invoices/book-all
+ */
+router.post('/invoices/book-all', async (req, res) => {
+  try {
+    const result = await BolInvoiceBooker.bookAllUnbooked();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('[BolComAPI] Error booking all invoices:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get invoices that need to be booked to Odoo
+ * GET /api/bolcom/invoices/unbooked
+ */
+router.get('/invoices/unbooked', async (req, res) => {
+  try {
+    const unbooked = await BolInvoice.find({
+      'odoo.billId': { $exists: false },
+      totalAmountExclVat: { $gt: 0 }
+    }).sort({ issueDate: -1 });
+
+    res.json({
+      success: true,
+      count: unbooked.length,
+      invoices: unbooked.map(inv => ({
+        invoiceId: inv.invoiceId,
+        issueDate: inv.issueDate,
+        invoiceType: inv.invoiceType,
+        totalAmountExclVat: inv.totalAmountExclVat,
+        syncError: inv.odoo?.syncError
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
