@@ -150,7 +150,7 @@ const PREDEFINED_CARRIERS = [
     color: '#FF6600',
     type: 'PARCEL',
     countries: ['NL', 'BE'],
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/PostNL_Logo.svg/200px-PostNL_Logo.svg.png'
+    logo: '/assets/logos/postnl.png'
   },
   {
     name: 'DHL',
@@ -160,7 +160,7 @@ const PREDEFINED_CARRIERS = [
     color: '#FFCC00',
     type: 'PARCEL',
     countries: ['NL', 'BE', 'DE'],
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/DHL_Logo.svg/200px-DHL_Logo.svg.png'
+    logo: '/assets/logos/dhl.png'
   },
   {
     name: 'DHL For You',
@@ -170,7 +170,7 @@ const PREDEFINED_CARRIERS = [
     color: '#FFCC00',
     type: 'PARCEL',
     countries: ['NL', 'BE'],
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/DHL_Logo.svg/200px-DHL_Logo.svg.png'
+    logo: '/assets/logos/dhl.png'
   },
   {
     name: 'DPD NL',
@@ -180,7 +180,7 @@ const PREDEFINED_CARRIERS = [
     color: '#DC0032',
     type: 'PARCEL',
     countries: ['NL'],
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/DPD_logo_%282015%29.svg/200px-DPD_logo_%282015%29.svg.png'
+    logo: '/assets/logos/dpd.png'
   },
   {
     name: 'DPD BE',
@@ -190,7 +190,7 @@ const PREDEFINED_CARRIERS = [
     color: '#DC0032',
     type: 'PARCEL',
     countries: ['BE'],
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/DPD_logo_%282015%29.svg/200px-DPD_logo_%282015%29.svg.png'
+    logo: '/assets/logos/dpd.png'
   },
   {
     name: 'GLS',
@@ -200,7 +200,7 @@ const PREDEFINED_CARRIERS = [
     color: '#003A70',
     type: 'PARCEL',
     countries: ['NL', 'BE', 'DE'],
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/GLS_Logo.svg/200px-GLS_Logo.svg.png'
+    logo: '/assets/logos/gls.png'
   },
   {
     name: 'UPS',
@@ -210,7 +210,7 @@ const PREDEFINED_CARRIERS = [
     color: '#351C15',
     type: 'PARCEL',
     countries: ['NL', 'BE', 'DE'],
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/UPS_Logo_Shield_2017.svg/200px-UPS_Logo_Shield_2017.svg.png'
+    logo: '/assets/logos/ups.png'
   },
   {
     name: 'Bpost',
@@ -220,7 +220,7 @@ const PREDEFINED_CARRIERS = [
     color: '#E30613',
     type: 'PARCEL',
     countries: ['BE'],
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Bpost_logo.svg/200px-Bpost_logo.svg.png'
+    logo: '/assets/logos/bpost.png'
   },
   {
     name: 'FedEx NL',
@@ -230,7 +230,17 @@ const PREDEFINED_CARRIERS = [
     color: '#4D148C',
     type: 'EXPRESS',
     countries: ['NL'],
-    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/FedEx_Corporation_-_2016_Logo.svg/200px-FedEx_Corporation_-_2016_Logo.svg.png'
+    logo: '/assets/logos/fedex.png'
+  },
+  {
+    name: 'FedEx BE',
+    code: 'FEDEX_BE',
+    displayName: 'FedEx Belgium',
+    bolTransporterCode: 'FEDEX_BE',
+    color: '#4D148C',
+    type: 'EXPRESS',
+    countries: ['BE'],
+    logo: '/assets/logos/fedex.png'
   },
   {
     name: 'Budbee',

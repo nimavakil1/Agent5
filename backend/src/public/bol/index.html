@@ -1138,6 +1138,32 @@
       }
     }
 
+    // Carrier logo mapping - maps Bol transporter codes to logo filenames
+    const CARRIER_LOGOS = {
+      'TNT': 'postnl',        // Bol uses TNT code for PostNL
+      'POSTNL': 'postnl',
+      'PNL': 'postnl',
+      'POSTNL_NL': 'postnl',
+      'DHL': 'dhl',
+      'DHL_NL': 'dhl',
+      'DHL_DE': 'dhl',
+      'DHLFORYOU': 'dhl',
+      'DHL-SD': 'dhl',
+      'DHL-GLOBAL-MAIL': 'dhl',
+      'DPD': 'dpd',
+      'DPD-NL': 'dpd',
+      'DPD-BE': 'dpd',
+      'GLS': 'gls',
+      'GLS_NL': 'gls',
+      'UPS': 'ups',
+      'FEDEX': 'fedex',
+      'FEDEX_NL': 'fedex',
+      'FEDEX_BE': 'fedex',
+      'BPOST': 'bpost',
+      'BPOST_BE': 'bpost',
+      'BPOST_BRIEF': 'bpost'
+    };
+
     function renderShipmentsTable(shipments) {
       const tbody = document.getElementById('shipments-table');
       tbody.innerHTML = shipments.map(shipment => {
@@ -1147,43 +1173,58 @@
 
         let trackUrl = '';
         let carrierDisplay = carrier;
+        let carrierLogo = CARRIER_LOGOS[carrier.toUpperCase()] || null;
+
         if (trackTrace && trackTrace !== '-') {
           const carrierLower = carrier.toLowerCase();
-          if (carrierLower.includes('postnl') || carrierLower === 'pnl' || carrierLower === 'postnl_nl') {
+          if (carrierLower.includes('postnl') || carrierLower === 'pnl' || carrierLower === 'postnl_nl' || carrierLower === 'tnt') {
             trackUrl = `https://postnl.nl/tracktrace/?B=${encodeURIComponent(trackTrace)}`;
             carrierDisplay = 'PostNL';
+            carrierLogo = 'postnl';
           } else if (carrierLower.includes('bpost') || carrierLower === 'bpost_be') {
             trackUrl = `https://track.bpost.cloud/btr/web/#/search?itemCode=${encodeURIComponent(trackTrace)}&lang=nl`;
             carrierDisplay = 'bpost';
+            carrierLogo = 'bpost';
           } else if (carrierLower.includes('gls') || carrierLower === 'gls_nl') {
             trackUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackTrace)}`;
             carrierDisplay = 'GLS';
-          } else if (carrierLower.includes('dpd') || carrierLower === 'dpd_nl' || carrierLower === 'dpd_be') {
+            carrierLogo = 'gls';
+          } else if (carrierLower.includes('dpd') || carrierLower === 'dpd_nl' || carrierLower === 'dpd_be' || carrierLower === 'dpd-nl' || carrierLower === 'dpd-be') {
             trackUrl = `https://tracking.dpd.de/status/nl_NL/parcel/${encodeURIComponent(trackTrace)}`;
             carrierDisplay = 'DPD';
-          } else if (carrierLower.includes('dhl') || carrierLower === 'dhl_nl' || carrierLower === 'dhl_de') {
+            carrierLogo = 'dpd';
+          } else if (carrierLower.includes('dhl') || carrierLower === 'dhl_nl' || carrierLower === 'dhl_de' || carrierLower === 'dhlforyou') {
             trackUrl = `https://www.dhl.com/nl-nl/home/tracking.html?tracking-id=${encodeURIComponent(trackTrace)}`;
             carrierDisplay = 'DHL';
+            carrierLogo = 'dhl';
           } else if (carrierLower.includes('ups')) {
             trackUrl = `https://www.ups.com/track?tracknum=${encodeURIComponent(trackTrace)}`;
             carrierDisplay = 'UPS';
+            carrierLogo = 'ups';
           } else if (carrierLower.includes('fedex')) {
             trackUrl = `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(trackTrace)}`;
             carrierDisplay = 'FedEx';
+            carrierLogo = 'fedex';
           } else if (carrierLower.includes('tnt')) {
             trackUrl = `https://www.tnt.com/express/nl_nl/site/shipping-tools/tracking.html?searchType=con&cons=${encodeURIComponent(trackTrace)}`;
-            carrierDisplay = 'TNT';
+            carrierDisplay = 'PostNL';  // TNT is now PostNL
+            carrierLogo = 'postnl';
           } else {
             trackUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackTrace)}`;
           }
         }
+
+        // Render carrier as logo or text fallback
+        const carrierCell = carrierLogo
+          ? `<img src="/assets/logos/${carrierLogo}.png" alt="${carrierDisplay}" title="${carrierDisplay}" style="height: 24px; max-width: 80px; object-fit: contain;">`
+          : carrierDisplay;
 
         return `
           <tr>
             <td><span class="order-id">${shipment.shipmentId}</span></td>
             <td><span class="order-id">${orderId}</span></td>
             <td>${formatDate(shipment.shipmentDateTime)}</td>
-            <td>${carrierDisplay}</td>
+            <td>${carrierCell}</td>
             <td>${trackTrace && trackTrace !== '-' ? `<a href="${trackUrl}" target="_blank" style="color: #60a5fa;">${trackTrace}</a>` : '-'}</td>
             <td><span class="badge shipped">Shipped</span></td>
           </tr>
