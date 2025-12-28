@@ -141,6 +141,7 @@ router.get('/orders', async (req, res) => {
         purchaseOrderType: o.purchaseOrderType,
         purchaseOrderDate: o.purchaseOrderDate,
         deliveryWindow: o.deliveryWindow,
+        shipmentStatus: o.shipmentStatus,
         totals: o.totals,
         acknowledgment: o.acknowledgment,
         odoo: o.odoo,
