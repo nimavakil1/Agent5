@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shipments - Bol.com</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page { max-width: 1400px; margin: 0 auto; padding: 32px; }
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
+    .card-header { padding: 18px 24px; border-bottom: 1px solid #252532; display: flex; align-items: center; justify-content: space-between; }
+    .card-title { font-size: 16px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 10px; }
+    .card-title .material-symbols-outlined { font-size: 20px; color: #0066ff; }
+    .card-body { padding: 24px; }
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; background: #12121a; border-bottom: 1px solid #252532; }
+    th[data-sort] { cursor: pointer; }
+    th[data-sort]:hover { color: #818cf8; }
+    th.sorted { color: #6366f1; }
+    th .sort-icon { font-size: 11px; vertical-align: middle; margin-left: 3px; }
+    td { padding: 14px 16px; font-size: 14px; color: #e4e4e7; border-bottom: 1px solid #252532; }
+    tr:hover td { background: rgba(99, 102, 241, 0.05); }
+    .order-id { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #0066ff; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; }
+    .badge.shipped { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #6366f1; color: white; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn .material-symbols-outlined { font-size: 18px; }
+    .empty-state { padding: 60px 20px; text-align: center; }
+    .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
+    .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
+    .empty-state-text { font-size: 14px; color: #71717a; }
+    .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: #71717a; }
+    .spinner { width: 24px; height: 24px; border: 3px solid #252532; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .column-filter { padding: 6px 10px; background: #12121a; border: 1px solid #252532; border-radius: 6px; color: #e4e4e7; font-size: 12px; width: 100%; margin-top: 6px; outline: none; }
+    .column-filter:focus { border-color: #6366f1; }
+    .column-filter::placeholder { color: #52525b; }
+    th.filterable { vertical-align: top; }
+    .pagination { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-top: 1px solid #252532; }
+    .pagination-info { font-size: 13px; color: #71717a; }
+    .page-size-select { padding: 6px 10px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #e4e4e7; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="material-symbols-outlined">local_shipping</span>
+          Shipments
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="loadShipments()">
+          <span class="material-symbols-outlined">refresh</span>
+          Refresh
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="table-container">
+          <table id="shipments-table-element">
+            <thead>
+              <tr>
+                <th class="filterable" data-sort="shipmentId" onclick="sortTable('shipmentId')">Shipment ID <span class="sort-icon"></span><br><input type="text" class="column-filter" placeholder="Filter..." onclick="event.stopPropagation()" onkeyup="filterTable()"></th>
+                <th class="filterable" data-sort="orderId" onclick="sortTable('orderId')">Order ID <span class="sort-icon"></span><br><input type="text" class="column-filter" placeholder="Filter..." onclick="event.stopPropagation()" onkeyup="filterTable()"></th>
+                <th class="filterable" data-sort="shipmentDateTime" onclick="sortTable('shipmentDateTime')">Date <span class="sort-icon"></span><br><input type="text" class="column-filter" placeholder="Filter..." onclick="event.stopPropagation()" onkeyup="filterTable()"></th>
+                <th class="filterable">Carrier<br><input type="text" class="column-filter" placeholder="Filter..." onkeyup="filterTable()"></th>
+                <th class="filterable">Track & Trace<br><input type="text" class="column-filter" placeholder="Filter..." onkeyup="filterTable()"></th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="shipments-table">
+              <tr><td colspan="6"><div class="loading"><div class="spinner"></div>Loading shipments...</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination" style="display: none;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; color: #71717a;">Show</span>
+            <select class="page-size-select" id="page-size" onchange="changePageSize()">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <span class="pagination-info" id="pagination-info">-</span>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" id="prev-btn" onclick="prevPage()" disabled>Previous</button>
+            <button class="btn btn-secondary btn-sm" id="next-btn" onclick="nextPage()" disabled>Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allData = [];
+    let filteredData = [];
+    let offset = 0;
+    let pageSize = 25;
+    let sortColumn = 'shipmentDateTime';
+    let sortDirection = 'desc';
+
+    const CARRIER_LOGOS = {
+      'TNT': 'postnl', 'POSTNL': 'postnl', 'PNL': 'postnl', 'POSTNL_NL': 'postnl',
+      'DHL': 'dhl', 'DHL_NL': 'dhl', 'DHL_DE': 'dhl', 'DHLFORYOU': 'dhl',
+      'DPD': 'dpd', 'DPD-NL': 'dpd', 'DPD-BE': 'dpd',
+      'GLS': 'gls', 'GLS_NL': 'gls',
+      'UPS': 'ups', 'FEDEX': 'fedex',
+      'BPOST': 'bpost', 'BPOST_BE': 'bpost'
+    };
+
+    async function init() {
+      await new Promise(resolve => {
+        const check = () => {
+          if (window.Agent5Shell && window.Agent5Shell.getCurrentUser()) resolve();
+          else setTimeout(check, 100);
+        };
+        check();
+      });
+      await loadShipments();
+    }
+
+    async function loadShipments() {
+      const tbody = document.getElementById('shipments-table');
+      tbody.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div>Loading shipments...</div></td></tr>';
+
+      try {
+        const res = await fetch('/api/bolcom/shipments?skipSync=true', { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.shipments || data.shipments.length === 0) {
+          allData = [];
+          filteredData = [];
+          tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">local_shipping</span><div class="empty-state-title">No shipments</div><div class="empty-state-text">No shipments found</div></div></td></tr>';
+          document.getElementById('pagination').style.display = 'none';
+          return;
+        }
+
+        allData = data.shipments;
+        filteredData = [...allData];
+        offset = 0;
+        applySort();
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" style="color: #ef4444; padding: 20px;">Error: ${e.message}</td></tr>`;
+      }
+    }
+
+    function sortTable(column) {
+      if (sortColumn === column) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = column;
+        sortDirection = column.includes('Date') ? 'desc' : 'asc';
+      }
+      applySort();
+      updateSortIndicators();
+    }
+
+    function applySort() {
+      if (sortColumn && filteredData.length > 0) {
+        filteredData.sort((a, b) => {
+          let valA, valB;
+          if (sortColumn === 'orderId') {
+            valA = a.orderId || a.shipmentItems?.[0]?.orderId || '';
+            valB = b.orderId || b.shipmentItems?.[0]?.orderId || '';
+          } else {
+            valA = a[sortColumn] || '';
+            valB = b[sortColumn] || '';
+          }
+          if (typeof valA === 'string') valA = valA.toLowerCase();
+          if (typeof valB === 'string') valB = valB.toLowerCase();
+          if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+          if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+      offset = 0;
+      render();
+    }
+
+    function updateSortIndicators() {
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.classList.remove('sorted');
+        const icon = th.querySelector('.sort-icon');
+        if (th.dataset.sort === sortColumn) {
+          th.classList.add('sorted');
+          icon.textContent = sortDirection === 'asc' ? '▲' : '▼';
+        } else {
+          icon.textContent = '';
+        }
+      });
+    }
+
+    function filterTable() {
+      const filters = [];
+      document.querySelectorAll('.column-filter').forEach((input, idx) => {
+        if (input.value.trim()) filters.push({ col: idx, val: input.value.toLowerCase() });
+      });
+
+      if (filters.length === 0) {
+        filteredData = [...allData];
+      } else {
+        filteredData = allData.filter(item => {
+          const row = getRowValues(item);
+          return filters.every(f => row[f.col]?.toLowerCase().includes(f.val));
+        });
+      }
+      offset = 0;
+      render();
+    }
+
+    function getRowValues(s) {
+      const orderId = s.orderId || s.shipmentItems?.[0]?.orderId || '-';
+      const carrier = s.transport?.transporterCode || '-';
+      const track = s.transport?.trackAndTrace || '-';
+      return [s.shipmentId || '', orderId, formatDate(s.shipmentDateTime), carrier, track, 'Shipped'];
+    }
+
+    function render() {
+      const tbody = document.getElementById('shipments-table');
+      const pageData = filteredData.slice(offset, offset + pageSize);
+
+      if (pageData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-symbols-outlined">local_shipping</span><div class="empty-state-title">No shipments</div></div></td></tr>';
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+
+      tbody.innerHTML = pageData.map(s => {
+        const orderId = s.orderId || s.shipmentItems?.[0]?.orderId || '-';
+        const carrier = s.transport?.transporterCode || '-';
+        const track = s.transport?.trackAndTrace || '-';
+        const trackUrl = getTrackUrl(carrier, track);
+        const carrierLogo = CARRIER_LOGOS[carrier.toUpperCase()];
+        const carrierCell = carrierLogo
+          ? `<img src="/assets/logos/${carrierLogo}.png" alt="${carrier}" style="height: 24px; max-width: 80px;" onerror="this.outerHTML='${carrier}'">`
+          : carrier;
+
+        return `<tr>
+          <td><span class="order-id">${s.shipmentId}</span></td>
+          <td><span class="order-id">${orderId}</span></td>
+          <td>${formatDate(s.shipmentDateTime)}</td>
+          <td>${carrierCell}</td>
+          <td>${track !== '-' ? `<a href="${trackUrl}" target="_blank" style="color: #60a5fa;">${track}</a>` : '-'}</td>
+          <td><span class="badge shipped">Shipped</span></td>
+        </tr>`;
+      }).join('');
+
+      updatePagination();
+    }
+
+    function getTrackUrl(carrier, track) {
+      if (!track || track === '-') return '#';
+      const c = carrier.toLowerCase();
+      if (c.includes('postnl') || c === 'tnt' || c === 'pnl') return `https://postnl.nl/tracktrace/?B=${encodeURIComponent(track)}`;
+      if (c.includes('bpost')) return `https://track.bpost.cloud/btr/web/#/search?itemCode=${encodeURIComponent(track)}&lang=nl`;
+      if (c.includes('dhl')) return `https://www.dhl.com/nl-nl/home/tracking.html?tracking-id=${encodeURIComponent(track)}`;
+      if (c.includes('dpd')) return `https://tracking.dpd.de/status/nl_NL/parcel/${encodeURIComponent(track)}`;
+      if (c.includes('gls')) return `https://parcelsapp.com/en/tracking/${encodeURIComponent(track)}`;
+      if (c.includes('ups')) return `https://www.ups.com/track?tracknum=${encodeURIComponent(track)}`;
+      return `https://parcelsapp.com/en/tracking/${encodeURIComponent(track)}`;
+    }
+
+    function formatDate(d) {
+      if (!d) return '-';
+      return new Date(d).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function updatePagination() {
+      const pagination = document.getElementById('pagination');
+      if (filteredData.length === 0) { pagination.style.display = 'none'; return; }
+      pagination.style.display = 'flex';
+      const start = offset + 1;
+      const end = Math.min(offset + pageSize, filteredData.length);
+      document.getElementById('pagination-info').textContent = `Showing ${start}-${end} of ${filteredData.length}`;
+      document.getElementById('prev-btn').disabled = offset === 0;
+      document.getElementById('next-btn').disabled = offset + pageSize >= filteredData.length;
+    }
+
+    function changePageSize() {
+      pageSize = parseInt(document.getElementById('page-size').value);
+      offset = 0;
+      render();
+    }
+
+    function prevPage() { offset = Math.max(0, offset - pageSize); render(); }
+    function nextPage() { if (offset + pageSize < filteredData.length) { offset += pageSize; render(); } }
+
+    init();
+  </script>
+</body>
+</html>

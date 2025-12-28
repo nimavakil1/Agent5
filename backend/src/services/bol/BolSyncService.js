@@ -479,17 +479,57 @@ async function syncReturns(mode = 'RECENT', onProgress = null) {
 
 /**
  * Sync invoices from Bol.com to MongoDB
+ * Fetches invoices from 2024-01-01 onwards using 30-day periods (API limit is 32 days)
  */
 async function syncInvoices(onProgress = null) {
-  console.log(`[BolSync] Syncing invoices...`);
+  console.log(`[BolSync] Syncing invoices from 2024-01-01...`);
 
   try {
-    await sleep(RATE_LIMIT.REQUEST_DELAY_MS);
-    const data = await bolRequest('/invoices');
-    const invoices = data.invoiceListItems || [];
+    let allInvoices = [];
+    const startDate = new Date('2024-01-01');
+    const endDate = new Date();
+    const periodDays = 30; // API limit is 32 days, we use 30 for safety
+
+    // Fetch invoices in 30-day chunks
+    let currentStart = new Date(startDate);
+    while (currentStart < endDate) {
+      const currentEnd = new Date(currentStart);
+      currentEnd.setDate(currentEnd.getDate() + periodDays);
+      if (currentEnd > endDate) currentEnd.setTime(endDate.getTime());
+
+      const periodStr = `${currentStart.toISOString().split('T')[0]}/${currentEnd.toISOString().split('T')[0]}`;
+      console.log(`[BolSync] Fetching invoices for period: ${periodStr}`);
+
+      await sleep(RATE_LIMIT.REQUEST_DELAY_MS);
+      try {
+        const data = await bolRequest(`/invoices?period=${encodeURIComponent(periodStr)}`);
+        const invoices = data.invoiceListItems || [];
+        allInvoices = allInvoices.concat(invoices);
+        console.log(`[BolSync] Found ${invoices.length} invoices for period ${periodStr}`);
+      } catch (e) {
+        // Some periods may have no invoices - that's okay
+        if (!e.message.includes('404')) {
+          console.warn(`[BolSync] Error fetching period ${periodStr}:`, e.message);
+        }
+      }
+
+      currentStart.setDate(currentStart.getDate() + periodDays);
+    }
+
+    // Deduplicate by invoiceId (in case of overlapping periods)
+    const uniqueInvoices = [];
+    const seenIds = new Set();
+    for (const inv of allInvoices) {
+      if (!seenIds.has(inv.invoiceId)) {
+        seenIds.add(inv.invoiceId);
+        uniqueInvoices.push(inv);
+      }
+    }
+
+    console.log(`[BolSync] Total unique invoices found: ${uniqueInvoices.length}`);
 
     let processed = 0;
-    for (const inv of invoices) {
+    for (const inv of uniqueInvoices) {
       const issueDate = inv.issueDate ? new Date(inv.issueDate) : null;
       const periodStart = inv.invoicePeriod?.startDate ? new Date(inv.invoicePeriod.startDate) : null;
       const periodEnd = inv.invoicePeriod?.endDate ? new Date(inv.invoicePeriod.endDate) : null;
@@ -521,7 +561,7 @@ async function syncInvoices(onProgress = null) {
         console.error(`[BolSync] DB error for invoice ${inv.invoiceId}:`, dbError.message);
       }
 
-      if (onProgress) onProgress(processed, invoices.length);
+      if (onProgress) onProgress(processed, uniqueInvoices.length);
     }
 
     console.log(`[BolSync] Invoices sync complete: ${processed} invoices processed`);

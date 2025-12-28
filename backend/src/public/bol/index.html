@@ -33,54 +33,6 @@
       margin-top: 4px;
     }
 
-    /* Tabs */
-    .tabs {
-      display: flex;
-      gap: 4px;
-      background: #12121a;
-      border: 1px solid #252532;
-      border-radius: 12px;
-      padding: 4px;
-      margin-bottom: 24px;
-      width: fit-content;
-    }
-
-    .tab {
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      color: #71717a;
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      transition: all 0.15s;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .tab:hover {
-      color: #a1a1aa;
-    }
-
-    .tab.active {
-      background: #252532;
-      color: #fff;
-    }
-
-    .tab .material-symbols-outlined {
-      font-size: 20px;
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
     /* Stats Grid */
     .stats-grid {
       display: grid;
@@ -548,28 +500,7 @@
       </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="tabs">
-      <button class="tab active" data-tab="orders">
-        <span class="material-symbols-outlined">shopping_cart</span>
-        Orders
-      </button>
-      <button class="tab" data-tab="shipments">
-        <span class="material-symbols-outlined">local_shipping</span>
-        Shipments
-      </button>
-      <button class="tab" data-tab="returns">
-        <span class="material-symbols-outlined">assignment_return</span>
-        Returns
-      </button>
-      <button class="tab" data-tab="invoices">
-        <span class="material-symbols-outlined">receipt_long</span>
-        Invoices
-      </button>
-    </div>
-
-    <!-- Orders Tab -->
-    <div class="tab-content active" id="tab-orders">
+    <!-- Orders -->
       <div class="card">
         <div class="card-header">
           <div class="card-title">
@@ -632,178 +563,6 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Shipments Tab -->
-    <div class="tab-content" id="tab-shipments">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">
-            <span class="material-symbols-outlined">local_shipping</span>
-            Recent Shipments
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="table-container">
-            <table id="shipments-table-element">
-              <thead>
-                <tr>
-                  <th class="filterable" data-sort="shipmentId" onclick="sortTable('shipments', 'shipmentId')">Shipment ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="0" placeholder="Filter..." onclick="event.stopPropagation()"></th>
-                  <th class="filterable" data-sort="orderId" onclick="sortTable('shipments', 'orderId')">Order ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="1" placeholder="Filter..." onclick="event.stopPropagation()"></th>
-                  <th class="filterable" data-sort="shipmentDateTime" onclick="sortTable('shipments', 'shipmentDateTime')">Date <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="2" placeholder="Filter..." onclick="event.stopPropagation()"></th>
-                  <th class="filterable">Carrier<br><input type="text" class="column-filter" data-column="3" placeholder="Filter..."></th>
-                  <th class="filterable">Track & Trace<br><input type="text" class="column-filter" data-column="4" placeholder="Filter..."></th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="shipments-table">
-                <tr>
-                  <td colspan="6">
-                    <div class="loading">
-                      <div class="spinner"></div>
-                      Loading shipments...
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="pagination" id="shipments-pagination" style="display: none;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 13px; color: #71717a;">Show</span>
-              <select class="page-size-select" id="shipments-page-size" onchange="changePageSize('shipments')">
-                <option value="10">10</option>
-                <option value="25" selected>25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </div>
-            <span class="pagination-info" id="shipments-pagination-info">-</span>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn btn-secondary btn-sm" id="shipments-prev-btn" onclick="prevPage('shipments')" disabled>Previous</button>
-              <button class="btn btn-secondary btn-sm" id="shipments-next-btn" onclick="nextPage('shipments')" disabled>Next</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Returns Tab -->
-    <div class="tab-content" id="tab-returns">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">
-            <span class="material-symbols-outlined">assignment_return</span>
-            Returns
-          </div>
-          <div class="filters" style="margin: 0;">
-            <select class="filter-select" id="returns-filter" onchange="loadReturns()">
-              <option value="">All Returns</option>
-              <option value="false">Open Returns</option>
-              <option value="true">Handled Returns</option>
-            </select>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="table-container">
-            <table id="returns-table-element">
-              <thead>
-                <tr>
-                  <th class="filterable" data-sort="returnId" onclick="sortTable('returns', 'returnId')">Return ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="0" placeholder="Filter..." onclick="event.stopPropagation()"></th>
-                  <th class="filterable" data-sort="orderId" onclick="sortTable('returns', 'orderId')">Order ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="1" placeholder="Filter..." onclick="event.stopPropagation()"></th>
-                  <th class="filterable" data-sort="registrationDateTime" onclick="sortTable('returns', 'registrationDateTime')">Date <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="2" placeholder="Filter..." onclick="event.stopPropagation()"></th>
-                  <th class="filterable">Reason<br><input type="text" class="column-filter" data-column="3" placeholder="Filter..."></th>
-                  <th class="filterable">Product<br><input type="text" class="column-filter" data-column="4" placeholder="Filter..."></th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="returns-table">
-                <tr>
-                  <td colspan="7">
-                    <div class="loading">
-                      <div class="spinner"></div>
-                      Loading returns...
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="pagination" id="returns-pagination" style="display: none;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 13px; color: #71717a;">Show</span>
-              <select class="page-size-select" id="returns-page-size" onchange="changePageSize('returns')">
-                <option value="10">10</option>
-                <option value="25" selected>25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </div>
-            <span class="pagination-info" id="returns-pagination-info">-</span>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn btn-secondary btn-sm" id="returns-prev-btn" onclick="prevPage('returns')" disabled>Previous</button>
-              <button class="btn btn-secondary btn-sm" id="returns-next-btn" onclick="nextPage('returns')" disabled>Next</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Invoices Tab -->
-    <div class="tab-content" id="tab-invoices">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">
-            <span class="material-symbols-outlined">receipt_long</span>
-            Invoices
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="table-container">
-            <table id="invoices-table-element">
-              <thead>
-                <tr>
-                  <th class="filterable" data-sort="invoiceId" onclick="sortTable('invoices', 'invoiceId')">Invoice ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="0" placeholder="Filter..." onclick="event.stopPropagation()"></th>
-                  <th class="filterable">Odoo Bill<br><input type="text" class="column-filter" data-column="1" placeholder="Filter..."></th>
-                  <th class="filterable">Period<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
-                  <th class="filterable" data-sort="issueDate" onclick="sortTable('invoices', 'issueDate')">Issue Date <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="3" placeholder="Filter..." onclick="event.stopPropagation()"></th>
-                  <th data-sort="totalAmountExclVat" onclick="sortTable('invoices', 'totalAmountExclVat')">Amount (excl. VAT) <span class="sort-icon"></span></th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="invoices-table">
-                <tr>
-                  <td colspan="7">
-                    <div class="loading">
-                      <div class="spinner"></div>
-                      Loading invoices...
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="pagination" id="invoices-pagination" style="display: none;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 13px; color: #71717a;">Show</span>
-              <select class="page-size-select" id="invoices-page-size" onchange="changePageSize('invoices')">
-                <option value="10">10</option>
-                <option value="25" selected>25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </div>
-            <span class="pagination-info" id="invoices-pagination-info">-</span>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn btn-secondary btn-sm" id="invoices-prev-btn" onclick="prevPage('invoices')" disabled>Previous</button>
-              <button class="btn btn-secondary btn-sm" id="invoices-next-btn" onclick="nextPage('invoices')" disabled>Next</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- Order Detail Modal -->
@@ -848,20 +607,14 @@
   </style>
 
   <script>
-    // Pagination state for each tab
+    // Pagination state for orders
     const paginationState = {
-      orders: { all: [], filtered: [], offset: 0, pageSize: 25 },
-      shipments: { all: [], filtered: [], offset: 0, pageSize: 25 },
-      returns: { all: [], filtered: [], offset: 0, pageSize: 25 },
-      invoices: { all: [], filtered: [], offset: 0, pageSize: 25 }
+      orders: { all: [], filtered: [], offset: 0, pageSize: 25 }
     };
 
-    // Sort state for each table
+    // Sort state for orders
     const sortState = {
-      orders: { column: 'orderPlacedDateTime', direction: 'desc' },
-      shipments: { column: 'shipmentDateTime', direction: 'desc' },
-      returns: { column: 'registrationDateTime', direction: 'desc' },
-      invoices: { column: 'issueDate', direction: 'desc' }
+      orders: { column: 'orderPlacedDateTime', direction: 'desc' }
     };
 
     function sortTable(type, column) {
@@ -884,14 +637,7 @@
         data.filtered.sort((a, b) => {
           let valA, valB;
 
-          // Special handling for computed fields
-          if (state.column === 'orderId' && type === 'shipments') {
-            valA = a.orderId || a.shipmentItems?.[0]?.orderId || '';
-            valB = b.orderId || b.shipmentItems?.[0]?.orderId || '';
-          } else if (state.column === 'orderId' && type === 'returns') {
-            valA = a.returnItems?.[0]?.orderId || '';
-            valB = b.returnItems?.[0]?.orderId || '';
-          } else if (state.column === 'itemCount') {
+          if (state.column === 'itemCount') {
             valA = (a.orderItems || []).length;
             valB = (b.orderItems || []).length;
           } else if (state.column === 'total') {
@@ -937,16 +683,6 @@
         }
       });
     }
-
-    // Tab switching
-    document.querySelectorAll('.tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-      });
-    });
 
     // Wait for shell to be ready then initialize
     async function init() {
@@ -1007,14 +743,8 @@
     async function loadAllData() {
       // First quickly load stats from MongoDB (no sync wait)
       await loadStatsQuick();
-
-      // Then load all the data (which triggers syncs in background)
-      await Promise.all([
-        loadOrders(),
-        loadShipments(),
-        loadReturns(),
-        loadInvoices()
-      ]);
+      // Load orders
+      await loadOrders();
       // Update stats from the loaded data
       loadStats();
     }

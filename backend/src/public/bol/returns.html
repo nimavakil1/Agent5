@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Returns - Bol.com</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page { max-width: 1400px; margin: 0 auto; padding: 32px; }
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
+    .card-header { padding: 18px 24px; border-bottom: 1px solid #252532; display: flex; align-items: center; justify-content: space-between; }
+    .card-title { font-size: 16px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 10px; }
+    .card-title .material-symbols-outlined { font-size: 20px; color: #0066ff; }
+    .card-body { padding: 24px; }
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; background: #12121a; border-bottom: 1px solid #252532; }
+    th[data-sort] { cursor: pointer; }
+    th[data-sort]:hover { color: #818cf8; }
+    th.sorted { color: #6366f1; }
+    th .sort-icon { font-size: 11px; vertical-align: middle; margin-left: 3px; }
+    td { padding: 14px 16px; font-size: 14px; color: #e4e4e7; border-bottom: 1px solid #252532; }
+    tr:hover td { background: rgba(99, 102, 241, 0.05); }
+    .order-id { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #0066ff; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; }
+    .badge.shipped { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .badge.returned { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn .material-symbols-outlined { font-size: 18px; }
+    .empty-state { padding: 60px 20px; text-align: center; }
+    .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
+    .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
+    .empty-state-text { font-size: 14px; color: #71717a; }
+    .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: #71717a; }
+    .spinner { width: 24px; height: 24px; border: 3px solid #252532; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .column-filter { padding: 6px 10px; background: #12121a; border: 1px solid #252532; border-radius: 6px; color: #e4e4e7; font-size: 12px; width: 100%; margin-top: 6px; outline: none; }
+    .column-filter:focus { border-color: #6366f1; }
+    th.filterable { vertical-align: top; }
+    .filter-select { padding: 10px 14px; background: #12121a; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; outline: none; cursor: pointer; }
+    .pagination { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-top: 1px solid #252532; }
+    .pagination-info { font-size: 13px; color: #71717a; }
+    .page-size-select { padding: 6px 10px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #e4e4e7; font-size: 13px; }
+    .return-product { display: flex; align-items: center; gap: 10px; }
+    .return-thumb { width: 36px; height: 36px; border-radius: 6px; background: #252532; object-fit: cover; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="material-symbols-outlined">assignment_return</span>
+          Returns
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <select class="filter-select" id="returns-filter" onchange="loadReturns()">
+            <option value="">All Returns</option>
+            <option value="false">Open Returns</option>
+            <option value="true">Handled Returns</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="loadReturns()">
+            <span class="material-symbols-outlined">refresh</span>
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-container">
+          <table id="returns-table-element">
+            <thead>
+              <tr>
+                <th class="filterable" data-sort="returnId" onclick="sortTable('returnId')">Return ID <span class="sort-icon"></span><br><input type="text" class="column-filter" placeholder="Filter..." onclick="event.stopPropagation()" onkeyup="filterTable()"></th>
+                <th class="filterable" data-sort="orderId" onclick="sortTable('orderId')">Order ID <span class="sort-icon"></span><br><input type="text" class="column-filter" placeholder="Filter..." onclick="event.stopPropagation()" onkeyup="filterTable()"></th>
+                <th class="filterable" data-sort="registrationDateTime" onclick="sortTable('registrationDateTime')">Date <span class="sort-icon"></span><br><input type="text" class="column-filter" placeholder="Filter..." onclick="event.stopPropagation()" onkeyup="filterTable()"></th>
+                <th class="filterable">Reason<br><input type="text" class="column-filter" placeholder="Filter..." onkeyup="filterTable()"></th>
+                <th class="filterable">Product<br><input type="text" class="column-filter" placeholder="Filter..." onkeyup="filterTable()"></th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="returns-table">
+              <tr><td colspan="7"><div class="loading"><div class="spinner"></div>Loading returns...</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination" style="display: none;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; color: #71717a;">Show</span>
+            <select class="page-size-select" id="page-size" onchange="changePageSize()">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <span class="pagination-info" id="pagination-info">-</span>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" id="prev-btn" onclick="prevPage()" disabled>Previous</button>
+            <button class="btn btn-secondary btn-sm" id="next-btn" onclick="nextPage()" disabled>Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allData = [];
+    let filteredData = [];
+    let offset = 0;
+    let pageSize = 25;
+    let sortColumn = 'registrationDateTime';
+    let sortDirection = 'desc';
+    const productCache = {};
+
+    async function init() {
+      await new Promise(resolve => {
+        const check = () => {
+          if (window.Agent5Shell && window.Agent5Shell.getCurrentUser()) resolve();
+          else setTimeout(check, 100);
+        };
+        check();
+      });
+      await loadReturns();
+    }
+
+    async function loadReturns() {
+      const tbody = document.getElementById('returns-table');
+      tbody.innerHTML = '<tr><td colspan="7"><div class="loading"><div class="spinner"></div>Loading returns...</div></td></tr>';
+
+      const handled = document.getElementById('returns-filter').value;
+      let query = '?skipSync=true';
+      if (handled !== '') query += `&handled=${handled}`;
+
+      try {
+        const res = await fetch(`/api/bolcom/returns${query}`, { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.returns || data.returns.length === 0) {
+          allData = [];
+          filteredData = [];
+          tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-symbols-outlined">assignment_return</span><div class="empty-state-title">No returns</div></div></td></tr>';
+          document.getElementById('pagination').style.display = 'none';
+          return;
+        }
+
+        // Lookup product info
+        const returnsWithProducts = await Promise.all(data.returns.map(async (ret) => {
+          const firstItem = ret.returnItems?.[0] || {};
+          if (firstItem.ean) {
+            const product = await lookupProduct(firstItem.ean);
+            return { ...ret, productInfo: product };
+          }
+          return ret;
+        }));
+
+        allData = returnsWithProducts;
+        filteredData = [...allData];
+        offset = 0;
+        applySort();
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color: #ef4444; padding: 20px;">Error: ${e.message}</td></tr>`;
+      }
+    }
+
+    async function lookupProduct(ean) {
+      if (!ean) return null;
+      if (productCache[ean]) return productCache[ean];
+      try {
+        const res = await fetch(`/api/odoo/products?q=${encodeURIComponent(ean)}&limit=1`, { credentials: 'include' });
+        const data = await res.json();
+        if (data.success && data.products?.length > 0) {
+          productCache[ean] = data.products[0];
+          return data.products[0];
+        }
+      } catch (e) { console.error('Product lookup error:', e); }
+      return null;
+    }
+
+    function sortTable(column) {
+      if (sortColumn === column) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = column;
+        sortDirection = column.includes('Date') ? 'desc' : 'asc';
+      }
+      applySort();
+      updateSortIndicators();
+    }
+
+    function applySort() {
+      if (sortColumn && filteredData.length > 0) {
+        filteredData.sort((a, b) => {
+          let valA, valB;
+          if (sortColumn === 'orderId') {
+            valA = a.returnItems?.[0]?.orderId || '';
+            valB = b.returnItems?.[0]?.orderId || '';
+          } else {
+            valA = a[sortColumn] || '';
+            valB = b[sortColumn] || '';
+          }
+          if (typeof valA === 'string') valA = valA.toLowerCase();
+          if (typeof valB === 'string') valB = valB.toLowerCase();
+          if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+          if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+      offset = 0;
+      render();
+    }
+
+    function updateSortIndicators() {
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.classList.remove('sorted');
+        const icon = th.querySelector('.sort-icon');
+        if (th.dataset.sort === sortColumn) {
+          th.classList.add('sorted');
+          icon.textContent = sortDirection === 'asc' ? '▲' : '▼';
+        } else {
+          icon.textContent = '';
+        }
+      });
+    }
+
+    function filterTable() {
+      const filters = [];
+      document.querySelectorAll('.column-filter').forEach((input, idx) => {
+        if (input.value.trim()) filters.push({ col: idx, val: input.value.toLowerCase() });
+      });
+
+      if (filters.length === 0) {
+        filteredData = [...allData];
+      } else {
+        filteredData = allData.filter(item => {
+          const row = getRowValues(item);
+          return filters.every(f => row[f.col]?.toLowerCase().includes(f.val));
+        });
+      }
+      offset = 0;
+      render();
+    }
+
+    function getRowValues(r) {
+      const item = r.returnItems?.[0] || {};
+      const product = r.productInfo;
+      return [
+        r.returnId || '',
+        item.orderId || '',
+        formatDate(r.registrationDateTime),
+        item.returnReason || '',
+        product?.name || product?.sku || item.ean || '',
+        r.handled ? 'Handled' : 'Open'
+      ];
+    }
+
+    function render() {
+      const tbody = document.getElementById('returns-table');
+      const pageData = filteredData.slice(offset, offset + pageSize);
+
+      if (pageData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-symbols-outlined">assignment_return</span><div class="empty-state-title">No returns</div></div></td></tr>';
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+
+      tbody.innerHTML = pageData.map(ret => {
+        const item = ret.returnItems?.[0] || {};
+        const orderId = item.orderId || '-';
+        const ean = item.ean || '-';
+        const product = ret.productInfo;
+        const sku = product?.sku || '';
+        const productName = product?.name || '';
+        const imageUrl = product?.image;
+
+        let reasonDisplay = item.returnReason || '-';
+        if (item.returnReasonDetail) {
+          reasonDisplay += `<br><span style="font-size: 11px; color: #71717a;">${item.returnReasonDetail}</span>`;
+        }
+
+        let productDisplay = '';
+        if (productName) productDisplay += `<div style="font-size: 13px; color: #e4e4e7; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${productName}</div>`;
+        if (sku) productDisplay += `<div style="font-size: 11px; color: #a1a1aa; font-family: monospace;">SKU: ${sku}</div>`;
+        productDisplay += `<div style="font-size: 11px; color: #71717a; font-family: monospace;">EAN: ${ean}</div>`;
+        if (item.quantity > 1) productDisplay += `<div style="font-size: 11px; color: #71717a;">Qty: ${item.quantity}</div>`;
+
+        return `<tr>
+          <td><span class="order-id">${ret.returnId}</span></td>
+          <td><span class="order-id">${orderId}</span></td>
+          <td>${formatDate(ret.registrationDateTime)}</td>
+          <td>${reasonDisplay}</td>
+          <td><div class="return-product">${imageUrl ? `<img src="${imageUrl}" class="return-thumb" onerror="this.style.display='none'">` : ''}<div>${productDisplay}</div></div></td>
+          <td><span class="badge ${ret.handled ? 'shipped' : 'returned'}">${ret.handled ? 'Handled' : 'Open'}</span></td>
+          <td>${!ret.handled ? `<button class="btn btn-secondary btn-sm" onclick="handleReturn('${item.rmaId}')"><span class="material-symbols-outlined">check</span></button>` : ''}</td>
+        </tr>`;
+      }).join('');
+
+      updatePagination();
+    }
+
+    async function handleReturn(rmaId) {
+      if (!rmaId || !confirm('Mark this return as handled?')) return;
+      try {
+        const res = await fetch(`/api/bolcom/returns/${rmaId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ handlingResult: 'RETURN_RECEIVED', quantityReturned: 1 })
+        });
+        const data = await res.json();
+        if (data.success) { alert('Return marked as handled'); loadReturns(); }
+        else alert('Failed: ' + (data.error || 'Unknown error'));
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    function formatDate(d) {
+      if (!d) return '-';
+      return new Date(d).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function updatePagination() {
+      const pagination = document.getElementById('pagination');
+      if (filteredData.length === 0) { pagination.style.display = 'none'; return; }
+      pagination.style.display = 'flex';
+      document.getElementById('pagination-info').textContent = `Showing ${offset + 1}-${Math.min(offset + pageSize, filteredData.length)} of ${filteredData.length}`;
+      document.getElementById('prev-btn').disabled = offset === 0;
+      document.getElementById('next-btn').disabled = offset + pageSize >= filteredData.length;
+    }
+
+    function changePageSize() { pageSize = parseInt(document.getElementById('page-size').value); offset = 0; render(); }
+    function prevPage() { offset = Math.max(0, offset - pageSize); render(); }
+    function nextPage() { if (offset + pageSize < filteredData.length) { offset += pageSize; render(); } }
+
+    init();
+  </script>
+</body>
+</html>
