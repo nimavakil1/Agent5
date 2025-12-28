@@ -315,7 +315,7 @@
         const data = await res.json();
         const o = data.order;
         currentPO = po;
-        document.getElementById('po-modal-body').innerHTML = '<div class="po-detail-header"><div class="po-detail-info"><h3>' + o.purchaseOrderNumber + '</h3><div class="po-detail-meta"><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span><span>Date: ' + formatDate(o.purchaseOrderDate) + '</span><span>Type: ' + (o.purchaseOrderType || 'Regular') + '</span></div></div><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></div>' + (o.deliveryWindow ? '<div style="margin-bottom:20px;padding:16px;background:#12121a;border-radius:10px;"><strong style="color:#a1a1aa;">Delivery Window:</strong><span style="color:#e4e4e7;margin-left:8px;">' + formatDate(o.deliveryWindow.startDate) + ' - ' + formatDate(o.deliveryWindow.endDate) + '</span></div>' : '') + '<div class="po-items-table"><table><thead><tr><th>#</th><th>ASIN</th><th>EAN/SKU</th><th>Ordered</th><th>Accepted</th><th>Shipped</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>' + (o.items || []).map((it, i) => '<tr><td>' + (i+1) + '</td><td>' + (it.amazonProductIdentifier || '-') + '</td><td>' + (it.vendorProductIdentifier || '-') + '</td><td>' + (it.orderedQuantity?.amount || 0) + '</td><td>' + (it.acknowledgedQuantity?.amount ?? it.acceptedQuantity?.amount ?? '-') + '</td><td>' + (it.shippedQuantity?.amount ?? it.receivingStatus?.receivedQuantity?.amount ?? '-') + '</td><td>' + formatCurrency(it.netCost?.amount, it.netCost?.currencyCode) + '</td><td>' + formatCurrency((it.orderedQuantity?.amount || 0) * (it.netCost?.amount || 0), it.netCost?.currencyCode) + '</td></tr>').join('') + '<tr class="totals-row"><td colspan="7" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td></tr></tbody></table></div>' + (o.odoo?.saleOrderId ? '<div style="margin-top:20px;padding:16px;background:rgba(99,102,241,0.1);border-radius:10px;border:1px solid rgba(99,102,241,0.3);"><strong style="color:#818cf8;">Odoo Order:</strong><a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link" style="margin-left:8px;">' + o.odoo.saleOrderName + '</a></div>' : '');
+        document.getElementById('po-modal-body').innerHTML = '<div class="po-detail-header"><div class="po-detail-info"><h3>' + o.purchaseOrderNumber + '</h3><div class="po-detail-meta"><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span><span>Date: ' + formatDate(o.purchaseOrderDate) + '</span><span>Type: ' + (o.purchaseOrderType || 'Regular') + '</span></div></div><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></div>' + (o.deliveryWindow ? '<div style="margin-bottom:20px;padding:16px;background:#12121a;border-radius:10px;"><strong style="color:#a1a1aa;">Delivery Window:</strong><span style="color:#e4e4e7;margin-left:8px;">' + formatDate(o.deliveryWindow.startDate) + ' - ' + formatDate(o.deliveryWindow.endDate) + '</span></div>' : '') + '<div class="po-items-table"><table><thead><tr><th>#</th><th>ASIN</th><th>EAN/SKU</th><th>Ordered</th><th>Accepted</th><th>Shipped</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>' + (o.items || []).map((it, i) => '<tr><td>' + (i+1) + '</td><td>' + (it.amazonProductIdentifier || '-') + '</td><td>' + (it.vendorProductIdentifier || '-') + '</td><td>' + (it.orderedQuantity?.amount || 0) + '</td><td>' + getAcceptedQty(it, o) + '</td><td>' + (it.shippedQuantity?.amount ?? it.receivingStatus?.receivedQuantity?.amount ?? '-') + '</td><td>' + formatCurrency(it.netCost?.amount, it.netCost?.currencyCode) + '</td><td>' + formatCurrency((it.orderedQuantity?.amount || 0) * (it.netCost?.amount || 0), it.netCost?.currencyCode) + '</td></tr>').join('') + '<tr class="totals-row"><td colspan="7" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td></tr></tbody></table></div>' + (o.odoo?.saleOrderId ? '<div style="margin-top:20px;padding:16px;background:rgba(99,102,241,0.1);border-radius:10px;border:1px solid rgba(99,102,241,0.3);"><strong style="color:#818cf8;">Odoo Order:</strong><a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link" style="margin-left:8px;">' + o.odoo.saleOrderName + '</a></div>' : '');
         document.getElementById('modal-create-odoo').disabled = !!o.odoo?.saleOrderId;
         document.getElementById('modal-ack').disabled = !!o.acknowledgment?.acknowledged;
         document.getElementById('po-modal').classList.add('open');
@@ -377,6 +377,19 @@
         await Promise.all([loadStats(), loadOrders()]);
       } catch (e) { window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error'); }
       finally { btn.disabled = false; }
+    }
+    function getAcceptedQty(item, order) {
+      // If explicitly acknowledged with a quantity, use that
+      if (item.acknowledgeQty && item.acknowledgeQty > 0) {
+        return item.acknowledgeQty;
+      }
+      // If order is acknowledged and item was accepted, show ordered quantity
+      if (order.purchaseOrderState === 'Acknowledged' &&
+          (!item.productAvailability || item.productAvailability === 'accepted')) {
+        return item.orderedQuantity?.amount || 0;
+      }
+      // Otherwise show dash
+      return '-';
     }
     init();
   </script>
