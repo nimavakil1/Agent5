@@ -122,12 +122,18 @@
 
       try {
         const res = await fetch('/api/bolcom/invoices?skipSync=true', { credentials: 'include' });
+
+        if (res.status === 429) {
+          tbody.innerHTML = '<tr><td colspan="7" style="color: #f59e0b; padding: 20px; text-align: center;">Rate limited - please wait a moment and refresh</td></tr>';
+          return;
+        }
+
         const data = await res.json();
 
         if (!data.success || !data.invoices || data.invoices.length === 0) {
           allData = [];
           filteredData = [];
-          tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><div class="empty-state-title">No invoices</div></div></td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><div class="empty-state-title">No invoices</div><div class="empty-state-text">' + (data.error || '') + '</div></div></td></tr>';
           document.getElementById('pagination').style.display = 'none';
           return;
         }

@@ -138,6 +138,12 @@
 
       try {
         const res = await fetch(`/api/bolcom/returns${query}`, { credentials: 'include' });
+
+        if (res.status === 429) {
+          tbody.innerHTML = '<tr><td colspan="7" style="color: #f59e0b; padding: 20px; text-align: center;">Rate limited - please wait a moment and refresh</td></tr>';
+          return;
+        }
+
         const data = await res.json();
 
         if (!data.success || !data.returns || data.returns.length === 0) {
