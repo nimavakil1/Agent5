@@ -7,6 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+const Warehouse = require('../../models/Warehouse');
 
 let odooClient = null;
 
@@ -1061,34 +1062,36 @@ router.get('/invoices', async (req, res) => {
 });
 
 /**
- * Get warehouses list - uses cached/default data, no Odoo call needed
+ * Get warehouses list - uses MongoDB cache (fast!)
+ * Warehouses are synced from Odoo via Settings > Warehouses
  */
 router.get('/warehouses', async (req, res) => {
   try {
-    // Try to get cached warehouses first (fast!)
-    const syncService = getProductSyncService();
-    const status = syncService.getStatus();
+    // Get warehouses from MongoDB cache
+    const warehouses = await Warehouse.getActive();
 
-    if (status.warehouses && status.warehouses.length > 0) {
+    if (warehouses.length > 0) {
       return res.json({
         success: true,
         cached: true,
-        warehouses: status.warehouses
+        warehouses: warehouses.map(w => ({
+          id: w.odooId,
+          name: w.name,
+          code: w.code,
+          stockLocationId: w.stockLocationId
+        }))
       });
     }
 
-    // Return default warehouses list - no Odoo call needed
-    // These are the common warehouses that exist in Odoo
-    // Full list will be available after a product sync
+    // No cached warehouses - return default Central Warehouse
+    // User should sync warehouses from Settings > Warehouses
+    console.log('[Odoo API] No cached warehouses found. Please sync from Settings > Warehouses.');
     res.json({
       success: true,
       cached: false,
+      needsSync: true,
       warehouses: [
-        { id: 1, name: 'Central Warehouse', code: 'CW' },
-        { id: 2, name: 'MaryLift', code: 'ML' },
-        { id: 15, name: 'Kaufland', code: 'KFL' },
-        { id: 18, name: 'CDiscount - Octopia', code: 'FBC' },
-        { id: 23, name: 'Ziegler_aalst', code: 'ZA' }
+        { id: 1, name: 'Central Warehouse', code: 'CW' }
       ]
     });
   } catch (error) {

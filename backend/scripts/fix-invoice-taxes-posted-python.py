@@ -127,12 +127,14 @@ def main():
 
                 # Reset to draft first
                 if not dry_run:
+                    reset_succeeded = False
                     try:
                         models.execute_kw(
                             ODOO_DB, uid, ODOO_PASSWORD,
                             'account.move', 'button_draft',
                             [[invoice_id]]
                         )
+                        reset_succeeded = True
                     except Exception as reset_error:
                         # Odoo server has allow_none=False, so it fails to serialize None returns
                         # Check if the error is about None marshalling - if so, the operation likely succeeded
@@ -146,15 +148,18 @@ def main():
                                 {'fields': ['state']}
                             )
                             if check and check[0].get('state') == 'draft':
-                                pass  # Success, continue with fix
+                                reset_succeeded = True  # Success, continue with fix
                             else:
                                 stats['reset_errors'] += 1
                                 print(f'    ERROR resetting {invoice_name} to draft: state not draft after reset')
                                 continue
                         else:
                             stats['reset_errors'] += 1
-                            print(f'    ERROR resetting {invoice_name} to draft: {reset_error}')
+                            print(f'    ERROR resetting {invoice_name} to draft: {error_str}')
                             continue
+
+                    if not reset_succeeded:
+                        continue
 
                 # Fix all lines with wrong tax
                 lines_fixed_this_invoice = 0
@@ -194,8 +199,7 @@ def main():
                                 print(f'    ERROR re-posting {invoice_name}: state not posted after action_post')
                         else:
                             stats['repost_errors'] += 1
-                            print(f'    ERROR re-posting {invoice_name}: {repost_error}')
-                        # Invoice is now in draft with correct taxes - continue anyway
+                            print(f'    ERROR re-posting {invoice_name}: {error_str}')
 
                 if lines_fixed_this_invoice > 0:
                     stats['posted_fixed'] += 1

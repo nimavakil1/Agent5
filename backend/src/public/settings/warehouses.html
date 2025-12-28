@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warehouses - Settings</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --border: #334155;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .page-title {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .page-subtitle {
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover { background: #475569; }
+    .card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .sync-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+    .sync-info .material-symbols-outlined {
+      font-size: 18px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 14px 20px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-weight: 500;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    tr:hover { background: rgba(59, 130, 246, 0.05); }
+    .warehouse-name {
+      font-weight: 500;
+    }
+    .warehouse-code {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+      padding: 4px 8px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      color: var(--accent);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge.active {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--success);
+    }
+    .badge.inactive {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+    }
+    .actions-cell {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      cursor: pointer;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+    .btn-icon:hover {
+      background: var(--accent);
+      color: white;
+    }
+    .btn-icon .material-symbols-outlined {
+      font-size: 18px;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-secondary);
+    }
+    .empty-state .material-symbols-outlined {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    .empty-state-title {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .loading-spinner {
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    .stats-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      flex: 1;
+    }
+    .stat-label {
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 28px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Warehouses</h1>
+        <p class="page-subtitle">Manage warehouse list synced from Odoo</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" id="sync-btn" onclick="syncWarehouses()">
+          <span class="material-symbols-outlined">sync</span>
+          Sync from Odoo
+        </button>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Warehouses</div>
+        <div class="stat-value" id="total-count">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active</div>
+        <div class="stat-value" id="active-count">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Last Synced</div>
+        <div class="stat-value" id="last-sync" style="font-size: 16px;">Never</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Warehouse List</span>
+        <div class="sync-info" id="sync-info">
+          <span class="material-symbols-outlined">info</span>
+          <span>Warehouses are read-only. Sync to update from Odoo.</span>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Odoo ID</th>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Stock Location</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="warehouses-table">
+          <tr>
+            <td colspan="6">
+              <div class="empty-state">
+                <span class="material-symbols-outlined loading-spinner">sync</span>
+                <div class="empty-state-title">Loading...</div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">
+    <span class="material-symbols-outlined" style="color: var(--success);">check_circle</span>
+    <span id="toast-message"></span>
+  </div>
+
+  <script>
+    let warehouses = [];
+
+    async function loadWarehouses() {
+      try {
+        const res = await fetch('/api/warehouses', { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        warehouses = data.warehouses || [];
+        renderWarehouses();
+        updateStats(data);
+
+      } catch (error) {
+        console.error('Failed to load warehouses:', error);
+        document.getElementById('warehouses-table').innerHTML = `
+          <tr>
+            <td colspan="6">
+              <div class="empty-state">
+                <span class="material-symbols-outlined">cloud_off</span>
+                <div class="empty-state-title">Failed to load warehouses</div>
+                <div>${error.message}</div>
+                <button class="btn btn-primary" onclick="syncWarehouses()" style="margin-top: 16px;">
+                  <span class="material-symbols-outlined">sync</span>
+                  Sync from Odoo
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    function updateStats(data) {
+      document.getElementById('total-count').textContent = data.count || 0;
+      document.getElementById('active-count').textContent =
+        warehouses.filter(w => w.isActive).length;
+
+      if (data.lastSyncedAt) {
+        const date = new Date(data.lastSyncedAt);
+        document.getElementById('last-sync').textContent =
+          date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+      }
+    }
+
+    function renderWarehouses() {
+      const tbody = document.getElementById('warehouses-table');
+
+      if (warehouses.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6">
+              <div class="empty-state">
+                <span class="material-symbols-outlined">warehouse</span>
+                <div class="empty-state-title">No warehouses synced</div>
+                <div>Click "Sync from Odoo" to import warehouses</div>
+                <button class="btn btn-primary" onclick="syncWarehouses()" style="margin-top: 16px;">
+                  <span class="material-symbols-outlined">sync</span>
+                  Sync from Odoo
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = warehouses.map(w => `
+        <tr>
+          <td>${w.id}</td>
+          <td><span class="warehouse-code">${w.code}</span></td>
+          <td class="warehouse-name">${w.name}</td>
+          <td>${w.stockLocationId || '-'}</td>
+          <td>
+            <span class="badge ${w.isActive ? 'active' : 'inactive'}">
+              ${w.isActive ? 'Active' : 'Inactive'}
+            </span>
+          </td>
+          <td class="actions-cell">
+            <button class="btn-icon" onclick="toggleActive('${w._id}')" title="${w.isActive ? 'Deactivate' : 'Activate'}">
+              <span class="material-symbols-outlined">${w.isActive ? 'visibility_off' : 'visibility'}</span>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function syncWarehouses() {
+      const btn = document.getElementById('sync-btn');
+      const originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined loading-spinner">sync</span>Syncing...';
+
+      try {
+        const res = await fetch('/api/warehouses/sync', {
+          method: 'POST',
+          credentials: 'include'
+        });
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        showToast(data.message);
+        await loadWarehouses();
+
+      } catch (error) {
+        showToast('Sync failed: ' + error.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
+    }
+
+    async function toggleActive(id) {
+      try {
+        const res = await fetch(`/api/warehouses/${id}/toggle-active`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        showToast(data.message);
+        await loadWarehouses();
+
+      } catch (error) {
+        showToast('Failed to update: ' + error.message, true);
+      }
+    }
+
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      const icon = toast.querySelector('.material-symbols-outlined');
+      const msg = document.getElementById('toast-message');
+
+      icon.textContent = isError ? 'error' : 'check_circle';
+      icon.style.color = isError ? 'var(--danger)' : 'var(--success)';
+      msg.textContent = message;
+
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Initialize
+    loadWarehouses();
+  </script>
+</body>
+</html>
