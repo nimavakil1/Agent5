@@ -1061,10 +1061,24 @@ router.get('/invoices', async (req, res) => {
 });
 
 /**
- * Get warehouses list
+ * Get warehouses list - uses cached data from ProductSyncService
  */
 router.get('/warehouses', async (req, res) => {
   try {
+    // Try to get cached warehouses first (fast!)
+    const syncService = getProductSyncService();
+    const status = syncService.getStatus();
+
+    if (status.warehouses && status.warehouses.length > 0) {
+      return res.json({
+        success: true,
+        cached: true,
+        warehouses: status.warehouses
+      });
+    }
+
+    // Fallback to Odoo if no cached data (slower)
+    console.log('[Odoo API] No cached warehouses, fetching from Odoo...');
     const client = await getOdooClient();
     const warehouses = await client.searchRead('stock.warehouse', [], [
       'id', 'name', 'code', 'lot_stock_id'
@@ -1072,6 +1086,7 @@ router.get('/warehouses', async (req, res) => {
 
     res.json({
       success: true,
+      cached: false,
       warehouses: warehouses.map(w => ({
         id: w.id,
         name: w.name,
@@ -1081,7 +1096,13 @@ router.get('/warehouses', async (req, res) => {
     });
   } catch (error) {
     console.error('Odoo warehouses error:', error);
-    res.status(500).json({ error: error.message });
+    // Return default warehouse on error so inventory page can still load
+    res.json({
+      success: true,
+      cached: false,
+      fallback: true,
+      warehouses: [{ id: 1, name: 'Central Warehouse', code: 'CW' }]
+    });
   }
 });
 
