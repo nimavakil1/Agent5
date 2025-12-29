@@ -27,6 +27,7 @@
     "@sendinblue/client": "^3.3.1",
     "@shopify/shopify-api": "^11.14.1",
     "amazon-sp-api": "^1.0.0",
+    "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
