@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CW Fulfillment</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <script src="/lib/print-service.js"></script>
+  <style>
+    .page { max-width: 1600px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .page-title { font-size: 24px; font-weight: 700; color: #fff; margin: 0; display: flex; align-items: center; gap: 12px; }
+    .page-title .material-symbols-outlined { font-size: 32px; color: #f97316; }
+    .header-actions { display: flex; gap: 12px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #f97316; color: white; }
+    .btn-primary:hover { background: #ea580c; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn-ghost { background: transparent; color: #71717a; border: none; }
+    .btn-ghost:hover { color: #e4e4e7; background: #252532; }
+    .btn .material-symbols-outlined { font-size: 20px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+    /* Stats Row */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.15s; }
+    .stat-card:hover { border-color: #3f3f50; }
+    .stat-card.active { border-color: #f97316; }
+    .stat-value { font-size: 32px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .stat-label { font-size: 13px; color: #71717a; }
+    .stat-card.warning .stat-value { color: #fbbf24; }
+    .stat-card.danger .stat-value { color: #f87171; }
+    .stat-card.success .stat-value { color: #4ade80; }
+    .stat-card.info .stat-value { color: #60a5fa; }
+
+    /* Filters */
+    .filters-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .filter-input { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 14px; min-width: 200px; }
+    .filter-input:focus { outline: none; border-color: #f97316; }
+    .filter-select { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 14px; cursor: pointer; }
+    .filter-select:focus { outline: none; border-color: #f97316; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; background: #12121a; padding: 4px; border-radius: 10px; width: fit-content; }
+    .tab { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; color: #71717a; cursor: pointer; transition: all 0.15s; }
+    .tab:hover { color: #e4e4e7; }
+    .tab.active { background: #252532; color: #fff; }
+
+    /* Card */
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; }
+    .card-title { font-size: 16px; font-weight: 600; color: #fff; margin: 0; }
+
+    /* Table */
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid #252532; }
+    th { background: #12121a; font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; position: sticky; top: 0; }
+    td { font-size: 14px; color: #e4e4e7; }
+    tr:hover td { background: #1a1a28; }
+    tr.snoozed td { opacity: 0.6; }
+    tr.late td { background: rgba(248, 113, 113, 0.1); }
+
+    /* Badges */
+    .badge { display: inline-flex; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    .badge-ready { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+    .badge-pending { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .badge-processing { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+    .badge-shipped { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+    .badge-on_hold { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+    .badge-snoozed { background: rgba(168, 162, 158, 0.15); color: #a8a29e; }
+
+    .channel-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .channel-bol { background: #1e3a5f; color: #60a5fa; }
+    .channel-amazon_vendor { background: #422006; color: #fb923c; }
+    .channel-amazon_seller { background: #422006; color: #fbbf24; }
+    .channel-direct { background: #1a1a28; color: #a1a1aa; }
+
+    .priority-badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+    .priority-urgent { background: #7f1d1d; color: #fca5a5; }
+    .priority-high { background: #78350f; color: #fcd34d; }
+
+    .marketplace-flag { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+
+    /* Actions */
+    .action-btn { width: 32px; height: 32px; border-radius: 8px; background: #252532; border: none; color: #71717a; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-right: 4px; }
+    .action-btn:hover { background: #3f3f50; color: #e4e4e7; }
+    .action-btn .material-symbols-outlined { font-size: 18px; }
+
+    /* Checkbox */
+    .checkbox { width: 18px; height: 18px; accent-color: #f97316; cursor: pointer; }
+
+    /* Empty state */
+    .empty-state { padding: 60px 20px; text-align: center; }
+    .empty-state .material-symbols-outlined { font-size: 64px; color: #3f3f50; margin-bottom: 16px; }
+    .empty-state-title { font-size: 18px; font-weight: 600; color: #e4e4e7; margin-bottom: 8px; }
+    .empty-state-text { font-size: 14px; color: #71717a; }
+
+    /* Pagination */
+    .pagination { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-top: 1px solid #252532; }
+    .pagination-info { font-size: 13px; color: #71717a; }
+
+    /* Printer status */
+    .printer-status { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: #252532; border-radius: 8px; font-size: 12px; color: #71717a; cursor: pointer; }
+    .printer-status.connected { color: #4ade80; }
+    .printer-status .material-symbols-outlined { font-size: 16px; }
+
+    /* Bulk actions bar */
+    .bulk-actions { display: none; align-items: center; gap: 12px; padding: 12px 20px; background: #252532; border-radius: 10px; margin-bottom: 16px; }
+    .bulk-actions.visible { display: flex; }
+    .bulk-count { font-size: 14px; color: #e4e4e7; font-weight: 600; }
+
+    /* Snooze modal */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; display: none; align-items: center; justify-content: center; }
+    .modal-overlay.visible { display: flex; }
+    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; padding: 24px; min-width: 400px; max-width: 500px; }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; margin: 0 0 20px; }
+    .modal-field { margin-bottom: 16px; }
+    .modal-label { display: block; font-size: 13px; color: #71717a; margin-bottom: 6px; }
+    .modal-input { width: 100%; padding: 10px 14px; background: #12121a; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 14px; }
+    .modal-input:focus { outline: none; border-color: #f97316; }
+    .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+    .quick-snooze { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .quick-snooze-btn { padding: 6px 12px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #e4e4e7; font-size: 12px; cursor: pointer; }
+    .quick-snooze-btn:hover { background: #3f3f50; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">
+        <span class="material-symbols-outlined">inventory_2</span>
+        CW Fulfillment
+      </h1>
+      <div class="header-actions">
+        <div class="printer-status" id="printer-status" onclick="selectPrinter()" title="Click to select printer">
+          <span class="material-symbols-outlined">print_disabled</span>
+          <span id="printer-name">No printer</span>
+        </div>
+        <button class="btn btn-secondary" onclick="syncOrders()" id="sync-btn">
+          <span class="material-symbols-outlined">sync</span>Sync Odoo
+        </button>
+      </div>
+    </header>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card" id="stat-ready" onclick="filterByStatus('ready')">
+        <div class="stat-value" id="stat-ready-value">--</div>
+        <div class="stat-label">Ready to Ship</div>
+      </div>
+      <div class="stat-card warning" id="stat-late" onclick="filterByStatus('late')">
+        <div class="stat-value" id="stat-late-value">--</div>
+        <div class="stat-label">Late / Overdue</div>
+      </div>
+      <div class="stat-card info" id="stat-snoozed" onclick="showSnoozed()">
+        <div class="stat-value" id="stat-snoozed-value">--</div>
+        <div class="stat-label">Snoozed</div>
+      </div>
+      <div class="stat-card success" id="stat-processing">
+        <div class="stat-value" id="stat-processing-value">--</div>
+        <div class="stat-label">Processing</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <input type="text" class="filter-input" id="filter-search" placeholder="Search order, customer..." oninput="debounceSearch()">
+      <select class="filter-select" id="filter-channel" onchange="loadOrders()">
+        <option value="">All Channels</option>
+        <option value="bol">Bol.com</option>
+        <option value="amazon_vendor">Amazon Vendor</option>
+        <option value="amazon_seller">Amazon Seller</option>
+        <option value="direct">Direct</option>
+      </select>
+      <select class="filter-select" id="filter-marketplace" onchange="loadOrders()">
+        <option value="">All Countries</option>
+        <option value="NL">Netherlands</option>
+        <option value="BE">Belgium</option>
+        <option value="DE">Germany</option>
+        <option value="FR">France</option>
+        <option value="IT">Italy</option>
+        <option value="ES">Spain</option>
+      </select>
+      <select class="filter-select" id="filter-status" onchange="loadOrders()">
+        <option value="">Ready & Processing</option>
+        <option value="pending">Pending</option>
+        <option value="ready">Ready</option>
+        <option value="processing">Processing</option>
+        <option value="on_hold">On Hold</option>
+      </select>
+      <label style="display: flex; align-items: center; gap: 6px; color: #71717a; font-size: 13px; cursor: pointer;">
+        <input type="checkbox" id="filter-snoozed" onchange="loadOrders()"> Show snoozed
+      </label>
+      <button class="btn btn-ghost btn-sm" onclick="clearFilters()">
+        <span class="material-symbols-outlined" style="font-size: 16px;">clear</span>Clear
+      </button>
+    </div>
+
+    <!-- Bulk Actions -->
+    <div class="bulk-actions" id="bulk-actions">
+      <span class="bulk-count"><span id="selected-count">0</span> selected</span>
+      <button class="btn btn-secondary btn-sm" onclick="bulkSnooze()">
+        <span class="material-symbols-outlined">snooze</span>Snooze
+      </button>
+      <button class="btn btn-secondary btn-sm" onclick="bulkUnsnooze()">
+        <span class="material-symbols-outlined">alarm_on</span>Unsnooze
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="clearSelection()">Cancel</button>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="card">
+      <div class="table-container" style="max-height: 600px; overflow-y: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40px;"><input type="checkbox" class="checkbox" id="select-all" onchange="toggleSelectAll()"></th>
+              <th>Order</th>
+              <th>Channel</th>
+              <th>Customer</th>
+              <th>Items</th>
+              <th>Total</th>
+              <th>Ship By</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="orders-table">
+            <tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading...</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <div class="pagination-info" id="pagination-info">-</div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary btn-sm" id="prev-btn" onclick="prevPage()" disabled>Previous</button>
+          <button class="btn btn-secondary btn-sm" id="next-btn" onclick="nextPage()" disabled>Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Snooze Modal -->
+  <div class="modal-overlay" id="snooze-modal">
+    <div class="modal">
+      <h3 class="modal-title">Snooze Order</h3>
+      <div class="modal-field">
+        <label class="modal-label">Snooze until (optional)</label>
+        <input type="date" class="modal-input" id="snooze-date">
+        <div class="quick-snooze">
+          <button class="quick-snooze-btn" onclick="setSnoozeDate(1)">Tomorrow</button>
+          <button class="quick-snooze-btn" onclick="setSnoozeDate(3)">3 days</button>
+          <button class="quick-snooze-btn" onclick="setSnoozeDate(7)">1 week</button>
+          <button class="quick-snooze-btn" onclick="setSnoozeDate(null)">Indefinite</button>
+        </div>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Reason (optional)</label>
+        <input type="text" class="modal-input" id="snooze-reason" placeholder="e.g., Waiting for stock">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeSnoozeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmSnooze()">Snooze</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const CHANNEL_COLORS = { bol: 'channel-bol', amazon_vendor: 'channel-amazon_vendor', amazon_seller: 'channel-amazon_seller', direct: 'channel-direct' };
+    const CHANNEL_NAMES = { bol: 'Bol.com', amazon_vendor: 'AMZ Vendor', amazon_seller: 'AMZ Seller', direct: 'Direct', other: 'Other' };
+    const MARKETPLACE_FLAGS = { DE: 'de', FR: 'fr', IT: 'it', ES: 'es', NL: 'nl', BE: 'be', PL: 'pl', SE: 'se', UK: 'gb', AT: 'at', CZ: 'cz' };
+
+    let orders = [];
+    let selectedOrders = new Set();
+    let currentOffset = 0;
+    let totalOrders = 0;
+    let snoozeTargetId = null;
+    let searchTimeout = null;
+    const PAGE_SIZE = 50;
+
+    // Initialize
+    async function init() {
+      await Promise.all([loadStats(), loadOrders()]);
+      initPrinter();
+    }
+
+    // Load stats
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/fulfillment/stats', { credentials: 'include' });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('stat-ready-value').textContent = data.stats.ready || 0;
+          document.getElementById('stat-late-value').textContent = data.stats.late || 0;
+          document.getElementById('stat-snoozed-value').textContent = data.stats.snoozed || 0;
+          document.getElementById('stat-processing-value').textContent = data.stats.processing || 0;
+        }
+      } catch (e) { console.error('Failed to load stats:', e); }
+    }
+
+    // Load orders
+    async function loadOrders() {
+      const search = document.getElementById('filter-search').value;
+      const channel = document.getElementById('filter-channel').value;
+      const marketplace = document.getElementById('filter-marketplace').value;
+      const status = document.getElementById('filter-status').value;
+      const includeSnoozed = document.getElementById('filter-snoozed').checked;
+
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (channel) params.set('channel', channel);
+      if (marketplace) params.set('marketplace', marketplace);
+      if (status) params.set('status', status);
+      if (includeSnoozed) params.set('includeSnoozed', 'true');
+      params.set('limit', PAGE_SIZE);
+      params.set('offset', currentOffset);
+
+      try {
+        const res = await fetch('/api/fulfillment/orders?' + params.toString(), { credentials: 'include' });
+        const data = await res.json();
+        if (data.success) {
+          orders = data.orders;
+          totalOrders = data.total;
+          renderOrders();
+          updatePagination();
+        }
+      } catch (e) {
+        console.error('Failed to load orders:', e);
+        document.getElementById('orders-table').innerHTML = '<tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load orders</div></div></td></tr>';
+      }
+    }
+
+    // Render orders table
+    function renderOrders() {
+      const tbody = document.getElementById('orders-table');
+
+      if (orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">check_circle</span><div class="empty-state-title">No orders to display</div><div class="empty-state-text">All caught up! No orders match your current filters.</div></div></td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = orders.map(order => {
+        const isSnoozed = order.snooze?.isSnoozed;
+        const isLate = order.isLate;
+        const rowClass = isSnoozed ? 'snoozed' : (isLate ? 'late' : '');
+        const flag = MARKETPLACE_FLAGS[order.marketplace];
+
+        return `<tr class="${rowClass}">
+          <td><input type="checkbox" class="checkbox order-checkbox" data-id="${order._id}" ${selectedOrders.has(order._id) ? 'checked' : ''} onchange="toggleOrderSelect('${order._id}')"></td>
+          <td>
+            <div style="font-weight: 600;">${order.odoo?.saleOrderName || '-'}</div>
+            <div style="font-size: 12px; color: #71717a;">${order.channelOrderRef || order.channelOrderId || ''}</div>
+          </td>
+          <td>
+            <span class="channel-badge ${CHANNEL_COLORS[order.channel] || 'channel-direct'}">${CHANNEL_NAMES[order.channel] || order.channel}</span>
+            ${flag ? `<img src="https://flagcdn.com/w40/${flag}.png" class="marketplace-flag" alt="${order.marketplace}">` : ''}
+            ${order.priority === 'urgent' || order.priority === 'high' ? `<span class="priority-badge priority-${order.priority}">${order.priority}</span>` : ''}
+          </td>
+          <td>
+            <div>${order.customer?.name || '-'}</div>
+            <div style="font-size: 12px; color: #71717a;">${order.shippingAddress?.city || ''} ${order.shippingAddress?.country || ''}</div>
+          </td>
+          <td>${order.itemCount || order.items?.length || '-'}</td>
+          <td>${order.totalAmount ? formatCurrency(order.totalAmount, order.currency) : '-'}</td>
+          <td>
+            ${order.latestShipDate ? formatDate(order.latestShipDate) : (order.promisedDeliveryDate ? formatDate(order.promisedDeliveryDate) : '-')}
+            ${isLate ? '<span style="color: #f87171; font-size: 11px;"> LATE</span>' : ''}
+          </td>
+          <td>
+            ${isSnoozed
+              ? `<span class="badge badge-snoozed">Snoozed${order.snooze.snoozedUntil ? ' until ' + formatDate(order.snooze.snoozedUntil) : ''}</span>`
+              : `<span class="badge badge-${order.status}">${order.status}</span>`}
+          </td>
+          <td>
+            ${isSnoozed
+              ? `<button class="action-btn" onclick="unsnoozeOrder('${order._id}')" title="Unsnooze"><span class="material-symbols-outlined">alarm_on</span></button>`
+              : `<button class="action-btn" onclick="openSnoozeModal('${order._id}')" title="Snooze"><span class="material-symbols-outlined">snooze</span></button>`}
+            <button class="action-btn" onclick="viewOrder('${order._id}')" title="View details"><span class="material-symbols-outlined">visibility</span></button>
+            <button class="action-btn" onclick="printLabel('${order._id}')" title="Print label"><span class="material-symbols-outlined">print</span></button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Pagination
+    function updatePagination() {
+      const start = currentOffset + 1;
+      const end = Math.min(currentOffset + orders.length, totalOrders);
+      document.getElementById('pagination-info').textContent = `Showing ${start}-${end} of ${totalOrders}`;
+      document.getElementById('prev-btn').disabled = currentOffset === 0;
+      document.getElementById('next-btn').disabled = currentOffset + PAGE_SIZE >= totalOrders;
+    }
+
+    function prevPage() {
+      if (currentOffset > 0) {
+        currentOffset = Math.max(0, currentOffset - PAGE_SIZE);
+        loadOrders();
+      }
+    }
+
+    function nextPage() {
+      if (currentOffset + PAGE_SIZE < totalOrders) {
+        currentOffset += PAGE_SIZE;
+        loadOrders();
+      }
+    }
+
+    // Search with debounce
+    function debounceSearch() {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        currentOffset = 0;
+        loadOrders();
+      }, 300);
+    }
+
+    // Filters
+    function clearFilters() {
+      document.getElementById('filter-search').value = '';
+      document.getElementById('filter-channel').value = '';
+      document.getElementById('filter-marketplace').value = '';
+      document.getElementById('filter-status').value = '';
+      document.getElementById('filter-snoozed').checked = false;
+      currentOffset = 0;
+      loadOrders();
+    }
+
+    function filterByStatus(status) {
+      if (status === 'late') {
+        // Special handling for late filter
+        document.getElementById('filter-status').value = 'ready';
+      } else {
+        document.getElementById('filter-status').value = status;
+      }
+      currentOffset = 0;
+      loadOrders();
+    }
+
+    function showSnoozed() {
+      document.getElementById('filter-snoozed').checked = true;
+      document.getElementById('filter-status').value = '';
+      currentOffset = 0;
+      loadOrders();
+    }
+
+    // Selection
+    function toggleOrderSelect(id) {
+      if (selectedOrders.has(id)) {
+        selectedOrders.delete(id);
+      } else {
+        selectedOrders.add(id);
+      }
+      updateBulkActions();
+    }
+
+    function toggleSelectAll() {
+      const checked = document.getElementById('select-all').checked;
+      if (checked) {
+        orders.forEach(o => selectedOrders.add(o._id));
+      } else {
+        selectedOrders.clear();
+      }
+      document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = checked);
+      updateBulkActions();
+    }
+
+    function clearSelection() {
+      selectedOrders.clear();
+      document.getElementById('select-all').checked = false;
+      document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = false);
+      updateBulkActions();
+    }
+
+    function updateBulkActions() {
+      const bar = document.getElementById('bulk-actions');
+      const count = selectedOrders.size;
+      document.getElementById('selected-count').textContent = count;
+      bar.classList.toggle('visible', count > 0);
+    }
+
+    // Snooze Modal
+    function openSnoozeModal(orderId) {
+      snoozeTargetId = orderId;
+      document.getElementById('snooze-date').value = '';
+      document.getElementById('snooze-reason').value = '';
+      document.getElementById('snooze-modal').classList.add('visible');
+    }
+
+    function closeSnoozeModal() {
+      snoozeTargetId = null;
+      document.getElementById('snooze-modal').classList.remove('visible');
+    }
+
+    function setSnoozeDate(days) {
+      if (days === null) {
+        document.getElementById('snooze-date').value = '';
+      } else {
+        const date = new Date();
+        date.setDate(date.getDate() + days);
+        document.getElementById('snooze-date').value = date.toISOString().split('T')[0];
+      }
+    }
+
+    async function confirmSnooze() {
+      const dateStr = document.getElementById('snooze-date').value;
+      const reason = document.getElementById('snooze-reason').value;
+
+      try {
+        const res = await fetch(`/api/fulfillment/orders/${snoozeTargetId}/snooze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            until: dateStr ? new Date(dateStr).toISOString() : null,
+            reason
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.Agent5Shell?.showToast?.('Order snoozed', 'success');
+          closeSnoozeModal();
+          loadOrders();
+          loadStats();
+        } else {
+          window.Agent5Shell?.showToast?.(data.error, 'error');
+        }
+      } catch (e) {
+        window.Agent5Shell?.showToast?.('Failed to snooze', 'error');
+      }
+    }
+
+    async function unsnoozeOrder(id) {
+      try {
+        const res = await fetch(`/api/fulfillment/orders/${id}/unsnooze`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.Agent5Shell?.showToast?.('Order unsnoozed', 'success');
+          loadOrders();
+          loadStats();
+        }
+      } catch (e) {
+        window.Agent5Shell?.showToast?.('Failed to unsnooze', 'error');
+      }
+    }
+
+    // Bulk actions
+    async function bulkSnooze() {
+      const ids = Array.from(selectedOrders);
+      if (ids.length === 0) return;
+
+      // For bulk, just snooze indefinitely - could add modal
+      try {
+        const res = await fetch('/api/fulfillment/orders/bulk-snooze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ orderIds: ids })
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.Agent5Shell?.showToast?.(data.message, 'success');
+          clearSelection();
+          loadOrders();
+          loadStats();
+        }
+      } catch (e) {
+        window.Agent5Shell?.showToast?.('Failed to snooze orders', 'error');
+      }
+    }
+
+    async function bulkUnsnooze() {
+      const ids = Array.from(selectedOrders);
+      if (ids.length === 0) return;
+
+      try {
+        const res = await fetch('/api/fulfillment/orders/bulk-unsnooze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ orderIds: ids })
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.Agent5Shell?.showToast?.(data.message, 'success');
+          clearSelection();
+          loadOrders();
+          loadStats();
+        }
+      } catch (e) {
+        window.Agent5Shell?.showToast?.('Failed to unsnooze orders', 'error');
+      }
+    }
+
+    // Sync
+    async function syncOrders() {
+      const btn = document.getElementById('sync-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">sync</span>Syncing...';
+
+      try {
+        const res = await fetch('/api/fulfillment/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ limit: 500 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.Agent5Shell?.showToast?.(data.message, 'success');
+          loadOrders();
+          loadStats();
+        } else {
+          window.Agent5Shell?.showToast?.(data.error, 'error');
+        }
+      } catch (e) {
+        window.Agent5Shell?.showToast?.('Sync failed', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined">sync</span>Sync Odoo';
+      }
+    }
+
+    // Actions
+    function viewOrder(id) {
+      // TODO: Open order detail modal
+      window.Agent5Shell?.showToast?.('Order details coming soon', 'info');
+    }
+
+    async function printLabel(id) {
+      window.Agent5Shell?.showToast?.('Label printing coming soon', 'info');
+    }
+
+    // Printer
+    async function initPrinter() {
+      if (typeof PrintService === 'undefined') return;
+      const status = await PrintService.checkStatus();
+      updatePrinterUI(status);
+    }
+
+    function updatePrinterUI(status) {
+      const el = document.getElementById('printer-status');
+      const nameEl = document.getElementById('printer-name');
+      const iconEl = el.querySelector('.material-symbols-outlined');
+
+      if (status.connected) {
+        el.classList.add('connected');
+        iconEl.textContent = 'print';
+        nameEl.textContent = status.selectedPrinter || 'Select printer';
+      } else {
+        el.classList.remove('connected');
+        iconEl.textContent = 'print_disabled';
+        nameEl.textContent = 'No printer';
+      }
+    }
+
+    async function selectPrinter() {
+      if (typeof PrintService === 'undefined') return;
+      const result = await PrintService.showPrinterDialog();
+      if (result.success) {
+        window.Agent5Shell?.showToast?.('Printer set to ' + result.printer, 'success');
+        updatePrinterUI({ connected: true, selectedPrinter: result.printer });
+      }
+    }
+
+    // Helpers
+    function formatDate(d) {
+      if (!d) return '-';
+      return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    }
+
+    function formatCurrency(amount, currency = 'EUR') {
+      return new Intl.NumberFormat('en-EU', { style: 'currency', currency }).format(amount);
+    }
+
+    // Init
+    init();
+  </script>
+  <style>
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  </style>
+</body>
+</html>

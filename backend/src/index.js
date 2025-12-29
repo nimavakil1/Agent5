@@ -49,6 +49,7 @@ const { syncRouter: odooSyncRouter } = require('./api/routes/purchasing.api');
 const inventoryRouter = require('./api/routes/inventory.api');
 const printRouter = require('./api/routes/print.api');
 const shippingRouter = require('./api/routes/shipping.api');
+const fulfillmentRouter = require('./api/routes/fulfillment.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -360,6 +361,8 @@ app.use('/api/inventory', requireSession, inventoryRouter);
 app.use('/api/print', requireSession, printRouter);
 // Shipping carrier integrations (GLS, etc.)
 app.use('/api/shipping', requireSession, shippingRouter);
+// CW Fulfillment module
+app.use('/api/fulfillment', requireSession, fulfillmentRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
