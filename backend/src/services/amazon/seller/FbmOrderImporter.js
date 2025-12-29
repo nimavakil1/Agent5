@@ -17,7 +17,26 @@ const { getDb } = require('../../../db');
 // Odoo constants
 const PAYMENT_TERM_21_DAYS = 2;
 const AMAZON_SELLER_TEAM_ID = 11;
-const FBM_WAREHOUSE_ID = 1; // Belgium warehouse
+const FBM_WAREHOUSE_ID = 1; // Belgium warehouse (CW)
+
+/**
+ * Journal configuration for FBM orders
+ * FBM always ships from Belgium (CW warehouse)
+ */
+const FBM_JOURNALS = {
+  'BE': { code: 'VBE', id: 1 },   // Domestic Belgium
+  'OSS': { code: 'VOS', id: 12 }, // EU cross-border (OSS)
+  'EXPORT': { code: 'VEX', id: 52 }, // Non-EU export
+};
+
+/**
+ * EU countries for determining OSS vs Export
+ */
+const EU_COUNTRIES = [
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR',
+  'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL',
+  'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
+];
 
 class FbmOrderImporter {
   constructor() {
@@ -249,6 +268,40 @@ class FbmOrderImporter {
   }
 
   /**
+   * Determine journal for FBM order based on destination country
+   * FBM always ships from Belgium (BE)
+   *
+   * @param {string} destCountry - Destination country code
+   * @returns {object} { journalId, journalCode, journalType }
+   */
+  determineJournal(destCountry) {
+    // Non-EU destination = Export
+    if (!EU_COUNTRIES.includes(destCountry)) {
+      return {
+        journalId: FBM_JOURNALS['EXPORT'].id,
+        journalCode: FBM_JOURNALS['EXPORT'].code,
+        journalType: 'export'
+      };
+    }
+
+    // Domestic Belgium
+    if (destCountry === 'BE') {
+      return {
+        journalId: FBM_JOURNALS['BE'].id,
+        journalCode: FBM_JOURNALS['BE'].code,
+        journalType: 'domestic'
+      };
+    }
+
+    // EU cross-border = OSS
+    return {
+      journalId: FBM_JOURNALS['OSS'].id,
+      journalCode: FBM_JOURNALS['OSS'].code,
+      journalType: 'oss'
+    };
+  }
+
+  /**
    * Create sale order in Odoo
    */
   async createOdooOrder(order, partnerId, orderLines) {
@@ -257,6 +310,9 @@ class FbmOrderImporter {
       product_uom_qty: line.quantity,
       name: line.name
     }]);
+
+    // Determine journal based on destination country
+    const journalInfo = this.determineJournal(order.country);
 
     const orderData = {
       partner_id: partnerId,
@@ -267,7 +323,8 @@ class FbmOrderImporter {
       warehouse_id: FBM_WAREHOUSE_ID,
       order_line: odooLines,
       payment_term_id: PAYMENT_TERM_21_DAYS,
-      team_id: AMAZON_SELLER_TEAM_ID
+      team_id: AMAZON_SELLER_TEAM_ID,
+      journal_id: journalInfo.journalId
     };
 
     const orderId = await this.odoo.create('sale.order', orderData);
@@ -276,10 +333,12 @@ class FbmOrderImporter {
     const created = await this.odoo.searchRead('sale.order', [['id', '=', orderId]], ['name']);
     const createdName = created.length > 0 ? created[0].name : `SO-${orderId}`;
 
+    console.log(`[FbmOrderImporter] Created order ${createdName} with journal ${journalInfo.journalCode} (${journalInfo.journalType}: BE→${order.country})`);
+
     // Confirm order
     await this.odoo.execute('sale.order', 'action_confirm', [[orderId]]);
 
-    return { id: orderId, name: createdName };
+    return { id: orderId, name: createdName, journalCode: journalInfo.journalCode };
   }
 
   /**

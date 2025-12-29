@@ -41,6 +41,38 @@ const PAYMENT_TERM_21_DAYS = 2; // Adjust if different in your Odoo
 const AMAZON_SELLER_TEAM_ID = 11;
 
 /**
+ * Journal configuration for Amazon Seller orders
+ *
+ * Journal selection is based on ship-from → ship-to:
+ * - Domestic sales (BE→BE, DE→DE, etc.): Use country-specific journal
+ * - EU cross-border B2C: Use OSS journal
+ * - Export (non-EU destinations): Use Export journal
+ */
+const SELLER_JOURNALS = {
+  // Country-specific journals (for domestic sales or FBA from that country)
+  'BE': { code: 'VBE', id: 1 },   // INV*BE/ Invoices
+  'NL': { code: 'VNL', id: 16 },  // INV*NL/ Invoices
+  'DE': { code: 'VDE', id: 15 },  // INV*DE/ Invoices
+  'FR': { code: 'VFR', id: 14 },  // INV*FR/ Invoices
+  'IT': { code: 'VIT', id: 40 },  // INV*IT/ Invoices
+  'PL': { code: 'VPL', id: 51 },  // INV*PL/ Invoices
+  'CZ': { code: 'VCZ', id: 50 },  // INV*CZ/ Invoices
+  'GB': { code: 'VGB', id: 41 },  // INV*GB/ Invoices (UK domestic FBA)
+  // Special journals
+  'OSS': { code: 'VOS', id: 12 }, // INV*OSS/ Invoices (EU cross-border B2C)
+  'EXPORT': { code: 'VEX', id: 52 }, // INV*EX/ Export Invoices (non-EU)
+};
+
+/**
+ * EU member countries (for determining OSS vs Export)
+ */
+const EU_COUNTRIES = [
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR',
+  'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL',
+  'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'
+];
+
+/**
  * SellerOrderCreator - Creates Odoo orders from Amazon seller orders
  */
 class SellerOrderCreator {
@@ -644,6 +676,51 @@ class SellerOrderCreator {
   }
 
   /**
+   * Determine the correct journal for an order based on ship-from and ship-to countries
+   *
+   * Logic:
+   * - Export (non-EU destination): VEX
+   * - Domestic (same country): Country-specific journal (VBE, VNL, VDE, etc.)
+   * - EU cross-border: VOS (OSS)
+   *
+   * @param {object} config - Order config with shipFromCountry and shipToCountry
+   * @returns {object} { journalId, journalCode, journalType }
+   */
+  determineJournal(config) {
+    const { shipFromCountry, shipToCountry, isFBA } = config;
+
+    // Check if destination is outside EU (export)
+    const isExport = !EU_COUNTRIES.includes(shipToCountry);
+    if (isExport) {
+      const journal = SELLER_JOURNALS['EXPORT'];
+      return {
+        journalId: journal.id,
+        journalCode: journal.code,
+        journalType: 'export'
+      };
+    }
+
+    // Check if domestic sale (same country)
+    if (shipFromCountry === shipToCountry) {
+      // Use country-specific journal
+      const journal = SELLER_JOURNALS[shipFromCountry] || SELLER_JOURNALS['BE'];
+      return {
+        journalId: journal.id,
+        journalCode: journal.code,
+        journalType: 'domestic'
+      };
+    }
+
+    // EU cross-border sale → OSS
+    const journal = SELLER_JOURNALS['OSS'];
+    return {
+      journalId: journal.id,
+      journalCode: journal.code,
+      journalType: 'oss'
+    };
+  }
+
+  /**
    * Create the sale order in Odoo
    */
   async createOdooOrder(order, partnerId, config, orderLines) {
@@ -658,6 +735,9 @@ class SellerOrderCreator {
       ? order.purchaseDate.toISOString().split('T')[0]
       : new Date(order.purchaseDate).toISOString().split('T')[0];
 
+    // Determine journal based on ship-from and ship-to countries
+    const journalInfo = this.determineJournal(config);
+
     // Create order data
     const orderData = {
       name: orderName,
@@ -669,17 +749,20 @@ class SellerOrderCreator {
       warehouse_id: config.warehouseId,
       order_line: odooLines,
       payment_term_id: PAYMENT_TERM_21_DAYS,
-      team_id: config.salesTeamId
+      team_id: config.salesTeamId,
+      journal_id: journalInfo.journalId
     };
 
     // Create the order
     const orderId = await this.odoo.create('sale.order', orderData);
 
-    console.log(`[SellerOrderCreator] Created order ${orderName} (ID: ${orderId})`);
+    console.log(`[SellerOrderCreator] Created order ${orderName} (ID: ${orderId}) with journal ${journalInfo.journalCode} (${journalInfo.journalType}: ${config.shipFromCountry}→${config.shipToCountry})`);
 
     return {
       id: orderId,
-      name: orderName
+      name: orderName,
+      journalId: journalInfo.journalId,
+      journalCode: journalInfo.journalCode
     };
   }
 
