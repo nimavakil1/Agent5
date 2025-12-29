@@ -176,7 +176,8 @@ class SellerTrackingPusher {
       const confirmResult = await this.confirmShipment(order, {
         trackingNumber,
         carrierName,
-        shipDate
+        shipDate,
+        pickingId: picking.id  // Used as packageReferenceId (must be numeric)
       });
 
       if (confirmResult.success) {
@@ -229,7 +230,7 @@ class SellerTrackingPusher {
    * Confirm shipment with Amazon
    */
   async confirmShipment(order, shipmentData) {
-    const { trackingNumber, carrierName, shipDate } = shipmentData;
+    const { trackingNumber, carrierName, shipDate, pickingId } = shipmentData;
 
     const marketplaceId = order.marketplaceId;
 
@@ -241,8 +242,12 @@ class SellerTrackingPusher {
     }
 
     // Build package details per Amazon API spec
+    // packageReferenceId MUST be a positive numeric value (Amazon requirement)
+    // We use Odoo picking ID as a unique numeric identifier
+    const packageReferenceId = pickingId.toString();
+
     const packageDetail = {
-      packageReferenceId: `PKG-${order.amazonOrderId}`,
+      packageReferenceId: packageReferenceId,
       carrierCode: carrierName,
       trackingNumber: trackingNumber,
       shipDate: shipDate,
