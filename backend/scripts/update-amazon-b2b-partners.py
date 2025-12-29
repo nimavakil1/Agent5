@@ -21,6 +21,31 @@ ODOO_DB = 'ninicocolala-v16-fvl-fvl-7662670'
 ODOO_USERNAME = 'info@acropaq.com'
 ODOO_PASSWORD = '3f9e62b99ae693c1973470c473410050ae7860f9'
 
+# Cache for country IDs
+_country_cache = {}
+
+
+def get_country_id(models, db, uid, password, country_code):
+    """Get Odoo country ID from ISO country code."""
+    if not country_code:
+        return False
+
+    if country_code in _country_cache:
+        return _country_cache[country_code]
+
+    countries = models.execute_kw(
+        db, uid, password,
+        'res.country', 'search_read',
+        [[['code', '=', country_code.upper()]]],
+        {'fields': ['id'], 'limit': 1}
+    )
+
+    if countries:
+        _country_cache[country_code] = countries[0]['id']
+        return countries[0]['id']
+
+    return False
+
 
 def main():
     if len(sys.argv) < 2:
@@ -143,6 +168,54 @@ def main():
 
             print(f'  -> Current partner: {partner["name"]} (VAT: {partner.get("vat") or "none"})')
 
+            # Check if this is a generic Amazon partner (should not be modified)
+            is_generic_partner = (
+                'AMZ_B2C' in partner['name'] or
+                'AMZ_B2B' in partner['name'] or
+                partner['name'].startswith('Amazon |')
+            )
+
+            if is_generic_partner:
+                print(f'  -> Generic Amazon partner - need to create new partner')
+
+                if vat_number or company_name:
+                    # Create a new partner for this B2B customer
+                    new_partner_vals = {
+                        'name': company_name or order_data['recipient_name'],
+                        'is_company': True,
+                        'company_type': 'company',
+                        'street': order_data['ship_address_1'],
+                        'street2': order_data['ship_address_2'] or False,
+                        'city': order_data['ship_city'],
+                        'zip': order_data['ship_postal_code'],
+                        'country_id': get_country_id(models, ODOO_DB, uid, ODOO_PASSWORD, order_data['ship_country']),
+                    }
+                    if vat_number:
+                        new_partner_vals['vat'] = vat_number
+
+                    if not dry_run:
+                        new_partner_id = models.execute_kw(
+                            ODOO_DB, uid, ODOO_PASSWORD,
+                            'res.partner', 'create',
+                            [new_partner_vals]
+                        )
+                        # Update order to use new partner
+                        models.execute_kw(
+                            ODOO_DB, uid, ODOO_PASSWORD,
+                            'sale.order', 'write',
+                            [[order['id']], {
+                                'partner_id': new_partner_id,
+                                'partner_invoice_id': new_partner_id,
+                            }]
+                        )
+                    action = 'Would create' if dry_run else 'Created'
+                    print(f'  -> {action} new partner: {new_partner_vals["name"]} (VAT: {vat_number or "none"})')
+                    stats['partner_created'] += 1
+                else:
+                    print(f'  -> No B2B info to create new partner')
+                    stats['already_correct'] += 1
+                continue
+
             # Check if partner already has correct VAT
             if partner.get('vat') and vat_number and partner['vat'].replace(' ', '') == vat_number.replace(' ', ''):
                 print(f'  -> Already has correct VAT')
@@ -159,11 +232,6 @@ def main():
                 # If we have a company name and partner is not marked as company, update it
                 update_vals['is_company'] = True
                 update_vals['company_type'] = 'company'
-
-            if company_name and partner['name'] != company_name:
-                # Update name to company name if different
-                # But be careful - might be a shared partner
-                pass  # Don't update name to avoid breaking other orders
 
             if update_vals:
                 if not dry_run:

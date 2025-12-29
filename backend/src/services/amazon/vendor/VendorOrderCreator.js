@@ -39,19 +39,16 @@ const AMAZON_VENDOR_PARTNERS = {
 };
 
 /**
- * Marketplace to Warehouse mapping
- * For Vendor Central, we typically ship from our main warehouse
+ * Warehouse for Vendor Central orders
+ * All Vendor Central orders ship from Central Warehouse
  */
-const MARKETPLACE_WAREHOUSE = {
-  'DE': 'be1',  // Ship from Belgium
-  'FR': 'be1',
-  'NL': 'be1',
-  'UK': 'be1',
-  'IT': 'be1',
-  'ES': 'be1',
-  'SE': 'be1',
-  'PL': 'be1',
-};
+const VENDOR_WAREHOUSE_CODE = 'CW';  // Central Warehouse
+
+/**
+ * Invoice Journal for Vendor Central orders
+ * Using Belgian journal as orders are shipped from Belgium
+ */
+const VENDOR_INVOICE_JOURNAL_ID = 1;  // VBE - INV*BE/ Invoices
 
 /**
  * Sales Team IDs for Vendor Central (different from Seller Central)
@@ -209,8 +206,8 @@ class VendorOrderCreator {
       }
       result.warnings.push(...partnerIds.warnings);
 
-      // Step 5: Find warehouse
-      const warehouseId = await this.findWarehouse(po.marketplaceId);
+      // Step 5: Find warehouse (always Central Warehouse for Vendor)
+      const warehouseId = await this.findWarehouse();
 
       // Step 6: Prepare order data
       const orderData = {
@@ -220,6 +217,7 @@ class VendorOrderCreator {
         client_order_ref: poNumber,  // CRITICAL: Store PO number for duplicate detection
         date_order: this.formatDate(po.purchaseOrderDate),
         warehouse_id: warehouseId,
+        journal_id: VENDOR_INVOICE_JOURNAL_ID,      // Invoice journal (VBE - Belgian)
         order_line: orderLines.lines.map(line => [0, 0, line]),
         // Store vendor-specific info in notes
         note: this.buildOrderNotes(po),
@@ -523,10 +521,11 @@ class VendorOrderCreator {
   }
 
   /**
-   * Find warehouse for marketplace
+   * Find warehouse for Vendor Central orders
+   * Always uses Central Warehouse (CW)
    */
-  async findWarehouse(marketplace) {
-    const warehouseCode = MARKETPLACE_WAREHOUSE[marketplace] || 'be1';
+  async findWarehouse() {
+    const warehouseCode = VENDOR_WAREHOUSE_CODE;
 
     // Check cache
     if (this.warehouseCache[warehouseCode]) {
@@ -543,14 +542,15 @@ class VendorOrderCreator {
       return warehouses[0];
     }
 
-    // Fallback to first warehouse
+    // Fallback to first warehouse (should not happen)
+    console.warn(`[VendorOrderCreator] Central Warehouse (CW) not found, using fallback`);
     const fallback = await this.odoo.search('stock.warehouse', [], { limit: 1 });
     if (fallback.length > 0) {
       this.warehouseCache[warehouseCode] = fallback[0];
       return fallback[0];
     }
 
-    throw new Error(`No warehouse found for marketplace ${marketplace}`);
+    throw new Error('No warehouse found for Vendor Central orders');
   }
 
   /**
@@ -607,6 +607,7 @@ module.exports = {
   VendorOrderCreator,
   getVendorOrderCreator,
   AMAZON_VENDOR_PARTNERS,
-  MARKETPLACE_WAREHOUSE,
+  VENDOR_WAREHOUSE_CODE,
+  VENDOR_INVOICE_JOURNAL_ID,
   VENDOR_SALES_TEAMS
 };
