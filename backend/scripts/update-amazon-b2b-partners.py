@@ -199,13 +199,14 @@ def main():
                             'res.partner', 'create',
                             [new_partner_vals]
                         )
-                        # Update order to use new partner
+                        # Update order to use new partner (all three partner fields)
                         models.execute_kw(
                             ODOO_DB, uid, ODOO_PASSWORD,
                             'sale.order', 'write',
                             [[order['id']], {
                                 'partner_id': new_partner_id,
                                 'partner_invoice_id': new_partner_id,
+                                'partner_shipping_id': new_partner_id,
                             }]
                         )
                     action = 'Would create' if dry_run else 'Created'

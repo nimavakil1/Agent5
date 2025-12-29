@@ -12,15 +12,16 @@
  *
  * Configuration:
  * - Order prefix: FBR (merchant) or FBB (Bol-fulfilled)
- * - Warehouse: Central Warehouse (ID: 1)
+ * - Warehouse: FBR uses CW (Central Warehouse), FBB uses BOL warehouse
  * - Stock field: free_qty of Central Warehouse only
  */
 
 const BolOrder = require('../../models/BolOrder');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 
-// Central Warehouse ID in Odoo
-const CENTRAL_WAREHOUSE_ID = 1;
+// Warehouse IDs in Odoo
+const CENTRAL_WAREHOUSE_ID = 1;  // CW - for FBR orders (we ship from our warehouse)
+const BOL_WAREHOUSE_ID = 3;      // BOL - for FBB orders (Bol ships from their warehouse)
 
 // Country code to Odoo country ID mapping
 const COUNTRY_IDS = {
@@ -373,13 +374,17 @@ class BolOrderCreator {
         ? new Date(bolOrder.orderPlacedDateTime).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0];
 
+      // Use BOL warehouse for FBB orders, Central Warehouse for FBR orders
+      const warehouseId = fulfilmentMethod === 'FBB' ? BOL_WAREHOUSE_ID : CENTRAL_WAREHOUSE_ID;
+      console.log(`[BolOrderCreator] Using warehouse: ${fulfilmentMethod === 'FBB' ? 'BOL' : 'CW'} (ID: ${warehouseId})`);
+
       const orderData = {
         partner_id: partnerId,
         partner_invoice_id: partnerId,   // Required: Invoice address
         partner_shipping_id: partnerId,  // Required: Delivery address
         client_order_ref: orderRef,
         date_order: orderDate,
-        warehouse_id: CENTRAL_WAREHOUSE_ID,
+        warehouse_id: warehouseId,
         team_id: BOL_TEAM_ID,            // Sales Team: BOL
         order_line: orderLines,
         note: this.buildOrderNotes(bolOrder, prefix, taxConfig)
@@ -777,6 +782,7 @@ module.exports = {
   BolOrderCreator,
   getBolOrderCreator,
   CENTRAL_WAREHOUSE_ID,
+  BOL_WAREHOUSE_ID,
   COUNTRY_IDS,
   TAX_CONFIG
 };
