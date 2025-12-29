@@ -6,6 +6,7 @@
   <title>Shipments - Amazon Vendor</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
   <script src="/shell-v2.js"></script>
+  <script src="/lib/print-service.js"></script>
   <style>
     .page { max-width: 1400px; margin: 0 auto; padding: 24px; }
     .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
@@ -54,6 +55,10 @@
     .pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-top: 1px solid #252532; }
     .pagination-info { font-size: 13px; color: #71717a; }
     .page-size-select { padding: 6px 10px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #e4e4e7; font-size: 13px; }
+    .printer-status { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: #252532; border-radius: 8px; font-size: 12px; color: #71717a; }
+    .printer-status.connected { color: #4ade80; }
+    .printer-status.disconnected { color: #f87171; }
+    .printer-status .material-symbols-outlined { font-size: 16px; }
   </style>
 </head>
 <body>
@@ -63,6 +68,10 @@
         <img src="/assets/logos/amazon_vendor.png" alt="Amazon Vendor Central" class="page-logo">
       </div>
       <div class="header-actions">
+        <div class="printer-status disconnected" id="printer-status" onclick="selectPrinter()" style="cursor:pointer;" title="Click to select printer">
+          <span class="material-symbols-outlined">print_disabled</span>
+          <span id="printer-name">No printer</span>
+        </div>
         <button class="btn btn-secondary" onclick="pollShipments()" id="poll-btn">
           <span class="material-symbols-outlined">sync</span>Poll Amazon
         </button>
@@ -275,7 +284,65 @@
       } catch (e) { window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error'); }
       finally { btn.disabled = false; }
     }
+    // Printer integration
+    async function initPrinter() {
+      const status = await PrintService.checkStatus();
+      updatePrinterUI(status);
+    }
+
+    function updatePrinterUI(status) {
+      const el = document.getElementById('printer-status');
+      const nameEl = document.getElementById('printer-name');
+      const iconEl = el.querySelector('.material-symbols-outlined');
+
+      if (status.connected) {
+        el.classList.remove('disconnected');
+        el.classList.add('connected');
+        iconEl.textContent = 'print';
+        nameEl.textContent = status.selectedPrinter || 'Select printer';
+      } else {
+        el.classList.remove('connected');
+        el.classList.add('disconnected');
+        iconEl.textContent = 'print_disabled';
+        if (status.error?.includes('not running')) {
+          nameEl.textContent = 'Install QZ Tray';
+          nameEl.innerHTML = '<a href="https://qz.io/download/" target="_blank" style="color:#60a5fa;">Install QZ Tray</a>';
+        } else {
+          nameEl.textContent = 'No printer';
+        }
+      }
+    }
+
+    async function selectPrinter() {
+      const result = await PrintService.showPrinterDialog();
+      if (result.success) {
+        window.Agent5Shell?.showToast?.('Printer set to ' + result.printer, 'success');
+        updatePrinterUI({ connected: true, selectedPrinter: result.printer });
+      } else if (result.downloadUrl) {
+        window.open(result.downloadUrl, '_blank');
+      }
+    }
+
+    async function printLabel(trackingNumber) {
+      if (!PrintService.isConnected()) {
+        const result = await PrintService.connect();
+        if (!result.success) {
+          window.Agent5Shell?.showToast?.(result.error || 'Printer not connected', 'error');
+          return;
+        }
+      }
+
+      const result = await PrintService.printGLSLabel(trackingNumber);
+      if (result.success) {
+        window.Agent5Shell?.showToast?.('Label printed', 'success');
+      } else {
+        window.Agent5Shell?.showToast?.('Print failed: ' + result.error, 'error');
+      }
+    }
+
+    // Initialize
     init();
+    initPrinter();
   </script>
 </body>
 </html>

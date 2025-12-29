@@ -47,6 +47,8 @@ const settingsRouter = require('./api/routes/settings.api');
 const purchasingRouter = require('./api/routes/purchasing.api');
 const { syncRouter: odooSyncRouter } = require('./api/routes/purchasing.api');
 const inventoryRouter = require('./api/routes/inventory.api');
+const printRouter = require('./api/routes/print.api');
+const shippingRouter = require('./api/routes/shipping.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -354,6 +356,10 @@ app.use('/api/odoo-sync', odooSyncRouter);
 app.use('/api/purchasing', requireSession, purchasingRouter);
 // Inventory optimization endpoints require session
 app.use('/api/inventory', requireSession, inventoryRouter);
+// Print service for QZ Tray integration
+app.use('/api/print', requireSession, printRouter);
+// Shipping carrier integrations (GLS, etc.)
+app.use('/api/shipping', requireSession, shippingRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
