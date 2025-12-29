@@ -563,6 +563,612 @@ router.post('/orders/:poNumber/update-acknowledgments', async (req, res) => {
   }
 });
 
+// ==================== ORDER CONSOLIDATION ====================
+
+/**
+ * Amazon FC (Fulfillment Center) Names by Party ID
+ * These are Amazon's warehouse codes - the shipToParty.partyId
+ */
+const FC_NAMES = {
+  // Germany (DE)
+  'TEUR': 'Amazon DE - Leipzig (LEJ1/LEJ2)',
+  'LEJ1': 'Amazon DE - Leipzig LEJ1',
+  'LEJ2': 'Amazon DE - Leipzig LEJ2',
+  'EDE4': 'Amazon DE - Dortmund',
+  'CGN1': 'Amazon DE - Köln',
+  'FRA1': 'Amazon DE - Bad Hersfeld',
+  'FRA3': 'Amazon DE - Bad Hersfeld FRA3',
+  'FRA7': 'Amazon DE - Frankfurt Rhein-Main',
+  'MUC3': 'Amazon DE - Graben',
+  'HAM2': 'Amazon DE - Winsen',
+  'BER3': 'Amazon DE - Berlin',
+  'DTM1': 'Amazon DE - Dortmund DTM1',
+  'DTM2': 'Amazon DE - Werne',
+  'DUS2': 'Amazon DE - Mönchengladbach',
+  'PAD1': 'Amazon DE - Oelde',
+  'STR1': 'Amazon DE - Pforzheim',
+
+  // France (FR)
+  'LYS1': 'Amazon FR - Montélimar',
+  'ORY1': 'Amazon FR - Saran',
+  'ORY4': 'Amazon FR - Brétigny',
+  'MRS1': 'Amazon FR - Lauwin-Planque',
+  'CDG7': 'Amazon FR - Senlis',
+  'BVA1': 'Amazon FR - Amiens',
+
+  // UK
+  'LTN1': 'Amazon UK - Marston Gate',
+  'BHX1': 'Amazon UK - Rugeley',
+  'EUK5': 'Amazon UK - Peterborough',
+  'MAN1': 'Amazon UK - Manchester',
+  'EDI4': 'Amazon UK - Dunfermline',
+
+  // Italy
+  'MXP5': 'Amazon IT - Castel San Giovanni',
+  'FCO1': 'Amazon IT - Passo Corese',
+
+  // Spain
+  'MAD4': 'Amazon ES - San Fernando',
+  'MAD6': 'Amazon ES - Illescas',
+  'BCN1': 'Amazon ES - El Prat',
+
+  // Netherlands
+  'RTM1': 'Amazon NL - Rozenburg',
+
+  // Belgium
+  'CRL1': 'Amazon BE - Charleroi',
+
+  // Poland
+  'WRO1': 'Amazon PL - Wrocław',
+  'WRO2': 'Amazon PL - Bielany Wrocławskie',
+  'POZ1': 'Amazon PL - Poznań',
+  'LCJ1': 'Amazon PL - Łódź',
+  'KTW1': 'Amazon PL - Gliwice',
+
+  // Sweden
+  'ARN1': 'Amazon SE - Eskilstuna',
+
+  // Czech Republic
+  'PRG1': 'Amazon CZ - Dobrovíz',
+  'PRG2': 'Amazon CZ - Prague'
+};
+
+/**
+ * Get friendly FC name from party ID
+ */
+function getFCName(partyId, address = null) {
+  if (!partyId) return 'Unknown FC';
+
+  const upper = partyId.toUpperCase();
+
+  // Check known FC codes
+  if (FC_NAMES[upper]) {
+    return FC_NAMES[upper];
+  }
+
+  // Try to extract FC code from longer party IDs (e.g., "AMAZON_EU_FRA3" -> "FRA3")
+  const parts = upper.split(/[_\s-]/);
+  for (const part of parts.reverse()) {
+    if (FC_NAMES[part]) {
+      return FC_NAMES[part];
+    }
+  }
+
+  // If we have address info, use city
+  if (address?.city) {
+    return `Amazon FC - ${address.city}`;
+  }
+
+  return `Amazon FC ${partyId}`;
+}
+
+/**
+ * Create a group ID from FC party ID and delivery window
+ */
+function createConsolidationGroupId(partyId, deliveryWindowEnd) {
+  const fcCode = partyId?.toUpperCase() || 'UNKNOWN';
+  const dateStr = deliveryWindowEnd
+    ? new Date(deliveryWindowEnd).toISOString().split('T')[0]
+    : 'nodate';
+  return `${fcCode}_${dateStr}`;
+}
+
+/**
+ * @route GET /api/vendor/orders/consolidate
+ * @desc Get orders grouped by FC (shipToParty) and delivery window for consolidated shipping
+ * @query marketplace - Filter by marketplace
+ * @query state - Filter by PO state (default: Acknowledged)
+ * @query shipmentStatus - Filter by shipment status (default: not_shipped)
+ * @query daysAhead - Days ahead to include delivery windows (default: 14)
+ */
+router.get('/orders/consolidate', async (req, res) => {
+  try {
+    const db = getDb();
+    const collection = db.collection('vendor_purchase_orders');
+
+    // Build filter - default to orders ready to ship
+    const query = {
+      purchaseOrderState: req.query.state || 'Acknowledged',
+      shipmentStatus: req.query.shipmentStatus || 'not_shipped'
+    };
+
+    if (req.query.marketplace) {
+      query.marketplaceId = req.query.marketplace.toUpperCase();
+    }
+
+    // Get orders
+    const orders = await collection.find(query)
+      .sort({ 'deliveryWindow.endDate': 1, 'shipToParty.partyId': 1 })
+      .toArray();
+
+    // Group by FC + delivery window end date
+    const groups = {};
+
+    for (const order of orders) {
+      const partyId = order.shipToParty?.partyId || 'UNKNOWN';
+      const deliveryEnd = order.deliveryWindow?.endDate;
+      const groupId = createConsolidationGroupId(partyId, deliveryEnd);
+
+      if (!groups[groupId]) {
+        groups[groupId] = {
+          groupId,
+          fcPartyId: partyId,
+          fcName: getFCName(partyId, order.shipToParty?.address),
+          fcAddress: order.shipToParty?.address || null,
+          deliveryWindow: order.deliveryWindow,
+          marketplace: order.marketplaceId,
+          orders: [],
+          totalItems: 0,
+          totalUnits: 0,
+          totalAmount: 0,
+          currency: 'EUR'
+        };
+      }
+
+      const group = groups[groupId];
+      group.orders.push({
+        purchaseOrderNumber: order.purchaseOrderNumber,
+        purchaseOrderDate: order.purchaseOrderDate,
+        itemCount: order.items?.length || 0,
+        totals: order.totals,
+        odoo: order.odoo
+      });
+
+      group.totalItems += order.items?.length || 0;
+      group.totalUnits += order.totals?.totalUnits || 0;
+      group.totalAmount += order.totals?.totalAmount || 0;
+      if (order.totals?.currency) group.currency = order.totals.currency;
+    }
+
+    // Convert to array and sort by delivery date
+    const consolidatedGroups = Object.values(groups).sort((a, b) => {
+      const dateA = a.deliveryWindow?.endDate ? new Date(a.deliveryWindow.endDate) : new Date(0);
+      const dateB = b.deliveryWindow?.endDate ? new Date(b.deliveryWindow.endDate) : new Date(0);
+      return dateA - dateB;
+    });
+
+    // Summary stats
+    const summary = {
+      totalGroups: consolidatedGroups.length,
+      totalOrders: orders.length,
+      totalUnits: consolidatedGroups.reduce((sum, g) => sum + g.totalUnits, 0),
+      totalAmount: consolidatedGroups.reduce((sum, g) => sum + g.totalAmount, 0),
+      byFC: {}
+    };
+
+    for (const group of consolidatedGroups) {
+      if (!summary.byFC[group.fcPartyId]) {
+        summary.byFC[group.fcPartyId] = {
+          fcName: group.fcName,
+          orderCount: 0,
+          totalUnits: 0
+        };
+      }
+      summary.byFC[group.fcPartyId].orderCount += group.orders.length;
+      summary.byFC[group.fcPartyId].totalUnits += group.totalUnits;
+    }
+
+    res.json({
+      success: true,
+      summary,
+      groups: consolidatedGroups
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /orders/consolidate error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/orders/consolidate/:groupId
+ * @desc Get detailed view of a consolidation group with all items
+ */
+router.get('/orders/consolidate/:groupId', async (req, res) => {
+  try {
+    const db = getDb();
+    const collection = db.collection('vendor_purchase_orders');
+
+    // Parse group ID to get FC and date
+    const [fcPartyId, dateStr] = req.params.groupId.split('_');
+
+    if (!fcPartyId) {
+      return res.status(400).json({ success: false, error: 'Invalid group ID' });
+    }
+
+    // Build query
+    const query = {
+      'shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
+      purchaseOrderState: 'Acknowledged',
+      shipmentStatus: 'not_shipped'
+    };
+
+    // Add date filter if present
+    if (dateStr && dateStr !== 'nodate') {
+      const startOfDay = new Date(dateStr);
+      const endOfDay = new Date(dateStr);
+      endOfDay.setDate(endOfDay.getDate() + 1);
+      query['deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
+    }
+
+    const orders = await collection.find(query)
+      .sort({ purchaseOrderNumber: 1 })
+      .toArray();
+
+    if (orders.length === 0) {
+      return res.status(404).json({ success: false, error: 'No orders found for this group' });
+    }
+
+    // Consolidate all items across orders
+    const itemMap = {}; // Key by product identifier
+    const consolidatedItems = [];
+
+    for (const order of orders) {
+      for (const item of (order.items || [])) {
+        const key = item.vendorProductIdentifier || item.amazonProductIdentifier;
+
+        if (!itemMap[key]) {
+          itemMap[key] = {
+            vendorProductIdentifier: item.vendorProductIdentifier,
+            amazonProductIdentifier: item.amazonProductIdentifier,
+            odooProductId: item.odooProductId,
+            odooProductName: item.odooProductName,
+            odooSku: item.odooSku,
+            totalQty: 0,
+            unitOfMeasure: item.orderedQuantity?.unitOfMeasure || 'Each',
+            netCost: item.netCost,
+            orders: []
+          };
+          consolidatedItems.push(itemMap[key]);
+        }
+
+        const qty = item.orderedQuantity?.amount || 0;
+        itemMap[key].totalQty += qty;
+        itemMap[key].orders.push({
+          purchaseOrderNumber: order.purchaseOrderNumber,
+          qty,
+          itemSequenceNumber: item.itemSequenceNumber
+        });
+      }
+    }
+
+    // Sort items by total quantity (most first)
+    consolidatedItems.sort((a, b) => b.totalQty - a.totalQty);
+
+    const firstOrder = orders[0];
+
+    res.json({
+      success: true,
+      groupId: req.params.groupId,
+      fcPartyId,
+      fcName: getFCName(fcPartyId, firstOrder.shipToParty?.address),
+      fcAddress: firstOrder.shipToParty?.address,
+      deliveryWindow: firstOrder.deliveryWindow,
+      orderCount: orders.length,
+      orders: orders.map(o => ({
+        purchaseOrderNumber: o.purchaseOrderNumber,
+        purchaseOrderDate: o.purchaseOrderDate,
+        marketplaceId: o.marketplaceId,
+        itemCount: o.items?.length || 0,
+        totals: o.totals,
+        odoo: o.odoo
+      })),
+      consolidatedItems,
+      summary: {
+        totalItems: consolidatedItems.length,
+        totalUnits: consolidatedItems.reduce((sum, i) => sum + i.totalQty, 0),
+        totalAmount: orders.reduce((sum, o) => sum + (o.totals?.totalAmount || 0), 0)
+      }
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /orders/consolidate/:groupId error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/orders/consolidate/:groupId/packing-list
+ * @desc Generate a consolidated packing list for a group of orders
+ * @body format - Output format: 'json' (default), 'html', 'csv'
+ */
+router.post('/orders/consolidate/:groupId/packing-list', async (req, res) => {
+  try {
+    const db = getDb();
+    const collection = db.collection('vendor_purchase_orders');
+
+    // Parse group ID
+    const [fcPartyId, dateStr] = req.params.groupId.split('_');
+
+    // Build query
+    const query = {
+      'shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
+      purchaseOrderState: 'Acknowledged',
+      shipmentStatus: 'not_shipped'
+    };
+
+    if (dateStr && dateStr !== 'nodate') {
+      const startOfDay = new Date(dateStr);
+      const endOfDay = new Date(dateStr);
+      endOfDay.setDate(endOfDay.getDate() + 1);
+      query['deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
+    }
+
+    const orders = await collection.find(query)
+      .sort({ purchaseOrderNumber: 1 })
+      .toArray();
+
+    if (orders.length === 0) {
+      return res.status(404).json({ success: false, error: 'No orders found for this group' });
+    }
+
+    // Build consolidated packing list
+    const packingList = {
+      generatedAt: new Date().toISOString(),
+      groupId: req.params.groupId,
+      shipTo: {
+        fcPartyId,
+        fcName: getFCName(fcPartyId, orders[0].shipToParty?.address),
+        address: orders[0].shipToParty?.address
+      },
+      deliveryWindow: orders[0].deliveryWindow,
+      purchaseOrders: orders.map(o => o.purchaseOrderNumber),
+      items: [],
+      summary: {
+        orderCount: orders.length,
+        lineCount: 0,
+        totalUnits: 0
+      }
+    };
+
+    // Consolidate items
+    const itemMap = {};
+
+    for (const order of orders) {
+      for (const item of (order.items || [])) {
+        const key = item.vendorProductIdentifier || item.amazonProductIdentifier;
+        const qty = item.orderedQuantity?.amount || 0;
+
+        if (!itemMap[key]) {
+          itemMap[key] = {
+            line: 0,
+            sku: item.odooSku || item.vendorProductIdentifier,
+            ean: item.vendorProductIdentifier,
+            asin: item.amazonProductIdentifier,
+            description: item.odooProductName || 'Unknown Product',
+            quantity: 0,
+            unitOfMeasure: item.orderedQuantity?.unitOfMeasure || 'Each',
+            poNumbers: []
+          };
+        }
+
+        itemMap[key].quantity += qty;
+        if (!itemMap[key].poNumbers.includes(order.purchaseOrderNumber)) {
+          itemMap[key].poNumbers.push(order.purchaseOrderNumber);
+        }
+      }
+    }
+
+    // Convert to array with line numbers
+    let lineNum = 1;
+    packingList.items = Object.values(itemMap)
+      .sort((a, b) => (a.sku || '').localeCompare(b.sku || ''))
+      .map(item => {
+        item.line = lineNum++;
+        return item;
+      });
+
+    packingList.summary.lineCount = packingList.items.length;
+    packingList.summary.totalUnits = packingList.items.reduce((sum, i) => sum + i.quantity, 0);
+
+    const format = req.body.format || 'json';
+
+    if (format === 'html') {
+      // Generate printable HTML
+      const html = generatePackingListHTML(packingList);
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(html);
+    }
+
+    if (format === 'csv') {
+      // Generate CSV
+      const csv = generatePackingListCSV(packingList);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="packing-list-${req.params.groupId}.csv"`);
+      return res.send(csv);
+    }
+
+    res.json({
+      success: true,
+      packingList
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /orders/consolidate/:groupId/packing-list error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Generate HTML packing list for printing
+ */
+function generatePackingListHTML(packingList) {
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-GB') : '-';
+  const address = packingList.shipTo.address || {};
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Packing List - ${packingList.groupId}</title>
+  <style>
+    @media print {
+      @page { margin: 1cm; size: A4; }
+      .no-print { display: none !important; }
+    }
+    body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; }
+    h1 { font-size: 18px; margin-bottom: 5px; }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
+    .header-left { flex: 1; }
+    .header-right { text-align: right; }
+    .ship-to { background: #f5f5f5; padding: 10px; margin-bottom: 15px; border-radius: 4px; }
+    .ship-to h3 { margin: 0 0 5px 0; font-size: 14px; }
+    .info-row { margin: 3px 0; }
+    .info-label { font-weight: bold; display: inline-block; width: 100px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+    th { background: #e9e9e9; font-weight: bold; }
+    .qty { text-align: center; font-weight: bold; }
+    .line-num { text-align: center; width: 40px; }
+    .summary { margin-top: 20px; padding: 10px; background: #f9f9f9; border-radius: 4px; }
+    .summary-item { display: inline-block; margin-right: 30px; }
+    .summary-value { font-size: 16px; font-weight: bold; }
+    .po-list { font-size: 11px; color: #666; margin-top: 10px; }
+    .footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 10px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <h1>CONSOLIDATED PACKING LIST</h1>
+      <div>Acropaq NV</div>
+    </div>
+    <div class="header-right">
+      <div><strong>Generated:</strong> ${formatDate(packingList.generatedAt)}</div>
+      <div><strong>Group ID:</strong> ${packingList.groupId}</div>
+    </div>
+  </div>
+
+  <div class="ship-to">
+    <h3>SHIP TO: ${packingList.shipTo.fcName}</h3>
+    <div class="info-row"><span class="info-label">FC Code:</span> ${packingList.shipTo.fcPartyId}</div>
+    ${address.addressLine1 ? `<div class="info-row"><span class="info-label">Address:</span> ${address.addressLine1}</div>` : ''}
+    ${address.city ? `<div class="info-row"><span class="info-label">City:</span> ${address.city} ${address.postalCode || ''}</div>` : ''}
+    ${address.countryCode ? `<div class="info-row"><span class="info-label">Country:</span> ${address.countryCode}</div>` : ''}
+    <div class="info-row"><span class="info-label">Deliver By:</span> ${formatDate(packingList.deliveryWindow?.endDate)}</div>
+  </div>
+
+  <div class="po-list">
+    <strong>Purchase Orders:</strong> ${packingList.purchaseOrders.join(', ')}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="line-num">#</th>
+        <th>SKU</th>
+        <th>EAN</th>
+        <th>Description</th>
+        <th class="qty">Qty</th>
+        <th>UOM</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${packingList.items.map(item => `
+      <tr>
+        <td class="line-num">${item.line}</td>
+        <td>${item.sku || '-'}</td>
+        <td>${item.ean || '-'}</td>
+        <td>${item.description}</td>
+        <td class="qty">${item.quantity}</td>
+        <td>${item.unitOfMeasure}</td>
+      </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <div class="summary">
+    <div class="summary-item"><span>Orders:</span> <span class="summary-value">${packingList.summary.orderCount}</span></div>
+    <div class="summary-item"><span>Line Items:</span> <span class="summary-value">${packingList.summary.lineCount}</span></div>
+    <div class="summary-item"><span>Total Units:</span> <span class="summary-value">${packingList.summary.totalUnits}</span></div>
+  </div>
+
+  <div class="footer">
+    Generated by Agent5 - ${new Date().toISOString()}
+  </div>
+
+  <div class="no-print" style="margin-top: 20px;">
+    <button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">Print Packing List</button>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Generate CSV packing list
+ */
+function generatePackingListCSV(packingList) {
+  const lines = [];
+
+  // Header info
+  lines.push(`"Packing List for ${packingList.shipTo.fcName}"`);
+  lines.push(`"Ship To:","${packingList.shipTo.fcPartyId}","${packingList.shipTo.fcName}"`);
+  lines.push(`"Delivery By:","${packingList.deliveryWindow?.endDate ? new Date(packingList.deliveryWindow.endDate).toISOString().split('T')[0] : ''}"`);
+  lines.push(`"Purchase Orders:","${packingList.purchaseOrders.join(', ')}"`);
+  lines.push('');
+
+  // Item headers
+  lines.push('"Line","SKU","EAN","ASIN","Description","Quantity","UOM","PO Numbers"');
+
+  // Items
+  for (const item of packingList.items) {
+    lines.push([
+      item.line,
+      `"${(item.sku || '').replace(/"/g, '""')}"`,
+      `"${(item.ean || '').replace(/"/g, '""')}"`,
+      `"${(item.asin || '').replace(/"/g, '""')}"`,
+      `"${(item.description || '').replace(/"/g, '""')}"`,
+      item.quantity,
+      `"${item.unitOfMeasure}"`,
+      `"${item.poNumbers.join(', ')}"`
+    ].join(','));
+  }
+
+  // Summary
+  lines.push('');
+  lines.push(`"Total Orders:","${packingList.summary.orderCount}"`);
+  lines.push(`"Total Lines:","${packingList.summary.lineCount}"`);
+  lines.push(`"Total Units:","${packingList.summary.totalUnits}"`);
+
+  return lines.join('\n');
+}
+
+/**
+ * @route GET /api/vendor/fc-codes
+ * @desc Get list of known Amazon FC codes with names
+ */
+router.get('/fc-codes', async (req, res) => {
+  try {
+    const fcList = Object.entries(FC_NAMES).map(([code, name]) => ({ code, name }));
+
+    res.json({
+      success: true,
+      count: fcList.length,
+      fcCodes: fcList
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /fc-codes error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== INVOICES ====================
 
 /**

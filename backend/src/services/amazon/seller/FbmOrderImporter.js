@@ -303,16 +303,16 @@ class FbmOrderImporter {
 
   /**
    * Create sale order in Odoo
+   * NOTE: Journal is NOT set here - VcsOdooInvoicer will set the correct journal
+   * based on actual ship-from country from VCS report
    */
   async createOdooOrder(order, partnerId, orderLines) {
     const odooLines = orderLines.map(line => [0, 0, {
       product_id: line.product_id,
       product_uom_qty: line.quantity,
       name: line.name
+      // NOTE: price_unit not set from TSV - VCS invoice will have correct prices
     }]);
-
-    // Determine journal based on destination country
-    const journalInfo = this.determineJournal(order.country);
 
     const orderData = {
       partner_id: partnerId,
@@ -323,8 +323,8 @@ class FbmOrderImporter {
       warehouse_id: FBM_WAREHOUSE_ID,
       order_line: odooLines,
       payment_term_id: PAYMENT_TERM_21_DAYS,
-      team_id: AMAZON_SELLER_TEAM_ID,
-      journal_id: journalInfo.journalId
+      team_id: AMAZON_SELLER_TEAM_ID
+      // NOTE: journal_id NOT set - VCS invoice import will set correct journal
     };
 
     const orderId = await this.odoo.create('sale.order', orderData);
@@ -333,12 +333,12 @@ class FbmOrderImporter {
     const created = await this.odoo.searchRead('sale.order', [['id', '=', orderId]], ['name']);
     const createdName = created.length > 0 ? created[0].name : `SO-${orderId}`;
 
-    console.log(`[FbmOrderImporter] Created order ${createdName} with journal ${journalInfo.journalCode} (${journalInfo.journalType}: BE→${order.country})`);
+    console.log(`[FbmOrderImporter] Created order ${createdName} - journal will be set by VCS import`);
 
     // Confirm order
     await this.odoo.execute('sale.order', 'action_confirm', [[orderId]]);
 
-    return { id: orderId, name: createdName, journalCode: journalInfo.journalCode };
+    return { id: orderId, name: createdName };
   }
 
   /**

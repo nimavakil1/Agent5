@@ -202,8 +202,8 @@ class SellerOrderCreator {
       // Determine order configuration
       const config = this.getOrderConfig(order);
 
-      // Find/create customer
-      const partnerId = await this.findOrCreateCustomer(order, config);
+      // Find/create customer and shipping address (real addresses, not generic)
+      const { customerId, shippingAddressId } = await this.findOrCreateCustomerAndAddress(order, config);
 
       // Resolve order lines
       const orderLines = await this.resolveOrderLines(order, config);
@@ -220,7 +220,8 @@ class SellerOrderCreator {
       if (options.dryRun) {
         result.success = true;
         result.preview = {
-          partnerId,
+          customerId,
+          shippingAddressId,
           warehouseId: config.warehouseId,
           orderPrefix: config.orderPrefix,
           linesCount: orderLines.lines.length,
@@ -231,7 +232,7 @@ class SellerOrderCreator {
       }
 
       // Create the order in Odoo
-      const createdOrder = await this.createOdooOrder(order, partnerId, config, orderLines);
+      const createdOrder = await this.createOdooOrder(order, customerId, shippingAddressId, config, orderLines);
 
       // Auto-confirm if requested
       if (options.autoConfirm !== false) {
@@ -245,7 +246,8 @@ class SellerOrderCreator {
 
       // Update MongoDB with Odoo info
       await this.importer.updateOdooInfo(amazonOrderId, {
-        partnerId,
+        partnerId: customerId,
+        shippingAddressId,
         saleOrderId: createdOrder.id,
         saleOrderName: createdOrder.name,
         createdAt: new Date()
@@ -254,7 +256,8 @@ class SellerOrderCreator {
       result.success = true;
       result.odooOrderId = createdOrder.id;
       result.odooOrderName = createdOrder.name;
-      result.partnerId = partnerId;
+      result.customerId = customerId;
+      result.shippingAddressId = shippingAddressId;
       result.linesCreated = orderLines.lines.length;
       result.confirmed = createdOrder.confirmed || false;
 
@@ -449,98 +452,103 @@ class SellerOrderCreator {
   }
 
   /**
-   * Find or create customer from order data
+   * Find or create customer and shipping address from order data
+   * ALWAYS creates real customer with actual shipping address (not generic)
+   *
+   * @returns {Object} { customerId, shippingAddressId }
    */
-  async findOrCreateCustomer(order, config) {
+  async findOrCreateCustomerAndAddress(order, config) {
     const address = order.shippingAddress;
 
-    // For B2C, use generic Amazon customer
-    if (!order.isBusinessOrder) {
-      const customerName = `Amazon | AMZ_B2C_${config.shipToCountry}`;
-      return await this.findOrCreateGenericCustomer(customerName, config.shipToCountry);
+    // Must have address data
+    if (!address || !address.name) {
+      throw new Error('Order has no shipping address');
     }
 
-    // For B2B, try to find/create by address
-    if (address && address.name) {
-      // Check cache
-      const cacheKey = `${address.name}|${address.postalCode}|${address.countryCode}`;
-      if (this.partnerCache[cacheKey]) {
-        return this.partnerCache[cacheKey];
-      }
+    // Build customer name
+    // For B2B: use company name if available, otherwise recipient name
+    // For B2C: use recipient name
+    let customerName = address.name;
+    if (order.isBusinessOrder && order.buyerCompanyName) {
+      customerName = order.buyerCompanyName;
+    }
 
-      // Try to find existing customer by name and postal code
-      const existing = await this.odoo.searchRead('res.partner',
+    const countryId = this.countryCache[address.countryCode] || null;
+
+    // Check cache for customer
+    const customerCacheKey = `customer|${customerName}|${address.countryCode}`;
+    let customerId = this.partnerCache[customerCacheKey];
+
+    if (!customerId) {
+      // Try to find existing customer by name and country
+      const existingCustomer = await this.odoo.searchRead('res.partner',
         [
-          ['name', 'ilike', address.name],
-          ['zip', '=', address.postalCode]
+          ['name', '=', customerName],
+          ['country_id', '=', countryId],
+          ['parent_id', '=', false],  // Must be parent, not child contact
+          ['customer_rank', '>', 0]
         ],
         ['id']
       );
 
-      if (existing.length > 0) {
-        this.partnerCache[cacheKey] = existing[0].id;
-        return existing[0].id;
+      if (existingCustomer.length > 0) {
+        customerId = existingCustomer[0].id;
+      } else {
+        // Create new customer
+        customerId = await this.odoo.create('res.partner', {
+          name: customerName,
+          company_type: order.isBusinessOrder ? 'company' : 'person',
+          is_company: order.isBusinessOrder,
+          customer_rank: 1,
+          country_id: countryId,
+          email: order.buyerEmail || null,
+          comment: `Amazon customer - created from order ${order.amazonOrderId}`
+        });
+        console.log(`[SellerOrderCreator] Created customer: ${customerName} (ID: ${customerId})`);
       }
 
-      // Create new customer
-      const countryId = this.countryCache[address.countryCode] || null;
-      const partnerId = await this.odoo.create('res.partner', {
-        name: address.name,
-        company_type: order.isBusinessOrder ? 'company' : 'person',
-        is_company: order.isBusinessOrder,
-        customer_rank: 1,
-        street: address.addressLine1,
-        street2: address.addressLine2 || null,
-        city: address.city,
-        zip: address.postalCode,
-        country_id: countryId,
-        phone: address.phone || null,
-        email: order.buyerEmail || null,
-        comment: `Created from Amazon order ${order.amazonOrderId}`
-      });
-
-      this.partnerCache[cacheKey] = partnerId;
-      return partnerId;
+      this.partnerCache[customerCacheKey] = customerId;
     }
 
-    // Fallback to generic customer
-    const customerName = `Amazon | AMZ_B2C_${config.shipToCountry}`;
-    return await this.findOrCreateGenericCustomer(customerName, config.shipToCountry);
-  }
+    // Now create/find the shipping address as a child contact
+    const addressCacheKey = `shipping|${customerId}|${address.postalCode}|${address.addressLine1}`;
+    let shippingAddressId = this.partnerCache[addressCacheKey];
 
-  /**
-   * Find or create a generic B2C customer
-   */
-  async findOrCreateGenericCustomer(customerName, countryCode) {
-    // Check cache
-    if (this.partnerCache[customerName]) {
-      return this.partnerCache[customerName];
+    if (!shippingAddressId) {
+      // Try to find existing shipping address under this customer
+      const existingAddress = await this.odoo.searchRead('res.partner',
+        [
+          ['parent_id', '=', customerId],
+          ['type', '=', 'delivery'],
+          ['zip', '=', address.postalCode],
+          ['street', '=', address.addressLine1]
+        ],
+        ['id']
+      );
+
+      if (existingAddress.length > 0) {
+        shippingAddressId = existingAddress[0].id;
+      } else {
+        // Create new shipping address as child contact
+        shippingAddressId = await this.odoo.create('res.partner', {
+          parent_id: customerId,
+          type: 'delivery',
+          name: address.name,  // Recipient name for delivery
+          street: address.addressLine1,
+          street2: address.addressLine2 || null,
+          city: address.city,
+          zip: address.postalCode,
+          country_id: countryId,
+          phone: address.phone || null,
+          comment: `Shipping address from Amazon order ${order.amazonOrderId}`
+        });
+        console.log(`[SellerOrderCreator] Created shipping address for ${customerName} (ID: ${shippingAddressId})`);
+      }
+
+      this.partnerCache[addressCacheKey] = shippingAddressId;
     }
 
-    // Search for existing
-    const existing = await this.odoo.searchRead('res.partner',
-      [['name', '=', customerName]],
-      ['id']
-    );
-
-    if (existing.length > 0) {
-      this.partnerCache[customerName] = existing[0].id;
-      return existing[0].id;
-    }
-
-    // Create generic customer
-    const countryId = this.countryCache[countryCode] || null;
-    const partnerId = await this.odoo.create('res.partner', {
-      name: customerName,
-      company_type: 'company',
-      is_company: true,
-      customer_rank: 1,
-      country_id: countryId,
-      comment: 'Generic Amazon B2C customer'
-    });
-
-    this.partnerCache[customerName] = partnerId;
-    return partnerId;
+    return { customerId, shippingAddressId };
   }
 
   /**
@@ -722,8 +730,10 @@ class SellerOrderCreator {
 
   /**
    * Create the sale order in Odoo
+   * NOTE: Journal is NOT set here - VcsOdooInvoicer will set the correct journal
+   * based on actual ship-from country from VCS report
    */
-  async createOdooOrder(order, partnerId, config, orderLines) {
+  async createOdooOrder(order, partnerId, shippingPartnerId, config, orderLines) {
     // Generate order name
     const orderName = `${config.orderPrefix}${order.amazonOrderId}`;
 
@@ -735,34 +745,29 @@ class SellerOrderCreator {
       ? order.purchaseDate.toISOString().split('T')[0]
       : new Date(order.purchaseDate).toISOString().split('T')[0];
 
-    // Determine journal based on ship-from and ship-to countries
-    const journalInfo = this.determineJournal(config);
-
     // Create order data
+    // NOTE: journal_id is NOT set - VCS invoice import will set correct journal
     const orderData = {
       name: orderName,
       partner_id: partnerId,
       partner_invoice_id: partnerId,
-      partner_shipping_id: partnerId,
+      partner_shipping_id: shippingPartnerId,  // Separate shipping address
       client_order_ref: order.amazonOrderId,
       date_order: orderDate,
       warehouse_id: config.warehouseId,
       order_line: odooLines,
       payment_term_id: PAYMENT_TERM_21_DAYS,
-      team_id: config.salesTeamId,
-      journal_id: journalInfo.journalId
+      team_id: config.salesTeamId
     };
 
     // Create the order
     const orderId = await this.odoo.create('sale.order', orderData);
 
-    console.log(`[SellerOrderCreator] Created order ${orderName} (ID: ${orderId}) with journal ${journalInfo.journalCode} (${journalInfo.journalType}: ${config.shipFromCountry}→${config.shipToCountry})`);
+    console.log(`[SellerOrderCreator] Created order ${orderName} (ID: ${orderId}) - journal will be set by VCS import`);
 
     return {
       id: orderId,
-      name: orderName,
-      journalId: journalInfo.journalId,
-      journalCode: journalInfo.journalCode
+      name: orderName
     };
   }
 

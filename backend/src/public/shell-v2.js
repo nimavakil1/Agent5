@@ -51,6 +51,7 @@
       basePath: '/vendor',
       pages: [
         { id: 'orders', path: '/vendor/', name: 'Purchase Orders', icon: 'receipt_long' },
+        { id: 'consolidate', path: '/vendor/consolidate.html', name: 'Consolidate', icon: 'inventory_2' },
         { id: 'invoices', path: '/vendor/invoices.html', name: 'Invoices', icon: 'description' },
         { id: 'remittances', path: '/vendor/remittances.html', name: 'Remittances', icon: 'payments' },
         { id: 'shipments', path: '/vendor/shipments.html', name: 'Shipments', icon: 'local_shipping' },

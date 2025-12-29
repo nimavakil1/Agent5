@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Consolidation - Amazon Vendor</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page { max-width: 1600px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .page-title { font-size: 24px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 12px; }
+    .page-title .material-symbols-outlined { font-size: 32px; color: #f97316; }
+    .header-actions { display: flex; gap: 12px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #f97316; color: white; }
+    .btn-primary:hover { background: #ea580c; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn .material-symbols-outlined { font-size: 20px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Summary Cards */
+    .summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 1000px) { .summary-row { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px) { .summary-row { grid-template-columns: 1fr; } }
+    .summary-card { background: #18181f; border: 1px solid #252532; border-radius: 12px; padding: 20px; }
+    .summary-value { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .summary-label { font-size: 13px; color: #71717a; }
+    .summary-card.highlight { border-color: #f97316; }
+    .summary-card.highlight .summary-value { color: #f97316; }
+
+    /* Filters */
+    .filters-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .filter-select { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; }
+    .filter-select:focus { outline: none; border-color: #f97316; }
+
+    /* Consolidation Groups */
+    .groups-container { display: flex; flex-direction: column; gap: 20px; }
+    .group-card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; transition: all 0.15s; }
+    .group-card:hover { border-color: #3f3f50; }
+    .group-card.expanded { border-color: #f97316; }
+    .group-header { display: flex; align-items: center; justify-content: space-between; padding: 20px; cursor: pointer; }
+    .group-header:hover { background: #1c1c28; }
+    .group-info { flex: 1; }
+    .group-fc-name { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
+    .group-fc-code { font-size: 12px; color: #71717a; background: #252532; padding: 2px 8px; border-radius: 4px; }
+    .group-meta { display: flex; gap: 20px; font-size: 13px; color: #a1a1aa; margin-top: 8px; flex-wrap: wrap; }
+    .group-meta-item { display: flex; align-items: center; gap: 4px; }
+    .group-meta-item .material-symbols-outlined { font-size: 16px; color: #71717a; }
+    .group-stats { display: flex; gap: 24px; align-items: center; }
+    .group-stat { text-align: center; }
+    .group-stat-value { font-size: 20px; font-weight: 700; color: #fff; }
+    .group-stat-label { font-size: 11px; color: #71717a; text-transform: uppercase; }
+    .group-actions { display: flex; gap: 8px; margin-left: 20px; }
+    .expand-icon { color: #71717a; transition: transform 0.2s; }
+    .group-card.expanded .expand-icon { transform: rotate(180deg); }
+
+    /* Group Details (expanded) */
+    .group-details { display: none; padding: 0 20px 20px; border-top: 1px solid #252532; }
+    .group-card.expanded .group-details { display: block; }
+    .orders-list { margin-bottom: 20px; }
+    .orders-list-title { font-size: 14px; font-weight: 600; color: #a1a1aa; margin-bottom: 12px; }
+    .order-pill { display: inline-flex; align-items: center; gap: 6px; background: #252532; padding: 6px 12px; border-radius: 8px; font-size: 13px; color: #e4e4e7; margin-right: 8px; margin-bottom: 8px; }
+    .order-pill .material-symbols-outlined { font-size: 16px; color: #71717a; }
+
+    /* Items Table */
+    .items-section { margin-top: 16px; }
+    .items-section-title { font-size: 14px; font-weight: 600; color: #a1a1aa; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #252532; }
+    th { background: #12121a; font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { font-size: 14px; color: #e4e4e7; }
+    tr:hover td { background: #1a1a28; }
+    .qty-cell { font-weight: 600; color: #4ade80; text-align: center; }
+    .sku-cell { font-family: monospace; font-size: 13px; }
+
+    /* Delivery Window Urgency */
+    .delivery-urgent { color: #ef4444; font-weight: 600; }
+    .delivery-soon { color: #fbbf24; }
+    .delivery-ok { color: #4ade80; }
+
+    /* Empty State */
+    .empty-state { padding: 60px 20px; text-align: center; background: #18181f; border-radius: 16px; border: 1px solid #252532; }
+    .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
+    .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
+    .empty-state-text { font-size: 14px; color: #71717a; }
+
+    /* Loading */
+    .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: #71717a; }
+    .loading .material-symbols-outlined { animation: spin 1s linear infinite; margin-right: 8px; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 24px; right: 24px; padding: 14px 20px; background: #22c55e; color: white; border-radius: 10px; font-weight: 600; display: none; z-index: 3000; }
+    .toast.error { background: #ef4444; }
+    .toast.show { display: flex; align-items: center; gap: 8px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">
+        <span class="material-symbols-outlined">inventory_2</span>
+        Order Consolidation
+      </h1>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="loadData()">
+          <span class="material-symbols-outlined">refresh</span>Refresh
+        </button>
+      </div>
+    </header>
+
+    <!-- Summary -->
+    <div class="summary-row">
+      <div class="summary-card highlight">
+        <div class="summary-value" id="summary-groups">-</div>
+        <div class="summary-label">Consolidation Groups</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value" id="summary-orders">-</div>
+        <div class="summary-label">Total Orders</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value" id="summary-units">-</div>
+        <div class="summary-label">Total Units</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value" id="summary-amount">-</div>
+        <div class="summary-label">Total Value</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <select class="filter-select" id="filter-marketplace" onchange="loadData()">
+        <option value="">All Marketplaces</option>
+        <option value="DE">Germany (DE)</option>
+        <option value="FR">France (FR)</option>
+        <option value="IT">Italy (IT)</option>
+        <option value="ES">Spain (ES)</option>
+        <option value="NL">Netherlands (NL)</option>
+        <option value="BE">Belgium (BE)</option>
+        <option value="PL">Poland (PL)</option>
+        <option value="SE">Sweden (SE)</option>
+      </select>
+      <button class="btn btn-secondary btn-sm" onclick="clearFilters()">
+        <span class="material-symbols-outlined">clear</span>Clear
+      </button>
+    </div>
+
+    <!-- Groups Container -->
+    <div id="groups-container" class="groups-container">
+      <div class="loading">
+        <span class="material-symbols-outlined">sync</span>
+        Loading consolidation data...
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let consolidationData = null;
+    let groupDetails = {}; // Cache for expanded group details
+
+    // Format currency
+    function formatCurrency(amount, currency = 'EUR') {
+      return new Intl.NumberFormat('en-EU', { style: 'currency', currency }).format(amount);
+    }
+
+    // Format date
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    // Calculate days until delivery
+    function getDaysUntil(dateStr) {
+      if (!dateStr) return null;
+      const d = new Date(dateStr);
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      d.setHours(0, 0, 0, 0);
+      return Math.ceil((d - now) / (1000 * 60 * 60 * 24));
+    }
+
+    // Get urgency class based on days until delivery
+    function getUrgencyClass(days) {
+      if (days === null) return '';
+      if (days <= 2) return 'delivery-urgent';
+      if (days <= 5) return 'delivery-soon';
+      return 'delivery-ok';
+    }
+
+    // Show toast message
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast show' + (isError ? ' error' : '');
+      setTimeout(() => toast.className = 'toast', 3000);
+    }
+
+    // Load consolidation data
+    async function loadData() {
+      const container = document.getElementById('groups-container');
+      container.innerHTML = '<div class="loading"><span class="material-symbols-outlined">sync</span>Loading consolidation data...</div>';
+
+      try {
+        const marketplace = document.getElementById('filter-marketplace').value;
+        let url = '/api/vendor/orders/consolidate?';
+        if (marketplace) url += `marketplace=${marketplace}`;
+
+        const res = await fetch(url, { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        consolidationData = data;
+        renderSummary(data.summary);
+        renderGroups(data.groups);
+      } catch (err) {
+        container.innerHTML = `<div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Error loading data</div><div class="empty-state-text">${err.message}</div></div>`;
+      }
+    }
+
+    // Render summary cards
+    function renderSummary(summary) {
+      document.getElementById('summary-groups').textContent = summary.totalGroups || 0;
+      document.getElementById('summary-orders').textContent = summary.totalOrders || 0;
+      document.getElementById('summary-units').textContent = summary.totalUnits?.toLocaleString() || 0;
+      document.getElementById('summary-amount').textContent = formatCurrency(summary.totalAmount || 0);
+    }
+
+    // Render consolidation groups
+    function renderGroups(groups) {
+      const container = document.getElementById('groups-container');
+
+      if (!groups || groups.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <span class="material-symbols-outlined">check_circle</span>
+            <div class="empty-state-title">No orders to consolidate</div>
+            <div class="empty-state-text">All acknowledged orders have been shipped or there are no orders pending shipment.</div>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = groups.map(group => renderGroupCard(group)).join('');
+    }
+
+    // Render a single group card
+    function renderGroupCard(group) {
+      const daysUntil = getDaysUntil(group.deliveryWindow?.endDate);
+      const urgencyClass = getUrgencyClass(daysUntil);
+      const urgencyText = daysUntil !== null
+        ? (daysUntil < 0 ? 'OVERDUE' : daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} days`)
+        : '-';
+
+      return `
+        <div class="group-card" id="group-${group.groupId}" data-group-id="${group.groupId}">
+          <div class="group-header" onclick="toggleGroup('${group.groupId}')">
+            <div class="group-info">
+              <div class="group-fc-name">
+                ${group.fcName}
+                <span class="group-fc-code">${group.fcPartyId}</span>
+              </div>
+              <div class="group-meta">
+                <div class="group-meta-item">
+                  <span class="material-symbols-outlined">calendar_today</span>
+                  Deliver by: <span class="${urgencyClass}">${formatDate(group.deliveryWindow?.endDate)} (${urgencyText})</span>
+                </div>
+                <div class="group-meta-item">
+                  <span class="material-symbols-outlined">location_on</span>
+                  ${group.fcAddress?.city || 'Unknown'}, ${group.fcAddress?.countryCode || '-'}
+                </div>
+              </div>
+            </div>
+            <div class="group-stats">
+              <div class="group-stat">
+                <div class="group-stat-value">${group.orders.length}</div>
+                <div class="group-stat-label">Orders</div>
+              </div>
+              <div class="group-stat">
+                <div class="group-stat-value">${group.totalItems}</div>
+                <div class="group-stat-label">Lines</div>
+              </div>
+              <div class="group-stat">
+                <div class="group-stat-value">${group.totalUnits.toLocaleString()}</div>
+                <div class="group-stat-label">Units</div>
+              </div>
+              <div class="group-stat">
+                <div class="group-stat-value">${formatCurrency(group.totalAmount)}</div>
+                <div class="group-stat-label">Value</div>
+              </div>
+            </div>
+            <div class="group-actions">
+              <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); printPackingList('${group.groupId}')">
+                <span class="material-symbols-outlined">print</span>Packing List
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); downloadCSV('${group.groupId}')">
+                <span class="material-symbols-outlined">download</span>CSV
+              </button>
+              <span class="material-symbols-outlined expand-icon">expand_more</span>
+            </div>
+          </div>
+          <div class="group-details" id="details-${group.groupId}">
+            <div class="loading"><span class="material-symbols-outlined">sync</span>Loading details...</div>
+          </div>
+        </div>`;
+    }
+
+    // Toggle group expansion
+    async function toggleGroup(groupId) {
+      const card = document.getElementById(`group-${groupId}`);
+      const details = document.getElementById(`details-${groupId}`);
+      const isExpanded = card.classList.contains('expanded');
+
+      if (isExpanded) {
+        card.classList.remove('expanded');
+        return;
+      }
+
+      card.classList.add('expanded');
+
+      // Load details if not cached
+      if (!groupDetails[groupId]) {
+        try {
+          const res = await fetch(`/api/vendor/orders/consolidate/${encodeURIComponent(groupId)}`, { credentials: 'include' });
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error);
+          groupDetails[groupId] = data;
+        } catch (err) {
+          details.innerHTML = `<div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Error loading details</div><div class="empty-state-text">${err.message}</div></div>`;
+          return;
+        }
+      }
+
+      renderGroupDetails(groupId, groupDetails[groupId]);
+    }
+
+    // Render group details
+    function renderGroupDetails(groupId, data) {
+      const details = document.getElementById(`details-${groupId}`);
+
+      const ordersHtml = data.orders.map(o => `
+        <div class="order-pill">
+          <span class="material-symbols-outlined">receipt</span>
+          ${o.purchaseOrderNumber}
+          <span style="color: #71717a; font-size: 12px;">${o.itemCount} items</span>
+        </div>
+      `).join('');
+
+      const itemsHtml = data.consolidatedItems.map((item, idx) => `
+        <tr>
+          <td>${idx + 1}</td>
+          <td class="sku-cell">${item.odooSku || item.vendorProductIdentifier || '-'}</td>
+          <td class="sku-cell">${item.vendorProductIdentifier || '-'}</td>
+          <td>${item.odooProductName || 'Unknown Product'}</td>
+          <td class="qty-cell">${item.totalQty}</td>
+          <td>${item.unitOfMeasure}</td>
+          <td style="font-size: 12px; color: #71717a;">${item.orders.map(o => o.purchaseOrderNumber).join(', ')}</td>
+        </tr>
+      `).join('');
+
+      details.innerHTML = `
+        <div class="orders-list">
+          <div class="orders-list-title">Purchase Orders in this Shipment (${data.orderCount})</div>
+          ${ordersHtml}
+        </div>
+        <div class="items-section">
+          <div class="items-section-title">Consolidated Items (${data.consolidatedItems.length} unique products, ${data.summary.totalUnits} total units)</div>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>SKU</th>
+                <th>EAN</th>
+                <th>Description</th>
+                <th style="text-align: center;">Qty</th>
+                <th>UOM</th>
+                <th>PO Numbers</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    // Print packing list
+    async function printPackingList(groupId) {
+      try {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/api/vendor/orders/consolidate/${encodeURIComponent(groupId)}/packing-list`;
+        form.target = '_blank';
+
+        const formatInput = document.createElement('input');
+        formatInput.type = 'hidden';
+        formatInput.name = 'format';
+        formatInput.value = 'html';
+        form.appendChild(formatInput);
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+
+        showToast('Opening packing list for printing...');
+      } catch (err) {
+        showToast('Error generating packing list: ' + err.message, true);
+      }
+    }
+
+    // Download CSV
+    async function downloadCSV(groupId) {
+      try {
+        const res = await fetch(`/api/vendor/orders/consolidate/${encodeURIComponent(groupId)}/packing-list`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ format: 'csv' }),
+          credentials: 'include'
+        });
+
+        if (!res.ok) throw new Error('Failed to generate CSV');
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `packing-list-${groupId}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        showToast('CSV downloaded');
+      } catch (err) {
+        showToast('Error downloading CSV: ' + err.message, true);
+      }
+    }
+
+    // Clear filters
+    function clearFilters() {
+      document.getElementById('filter-marketplace').value = '';
+      loadData();
+    }
+
+    // Initialize
+    loadData();
+  </script>
+</body>
+</html>
