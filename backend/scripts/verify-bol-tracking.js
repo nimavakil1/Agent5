@@ -58,6 +58,22 @@ async function getShipments(token, orderId) {
   return response.json();
 }
 
+// Get individual shipment details (includes transport info)
+async function getShipmentDetails(token, shipmentId) {
+  const response = await fetch(`https://api.bol.com/retailer/shipments/${shipmentId}`, {
+    headers: {
+      'Accept': 'application/vnd.retailer.v10+json',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    return { error: response.status };
+  }
+
+  return response.json();
+}
+
 async function verify() {
   await mongoose.connect(process.env.MONGO_URI);
 
@@ -95,16 +111,25 @@ async function verify() {
       console.log(`  Confirmed at: ${order.shipmentConfirmedAt}`);
       issues++;
     } else {
-      const shipment = shipments[0];
-      const bolTracking = shipment.transport?.trackAndTrace || 'none';
-      const bolTransporter = shipment.transport?.transporterCode || 'unknown';
+      // Get detailed shipment info (includes transport)
+      const shipmentId = shipments[0].shipmentId;
+      const shipmentDetails = await getShipmentDetails(token, shipmentId);
+
+      if (shipmentDetails.error) {
+        console.log(`${order.orderId}: API Error getting shipment details`);
+        issues++;
+        continue;
+      }
+
+      const bolTracking = shipmentDetails.transport?.trackAndTrace || 'none';
+      const bolTransporter = shipmentDetails.transport?.transporterCode || 'unknown';
 
       const match = bolTracking === order.trackingCode ? '✓' : '⚠ MISMATCH';
 
       console.log(`${order.orderId}: ${match}`);
       console.log(`  MongoDB tracking: ${order.trackingCode}`);
       console.log(`  Bol.com tracking: ${bolTracking} (${bolTransporter})`);
-      console.log(`  Shipment ID: ${shipment.shipmentId}`);
+      console.log(`  Shipment ID: ${shipmentId}`);
 
       if (bolTracking === order.trackingCode) {
         verified++;
