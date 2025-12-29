@@ -164,10 +164,10 @@ class SellerTrackingPusher {
       }
     }
 
-    // Get ship date
+    // Get ship date - Amazon requires full ISO 8601 format (e.g., 2025-12-23T12:00:00Z)
     const shipDate = picking.date_done
-      ? new Date(picking.date_done).toISOString().split('T')[0]
-      : new Date().toISOString().split('T')[0];
+      ? new Date(picking.date_done).toISOString()
+      : new Date().toISOString();
 
     console.log(`[SellerTrackingPusher] Pushing tracking for ${order.amazonOrderId}: ${trackingNumber} via ${carrierName}`);
 
