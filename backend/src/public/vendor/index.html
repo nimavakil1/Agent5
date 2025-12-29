@@ -322,25 +322,23 @@
         // Check if already acknowledged
         const isAcknowledged = o.purchaseOrderState === 'Acknowledged' || o.acknowledgment?.acknowledged;
 
-        // Then fetch stock info from CW
+        // Fetch stock/product info from CW (always, to get product names)
         let stockInfo = {};
-        if (!isAcknowledged) {
-          try {
-            const stockRes = await fetch('/api/vendor/orders/' + po + '/check-stock', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({ warehouseCode: 'CW' })
-            });
-            if (stockRes.ok) {
-              const stockData = await stockRes.json();
-              stockInfo = (stockData.items || []).reduce((acc, item) => {
-                acc[item.vendorProductIdentifier] = item;
-                return acc;
-              }, {});
-            }
-          } catch (e) { console.warn('Stock check failed:', e); }
-        }
+        try {
+          const stockRes = await fetch('/api/vendor/orders/' + po + '/check-stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ warehouseCode: 'CW' })
+          });
+          if (stockRes.ok) {
+            const stockData = await stockRes.json();
+            stockInfo = (stockData.items || []).reduce((acc, item) => {
+              acc[item.vendorProductIdentifier] = item;
+              return acc;
+            }, {});
+          }
+        } catch (e) { console.warn('Stock check failed:', e); }
 
         // Build modal content
         const headerHtml = '<div class="po-detail-header"><div class="po-detail-info"><h3>' + o.purchaseOrderNumber + '</h3><div class="po-detail-meta"><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span><span>Date: ' + formatDate(o.purchaseOrderDate) + '</span><span>Type: ' + (o.purchaseOrderType || 'Regular') + '</span></div></div><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></div>';
@@ -359,8 +357,8 @@
         (o.items || []).forEach((it, i) => {
           const vendorId = it.vendorProductIdentifier || '-';
           const stock = stockInfo[vendorId] || {};
-          // SKU = Odoo default_code (internal reference)
-          const sku = stock.odooSku || it.odooSku || '-';
+          // SKU = Odoo default_code, fallback to Amazon's vendorProductIdentifier
+          const sku = stock.odooSku || it.odooSku || vendorId;
           const orderedQty = it.orderedQuantity?.amount || 0;
           const cwStock = stock.qtyAvailable ?? it.qtyAvailable ?? 0;
           const productName = stock.odooProductName || it.odooProductName || '';
