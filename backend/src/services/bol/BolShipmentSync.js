@@ -247,7 +247,7 @@ class BolShipmentSync {
   async confirmShipment(bolOrderId, orderItems, transport) {
     const shipmentData = {
       orderItems: orderItems.map(item => ({
-        orderItemId: item.orderItemId
+        orderItemId: String(item.orderItemId)
       }))
     };
 
@@ -255,7 +255,11 @@ class BolShipmentSync {
       shipmentData.transport = transport;
     }
 
-    return this.bolRequest('/shipments', 'POST', shipmentData);
+    console.log(`[BolShipmentSync] Sending shipment for ${bolOrderId}:`, JSON.stringify(shipmentData));
+
+    const response = await this.bolRequest('/shipments', 'POST', shipmentData);
+    console.log(`[BolShipmentSync] Response for ${bolOrderId}:`, JSON.stringify(response));
+    return response;
   }
 
   /**
