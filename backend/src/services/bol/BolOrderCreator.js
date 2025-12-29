@@ -379,6 +379,7 @@ class BolOrderCreator {
       console.log(`[BolOrderCreator] Using warehouse: ${fulfilmentMethod === 'FBB' ? 'BOL' : 'CW'} (ID: ${warehouseId})`);
 
       const orderData = {
+        name: orderRef,                   // Set order name to Bol reference (e.g., FBBA000DD78MR)
         partner_id: partnerId,
         partner_invoice_id: partnerId,   // Required: Invoice address
         partner_shipping_id: partnerId,  // Required: Delivery address
