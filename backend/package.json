@@ -29,6 +29,7 @@
     "amazon-sp-api": "^1.0.0",
     "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
+    "bwip-js": "^4.8.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "csv-parse": "^6.1.0",

@@ -118,11 +118,21 @@ class FbmOrderImporter {
         };
       }
 
+      // Parse price - Amazon TSV has "item-price" column
+      const itemPriceStr = cols[headerIndex['item-price']]?.trim() || '0';
+      const itemPrice = parseFloat(itemPriceStr.replace(/[^0-9.-]/g, '')) || 0;
+
+      // Parse shipping price if available
+      const shippingPriceStr = cols[headerIndex['shipping-price']]?.trim() || '0';
+      const shippingPrice = parseFloat(shippingPriceStr.replace(/[^0-9.-]/g, '')) || 0;
+
       orderGroups[orderId].items.push({
         sku: sku,
         resolvedSku: resolved.odooSku,
         quantity: parseInt(cols[headerIndex['quantity-to-ship']]?.trim() || '1'),
-        productName: cols[headerIndex['product-name']]?.trim() || sku
+        productName: cols[headerIndex['product-name']]?.trim() || sku,
+        itemPrice: itemPrice,
+        shippingPrice: shippingPrice
       });
     }
 
@@ -310,8 +320,8 @@ class FbmOrderImporter {
     const odooLines = orderLines.map(line => [0, 0, {
       product_id: line.product_id,
       product_uom_qty: line.quantity,
+      price_unit: line.price_unit,  // Price from TSV
       name: line.name
-      // NOTE: price_unit not set from TSV - VCS invoice will have correct prices
     }]);
 
     const orderData = {
@@ -399,9 +409,14 @@ class FbmOrderImporter {
               hasError = true;
               break;
             }
+
+            // Calculate unit price (Amazon gives total price for quantity)
+            const priceUnit = item.quantity > 0 ? item.itemPrice / item.quantity : 0;
+
             orderLines.push({
               product_id: productId,
               quantity: item.quantity,
+              price_unit: priceUnit,
               name: item.productName || item.resolvedSku
             });
           }
