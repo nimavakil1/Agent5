@@ -381,7 +381,7 @@ class VendorOrderCreator {
           product_id: productId,
           product_uom_qty: quantity,
           price_unit: priceUnit,
-          name: `[${sku}] PO Line ${item.itemSequenceNumber}`,
+          // Don't set name - let Odoo use default product description
         });
 
       } catch (error) {
