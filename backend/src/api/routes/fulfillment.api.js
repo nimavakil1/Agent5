@@ -463,6 +463,26 @@ router.get('/sync-historical/status', async (req, res) => {
   }
 });
 
+/**
+ * Cleanup FBA orders from fulfillment queue
+ * POST /api/fulfillment/cleanup-fba
+ *
+ * Removes orders that are not from CW warehouse (FBA orders are fulfilled by Amazon)
+ */
+router.post('/cleanup-fba', async (req, res) => {
+  try {
+    const sync = getFulfillmentSync();
+    const result = await sync.cleanupFbaOrders();
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============================================
 // ORDER ACTIONS
 // ============================================

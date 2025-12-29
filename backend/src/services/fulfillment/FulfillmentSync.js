@@ -17,7 +17,7 @@ const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 
 // Channel detection patterns
 const CHANNEL_PATTERNS = {
-  amazon_vendor: /^(AMZ|FBM|FBA|VDR)/i,
+  amazon_vendor: /^(AMZ|VDR)/i,
   amazon_seller: /^(FBM|FBA|AMZ-S)/i,
   bol: /^BOL/i,
   shopify: /^SHOP/i
@@ -141,8 +141,12 @@ class FulfillmentSync {
 
     try {
       // Build domain for Odoo query
+      // IMPORTANT: Only sync orders from CW warehouse (ID 1)
+      // FBA orders use FBA warehouses and are fulfilled by Amazon, not CW
+      const CW_WAREHOUSE_ID = 1;
       const domain = [
-        ['state', 'in', states]
+        ['state', 'in', states],
+        ['warehouse_id', '=', CW_WAREHOUSE_ID]
       ];
 
       if (!fullSync && since) {
@@ -372,6 +376,65 @@ class FulfillmentSync {
   }
 
   /**
+   * Cleanup: Remove FBA orders from fulfillment collection
+   * FBA orders are fulfilled by Amazon, not CW, so they shouldn't be in this queue
+   */
+  async cleanupFbaOrders() {
+    await this.init();
+
+    const CW_WAREHOUSE_ID = 1;
+    const results = {
+      checked: 0,
+      removed: 0,
+      errors: []
+    };
+
+    try {
+      // Find all orders in our collection
+      const orders = await FulfillmentOrder.find({}, { 'odoo.saleOrderId': 1, 'odoo.saleOrderName': 1 }).lean();
+      results.checked = orders.length;
+
+      console.log(`[FulfillmentSync] Checking ${orders.length} orders for FBA cleanup...`);
+
+      for (const order of orders) {
+        if (!order.odoo?.saleOrderId) continue;
+
+        try {
+          // Check warehouse in Odoo
+          const odooOrders = await this.odoo.searchRead('sale.order',
+            [['id', '=', order.odoo.saleOrderId]],
+            ['warehouse_id']
+          );
+
+          if (odooOrders.length === 0) {
+            // Order doesn't exist in Odoo anymore, remove it
+            await FulfillmentOrder.deleteOne({ _id: order._id });
+            results.removed++;
+            continue;
+          }
+
+          const warehouseId = odooOrders[0].warehouse_id?.[0];
+          if (warehouseId && warehouseId !== CW_WAREHOUSE_ID) {
+            // Not CW warehouse (likely FBA), remove from fulfillment queue
+            await FulfillmentOrder.deleteOne({ _id: order._id });
+            results.removed++;
+            console.log(`[FulfillmentSync] Removed FBA order ${order.odoo.saleOrderName} (warehouse: ${warehouseId})`);
+          }
+        } catch (error) {
+          results.errors.push({ orderId: order.odoo?.saleOrderId, error: error.message });
+        }
+      }
+
+      console.log(`[FulfillmentSync] Cleanup complete: ${results.removed} FBA orders removed`);
+    } catch (error) {
+      console.error('[FulfillmentSync] Cleanup failed:', error);
+      results.error = error.message;
+    }
+
+    return results;
+  }
+
+  /**
    * Start the regular scheduled sync (every 15 minutes)
    */
   startScheduledSync() {
@@ -463,10 +526,12 @@ class FulfillmentSync {
       while (hasMore) {
         console.log(`[FulfillmentSync] Historical sync batch ${results.batches + 1} (offset: ${offset})...`);
 
-        // Fetch orders from Odoo
+        // Fetch orders from Odoo (CW warehouse only)
+        const CW_WAREHOUSE_ID = 1;
         const orders = await this.odoo.searchRead('sale.order',
           [
             ['state', 'in', ['sale', 'done']],
+            ['warehouse_id', '=', CW_WAREHOUSE_ID],
             ['date_order', '>=', HISTORICAL_START_DATE.toISOString().replace('T', ' ').split('.')[0]]
           ],
           [

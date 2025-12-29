@@ -316,12 +316,23 @@ router.post('/:id/test-connection', async (req, res) => {
       });
     }
 
-    // TODO: Implement actual connection testing per provider
-    // This is a placeholder - when connectors are built, this will test the actual API
-    const testResult = {
+    let testResult = {
       success: false,
       message: `Connector for "${carrier.apiConfig.provider}" not yet implemented`
     };
+
+    // Test connection based on provider
+    switch (carrier.apiConfig.provider) {
+      case 'gls': {
+        const { GLSClient } = require('../../services/shipping/GLSClient');
+        const glsClient = new GLSClient();
+        testResult = await glsClient.testConnection();
+        break;
+      }
+      // Add other providers here as they're implemented
+      default:
+        break;
+    }
 
     carrier.apiConfig.lastTestedAt = new Date();
     carrier.apiConfig.isConnected = testResult.success;

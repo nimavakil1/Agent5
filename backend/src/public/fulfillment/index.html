@@ -113,7 +113,7 @@
     .bulk-actions.visible { display: flex; }
     .bulk-count { font-size: 14px; color: #e4e4e7; font-weight: 600; }
 
-    /* Snooze modal */
+    /* Modal styles */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; display: none; align-items: center; justify-content: center; }
     .modal-overlay.visible { display: flex; }
     .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; padding: 24px; min-width: 400px; max-width: 500px; }
@@ -123,6 +123,25 @@
     .modal-input { width: 100%; padding: 10px 14px; background: #12121a; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 14px; }
     .modal-input:focus { outline: none; border-color: #f97316; }
     .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+
+    /* View Order Modal - larger */
+    .modal-lg { min-width: 600px; max-width: 800px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+    .modal-close { background: none; border: none; color: #71717a; cursor: pointer; padding: 4px; }
+    .modal-close:hover { color: #fff; }
+    .modal-section { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #252532; }
+    .modal-section:last-child { border-bottom: none; margin-bottom: 0; }
+    .modal-section-title { font-size: 14px; font-weight: 600; color: #f97316; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .detail-item { }
+    .detail-label { font-size: 12px; color: #71717a; margin-bottom: 2px; }
+    .detail-value { font-size: 14px; color: #e4e4e7; }
+    .detail-value a { color: #60a5fa; text-decoration: none; }
+    .detail-value a:hover { text-decoration: underline; }
+    .items-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .items-table th, .items-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #252532; font-size: 13px; }
+    .items-table th { color: #71717a; font-weight: 500; }
+    .items-table td { color: #e4e4e7; }
     .quick-snooze { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
     .quick-snooze-btn { padding: 6px 12px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #e4e4e7; font-size: 12px; cursor: pointer; }
     .quick-snooze-btn:hover { background: #3f3f50; }
@@ -265,6 +284,27 @@
       <div class="modal-actions">
         <button class="btn btn-secondary" onclick="closeSnoozeModal()">Cancel</button>
         <button class="btn btn-primary" onclick="confirmSnooze()">Snooze</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Order Modal -->
+  <div class="modal-overlay" id="view-order-modal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title" id="view-order-title">Order Details</h3>
+        <button class="modal-close" onclick="closeViewModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div id="view-order-content">
+        <!-- Dynamic content -->
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeViewModal()">Close</button>
+        <a class="btn btn-primary" id="view-order-odoo-link" href="#" target="_blank">
+          <span class="material-symbols-outlined">open_in_new</span> Open in Odoo
+        </a>
       </div>
     </div>
   </div>
@@ -628,9 +668,143 @@
     }
 
     // Actions
-    function viewOrder(id) {
-      // TODO: Open order detail modal
-      window.Agent5Shell?.showToast?.('Order details coming soon', 'info');
+    async function viewOrder(id) {
+      try {
+        const res = await fetch(`/api/fulfillment/orders/${id}`);
+        const data = await res.json();
+
+        if (!data.success) {
+          window.Agent5Shell?.showToast?.(data.error || 'Failed to load order', 'error');
+          return;
+        }
+
+        const order = data.order;
+        const channelName = CHANNEL_NAMES[order.channel] || order.channel;
+
+        // Update title
+        document.getElementById('view-order-title').textContent = order.odoo?.saleOrderName || order.channelOrderId;
+
+        // Update Odoo link
+        const odooLink = document.getElementById('view-order-odoo-link');
+        if (order.odoo?.saleOrderId) {
+          odooLink.href = `https://acropaq.odoo.com/web#id=${order.odoo.saleOrderId}&model=sale.order&view_type=form`;
+          odooLink.style.display = 'inline-flex';
+        } else {
+          odooLink.style.display = 'none';
+        }
+
+        // Build content
+        const addr = order.shippingAddress || {};
+        const itemsHtml = (order.items || []).map(item => `
+          <tr>
+            <td>${item.name || '-'}</td>
+            <td>${item.quantity || 1}</td>
+            <td>${item.quantityDelivered || 0}</td>
+          </tr>
+        `).join('');
+
+        const content = `
+          <div class="modal-section">
+            <div class="modal-section-title">Order Information</div>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <div class="detail-label">Channel</div>
+                <div class="detail-value"><span class="channel-badge ${CHANNEL_COLORS[order.channel] || ''}">${channelName}</span></div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Marketplace</div>
+                <div class="detail-value">${order.marketplace || '-'}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Channel Order ID</div>
+                <div class="detail-value">${order.channelOrderId || '-'}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Odoo Order</div>
+                <div class="detail-value">${order.odoo?.saleOrderName || '-'}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Order Date</div>
+                <div class="detail-value">${formatDate(order.orderDate)}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Promised Delivery</div>
+                <div class="detail-value">${formatDate(order.promisedDeliveryDate)}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Status</div>
+                <div class="detail-value"><span class="badge badge-${order.status}">${order.status}</span></div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Total</div>
+                <div class="detail-value">${order.currency || 'EUR'} ${(order.totalAmount || 0).toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-section">
+            <div class="modal-section-title">Shipping Address</div>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <div class="detail-label">Name</div>
+                <div class="detail-value">${addr.name || order.customer?.name || '-'}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Country</div>
+                <div class="detail-value">${addr.countryName || addr.country || '-'}</div>
+              </div>
+              <div class="detail-item" style="grid-column: 1 / -1;">
+                <div class="detail-label">Address</div>
+                <div class="detail-value">${[addr.street, addr.street2, addr.zip, addr.city].filter(Boolean).join(', ') || '-'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-section">
+            <div class="modal-section-title">Items (${order.itemCount || order.items?.length || 0})</div>
+            <table class="items-table">
+              <thead>
+                <tr><th>Product</th><th>Qty</th><th>Delivered</th></tr>
+              </thead>
+              <tbody>${itemsHtml || '<tr><td colspan="3">No items</td></tr>'}</tbody>
+            </table>
+          </div>
+
+          ${order.shipment?.trackingNumber ? `
+          <div class="modal-section">
+            <div class="modal-section-title">Shipment</div>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <div class="detail-label">Carrier</div>
+                <div class="detail-value">${order.shipment.carrier || order.carrier?.name || '-'}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Tracking</div>
+                <div class="detail-value">${order.shipment.trackingNumber}</div>
+              </div>
+            </div>
+          </div>
+          ` : ''}
+
+          ${order.notes ? `
+          <div class="modal-section">
+            <div class="modal-section-title">Notes</div>
+            <div class="detail-value">${order.notes}</div>
+          </div>
+          ` : ''}
+        `;
+
+        document.getElementById('view-order-content').innerHTML = content;
+        document.getElementById('view-order-modal').classList.add('visible');
+
+      } catch (error) {
+        console.error('Error loading order:', error);
+        window.Agent5Shell?.showToast?.('Failed to load order details', 'error');
+      }
+    }
+
+    function closeViewModal() {
+      document.getElementById('view-order-modal').classList.remove('visible');
     }
 
     async function printLabel(id) {
