@@ -67,6 +67,13 @@
         { id: 'invoices', path: '/bol/invoices.html', name: 'Invoices', icon: 'receipt_long' }
       ]
     },
+    'fulfillment': {
+      id: 'fulfillment', name: 'CW Fulfillment', icon: 'package_2', color: '#eab308',
+      basePath: '/fulfillment',
+      pages: [
+        { id: 'orders', path: '/fulfillment/', name: 'Orders', icon: 'inventory_2' }
+      ]
+    },
     'inventory': {
       id: 'inventory', name: 'Inventory', icon: 'inventory_2', color: '#8b5cf6',
       basePath: '/inventory',
