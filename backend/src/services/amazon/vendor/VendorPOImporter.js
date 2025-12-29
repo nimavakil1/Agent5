@@ -893,6 +893,7 @@ class VendorPOImporter {
           odooProductId: info.odooProductId,
           odooProductName: info.odooProductName,
           odooSku: info.odooSku,
+          odooBarcode: info.odooBarcode,  // Real EAN from Odoo
           qtyAvailable: info.qtyAvailable
         };
       }

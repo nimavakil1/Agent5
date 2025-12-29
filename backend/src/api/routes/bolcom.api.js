@@ -1983,8 +1983,8 @@ router.post('/sync/historical', async (req, res) => {
 });
 
 /**
- * Sync Bol orders with Odoo - link orders and check invoice status
- * Looks up orders in Odoo by client_order_ref and updates MongoDB with Odoo IDs
+ * Sync Bol orders with Odoo - link orders by searching multiple patterns
+ * Only links existing orders, never creates new ones
  */
 router.post('/sync/odoo', async (req, res) => {
   try {
@@ -1993,11 +1993,16 @@ router.post('/sync/odoo', async (req, res) => {
     await odoo.authenticate();
 
     // Get all Bol orders that don't have Odoo info yet (or need refresh)
-    const { refresh = false } = req.body;
-    const query = refresh ? {} : { 'odoo.saleOrderId': { $exists: false } };
+    const { refresh = false, limit = 500 } = req.body;
+    const query = refresh ? {} : {
+      $or: [
+        { 'odoo.saleOrderId': { $exists: false } },
+        { 'odoo.saleOrderId': null }
+      ]
+    };
     const bolOrders = await BolOrder.find(query)
       .sort({ orderPlacedDateTime: -1 })
-      .limit(500)
+      .limit(limit)
       .lean();
 
     if (bolOrders.length === 0) {
@@ -2009,24 +2014,47 @@ router.post('/sync/odoo', async (req, res) => {
       });
     }
 
+    console.log(`[Bol Odoo Sync] Linking ${bolOrders.length} orders...`);
+
     let synced = 0;
     let notFound = 0;
+    const notFoundList = [];
     const errors = [];
 
     for (const bolOrder of bolOrders) {
       try {
-        // Search for sale order in Odoo by client_order_ref (Bol order ID)
-        // Emipro typically stores the Bol order ID in client_order_ref
-        const saleOrders = await odoo.searchRead('sale.order', [
-          ['client_order_ref', '=', bolOrder.orderId]
-        ], ['id', 'name', 'invoice_ids', 'state'], { limit: 1 });
+        const orderId = bolOrder.orderId;
+        const fulfilmentMethod = bolOrder.fulfilmentMethod || 'FBR';
+        const prefix = fulfilmentMethod === 'FBB' ? 'FBB' : 'FBR';
 
-        if (saleOrders.length === 0) {
+        // Try multiple search patterns to find the order
+        const searchPatterns = [
+          [['client_order_ref', '=', `${prefix}${orderId}`]],      // FBB123 or FBR123
+          [['client_order_ref', '=', orderId]],                     // Just orderId
+          [['client_order_ref', 'ilike', `%${orderId}%`]],         // Contains orderId
+          [['name', 'ilike', `%${orderId}%`]]                      // Name contains orderId
+        ];
+
+        let saleOrder = null;
+        for (const pattern of searchPatterns) {
+          const results = await odoo.searchRead('sale.order', pattern,
+            ['id', 'name', 'invoice_ids', 'state', 'client_order_ref'],
+            { limit: 1 }
+          );
+          if (results.length > 0) {
+            saleOrder = results[0];
+            break;
+          }
+        }
+
+        if (!saleOrder) {
           notFound++;
+          if (notFoundList.length < 20) {
+            notFoundList.push(orderId);
+          }
           continue;
         }
 
-        const saleOrder = saleOrders[0];
         const odooData = {
           saleOrderId: saleOrder.id,
           saleOrderName: saleOrder.name,
@@ -2035,7 +2063,6 @@ router.post('/sync/odoo', async (req, res) => {
 
         // Check if there are invoices
         if (saleOrder.invoice_ids && saleOrder.invoice_ids.length > 0) {
-          // Get the first invoice details
           const invoices = await odoo.searchRead('account.move', [
             ['id', 'in', saleOrder.invoice_ids],
             ['move_type', '=', 'out_invoice'],
@@ -2055,19 +2082,26 @@ router.post('/sync/odoo', async (req, res) => {
         );
         synced++;
 
+        if (synced % 50 === 0) {
+          console.log(`[Bol Odoo Sync] Linked ${synced} orders...`);
+        }
+
       } catch (err) {
         errors.push({ orderId: bolOrder.orderId, error: err.message });
       }
 
       // Small delay to avoid overwhelming Odoo
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise(r => setTimeout(r, 30));
     }
+
+    console.log(`[Bol Odoo Sync] Complete: ${synced} linked, ${notFound} not found`);
 
     res.json({
       success: true,
-      message: `Synced ${synced} orders with Odoo`,
+      message: `Linked ${synced} orders with Odoo, ${notFound} not found`,
       synced,
       notFound,
+      notFoundSample: notFoundList.length > 0 ? notFoundList : undefined,
       errors: errors.length > 0 ? errors.slice(0, 10) : undefined
     });
   } catch (error) {

@@ -394,14 +394,15 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         continue;
       }
 
-      // Find product in Odoo by barcode (EAN)
+      // Find product in Odoo - try multiple search strategies
       let productId = null;
       let productData = null;
 
+      // Strategy 1: Search by barcode (vendorProductIdentifier is often EAN)
       if (ean) {
         const products = await odoo.searchRead('product.product',
           [['barcode', '=', ean]],
-          ['id', 'name', 'default_code', 'qty_available', 'free_qty'],
+          ['id', 'name', 'default_code', 'barcode', 'qty_available', 'free_qty'],
           { limit: 1 }
         );
         if (products.length > 0) {
@@ -410,11 +411,24 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         }
       }
 
-      // Try by ASIN in barcode field if not found by EAN
+      // Strategy 2: Search by default_code/SKU (vendorProductIdentifier is sometimes internal SKU)
+      if (!productId && ean) {
+        const products = await odoo.searchRead('product.product',
+          [['default_code', '=', ean]],
+          ['id', 'name', 'default_code', 'barcode', 'qty_available', 'free_qty'],
+          { limit: 1 }
+        );
+        if (products.length > 0) {
+          productData = products[0];
+          productId = productData.id;
+        }
+      }
+
+      // Strategy 3: Try by ASIN in barcode field
       if (!productId && asin) {
         const products = await odoo.searchRead('product.product',
           [['barcode', '=', asin]],
-          ['id', 'name', 'default_code', 'qty_available', 'free_qty'],
+          ['id', 'name', 'default_code', 'barcode', 'qty_available', 'free_qty'],
           { limit: 1 }
         );
         if (products.length > 0) {
@@ -454,6 +468,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         odooProductId: productId,
         odooProductName: productData.name,
         odooSku: productData.default_code,
+        odooBarcode: productData.barcode,  // Real EAN from Odoo
         qtyAvailable: Math.max(0, qtyAvailable)
       });
     }
@@ -480,6 +495,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         odooProductId: item.odooProductId,
         odooProductName: item.odooProductName,
         odooSku: item.odooSku,
+        odooBarcode: item.odooBarcode,  // Real EAN from Odoo
         qtyAvailable: item.qtyAvailable,
         acknowledgeQty: item.acknowledgeQty,
         backorderQty: item.backorderQty,

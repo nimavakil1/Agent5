@@ -490,47 +490,43 @@ class BolOrderCreator {
   }
 
   /**
-   * Create orders for all pending Bol orders (without Odoo orders)
-   * @param {object} options - Creation options
+   * Create orders for pending Bol orders (without Odoo orders)
+   * Only processes orders from the last X days to avoid creating historical orders
+   * @param {object} options - Creation options { limit, maxAgeDays }
    */
   async createPendingOrders(options = {}) {
-    const { limit = 50 } = options;
+    const { limit = 50, maxAgeDays = 7 } = options;
 
-    // Find orders without Odoo link
+    // Only process orders from the last X days
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+
+    // Find recent orders without Odoo link
     const pendingOrders = await BolOrder.find({
-      'odoo.saleOrderId': { $exists: false }
+      $or: [
+        { 'odoo.saleOrderId': { $exists: false } },
+        { 'odoo.saleOrderId': null }
+      ],
+      orderPlacedDateTime: { $gte: cutoffDate }
     })
       .sort({ orderPlacedDateTime: -1 })
       .limit(limit)
-      .select('orderId')
+      .select('orderId orderPlacedDateTime')
       .lean();
 
-    // Also find orders where odoo field is null
-    const pendingOrders2 = await BolOrder.find({
-      'odoo.saleOrderId': null
-    })
-      .sort({ orderPlacedDateTime: -1 })
-      .limit(limit)
-      .select('orderId')
-      .lean();
-
-    // Combine and dedupe
-    const allPending = [...pendingOrders, ...pendingOrders2];
-    const uniqueIds = [...new Set(allPending.map(o => o.orderId))];
-    const orderIds = uniqueIds.slice(0, limit);
-
-    if (orderIds.length === 0) {
+    if (pendingOrders.length === 0) {
       return {
         processed: 0,
         created: 0,
         skipped: 0,
         failed: 0,
         orders: [],
-        message: 'No pending orders to process'
+        message: `No pending orders from the last ${maxAgeDays} days`
       };
     }
 
-    console.log(`[BolOrderCreator] Processing ${orderIds.length} pending orders...`);
+    const orderIds = pendingOrders.map(o => o.orderId);
+    console.log(`[BolOrderCreator] Processing ${orderIds.length} pending orders from last ${maxAgeDays} days...`);
     return this.createOrders(orderIds, options);
   }
 
@@ -663,6 +659,103 @@ class BolOrderCreator {
     }
 
     return lines.join('\n');
+  }
+
+  /**
+   * Link pending Bol orders to existing Odoo orders (no creation)
+   * Searches by multiple patterns to find existing orders
+   * @param {object} options - Options { limit: number, batchSize: number }
+   */
+  async linkPendingOrders(options = {}) {
+    const { limit = 500, batchSize = 50 } = options;
+
+    // Find orders without Odoo link
+    const pendingOrders = await BolOrder.find({
+      $or: [
+        { 'odoo.saleOrderId': { $exists: false } },
+        { 'odoo.saleOrderId': null }
+      ]
+    })
+      .sort({ orderPlacedDateTime: -1 })
+      .limit(limit)
+      .select('orderId fulfilmentMethod')
+      .lean();
+
+    if (pendingOrders.length === 0) {
+      return {
+        processed: 0,
+        linked: 0,
+        notFound: 0,
+        notFoundOrders: [],
+        message: 'No pending orders to link'
+      };
+    }
+
+    console.log(`[BolOrderCreator] Linking ${pendingOrders.length} pending orders to Odoo...`);
+
+    const results = {
+      processed: 0,
+      linked: 0,
+      notFound: 0,
+      notFoundOrders: []
+    };
+
+    // Process in batches to avoid timeout
+    for (let i = 0; i < pendingOrders.length; i += batchSize) {
+      const batch = pendingOrders.slice(i, i + batchSize);
+
+      for (const order of batch) {
+        results.processed++;
+        const orderId = order.orderId;
+        const fulfilmentMethod = order.fulfilmentMethod || 'FBR';
+        const prefix = fulfilmentMethod === 'FBB' ? 'FBB' : 'FBR';
+
+        // Try multiple search patterns
+        const searchPatterns = [
+          ['client_order_ref', '=', `${prefix}${orderId}`],        // FBB123 or FBR123
+          ['client_order_ref', '=', orderId],                       // Just 123
+          ['client_order_ref', 'ilike', `%${orderId}%`],           // Contains orderId
+          ['name', 'ilike', `%${orderId}%`]                        // Order name contains orderId
+        ];
+
+        let foundOrder = null;
+        for (const pattern of searchPatterns) {
+          const orders = await this.odoo.searchRead('sale.order',
+            [pattern],
+            ['id', 'name', 'state', 'client_order_ref']
+          );
+          if (orders.length > 0) {
+            foundOrder = orders[0];
+            break;
+          }
+        }
+
+        if (foundOrder) {
+          // Link to MongoDB
+          await BolOrder.updateOne(
+            { orderId },
+            {
+              $set: {
+                'odoo.saleOrderId': foundOrder.id,
+                'odoo.saleOrderName': foundOrder.name,
+                'odoo.linkedAt': new Date()
+              }
+            }
+          );
+          results.linked++;
+
+          if (results.linked % 50 === 0) {
+            console.log(`[BolOrderCreator] Linked ${results.linked} orders...`);
+          }
+        } else {
+          results.notFound++;
+          results.notFoundOrders.push(orderId);
+        }
+      }
+    }
+
+    console.log(`[BolOrderCreator] Link complete: ${results.linked} linked, ${results.notFound} not found in Odoo`);
+    return results;
   }
 }
 

@@ -133,7 +133,7 @@ async function syncOrders(mode = 'RECENT', onProgress = null) {
     await sleep(RATE_LIMIT.PAGE_DELAY_MS);
 
     try {
-      const data = await bolRequest(`/orders?page=${page}`);
+      const data = await bolRequest(`/orders?page=${page}&fulfilment-method=ALL`);
       const orders = data.orders || [];
 
       if (orders.length === 0) {

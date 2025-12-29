@@ -244,7 +244,7 @@
       tbody.innerHTML = orders.map(o => {
         const shipStatus = getShippingStatus(o);
         const shipClass = shipStatus === 'Shipped' ? 'badge-acknowledged' : (shipStatus === 'Partial' ? 'badge-new' : 'badge-closed');
-        return '<tr><td><a href="#" class="po-number" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\'); return false;">' + o.purchaseOrderNumber + '</a></td><td><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></td><td><span class="badge ' + shipClass + '">' + shipStatus + '</span></td><td>' + o.itemCount + ' items</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td><td>' + (o.odoo?.saleOrderName ? '<a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link">' + o.odoo.saleOrderName + '</a>' : '-') + '</td><td><div class="actions"><button class="action-btn" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\')" data-tooltip="View Details"><span class="material-symbols-outlined">visibility</span></button><button class="action-btn" onclick="createOdooOrder(\'' + o.purchaseOrderNumber + '\')" data-tooltip="Create Odoo Order" ' + (o.odoo?.saleOrderId ? 'disabled' : '') + '><span class="material-symbols-outlined">add_shopping_cart</span></button><button class="action-btn" onclick="acknowledgePO(\'' + o.purchaseOrderNumber + '\')" data-tooltip="Acknowledge Order" ' + (o.acknowledgment?.acknowledged ? 'disabled' : '') + '><span class="material-symbols-outlined">check_circle</span></button></div></td></tr>';
+        return '<tr><td><a href="#" class="po-number" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\'); return false;">' + o.purchaseOrderNumber + '</a></td><td><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></td><td><span class="badge ' + shipClass + '">' + shipStatus + '</span></td><td>' + o.itemCount + ' items</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td><td>' + (o.odoo?.saleOrderName ? '<a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link">' + o.odoo.saleOrderName + '</a>' : '-') + '</td><td><button class="action-btn" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\')" data-tooltip="View Details"><span class="material-symbols-outlined">visibility</span></button></td></tr>';
       }).join('');
       applyColumnFilters();
     }
@@ -348,7 +348,7 @@
         const deliveryHtml = o.deliveryWindow ? '<div style="margin-bottom:20px;padding:16px;background:#12121a;border-radius:10px;"><strong style="color:#a1a1aa;">Delivery Window:</strong><span style="color:#e4e4e7;margin-left:8px;">' + formatDate(o.deliveryWindow.startDate) + ' - ' + formatDate(o.deliveryWindow.endDate) + '</span></div>' : '';
 
         // Build items table - editable if not acknowledged
-        let tableHtml = '<div class="po-items-table"><table><thead><tr><th>#</th><th>EAN/SKU</th><th>Product</th><th>Ordered</th>';
+        let tableHtml = '<div class="po-items-table"><table><thead><tr><th>#</th><th>EAN</th><th>SKU</th><th>Product</th><th>Ordered</th>';
         if (!isAcknowledged) {
           tableHtml += '<th>CW Stock</th><th>Accept Qty</th>';
         } else {
@@ -357,14 +357,18 @@
         tableHtml += '<th>Unit Price</th><th>Total</th></tr></thead><tbody>';
 
         (o.items || []).forEach((it, i) => {
-          const ean = it.vendorProductIdentifier || '-';
-          const stock = stockInfo[ean] || {};
+          const vendorId = it.vendorProductIdentifier || '-';
+          const stock = stockInfo[vendorId] || {};
+          // SKU = Odoo default_code (internal reference)
+          const sku = stock.odooSku || it.odooSku || '-';
+          // EAN = Odoo barcode (real EAN), fallback to vendorProductIdentifier if not found
+          const ean = stock.odooBarcode || it.odooBarcode || vendorId;
           const orderedQty = it.orderedQuantity?.amount || 0;
           const cwStock = stock.qtyAvailable ?? it.qtyAvailable ?? 0;
           const productName = stock.odooProductName || it.odooProductName || '';
           const currentAckQty = it.acknowledgeQty ?? orderedQty;
 
-          tableHtml += '<tr data-ean="' + ean + '"><td>' + (i+1) + '</td><td style="font-family:monospace;font-size:12px;">' + ean + '</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + productName + '">' + (productName || '-') + '</td><td>' + orderedQty + '</td>';
+          tableHtml += '<tr data-ean="' + vendorId + '"><td>' + (i+1) + '</td><td style="font-family:monospace;font-size:12px;">' + ean + '</td><td style="font-family:monospace;font-size:12px;">' + sku + '</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + productName + '">' + (productName || '-') + '</td><td>' + orderedQty + '</td>';
 
           if (!isAcknowledged) {
             const stockColor = cwStock >= orderedQty ? '#4ade80' : (cwStock > 0 ? '#fbbf24' : '#ef4444');
@@ -379,10 +383,10 @@
           tableHtml += '<td>' + formatCurrency(orderedQty * (it.netCost?.amount || 0), it.netCost?.currencyCode) + '</td></tr>';
         });
 
-        tableHtml += '<tr class="totals-row"><td colspan="' + (isAcknowledged ? '7' : '7') + '" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td></tr></tbody></table></div>';
+        tableHtml += '<tr class="totals-row"><td colspan="' + (isAcknowledged ? '8' : '8') + '" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td></tr></tbody></table></div>';
 
         // Auto-fill button (only if not acknowledged)
-        const autoFillHtml = !isAcknowledged ? '<div style="margin-top:16px;display:flex;gap:12px;"><button class="btn btn-secondary" onclick="autoFillFromStock()"><span class="material-symbols-outlined">auto_fix</span>Auto-fill from CW Stock</button><button class="btn btn-secondary" onclick="fillAllOrdered()"><span class="material-symbols-outlined">select_all</span>Accept All Ordered</button></div>' : '';
+        const autoFillHtml = !isAcknowledged ? '<div style="margin-top:16px;display:flex;gap:12px;"><button class="btn btn-secondary" onclick="autoFillFromStock()" title="Fill Accept Qty with available CW stock (min of ordered vs available)"><span class="material-symbols-outlined">auto_fix</span>Auto-fill from CW Stock</button><button class="btn btn-secondary" onclick="fillAllOrdered()" title="Accept all ordered QTYs - good when you KNOW there will be availability before shipment. This just fills the Accept Qty fields."><span class="material-symbols-outlined">select_all</span>Accept All Ordered</button></div>' : '';
 
         const odooHtml = o.odoo?.saleOrderId ? '<div style="margin-top:20px;padding:16px;background:rgba(99,102,241,0.1);border-radius:10px;border:1px solid rgba(99,102,241,0.3);"><strong style="color:#818cf8;">Odoo Order:</strong><a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link" style="margin-left:8px;">' + o.odoo.saleOrderName + '</a></div>' : '';
 
@@ -398,8 +402,8 @@
       document.querySelectorAll('.ack-qty-input').forEach(input => {
         const ean = input.dataset.ean;
         const row = input.closest('tr');
-        const orderedQty = parseInt(row.cells[3].textContent) || 0;
-        const cwStock = parseInt(row.cells[4].textContent) || 0;
+        const orderedQty = parseInt(row.cells[4].textContent) || 0;
+        const cwStock = parseInt(row.cells[5].textContent) || 0;
         input.value = Math.min(orderedQty, cwStock);
       });
       window.Agent5Shell?.showToast?.('Quantities set based on CW stock', 'success');
@@ -408,12 +412,12 @@
     function fillAllOrdered() {
       document.querySelectorAll('.ack-qty-input').forEach(input => {
         const row = input.closest('tr');
-        const orderedQty = parseInt(row.cells[3].textContent) || 0;
+        const orderedQty = parseInt(row.cells[4].textContent) || 0;
         input.value = orderedQty;
       });
       window.Agent5Shell?.showToast?.('All quantities set to ordered amount', 'success');
     }
-    function closeModal() { document.getElementById('po-modal').classList.remove('open'); currentPO = null; }
+    function closeModal() { document.getElementById('po-modal').classList.remove('open'); currentPO = null; currentPOData = null; }
     async function pollOrders() {
       const btn = document.getElementById('poll-btn');
       btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined">sync</span>Polling...';
@@ -449,12 +453,57 @@
       finally { btn.disabled = false; }
     }
     async function acknowledgePO(po) {
-      if (!confirm('Acknowledge ' + po + '?')) return;
+      // Collect quantities from inputs if modal is open
+      const inputs = document.querySelectorAll('.ack-qty-input');
+      if (inputs.length > 0) {
+        const items = [];
+        let hasPartial = false;
+        inputs.forEach(input => {
+          const ean = input.dataset.ean;
+          const ackQty = parseInt(input.value) || 0;
+          const row = input.closest('tr');
+          const orderedQty = parseInt(row.cells[3].textContent) || 0;
+          if (ackQty < orderedQty) hasPartial = true;
+          items.push({
+            vendorProductIdentifier: ean,
+            acknowledgeQty: ackQty,
+            backorderQty: 0,
+            productAvailability: ackQty > 0 ? 'accepted' : 'rejected_TemporarilyUnavailable'
+          });
+        });
+
+        // Confirm with user
+        const confirmMsg = hasPartial
+          ? 'Some items have reduced quantities. Acknowledge ' + po + ' with these quantities?'
+          : 'Acknowledge ' + po + ' with all items accepted?';
+        if (!confirm(confirmMsg)) return;
+
+        // First save the quantities
+        try {
+          const saveRes = await fetch('/api/vendor/orders/' + po + '/update-acknowledgments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ items })
+          });
+          if (!saveRes.ok) {
+            const d = await saveRes.json();
+            throw new Error('Failed to save quantities: ' + (d.error || 'Unknown error'));
+          }
+        } catch (e) {
+          window.Agent5Shell?.showToast?.('Error saving quantities: ' + e.message, 'error');
+          return;
+        }
+      } else {
+        if (!confirm('Acknowledge ' + po + '?')) return;
+      }
+
+      // Now send acknowledgment to Amazon
       try {
         const res = await fetch('/api/vendor/orders/' + po + '/acknowledge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status: 'Accepted' }) });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || d.errors?.join(', ') || 'Failed'); }
         const data = await res.json();
-        window.Agent5Shell?.showToast?.(data.skipped ? 'Skipped: ' + data.skipReason : 'Acknowledged', data.skipped ? 'info' : 'success');
+        window.Agent5Shell?.showToast?.(data.skipped ? 'Skipped: ' + data.skipReason : 'Acknowledged successfully!', data.skipped ? 'info' : 'success');
         await Promise.all([loadStats(), loadOrders()]); closeModal();
       } catch (e) { window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error'); }
     }

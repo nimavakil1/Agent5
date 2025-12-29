@@ -402,7 +402,7 @@ class VendorOrderCreator {
       return this.productCache[cacheKey];
     }
 
-    // Search by default_code (SKU)
+    // Search by default_code (internal SKU)
     if (sku) {
       const byCode = await this.odoo.search('product.product',
         [['default_code', '=', sku]],
@@ -414,15 +414,27 @@ class VendorOrderCreator {
       }
     }
 
-    // Search by barcode (sometimes ASIN is stored there)
-    if (asin) {
+    // Search by barcode (EAN - vendorProductIdentifier is typically the EAN)
+    if (sku) {
       const byBarcode = await this.odoo.search('product.product',
-        [['barcode', '=', asin]],
+        [['barcode', '=', sku]],
         { limit: 1 }
       );
       if (byBarcode.length > 0) {
         this.productCache[cacheKey] = byBarcode[0];
         return byBarcode[0];
+      }
+    }
+
+    // Search by barcode using ASIN as fallback
+    if (asin) {
+      const byAsin = await this.odoo.search('product.product',
+        [['barcode', '=', asin]],
+        { limit: 1 }
+      );
+      if (byAsin.length > 0) {
+        this.productCache[cacheKey] = byAsin[0];
+        return byAsin[0];
       }
     }
 

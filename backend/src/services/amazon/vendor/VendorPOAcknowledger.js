@@ -112,7 +112,8 @@ class VendorPOAcknowledger {
 
       // Get client for marketplace
       const client = this.getClient(po.marketplaceId);
-      const partyId = VENDOR_PARTY_IDS[po.marketplaceId] || 'ACROPAQ';
+      // Use partyId from the PO itself (Amazon's expected value), fallback to config
+      const partyId = po.sellingParty?.partyId || VENDOR_PARTY_IDS[po.marketplaceId] || 'ACROPAQ';
 
       // Get schedule data from PO (set by user via update-acknowledgments endpoint)
       const scheduleData = {
