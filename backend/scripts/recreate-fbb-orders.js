@@ -157,9 +157,13 @@ async function recreateOrders(options = {}) {
       const creator = await getBolOrderCreator();
       const createResult = await creator.createOrder(bolOrderId, { autoConfirm: true });
 
-      if (createResult.success) {
-        console.log(`  ✓ Recreated as ${createResult.odooOrderName} (warehouse: BOL)`);
+      if (createResult.success && !createResult.skipped) {
+        console.log(`  ✓ Recreated as ${createResult.odooOrderName} (ID: ${createResult.odooOrderId})`);
         results.success++;
+      } else if (createResult.skipped) {
+        console.log(`  ⚠ Skipped - found existing order: ${createResult.odooOrderName}`);
+        results.failed++;
+        results.errors.push({ order: orderName, error: `Skipped: ${createResult.skipReason}` });
       } else {
         console.log(`  ✗ Failed to recreate: ${createResult.errors.join(', ')}`);
         results.failed++;
