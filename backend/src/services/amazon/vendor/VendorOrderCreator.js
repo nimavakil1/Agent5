@@ -370,8 +370,8 @@ class VendorOrderCreator {
           continue;
         }
 
-        // Calculate price per unit
-        const quantity = item.orderedQuantity?.amount || 1;
+        // Use acknowledgeQty (accepted quantity) if set, otherwise fall back to orderedQuantity
+        const quantity = item.acknowledgeQty ?? item.orderedQuantity?.amount ?? 1;
         const netCost = parseFloat(item.netCost?.amount) || 0;
         const priceUnit = netCost > 0 ? netCost : 0;
 
