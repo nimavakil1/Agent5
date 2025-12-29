@@ -258,7 +258,7 @@ class VendorASNCreator {
   }
 
   /**
-   * Build ASN payload for Amazon
+   * Build ASN payload for Amazon (legacy - item level only)
    */
   _buildASNPayload(po, picking, shipmentId) {
     const shipmentDate = picking.date_done || picking.scheduled_date || new Date().toISOString();
@@ -311,6 +311,261 @@ class VendorASNCreator {
         shipmentItems
       }]
     };
+  }
+
+  /**
+   * Build ASN payload with carton-level SSCCs (ASN v2 compliant)
+   *
+   * Structure: Shipment -> Pallets -> Cartons -> Items
+   *
+   * @param {Object} po - Purchase order
+   * @param {Object} picking - Odoo picking
+   * @param {string} shipmentId - Shipment identifier
+   * @param {Object} packingData - Carton/pallet packing data from UI
+   * @param {Array} packingData.cartons - Array of carton objects with SSCC and items
+   * @param {Array} packingData.pallets - Array of pallet objects with SSCC and carton SSCCs
+   */
+  _buildASNPayloadWithSSCC(po, picking, shipmentId, packingData = {}) {
+    const shipmentDate = picking.date_done || picking.scheduled_date || new Date().toISOString();
+    const { cartons = [], pallets = [] } = packingData;
+
+    // If no cartons provided, fall back to legacy format
+    if (cartons.length === 0) {
+      return this._buildASNPayload(po, picking, shipmentId);
+    }
+
+    // Build carton structures with SSCC
+    const packedItems = {
+      cartons: cartons.map((carton, idx) => ({
+        cartonIdentifier: carton.sscc, // SSCC-18
+        cartonSequenceNumber: String(idx + 1),
+        items: carton.items.map((item, itemIdx) => {
+          // Find matching PO item
+          const poItem = po.items.find(
+            pi => pi.vendorProductIdentifier === item.ean ||
+                  pi.amazonProductIdentifier === item.asin
+          );
+          return {
+            itemReference: String(itemIdx + 1),
+            vendorProductIdentifier: item.ean || poItem?.vendorProductIdentifier,
+            amazonProductIdentifier: item.asin || poItem?.amazonProductIdentifier,
+            shippedQuantity: {
+              amount: item.quantity,
+              unitOfMeasure: 'Each'
+            }
+          };
+        })
+      }))
+    };
+
+    // Build pallet structures if any
+    let palletData = null;
+    if (pallets.length > 0) {
+      palletData = pallets.map((pallet, idx) => ({
+        palletIdentifier: pallet.sscc, // SSCC-18
+        tier: String(idx + 1),
+        block: '1',
+        cartonReferenceDetails: pallet.cartonSSCCs.map(sscc => {
+          const cartonIdx = cartons.findIndex(c => c.sscc === sscc);
+          return {
+            cartonSequenceNumber: String(cartonIdx + 1)
+          };
+        })
+      }));
+    }
+
+    // Calculate total shipped items for shipmentItems array
+    const shipmentItems = [];
+    const itemTotals = {};
+
+    cartons.forEach(carton => {
+      carton.items.forEach(item => {
+        const key = item.ean || item.asin;
+        if (!itemTotals[key]) {
+          const poItem = po.items.find(
+            pi => pi.vendorProductIdentifier === item.ean ||
+                  pi.amazonProductIdentifier === item.asin
+          );
+          itemTotals[key] = {
+            itemSequenceNumber: poItem?.itemSequenceNumber || '1',
+            amazonProductIdentifier: item.asin || poItem?.amazonProductIdentifier,
+            vendorProductIdentifier: item.ean || poItem?.vendorProductIdentifier,
+            shippedQuantity: {
+              amount: 0,
+              unitOfMeasure: 'Each'
+            }
+          };
+        }
+        itemTotals[key].shippedQuantity.amount += item.quantity;
+      });
+    });
+
+    Object.values(itemTotals).forEach(item => shipmentItems.push(item));
+
+    const confirmation = {
+      shipmentIdentifier: shipmentId,
+      shipmentConfirmationType: 'Original',
+      shipmentType: pallets.length > 0 ? SHIPMENT_TYPES.LESS_THAN_TRUCK_LOAD : SHIPMENT_TYPES.SMALL_PARCEL,
+      shipmentStructure: pallets.length > 0 ? 'PalletizedAssortmentCase' : 'LooseAssortmentCase',
+      transportationDetails: {
+        carrierScac: picking.carrier_id ? 'OTHR' : null,
+        carrierShipmentReferenceNumber: picking.carrier_tracking_ref || null,
+        transportationMode: TRANSPORTATION_METHODS.ROAD
+      },
+      amazonReferenceNumber: po.purchaseOrderNumber,
+      shipmentDate: new Date(shipmentDate).toISOString(),
+      shippedDate: new Date(shipmentDate).toISOString(),
+      estimatedDeliveryDate: po.deliveryWindow?.endDate
+        ? new Date(po.deliveryWindow.endDate).toISOString()
+        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      sellingParty: {
+        partyId: ACROPAQ_WAREHOUSE.partyId,
+        address: ACROPAQ_WAREHOUSE.address
+      },
+      shipFromParty: {
+        partyId: ACROPAQ_WAREHOUSE.partyId,
+        address: ACROPAQ_WAREHOUSE.address
+      },
+      shipToParty: po.shipToParty || {
+        partyId: 'AMAZON',
+        address: {
+          name: 'Amazon Fulfillment Center',
+          countryCode: po.marketplaceId === 'UK' ? 'GB' : po.marketplaceId
+        }
+      },
+      shipmentItems,
+      packedItems
+    };
+
+    // Add pallet data if present
+    if (palletData) {
+      confirmation.pallets = palletData;
+    }
+
+    return {
+      shipmentConfirmations: [confirmation]
+    };
+  }
+
+  /**
+   * Submit ASN with carton-level SSCC data
+   * @param {string} poNumber - Purchase order number
+   * @param {Object} packingData - Carton/pallet data from UI
+   * @param {Object} options - Additional options
+   */
+  async submitASNWithSSCC(poNumber, packingData, options = {}) {
+    const { odooPickingId, dryRun = false } = options;
+
+    const result = {
+      success: false,
+      purchaseOrderNumber: poNumber,
+      shipmentId: null,
+      transactionId: null,
+      cartonCount: packingData.cartons?.length || 0,
+      palletCount: packingData.pallets?.length || 0,
+      errors: [],
+      warnings: []
+    };
+
+    try {
+      // Get PO from MongoDB
+      const po = await this.importer.getPurchaseOrder(poNumber);
+      if (!po) {
+        result.errors.push(`PO not found: ${poNumber}`);
+        return result;
+      }
+
+      // Get delivery from Odoo (optional - may not have Odoo order)
+      let picking = null;
+      if (po.odoo?.saleOrderId) {
+        picking = await this._getDeliveryFromOdoo(po.odoo.saleOrderId, odooPickingId);
+      }
+
+      // Create a mock picking if none exists
+      if (!picking) {
+        picking = {
+          id: null,
+          name: 'MANUAL',
+          date_done: new Date().toISOString(),
+          scheduled_date: new Date().toISOString()
+        };
+        result.warnings.push('No Odoo delivery found - using manual shipment date');
+      }
+
+      // Generate shipment ID
+      const shipmentId = this._generateShipmentId(po, picking);
+
+      // Build ASN payload with SSCCs
+      const asnPayload = this._buildASNPayloadWithSSCC(po, picking, shipmentId, packingData);
+
+      if (dryRun) {
+        result.success = true;
+        result.shipmentId = shipmentId;
+        result.dryRun = true;
+        result.payload = asnPayload;
+        return result;
+      }
+
+      // Submit to Amazon
+      const client = this.getClient(po.marketplaceId);
+      await client.init();
+
+      const response = await client.submitShipmentConfirmations(asnPayload);
+
+      // Store in MongoDB
+      await this._saveShipment({
+        shipmentId,
+        purchaseOrderNumber: poNumber,
+        marketplaceId: po.marketplaceId,
+        odooPickingId: picking.id,
+        odooPickingName: picking.name,
+        transactionId: response.transactionId,
+        status: 'submitted',
+        submittedAt: new Date(),
+        shipmentDate: new Date(picking.date_done || picking.scheduled_date),
+        carrier: picking.carrier_id ? picking.carrier_id[1] : null,
+        trackingNumber: picking.carrier_tracking_ref || null,
+        cartons: packingData.cartons?.map(c => ({
+          sscc: c.sscc,
+          itemCount: c.items?.length || 0,
+          totalUnits: c.items?.reduce((sum, i) => sum + (i.quantity || 0), 0) || 0
+        })) || [],
+        pallets: packingData.pallets?.map(p => ({
+          sscc: p.sscc,
+          cartonCount: p.cartonSSCCs?.length || 0
+        })) || [],
+        items: asnPayload.shipmentConfirmations[0].shipmentItems
+      });
+
+      // Update PO
+      await this.db.collection(PO_COLLECTION).updateOne(
+        { purchaseOrderNumber: poNumber },
+        {
+          $push: {
+            shipments: {
+              shipmentId,
+              submittedAt: new Date(),
+              odooPickingId: picking.id,
+              cartonCount: packingData.cartons?.length || 0,
+              palletCount: packingData.pallets?.length || 0
+            }
+          },
+          $set: {
+            shipmentStatus: 'shipped',
+            updatedAt: new Date()
+          }
+        }
+      );
+
+      result.success = true;
+      result.shipmentId = shipmentId;
+      result.transactionId = response.transactionId;
+
+    } catch (error) {
+      result.errors.push(error.message);
+    }
+
+    return result;
   }
 
   /**

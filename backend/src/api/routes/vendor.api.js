@@ -1169,6 +1169,302 @@ router.get('/fc-codes', async (req, res) => {
   }
 });
 
+// ==================== SSCC / LABELS ====================
+
+const { getSSCCGenerator } = require('../../services/amazon/vendor/SSCCGenerator');
+const { getSSCCLabelGenerator } = require('../../services/amazon/vendor/SSCCLabelGenerator');
+
+/**
+ * @route GET /api/vendor/sscc/stats
+ * @desc Get SSCC generation statistics
+ */
+router.get('/sscc/stats', async (req, res) => {
+  try {
+    const generator = await getSSCCGenerator();
+    const stats = await generator.getStats();
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /sscc/stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/sscc/generate
+ * @desc Generate SSCC codes for cartons
+ * @body count - Number of SSCCs to generate
+ * @body type - 'carton' or 'pallet'
+ * @body purchaseOrderNumber - Associated PO
+ * @body shipmentId - Associated shipment
+ */
+router.post('/sscc/generate', async (req, res) => {
+  try {
+    const generator = await getSSCCGenerator();
+    const { count = 1, type = 'carton', purchaseOrderNumber, shipmentId } = req.body;
+
+    if (count > 100) {
+      return res.status(400).json({ success: false, error: 'Maximum 100 SSCCs per request' });
+    }
+
+    const results = [];
+    for (let i = 0; i < count; i++) {
+      const result = await generator.generateSSCC({
+        type,
+        purchaseOrderNumber,
+        shipmentId
+      });
+      results.push(result);
+    }
+
+    res.json({
+      success: true,
+      count: results.length,
+      ssccs: results
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /sscc/generate error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/sscc/pallet
+ * @desc Generate a pallet SSCC and link cartons to it
+ * @body cartonSSCCs - Array of carton SSCCs to put on this pallet
+ * @body purchaseOrderNumber - Associated PO
+ * @body shipmentId - Associated shipment
+ */
+router.post('/sscc/pallet', async (req, res) => {
+  try {
+    const generator = await getSSCCGenerator();
+    const { cartonSSCCs = [], purchaseOrderNumber, shipmentId } = req.body;
+
+    const palletSSCC = await generator.generatePalletSSCC(cartonSSCCs, {
+      purchaseOrderNumber,
+      shipmentId
+    });
+
+    res.json({
+      success: true,
+      pallet: palletSSCC
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /sscc/pallet error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/sscc/:sscc
+ * @desc Get SSCC details
+ */
+router.get('/sscc/:sscc', async (req, res) => {
+  try {
+    const generator = await getSSCCGenerator();
+    const record = await generator.getSSCC(req.params.sscc);
+
+    if (!record) {
+      return res.status(404).json({ success: false, error: 'SSCC not found' });
+    }
+
+    res.json({
+      success: true,
+      sscc: record
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /sscc/:sscc error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route PUT /api/vendor/sscc/:sscc/contents
+ * @desc Update contents of a carton/pallet
+ * @body items - Array of items { sku, ean, name, quantity }
+ */
+router.put('/sscc/:sscc/contents', async (req, res) => {
+  try {
+    const generator = await getSSCCGenerator();
+    const { items } = req.body;
+
+    await generator.updateContents(req.params.sscc, items);
+
+    res.json({
+      success: true,
+      message: 'Contents updated'
+    });
+  } catch (error) {
+    console.error('[VendorAPI] PUT /sscc/:sscc/contents error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route PUT /api/vendor/sscc/:sscc/status
+ * @desc Update SSCC status
+ * @body status - 'generated', 'printed', 'shipped', 'received'
+ */
+router.put('/sscc/:sscc/status', async (req, res) => {
+  try {
+    const generator = await getSSCCGenerator();
+    const { status } = req.body;
+
+    await generator.updateStatus(req.params.sscc, status);
+
+    res.json({
+      success: true,
+      message: `Status updated to ${status}`
+    });
+  } catch (error) {
+    console.error('[VendorAPI] PUT /sscc/:sscc/status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/sscc/by-po/:poNumber
+ * @desc Get all SSCCs for a purchase order
+ */
+router.get('/sscc/by-po/:poNumber', async (req, res) => {
+  try {
+    const generator = await getSSCCGenerator();
+    const ssccs = await generator.getSSCCsByPO(req.params.poNumber);
+
+    res.json({
+      success: true,
+      count: ssccs.length,
+      ssccs
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /sscc/by-po/:poNumber error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/sscc/:sscc/label
+ * @desc Generate label for an SSCC
+ * @body format - 'html' (default), 'png', 'zpl'
+ * @body shipTo - Ship-to information (FC)
+ * @body purchaseOrders - PO numbers
+ * @body items - Items in the container
+ */
+router.post('/sscc/:sscc/label', async (req, res) => {
+  try {
+    const generator = await getSSCCGenerator();
+    const labelGen = await getSSCCLabelGenerator();
+
+    const record = await generator.getSSCC(req.params.sscc);
+    if (!record) {
+      return res.status(404).json({ success: false, error: 'SSCC not found' });
+    }
+
+    const {
+      format = 'html',
+      shipTo = {},
+      purchaseOrders = record.purchaseOrderNumber ? [record.purchaseOrderNumber] : [],
+      items = record.contents?.items || []
+    } = req.body;
+
+    if (record.type === 'pallet') {
+      // Pallet label
+      const html = await labelGen.generatePalletLabelHTML({
+        sscc: req.params.sscc,
+        shipTo,
+        purchaseOrders,
+        cartonSSCCs: record.contents?.cartonSSCCs || [],
+        totalUnits: items.reduce((sum, i) => sum + (i.quantity || 0), 0),
+        singleSKU: items.length === 1
+      });
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(html);
+    }
+
+    // Carton label
+    if (format === 'html') {
+      const html = await labelGen.generateCartonLabelHTML({
+        sscc: req.params.sscc,
+        shipTo,
+        purchaseOrders,
+        items
+      });
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(html);
+    }
+
+    if (format === 'png') {
+      const png = await labelGen.generateBarcodeImage(req.params.sscc);
+      res.setHeader('Content-Type', 'image/png');
+      return res.send(png);
+    }
+
+    if (format === 'zpl') {
+      const zpl = labelGen.generateCartonLabelZPL({
+        sscc: req.params.sscc,
+        shipTo,
+        purchaseOrders,
+        items
+      });
+      res.setHeader('Content-Type', 'text/plain');
+      return res.send(zpl);
+    }
+
+    res.status(400).json({ success: false, error: 'Invalid format. Use html, png, or zpl' });
+  } catch (error) {
+    console.error('[VendorAPI] POST /sscc/:sscc/label error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/sscc/labels/batch
+ * @desc Generate multiple labels at once for printing
+ * @body ssccs - Array of SSCC codes
+ * @body shipTo - Common ship-to information
+ * @body purchaseOrders - Common PO numbers
+ */
+router.post('/sscc/labels/batch', async (req, res) => {
+  try {
+    const generator = await getSSCCGenerator();
+    const labelGen = await getSSCCLabelGenerator();
+
+    const { ssccs = [], shipTo = {}, purchaseOrders = [] } = req.body;
+
+    if (ssccs.length === 0) {
+      return res.status(400).json({ success: false, error: 'No SSCCs provided' });
+    }
+
+    if (ssccs.length > 50) {
+      return res.status(400).json({ success: false, error: 'Maximum 50 labels per batch' });
+    }
+
+    // Get all SSCC records
+    const cartons = [];
+    for (const sscc of ssccs) {
+      const record = await generator.getSSCC(sscc);
+      if (record && record.type === 'carton') {
+        cartons.push({
+          sscc,
+          shipTo,
+          purchaseOrders: record.purchaseOrderNumber ? [record.purchaseOrderNumber] : purchaseOrders,
+          items: record.contents?.items || []
+        });
+      }
+    }
+
+    const html = await labelGen.generateCartonLabelsHTML(cartons);
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error) {
+    console.error('[VendorAPI] POST /sscc/labels/batch error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== INVOICES ====================
 
 /**

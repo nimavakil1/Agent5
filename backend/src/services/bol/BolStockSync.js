@@ -1,12 +1,12 @@
 /**
  * BolStockSync - Sync stock levels from Odoo to Bol.com
  *
- * Pushes stock levels from Central Warehouse (free_qty) to Bol.com offers.
- *
- * Flow:
- * 1. Get all offers from Bol.com with their EANs
- * 2. For each EAN, find product in Odoo and get stock.quant free_qty
- * 3. Update Bol.com offer stock via PUT /retailer/offers/{offerId}/stock
+ * Workflow (Emipro-style):
+ * 1. Request offer export from Bol.com (async operation)
+ * 2. Wait for export to complete
+ * 3. Download and parse CSV to get all offers with offerId + EAN
+ * 4. Get stock levels from Odoo Central Warehouse for all EANs
+ * 5. Update each offer's stock via PUT /offers/{offerId}/stock
  *
  * Rate Limiting:
  * - Bol.com: 25 requests/second max
@@ -20,7 +20,6 @@ const CENTRAL_WAREHOUSE_ID = 1;
 
 // Rate limiting configuration
 const REQUEST_DELAY_MS = 50;   // 50ms = 20 requests/second
-const BATCH_SIZE = 100;        // Process in batches
 const MAX_RETRIES = 3;
 
 // Token cache (shared)
@@ -152,7 +151,7 @@ class BolStockSync {
       throw new Error(error.detail || `Bol.com API error: ${response.status}`);
     }
 
-    if (response.status === 204) {
+    if (response.status === 202 || response.status === 204) {
       return { success: true };
     }
 
@@ -167,88 +166,173 @@ class BolStockSync {
   }
 
   /**
-   * Get all offers from Bol.com
-   * Uses the offer export feature since there's no direct list endpoint
+   * Request an offer export from Bol.com (Emipro workflow step 1)
    */
-  async getOffers() {
-    console.log('[BolStockSync] Fetching offers from Bol.com...');
+  async requestOfferExport() {
+    console.log('[BolStockSync] Requesting offer export from Bol.com...');
 
-    // Bol.com doesn't have a simple "list all offers" endpoint
-    // We need to use the offers export or query by EAN
-    // For now, we'll use offers from our orders to build a list
+    const token = await this.getAccessToken();
+    const response = await fetch('https://api.bol.com/retailer/offers/export', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/vnd.retailer.v10+json',
+        'Content-Type': 'application/vnd.retailer.v10+json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ format: 'CSV' })
+    });
 
-    // Alternative: Use the catalog endpoint to search by EAN
-    // For each product in Odoo, we search for the offer
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `Failed to request offer export: ${response.status}`);
+    }
 
-    return [];
+    const result = await response.json();
+    console.log(`[BolStockSync] Export requested, processStatusId: ${result.processStatusId}`);
+    return result.processStatusId;
   }
 
   /**
-   * Get stock level from Odoo for a product by EAN
+   * Check process status (Emipro workflow step 2)
    */
-  async getStockByEan(ean) {
-    if (!ean) return 0;
+  async getProcessStatus(processStatusId) {
+    const token = await this.getAccessToken();
+    const response = await fetch(`https://api.bol.com/shared/process-status/${processStatusId}`, {
+      headers: {
+        'Accept': 'application/vnd.retailer.v10+json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
 
-    // Find product by barcode (EAN)
-    const products = await this.odoo.searchRead('product.product',
-      [['barcode', '=', ean]],
-      ['id', 'name', 'default_code'],
-      { limit: 1 }
-    );
-
-    if (products.length === 0) {
-      return null; // Product not found
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `Failed to get process status: ${response.status}`);
     }
 
-    const productId = products[0].id;
-
-    // Get stock.quant for this product in Central Warehouse location
-    const quants = await this.odoo.searchRead('stock.quant',
-      [
-        ['product_id', '=', productId],
-        ['location_id', '=', this.cwLocationId]
-      ],
-      ['quantity', 'reserved_quantity']
-    );
-
-    if (quants.length === 0) {
-      return 0;
-    }
-
-    // free_qty = quantity - reserved_quantity
-    const totalQty = quants.reduce((sum, q) => sum + (q.quantity || 0), 0);
-    const reservedQty = quants.reduce((sum, q) => sum + (q.reserved_quantity || 0), 0);
-    const freeQty = totalQty - reservedQty;
-
-    return Math.max(0, Math.floor(freeQty));
+    return response.json();
   }
 
   /**
-   * Get stock levels for multiple products by EAN
-   * More efficient batch query
+   * Wait for offer export to complete (Emipro workflow step 2)
    */
-  async getStockByEans(eans) {
+  async waitForOfferExport(processStatusId, maxWaitMs = 120000) {
+    const startTime = Date.now();
+    const pollInterval = 5000; // Check every 5 seconds
+
+    while (Date.now() - startTime < maxWaitMs) {
+      const status = await this.getProcessStatus(processStatusId);
+      console.log(`[BolStockSync] Export status: ${status.status}`);
+
+      if (status.status === 'SUCCESS') {
+        // Find the entityId (report ID) in the links
+        const reportLink = status.links?.find(l => l.rel === 'self' || l.href?.includes('export'));
+        if (reportLink) {
+          const match = reportLink.href?.match(/export\/(\d+)/);
+          if (match) return match[1];
+        }
+        return status.entityId;
+      }
+
+      if (status.status === 'FAILURE' || status.status === 'TIMEOUT') {
+        throw new Error(`Offer export failed: ${status.errorMessage || status.status}`);
+      }
+
+      await this.sleep(pollInterval);
+    }
+
+    throw new Error('Offer export timed out');
+  }
+
+  /**
+   * Download and parse the offer export CSV (Emipro workflow step 3)
+   */
+  async downloadOfferExport(reportId) {
+    console.log(`[BolStockSync] Downloading offer export ${reportId}...`);
+
+    const token = await this.getAccessToken();
+    const response = await fetch(`https://api.bol.com/retailer/offers/export/${reportId}`, {
+      headers: {
+        'Accept': 'application/vnd.retailer.v10+csv',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download offer export: ${response.status}`);
+    }
+
+    const csv = await response.text();
+    return this.parseOfferCsv(csv);
+  }
+
+  /**
+   * Parse offer export CSV
+   * Columns: offerId, ean, stockAmount, fulfilmentType, etc.
+   */
+  parseOfferCsv(csv) {
+    const lines = csv.trim().split('\n');
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const offers = [];
+
+    // Find column indices
+    const offerIdIdx = headers.indexOf('offerId');
+    const eanIdx = headers.indexOf('ean');
+    const stockIdx = headers.indexOf('stockAmount');
+    const fulfillmentIdx = headers.indexOf('fulfilmentType');
+    const refIdx = headers.indexOf('referenceCode');
+
+    console.log(`[BolStockSync] CSV columns: offerId=${offerIdIdx}, ean=${eanIdx}, stock=${stockIdx}, fulfilment=${fulfillmentIdx}`);
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+      if (values.length < headers.length) continue;
+
+      const offerId = values[offerIdIdx];
+      const ean = values[eanIdx];
+      const currentStock = parseInt(values[stockIdx]) || 0;
+      const fulfillmentType = values[fulfillmentIdx] || '';
+      const reference = values[refIdx] || '';
+
+      // Only include FBR offers (we manage stock for FBR, not FBB)
+      // FBB stock is managed by Bol.com
+      if (!offerId || !ean) continue;
+
+      offers.push({
+        offerId,
+        ean,
+        reference,
+        currentStock,
+        fulfillmentType
+      });
+    }
+
+    console.log(`[BolStockSync] Parsed ${offers.length} offers from CSV`);
+    return offers;
+  }
+
+  /**
+   * Get stock levels from Odoo for multiple EANs (Emipro workflow step 4)
+   */
+  async getOdooStock(eans) {
     if (!eans || eans.length === 0) return {};
 
-    // Find all products by barcode (EAN)
+    // Find products by barcode (EAN)
     const products = await this.odoo.searchRead('product.product',
       [['barcode', 'in', eans]],
-      ['id', 'name', 'default_code', 'barcode']
+      ['id', 'barcode']
     );
 
-    if (products.length === 0) {
-      return {};
-    }
+    if (products.length === 0) return {};
 
     const productIds = products.map(p => p.id);
     const eanToProductId = {};
     products.forEach(p => {
-      if (p.barcode) {
-        eanToProductId[p.barcode] = p.id;
-      }
+      if (p.barcode) eanToProductId[p.barcode] = p.id;
     });
 
-    // Get all stock.quants for these products in Central Warehouse
+    // Get stock.quants for these products in Central Warehouse
     const quants = await this.odoo.searchRead('stock.quant',
       [
         ['product_id', 'in', productIds],
@@ -257,7 +341,7 @@ class BolStockSync {
       ['product_id', 'quantity', 'reserved_quantity']
     );
 
-    // Build product stock map
+    // Calculate free stock per product
     const productStock = {};
     for (const q of quants) {
       const productId = q.product_id[0];
@@ -268,7 +352,7 @@ class BolStockSync {
       productStock[productId].reserved += q.reserved_quantity || 0;
     }
 
-    // Map back to EANs
+    // Map to EAN -> free_qty
     const stockByEan = {};
     for (const ean of eans) {
       const productId = eanToProductId[ean];
@@ -278,14 +362,13 @@ class BolStockSync {
       } else if (productId) {
         stockByEan[ean] = 0; // Product exists but no stock
       }
-      // If productId not found, EAN is not in result (product doesn't exist in Odoo)
     }
 
     return stockByEan;
   }
 
   /**
-   * Update stock for a single offer on Bol.com
+   * Update stock for a single offer on Bol.com (Emipro workflow step 5)
    */
   async updateOfferStock(offerId, amount) {
     try {
@@ -300,10 +383,9 @@ class BolStockSync {
   }
 
   /**
-   * Sync stock for offers based on order history
-   * Gets EANs from Bol orders, looks up stock in Odoo, updates Bol.com
+   * Main sync function - Emipro workflow
    */
-  async syncFromOrders() {
+  async syncFromOfferExport() {
     if (this.isRunning) {
       console.log('[BolStockSync] Sync already running, skipping');
       return { success: false, message: 'Sync already running' };
@@ -315,84 +397,76 @@ class BolStockSync {
     try {
       await this.init();
 
-      // Get unique EANs from recent orders
-      const BolOrder = require('../../models/BolOrder');
-      const recentOrders = await BolOrder.find({
-        orderPlacedDateTime: { $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) }
-      })
-        .select('orderItems.ean orderItems.sku')
-        .lean();
+      // Step 1: Request offer export
+      const processStatusId = await this.requestOfferExport();
 
-      const uniqueEans = new Set();
-      for (const order of recentOrders) {
-        for (const item of (order.orderItems || [])) {
-          if (item.ean) {
-            uniqueEans.add(item.ean);
-          }
-        }
-      }
+      // Step 2: Wait for export to complete
+      const reportId = await this.waitForOfferExport(processStatusId);
+      console.log(`[BolStockSync] Export ready, report ID: ${reportId}`);
 
-      const eans = Array.from(uniqueEans);
-      console.log(`[BolStockSync] Found ${eans.length} unique EANs from orders`);
+      // Step 3: Download and parse CSV
+      const offers = await this.downloadOfferExport(reportId);
 
-      if (eans.length === 0) {
+      if (offers.length === 0) {
         this.isRunning = false;
-        return { success: true, updated: 0, message: 'No EANs found in orders' };
+        return { success: true, updated: 0, message: 'No offers found in export' };
       }
 
-      // Get stock levels from Odoo
-      const stockByEan = await this.getStockByEans(eans);
-      console.log(`[BolStockSync] Got stock for ${Object.keys(stockByEan).length} products`);
+      // Step 4: Get stock from Odoo for all EANs
+      const allEans = [...new Set(offers.map(o => o.ean).filter(Boolean))];
+      const odooStock = await this.getOdooStock(allEans);
+      console.log(`[BolStockSync] Got Odoo stock for ${Object.keys(odooStock).length} of ${allEans.length} EANs`);
 
-      // For each EAN, find the offer ID from Bol.com and update stock
+      // Step 5: Update stock for each offer
       let updated = 0;
+      let skipped = 0;
       let failed = 0;
       const errors = [];
 
-      for (const ean of Object.keys(stockByEan)) {
-        try {
-          // Get offer by EAN (search in catalog)
-          // Note: This is not the most efficient method - ideally we'd cache offer IDs
-          const offerData = await this.bolRequest(`/offers?ean=${ean}`);
-          const offers = offerData.offers || [];
+      for (const offer of offers) {
+        const ean = offer.ean;
+        const newStock = odooStock[ean];
 
-          if (offers.length === 0) {
-            continue; // No offer for this EAN
-          }
-
-          const offerId = offers[0].offerId;
-          const stock = stockByEan[ean];
-
-          // Update stock on Bol.com
-          const result = await this.updateOfferStock(offerId, stock);
-
-          if (result.success) {
-            updated++;
-          } else {
-            failed++;
-            errors.push({ ean, offerId, error: result.error });
-          }
-
-          // Rate limiting
-          await this.sleep(REQUEST_DELAY_MS);
-
-        } catch (error) {
-          // Offer lookup might fail if EAN doesn't exist on Bol.com
-          // This is expected for products not listed
+        // Skip if no Odoo stock data (product doesn't exist in Odoo)
+        if (newStock === undefined) {
+          skipped++;
           continue;
         }
+
+        // Only update if stock changed
+        if (newStock === offer.currentStock) {
+          skipped++;
+          continue;
+        }
+
+        // Update stock on Bol.com
+        const result = await this.updateOfferStock(offer.offerId, newStock);
+
+        if (result.success) {
+          updated++;
+          console.log(`[BolStockSync] Updated ${ean}: ${offer.currentStock} → ${newStock}`);
+        } else {
+          failed++;
+          errors.push({ ean, offerId: offer.offerId, error: result.error });
+          console.error(`[BolStockSync] Failed to update ${ean}:`, result.error);
+        }
+
+        // Rate limiting
+        await this.sleep(REQUEST_DELAY_MS);
       }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
       this.lastSync = new Date();
-      this.lastResult = { updated, failed, duration, errors: errors.slice(0, 10) };
+      this.lastResult = { updated, skipped, failed, duration, totalOffers: offers.length, errors: errors.slice(0, 10) };
 
-      console.log(`[BolStockSync] Sync complete in ${duration}s: ${updated} updated, ${failed} failed`);
+      console.log(`[BolStockSync] Sync complete in ${duration}s: ${updated} updated, ${skipped} skipped, ${failed} failed`);
 
       return {
         success: true,
         updated,
+        skipped,
         failed,
+        totalOffers: offers.length,
         duration: `${duration}s`,
         errors: errors.slice(0, 10)
       };
@@ -406,69 +480,10 @@ class BolStockSync {
   }
 
   /**
-   * Sync stock using a provided offer map (offerId -> ean)
-   * More efficient if we already have the mapping
+   * Legacy method - redirects to new workflow
    */
-  async syncWithOfferMap(offerMap) {
-    if (this.isRunning) {
-      console.log('[BolStockSync] Sync already running, skipping');
-      return { success: false, message: 'Sync already running' };
-    }
-
-    this.isRunning = true;
-    const startTime = Date.now();
-
-    try {
-      await this.init();
-
-      const eans = Object.values(offerMap).filter(Boolean);
-      if (eans.length === 0) {
-        return { success: true, updated: 0, message: 'No EANs in offer map' };
-      }
-
-      // Get stock levels from Odoo
-      const stockByEan = await this.getStockByEans(eans);
-      console.log(`[BolStockSync] Got stock for ${Object.keys(stockByEan).length} products`);
-
-      // Update each offer
-      let updated = 0;
-      let failed = 0;
-      const errors = [];
-
-      for (const [offerId, ean] of Object.entries(offerMap)) {
-        const stock = stockByEan[ean];
-        if (stock === undefined) continue; // Product not in Odoo
-
-        const result = await this.updateOfferStock(offerId, stock);
-
-        if (result.success) {
-          updated++;
-        } else {
-          failed++;
-          errors.push({ offerId, ean, error: result.error });
-        }
-
-        await this.sleep(REQUEST_DELAY_MS);
-      }
-
-      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-      this.lastSync = new Date();
-      this.lastResult = { updated, failed, duration, errors: errors.slice(0, 10) };
-
-      return {
-        success: true,
-        updated,
-        failed,
-        duration: `${duration}s`,
-        errors: errors.slice(0, 10)
-      };
-
-    } catch (error) {
-      console.error('[BolStockSync] Sync error:', error);
-      return { success: false, error: error.message };
-    } finally {
-      this.isRunning = false;
-    }
+  async syncFromOrders() {
+    return this.syncFromOfferExport();
   }
 
   /**
@@ -501,7 +516,7 @@ async function getBolStockSync() {
  */
 async function runStockSync() {
   const sync = await getBolStockSync();
-  return sync.syncFromOrders();
+  return sync.syncFromOfferExport();
 }
 
 module.exports = {
