@@ -128,22 +128,15 @@ async function recreateOrders(options = {}) {
         }
       }
 
-      // Step 7: Cancel sale order
+      // Step 7: Cancel sale order (use direct state write - action_cancel often fails silently)
       try {
-        // First try action_cancel
-        await odoo.execute('sale.order', 'action_cancel', [[order.id]]);
-        console.log(`  Cancelled order ${orderName} via action_cancel`);
+        await odoo.write('sale.order', [order.id], { state: 'cancel' });
+        console.log(`  Cancelled order ${orderName}`);
       } catch (e) {
-        // If action_cancel fails, try setting state directly
-        try {
-          await odoo.write('sale.order', [order.id], { state: 'cancel' });
-          console.log(`  Cancelled order ${orderName} via state write`);
-        } catch (e2) {
-          console.log(`  Failed to cancel order: ${e2.message}`);
-          results.failed++;
-          results.errors.push({ order: orderName, error: `Cancel failed: ${e2.message}` });
-          continue;
-        }
+        console.log(`  Failed to cancel order: ${e.message}`);
+        results.failed++;
+        results.errors.push({ order: orderName, error: `Cancel failed: ${e.message}` });
+        continue;
       }
 
       // Step 8: Clear MongoDB link so order can be recreated
