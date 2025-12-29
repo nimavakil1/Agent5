@@ -453,6 +453,17 @@ router.get('/shipments', async (req, res) => {
       .sort({ shipmentDateTime: -1 })
       .lean();
 
+    // Get ZIP codes from orders
+    const orderIds = [...new Set(shipments.map(s => s.orderId).filter(Boolean))];
+    const orders = await BolOrder.find(
+      { orderId: { $in: orderIds } },
+      { orderId: 1, 'shipmentDetails.zipCode': 1 }
+    ).lean();
+    const zipMap = {};
+    for (const o of orders) {
+      zipMap[o.orderId] = o.shipmentDetails?.zipCode || '';
+    }
+
     res.json({
       success: true,
       count: shipments.length,
@@ -463,7 +474,8 @@ router.get('/shipments', async (req, res) => {
         shipmentReference: s.shipmentReference,
         orderId: s.orderId,
         transport: s.transport,
-        shipmentItems: s.shipmentItems
+        shipmentItems: s.shipmentItems,
+        zipCode: zipMap[s.orderId] || ''
       }))
     });
   } catch (error) {

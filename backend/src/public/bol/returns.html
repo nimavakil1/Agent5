@@ -123,7 +123,6 @@
     let pageSize = 25;
     let sortColumn = 'registrationDateTime';
     let sortDirection = 'desc';
-    const productCache = {};
 
     async function init() {
       await new Promise(resolve => {
@@ -162,37 +161,13 @@
           return;
         }
 
-        // Lookup product info
-        const returnsWithProducts = await Promise.all(data.returns.map(async (ret) => {
-          const firstItem = ret.returnItems?.[0] || {};
-          if (firstItem.ean) {
-            const product = await lookupProduct(firstItem.ean);
-            return { ...ret, productInfo: product };
-          }
-          return ret;
-        }));
-
-        allData = returnsWithProducts;
+        allData = data.returns;
         filteredData = [...allData];
         offset = 0;
         applySort();
       } catch (e) {
         tbody.innerHTML = `<tr><td colspan="7" style="color: #ef4444; padding: 20px;">Error: ${e.message}</td></tr>`;
       }
-    }
-
-    async function lookupProduct(ean) {
-      if (!ean) return null;
-      if (productCache[ean]) return productCache[ean];
-      try {
-        const res = await fetch(`/api/odoo/products?q=${encodeURIComponent(ean)}&limit=1`, { credentials: 'include' });
-        const data = await res.json();
-        if (data.success && data.products?.length > 0) {
-          productCache[ean] = data.products[0];
-          return data.products[0];
-        }
-      } catch (e) { console.error('Product lookup error:', e); }
-      return null;
     }
 
     function sortTable(column) {
@@ -261,13 +236,12 @@
 
     function getRowValues(r) {
       const item = r.returnItems?.[0] || {};
-      const product = r.productInfo;
       return [
         r.returnId || '',
         item.orderId || '',
         formatDate(r.registrationDateTime),
         item.returnReason || '',
-        product?.name || product?.sku || item.ean || '',
+        item.ean || '',
         r.handled ? 'Handled' : 'Open'
       ];
     }
@@ -286,20 +260,13 @@
         const item = ret.returnItems?.[0] || {};
         const orderId = item.orderId || '-';
         const ean = item.ean || '-';
-        const product = ret.productInfo;
-        const sku = product?.sku || '';
-        const productName = product?.name || '';
-        const imageUrl = product?.image;
 
         let reasonDisplay = item.returnReason || '-';
         if (item.returnReasonDetail) {
           reasonDisplay += `<br><span style="font-size: 11px; color: #71717a;">${item.returnReasonDetail}</span>`;
         }
 
-        let productDisplay = '';
-        if (productName) productDisplay += `<div style="font-size: 13px; color: #e4e4e7; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${productName}</div>`;
-        if (sku) productDisplay += `<div style="font-size: 11px; color: #a1a1aa; font-family: monospace;">SKU: ${sku}</div>`;
-        productDisplay += `<div style="font-size: 11px; color: #71717a; font-family: monospace;">EAN: ${ean}</div>`;
+        let productDisplay = `<div style="font-size: 13px; color: #e4e4e7; font-family: monospace;">${ean}</div>`;
         if (item.quantity > 1) productDisplay += `<div style="font-size: 11px; color: #71717a;">Qty: ${item.quantity}</div>`;
 
         return `<tr>
@@ -307,7 +274,7 @@
           <td><span class="order-id">${orderId}</span></td>
           <td>${formatDate(ret.registrationDateTime)}</td>
           <td>${reasonDisplay}</td>
-          <td><div class="return-product">${imageUrl ? `<img src="${imageUrl}" class="return-thumb" onerror="this.style.display='none'">` : ''}<div>${productDisplay}</div></div></td>
+          <td>${productDisplay}</td>
           <td><span class="badge ${ret.handled ? 'shipped' : 'returned'}">${ret.handled ? 'Handled' : 'Open'}</span></td>
           <td>${!ret.handled ? `<button class="btn btn-secondary btn-sm" onclick="handleReturn('${item.rmaId}')"><span class="material-symbols-outlined">check</span></button>` : ''}</td>
         </tr>`;

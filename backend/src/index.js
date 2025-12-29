@@ -302,13 +302,18 @@ if (process.env.PROTECT_RECORDINGS === '1') {
 }
 
 const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
-const max = parseInt(process.env.RATE_LIMIT_MAX || '120', 10); // Increased from 60 to 120
+const max = parseInt(process.env.RATE_LIMIT_MAX || '500', 10); // Increased to 500 for pages with many lookups
 const limiter = rateLimit({
   windowMs,
   max,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path.startsWith('/auth'), // Exempt auth routes from rate limiting
+  skip: (req) => {
+    // Exempt auth routes and internal product lookups from rate limiting
+    if (req.path.startsWith('/auth')) return true;
+    if (req.path.startsWith('/odoo/products') && req.query.q) return true;
+    return false;
+  },
   message: { error: 'Too many requests', message: 'Please try again later' } // Return JSON instead of text
 });
 app.use('/api', limiter);

@@ -302,7 +302,9 @@ class BolFulfillmentSwapper {
 
   /**
    * Parse offer export CSV
-   * CSV columns typically include: offerId, ean, referenceCode, fulfilmentMethod, etc.
+   * CSV columns: offerId,ean,conditionName,conditionCategory,conditionComment,bundlePricesPrice,
+   *              fulfilmentDeliveryCode,stockAmount,onHoldByRetailer,fulfilmentType,...
+   * IMPORTANT: Use 'fulfilmentType' column (contains FBB/FBR), NOT 'fulfilmentDeliveryCode' (contains delivery speed)
    */
   parseOfferCsv(csv) {
     const lines = csv.trim().split('\n');
@@ -311,21 +313,32 @@ class BolFulfillmentSwapper {
     const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
     const offers = [];
 
-    // Find column indices
-    const offerIdIdx = headers.findIndex(h => h.toLowerCase().includes('offerid'));
-    const eanIdx = headers.findIndex(h => h.toLowerCase() === 'ean');
-    const refIdx = headers.findIndex(h => h.toLowerCase().includes('reference'));
-    const fulfillmentIdx = headers.findIndex(h => h.toLowerCase().includes('fulfilment') || h.toLowerCase().includes('fulfillment'));
+    // Find column indices - be specific about column names!
+    const offerIdIdx = headers.indexOf('offerId');
+    const eanIdx = headers.indexOf('ean');
+    const refIdx = headers.indexOf('referenceCode');
+    // BUGFIX: Use exact column name 'fulfilmentType', not partial match
+    // The CSV has both 'fulfilmentDeliveryCode' (e.g. "3-5d") and 'fulfilmentType' (FBB/FBR)
+    const fulfillmentIdx = headers.indexOf('fulfilmentType');
+
+    console.log(`[BolFulfillmentSwapper] CSV columns: offerId=${offerIdIdx}, ean=${eanIdx}, ref=${refIdx}, fulfilmentType=${fulfillmentIdx}`);
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
       if (values.length < headers.length) continue;
 
+      const fulfillmentMethod = values[fulfillmentIdx] || '';
+      // Only include offers with valid fulfillment type
+      if (fulfillmentMethod !== 'FBB' && fulfillmentMethod !== 'FBR') {
+        console.warn(`[BolFulfillmentSwapper] Skipping offer with invalid fulfillment type: ${values[offerIdIdx]} = "${fulfillmentMethod}"`);
+        continue;
+      }
+
       offers.push({
         offerId: values[offerIdIdx] || '',
         ean: values[eanIdx] || '',
         reference: values[refIdx] || '',
-        fulfillmentMethod: values[fulfillmentIdx] || 'FBR'
+        fulfillmentMethod
       });
     }
 

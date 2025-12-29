@@ -77,8 +77,8 @@
                 <th class="filterable" data-sort="shipmentId" onclick="sortTable('shipmentId')">Shipment ID <span class="sort-icon"></span><br><input type="text" class="column-filter" placeholder="Filter..." onclick="event.stopPropagation()" onkeyup="filterTable()"></th>
                 <th class="filterable" data-sort="orderId" onclick="sortTable('orderId')">Order ID <span class="sort-icon"></span><br><input type="text" class="column-filter" placeholder="Filter..." onclick="event.stopPropagation()" onkeyup="filterTable()"></th>
                 <th class="filterable" data-sort="shipmentDateTime" onclick="sortTable('shipmentDateTime')">Date <span class="sort-icon"></span><br><input type="text" class="column-filter" placeholder="Filter..." onclick="event.stopPropagation()" onkeyup="filterTable()"></th>
+                <th class="filterable" data-sort="zipCode" onclick="sortTable('zipCode')">ZIP <span class="sort-icon"></span><br><input type="text" class="column-filter" placeholder="Filter..." onclick="event.stopPropagation()" onkeyup="filterTable()"></th>
                 <th class="filterable">Carrier<br><input type="text" class="column-filter" placeholder="Filter..." onkeyup="filterTable()"></th>
-                <th class="filterable">Track & Trace<br><input type="text" class="column-filter" placeholder="Filter..." onkeyup="filterTable()"></th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -233,8 +233,8 @@
     function getRowValues(s) {
       const orderId = s.orderId || s.shipmentItems?.[0]?.orderId || '-';
       const carrier = s.transport?.transporterCode || '-';
-      const track = s.transport?.trackAndTrace || '-';
-      return [s.shipmentId || '', orderId, formatDate(s.shipmentDateTime), carrier, track, 'Shipped'];
+      const zip = s.zipCode || '-';
+      return [s.shipmentId || '', orderId, formatDate(s.shipmentDateTime), zip, carrier, 'Shipped'];
     }
 
     function render() {
@@ -251,18 +251,29 @@
         const orderId = s.orderId || s.shipmentItems?.[0]?.orderId || '-';
         const carrier = s.transport?.transporterCode || '-';
         const track = s.transport?.trackAndTrace || '-';
+        const zip = s.zipCode || '-';
         const trackUrl = getTrackUrl(carrier, track);
         const carrierLogo = CARRIER_LOGOS[carrier.toUpperCase()];
-        const carrierCell = carrierLogo
-          ? `<img src="/assets/logos/${carrierLogo}.png" alt="${carrier}" style="height: 24px; max-width: 80px;" onerror="this.outerHTML='${carrier}'">`
-          : carrier;
+        const hasTracking = track && track !== '-';
+
+        let carrierCell;
+        if (carrierLogo) {
+          const logoImg = `<img src="/assets/logos/${carrierLogo}.png" alt="${carrier}" style="height: 24px; max-width: 80px;" onerror="this.outerHTML='${carrier}'">`;
+          carrierCell = hasTracking
+            ? `<a href="${trackUrl}" target="_blank" title="Track: ${track}" style="display: inline-block;">${logoImg}</a>`
+            : logoImg;
+        } else {
+          carrierCell = hasTracking
+            ? `<a href="${trackUrl}" target="_blank" style="color: #60a5fa;">${carrier}</a>`
+            : carrier;
+        }
 
         return `<tr>
           <td><span class="order-id">${s.shipmentId}</span></td>
           <td><span class="order-id">${orderId}</span></td>
           <td>${formatDate(s.shipmentDateTime)}</td>
+          <td>${zip}</td>
           <td>${carrierCell}</td>
-          <td>${track !== '-' ? `<a href="${trackUrl}" target="_blank" style="color: #60a5fa;">${track}</a>` : '-'}</td>
           <td><span class="badge shipped">Shipped</span></td>
         </tr>`;
       }).join('');
@@ -276,9 +287,10 @@
       if (c.includes('postnl') || c === 'tnt' || c === 'pnl') return `https://postnl.nl/tracktrace/?B=${encodeURIComponent(track)}`;
       if (c.includes('bpost')) return `https://track.bpost.cloud/btr/web/#/search?itemCode=${encodeURIComponent(track)}&lang=nl`;
       if (c.includes('dhl')) return `https://www.dhl.com/nl-nl/home/tracking.html?tracking-id=${encodeURIComponent(track)}`;
-      if (c.includes('dpd')) return `https://tracking.dpd.de/status/nl_NL/parcel/${encodeURIComponent(track)}`;
-      if (c.includes('gls')) return `https://parcelsapp.com/en/tracking/${encodeURIComponent(track)}`;
+      if (c.includes('dpd')) return `https://tracking.dpd.de/status/nl_BE/parcel/${encodeURIComponent(track)}`;
+      if (c.includes('gls')) return `https://gls-group.eu/GROUP/en/parcel-tracking?match=${encodeURIComponent(track)}`;
       if (c.includes('ups')) return `https://www.ups.com/track?tracknum=${encodeURIComponent(track)}`;
+      if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(track)}`;
       return `https://parcelsapp.com/en/tracking/${encodeURIComponent(track)}`;
     }
 

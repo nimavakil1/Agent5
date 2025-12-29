@@ -7,6 +7,7 @@
  * - Stock sync to Bol.com every 15 minutes
  * - Shipment confirmation check every 5 minutes
  * - FBB/FBR fulfillment swap check every hour
+ * - Returns sync from Bol.com every hour
  */
 
 const BolSyncService = require('./BolSyncService');
@@ -22,12 +23,14 @@ let orderPollInterval = null;
 let stockSyncInterval = null;
 let shipmentCheckInterval = null;
 let fulfillmentSwapInterval = null;
+let returnsSyncInterval = null;
 
 // Interval settings (in milliseconds)
 const ORDER_POLL_INTERVAL = 15 * 60 * 1000;       // 15 minutes
 const STOCK_SYNC_INTERVAL = 15 * 60 * 1000;       // 15 minutes
 const SHIPMENT_CHECK_INTERVAL = 5 * 60 * 1000;    // 5 minutes
 const FULFILLMENT_SWAP_INTERVAL = 60 * 60 * 1000; // 1 hour
+const RETURNS_SYNC_INTERVAL = 60 * 60 * 1000;     // 1 hour
 
 /**
  * Calculate milliseconds until next 3:00 AM
@@ -157,6 +160,21 @@ async function doFulfillmentSwap() {
 }
 
 /**
+ * Sync returns from Bol.com API to MongoDB
+ */
+async function doReturnsSync() {
+  try {
+    console.log('[BolScheduler] Syncing returns from Bol.com...');
+    const results = await BolSyncService.syncReturns('RECENT');
+    if (results && results.synced > 0) {
+      console.log(`[BolScheduler] Synced ${results.synced} returns from Bol.com`);
+    }
+  } catch (error) {
+    console.error('[BolScheduler] Returns sync failed:', error.message);
+  }
+}
+
+/**
  * Schedule the nightly sync job
  */
 function scheduleNightlySync() {
@@ -204,6 +222,12 @@ function start() {
     fulfillmentSwapInterval = setInterval(doFulfillmentSwap, FULFILLMENT_SWAP_INTERVAL);
   }, 5 * 60 * 1000);
 
+  // Returns sync every hour (start after 6 minutes)
+  setTimeout(() => {
+    doReturnsSync();
+    returnsSyncInterval = setInterval(doReturnsSync, RETURNS_SYNC_INTERVAL);
+  }, 6 * 60 * 1000);
+
   console.log('[BolScheduler] All jobs scheduled');
 }
 
@@ -231,6 +255,10 @@ function stop() {
     clearInterval(fulfillmentSwapInterval);
     fulfillmentSwapInterval = null;
   }
+  if (returnsSyncInterval) {
+    clearInterval(returnsSyncInterval);
+    returnsSyncInterval = null;
+  }
   console.log('[BolScheduler] All jobs stopped');
 }
 
@@ -239,7 +267,7 @@ function stop() {
  */
 function getStatus() {
   return {
-    running: !!(nightlySyncJob || orderPollInterval || stockSyncInterval || shipmentCheckInterval || fulfillmentSwapInterval),
+    running: !!(nightlySyncJob || orderPollInterval || stockSyncInterval || shipmentCheckInterval || fulfillmentSwapInterval || returnsSyncInterval),
     nightlySync: {
       scheduled: !!nightlySyncJob,
       nextRunAt: nightlySyncJob ? new Date(Date.now() + getMillisUntil3AM()) : null
@@ -248,7 +276,8 @@ function getStatus() {
       orderPoll: !!orderPollInterval,
       stockSync: !!stockSyncInterval,
       shipmentCheck: !!shipmentCheckInterval,
-      fulfillmentSwap: !!fulfillmentSwapInterval
+      fulfillmentSwap: !!fulfillmentSwapInterval,
+      returnsSync: !!returnsSyncInterval
     }
   };
 }
@@ -261,5 +290,6 @@ module.exports = {
   runOrderPoll,
   doStockSync,
   doShipmentCheck,
-  doFulfillmentSwap
+  doFulfillmentSwap,
+  doReturnsSync
 };
