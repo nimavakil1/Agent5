@@ -4,9 +4,14 @@
  * Pulls sale orders from Odoo and creates/updates FulfillmentOrder records.
  * Detects the source channel based on order name/reference patterns.
  *
+ * Scheduling:
+ * - Regular sync: Every 15 minutes (incremental, last 24 hours)
+ * - Historical sync: One-time at 2:00 AM for orders since 01/01/2024
+ *
  * @module FulfillmentSync
  */
 
+const cron = require('node-cron');
 const FulfillmentOrder = require('../../models/FulfillmentOrder');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 
@@ -18,10 +23,17 @@ const CHANNEL_PATTERNS = {
   shopify: /^SHOP/i
 };
 
+// Historical sync start date
+const HISTORICAL_START_DATE = new Date('2024-01-01T00:00:00Z');
+
 class FulfillmentSync {
   constructor() {
     this.odoo = null;
     this.lastSyncTime = null;
+    this.regularCronJob = null;
+    this.historicalCronJob = null;
+    this.isHistoricalSyncRunning = false;
+    this.historicalSyncCompleted = false;
   }
 
   /**
@@ -353,8 +365,171 @@ class FulfillmentSync {
       byChannelAndStatus: stats,
       snoozed: snoozedCount,
       readyToShip: readyCount,
-      lastSyncTime: this.lastSyncTime
+      lastSyncTime: this.lastSyncTime,
+      historicalSyncCompleted: this.historicalSyncCompleted,
+      isHistoricalSyncRunning: this.isHistoricalSyncRunning
     };
+  }
+
+  /**
+   * Start the regular scheduled sync (every 15 minutes)
+   */
+  startScheduledSync() {
+    if (this.regularCronJob) {
+      this.regularCronJob.stop();
+    }
+
+    // Run every 15 minutes
+    this.regularCronJob = cron.schedule('*/15 * * * *', async () => {
+      console.log('[FulfillmentSync] Running scheduled sync...');
+      try {
+        await this.init();
+        // Sync orders from last 24 hours
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        await this.syncOrders({ since, limit: 200 });
+
+        // Also auto-unsnooze expired orders
+        const unsnoozed = await FulfillmentOrder.unsnoozeExpired();
+        if (unsnoozed > 0) {
+          console.log(`[FulfillmentSync] Auto-unsnoozed ${unsnoozed} orders`);
+        }
+      } catch (error) {
+        console.error('[FulfillmentSync] Scheduled sync failed:', error.message);
+      }
+    });
+
+    console.log('[FulfillmentSync] Regular sync scheduled (every 15 minutes)');
+  }
+
+  /**
+   * Schedule historical sync at 2:00 AM (one-time)
+   * Syncs all orders from 01/01/2024 to now
+   */
+  scheduleHistoricalSync() {
+    if (this.historicalCronJob) {
+      this.historicalCronJob.stop();
+    }
+
+    // Schedule for 2:00 AM
+    this.historicalCronJob = cron.schedule('0 2 * * *', async () => {
+      // Only run once
+      if (this.historicalSyncCompleted) {
+        console.log('[FulfillmentSync] Historical sync already completed, skipping');
+        this.historicalCronJob.stop();
+        return;
+      }
+
+      console.log('[FulfillmentSync] Starting historical sync (orders since 01/01/2024)...');
+      await this.runHistoricalSync();
+
+      // Stop the cron job after running once
+      this.historicalCronJob.stop();
+    }, {
+      scheduled: true,
+      timezone: 'Europe/Brussels'
+    });
+
+    console.log('[FulfillmentSync] Historical sync scheduled for 2:00 AM (Europe/Brussels)');
+  }
+
+  /**
+   * Run the historical sync (all orders since 01/01/2024)
+   * This can be called manually or via scheduled job
+   */
+  async runHistoricalSync() {
+    if (this.isHistoricalSyncRunning) {
+      console.log('[FulfillmentSync] Historical sync already in progress');
+      return { success: false, error: 'Already running' };
+    }
+
+    this.isHistoricalSyncRunning = true;
+    const startTime = Date.now();
+    const results = {
+      totalSynced: 0,
+      totalErrors: 0,
+      batches: 0,
+      startDate: HISTORICAL_START_DATE.toISOString(),
+      endDate: new Date().toISOString()
+    };
+
+    try {
+      await this.init();
+
+      // Process in batches to avoid memory issues
+      const BATCH_SIZE = 100;
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        console.log(`[FulfillmentSync] Historical sync batch ${results.batches + 1} (offset: ${offset})...`);
+
+        // Fetch orders from Odoo
+        const orders = await this.odoo.searchRead('sale.order',
+          [
+            ['state', 'in', ['sale', 'done']],
+            ['date_order', '>=', HISTORICAL_START_DATE.toISOString().replace('T', ' ').split('.')[0]]
+          ],
+          [
+            'id', 'name', 'client_order_ref', 'partner_id', 'partner_shipping_id',
+            'date_order', 'commitment_date', 'amount_total', 'currency_id',
+            'state', 'warehouse_id', 'carrier_id', 'picking_ids',
+            'order_line', 'note', 'team_id'
+          ],
+          { limit: BATCH_SIZE, offset, order: 'date_order asc' }
+        );
+
+        if (orders.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        // Process each order
+        for (const order of orders) {
+          try {
+            await this.syncSingleOrder(order);
+            results.totalSynced++;
+          } catch (error) {
+            results.totalErrors++;
+            console.error(`[FulfillmentSync] Error syncing ${order.name}:`, error.message);
+          }
+        }
+
+        results.batches++;
+        offset += BATCH_SIZE;
+
+        // Small delay between batches to avoid overloading Odoo
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        console.log(`[FulfillmentSync] Batch complete. Synced: ${results.totalSynced}, Errors: ${results.totalErrors}`);
+      }
+
+      this.historicalSyncCompleted = true;
+      const duration = Math.round((Date.now() - startTime) / 1000);
+      console.log(`[FulfillmentSync] Historical sync complete in ${duration}s. Total: ${results.totalSynced} orders, ${results.totalErrors} errors`);
+
+    } catch (error) {
+      console.error('[FulfillmentSync] Historical sync failed:', error);
+      results.error = error.message;
+    } finally {
+      this.isHistoricalSyncRunning = false;
+    }
+
+    return results;
+  }
+
+  /**
+   * Stop all scheduled jobs
+   */
+  stopScheduledSync() {
+    if (this.regularCronJob) {
+      this.regularCronJob.stop();
+      this.regularCronJob = null;
+    }
+    if (this.historicalCronJob) {
+      this.historicalCronJob.stop();
+      this.historicalCronJob = null;
+    }
+    console.log('[FulfillmentSync] All scheduled syncs stopped');
   }
 }
 

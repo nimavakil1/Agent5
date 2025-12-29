@@ -140,6 +140,22 @@ if (process.env.NODE_ENV !== 'test') {
     } catch (e) {
       console.warn('Bol.com scheduler initialization skipped:', e.message);
     }
+
+    // Initialize CW Fulfillment sync scheduler
+    try {
+      const { getFulfillmentSync } = require('./services/fulfillment/FulfillmentSync');
+      const fulfillmentSync = getFulfillmentSync();
+
+      // Start regular sync (every 15 minutes)
+      fulfillmentSync.startScheduledSync();
+
+      // Schedule historical sync at 2:00 AM (one-time)
+      fulfillmentSync.scheduleHistoricalSync();
+
+      console.log('CW Fulfillment sync scheduler started (every 15 min + historical at 2:00 AM)');
+    } catch (e) {
+      console.warn('Fulfillment scheduler initialization skipped:', e.message);
+    }
   });
 }
 

@@ -399,6 +399,70 @@ router.post('/sync/:saleOrderId', async (req, res) => {
   }
 });
 
+/**
+ * Run historical sync (all orders since 01/01/2024)
+ * POST /api/fulfillment/sync-historical
+ *
+ * This is a long-running operation. The response returns immediately
+ * with status, and the sync continues in the background.
+ */
+router.post('/sync-historical', async (req, res) => {
+  try {
+    const sync = getFulfillmentSync();
+
+    // Check if already running
+    if (sync.isHistoricalSyncRunning) {
+      return res.json({
+        success: false,
+        message: 'Historical sync already in progress',
+        isRunning: true
+      });
+    }
+
+    // Check if already completed
+    if (sync.historicalSyncCompleted) {
+      return res.json({
+        success: false,
+        message: 'Historical sync already completed. Use regular sync for updates.',
+        isCompleted: true
+      });
+    }
+
+    // Start the sync in background (don't await)
+    sync.runHistoricalSync().then(result => {
+      console.log('[Fulfillment API] Historical sync completed:', result);
+    }).catch(err => {
+      console.error('[Fulfillment API] Historical sync error:', err);
+    });
+
+    res.json({
+      success: true,
+      message: 'Historical sync started. This will sync all orders since 01/01/2024.',
+      isRunning: true
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get historical sync status
+ * GET /api/fulfillment/sync-historical/status
+ */
+router.get('/sync-historical/status', async (req, res) => {
+  try {
+    const sync = getFulfillmentSync();
+
+    res.json({
+      success: true,
+      isRunning: sync.isHistoricalSyncRunning,
+      isCompleted: sync.historicalSyncCompleted
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============================================
 // ORDER ACTIONS
 // ============================================
