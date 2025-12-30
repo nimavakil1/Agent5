@@ -369,7 +369,7 @@
           if (!isAcknowledged) {
             const stockColor = cwStock >= orderedQty ? '#4ade80' : (cwStock > 0 ? '#fbbf24' : '#ef4444');
             tableHtml += '<td style="color:' + stockColor + ';font-weight:600;">' + cwStock + '</td>';
-            tableHtml += '<td><input type="number" class="ack-qty-input" data-ean="' + ean + '" value="' + currentAckQty + '" min="0" max="' + orderedQty + '" style="width:60px;padding:6px 8px;background:#12121a;border:1px solid #252532;border-radius:6px;color:#e4e4e7;text-align:center;"></td>';
+            tableHtml += '<td><input type="number" class="ack-qty-input" data-ean="' + vendorId + '" value="' + currentAckQty + '" min="0" max="' + orderedQty + '" style="width:60px;padding:6px 8px;background:#12121a;border:1px solid #252532;border-radius:6px;color:#e4e4e7;text-align:center;"></td>';
           } else {
             tableHtml += '<td>' + getAcceptedQty(it, o) + '</td>';
             tableHtml += '<td>' + (it.shippedQuantity?.amount ?? it.receivingStatus?.receivedQuantity?.amount ?? '-') + '</td>';
