@@ -207,9 +207,11 @@ router.get('/orders/consolidate', async (req, res) => {
     }
 
     // Get orders
+    console.log('[VendorAPI] Consolidate query:', JSON.stringify(query));
     const orders = await collection.find(query)
       .sort({ 'deliveryWindow.endDate': 1, 'shipToParty.partyId': 1 })
       .toArray();
+    console.log('[VendorAPI] Found', orders.length, 'orders for consolidation');
 
     // Group by FC + delivery window end date
     const groups = {};
