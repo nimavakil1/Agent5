@@ -183,9 +183,9 @@ router.get('/orders/consolidate', async (req, res) => {
 
     // Build filter - default to orders ready to ship
     // Include both New and Acknowledged states for consolidation
-    // Note: Using $ne: 'shipped' to match not_shipped, null, and missing fields
+    // Filter for not_shipped status - exclude fully_shipped and cancelled
     const query = {
-      shipmentStatus: req.query.shipmentStatus || { $ne: 'shipped' }
+      shipmentStatus: req.query.shipmentStatus || 'not_shipped'
     };
 
     // State filter - default to both New and Acknowledged
