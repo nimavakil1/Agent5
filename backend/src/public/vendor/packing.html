@@ -60,6 +60,9 @@
     .parcel-card.ready { border-color: #22c55e; }
     .parcel-card.error { border-color: #ef4444; }
     .parcel-card.active { border-color: #f97316; }
+    .parcel-card.overweight { border-color: #ef4444; background: #1a1218; }
+    .overweight-warning { background: #ef444420; color: #f87171; padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-top: 12px; display: flex; align-items: center; gap: 6px; }
+    .overweight-warning .material-symbols-outlined { font-size: 18px; }
     .parcel-header { padding: 16px; background: #12121a; display: flex; justify-content: space-between; align-items: center; }
     .parcel-title { font-size: 16px; font-weight: 600; color: #fff; }
     .parcel-status { font-size: 12px; padding: 4px 10px; border-radius: 20px; }
@@ -227,6 +230,7 @@
                   <th>SKU</th>
                   <th>EAN</th>
                   <th>Product</th>
+                  <th class="qty-cell">Weight</th>
                   <th class="qty-cell">Total</th>
                   <th class="qty-cell">Packed</th>
                   <th class="qty-cell">Remaining</th>
@@ -438,11 +442,12 @@
       modalBody.innerHTML = groupData.consolidatedItems.map(item => {
         const key = item.odooSku || item.vendorProductIdentifier;
         const remaining = getRemainingQty(key);
+        const weight = item.weight || 0.5; // Default to 0.5kg if no weight
 
         return `
           <div class="item-select-row">
             <div class="item-select-info">
-              <div class="item-select-sku">${item.odooSku || '-'}</div>
+              <div class="item-select-sku">${item.odooSku || '-'} <span style="color: #71717a; font-size: 11px;">(${weight}kg each)</span></div>
               <div class="item-select-name">${item.odooProductName || 'Unknown'}</div>
               <div class="item-select-available">Available: <span>${remaining}</span> of ${item.totalQty}</div>
             </div>
@@ -450,6 +455,7 @@
                    data-sku="${item.odooSku || ''}"
                    data-ean="${item.vendorProductIdentifier || ''}"
                    data-name="${item.odooProductName || ''}"
+                   data-weight="${weight}"
                    min="0" max="${remaining}" value="0"
                    ${remaining === 0 ? 'disabled' : ''}>
           </div>
@@ -478,6 +484,7 @@
           const sku = input.dataset.sku;
           const ean = input.dataset.ean;
           const name = input.dataset.name;
+          const weight = parseFloat(input.dataset.weight) || 0.5;
 
           // Check if item already exists in parcel
           const existing = parcels[currentModalParcelIndex].items.find(i =>
@@ -488,7 +495,7 @@
             existing.quantity += qty;
           } else {
             parcels[currentModalParcelIndex].items.push({
-              sku, ean, name, quantity: qty
+              sku, ean, name, quantity: qty, weight
             });
           }
           addedCount += qty;
@@ -619,13 +626,15 @@
         const remaining = getRemainingQty(key);
         const packed = item.totalQty - remaining;
         const isComplete = remaining === 0;
-        const hasPartial = packed > 0 && remaining > 0;
+        const weight = item.weight || 0;
+        const totalWeight = weight * item.totalQty;
 
         return `
           <tr style="${isComplete ? 'opacity: 0.5;' : ''}">
             <td>${item.odooSku || '-'}</td>
             <td style="font-family: monospace; font-size: 12px;">${item.vendorProductIdentifier || '-'}</td>
             <td>${item.odooProductName || 'Unknown'}</td>
+            <td class="qty-cell" style="color: #71717a;">${weight}kg <span style="font-size: 10px;">(${totalWeight.toFixed(1)}kg total)</span></td>
             <td class="qty-cell">${item.totalQty}</td>
             <td class="qty-cell" style="color: ${packed > 0 ? '#4ade80' : '#71717a'};">${packed}</td>
             <td class="qty-cell" style="color: ${remaining > 0 ? '#f97316' : '#4ade80'}; font-weight: ${remaining > 0 ? '600' : '400'};">
@@ -733,8 +742,11 @@
       const grid = document.getElementById('parcels-grid');
       const hasRemainingItems = Object.values(itemsRemaining).some(qty => qty > 0);
 
+      const MAX_PARCEL_WEIGHT = 15; // kg - Amazon limit
+
       grid.innerHTML = parcels.map((parcel, idx) => {
         const status = parcel.sscc ? 'ready' : 'pending';
+        const isOverweight = parcel.weight > MAX_PARCEL_WEIGHT;
         const itemsHtml = parcel.items.length > 0
           ? parcel.items.map((item, itemIdx) => `
               <div class="parcel-item">
@@ -751,10 +763,10 @@
           : '<div style="color: #71717a; font-style: italic; padding: 8px 0;">No items assigned - click "Add Items" below</div>';
 
         return `
-          <div class="parcel-card ${status}">
+          <div class="parcel-card ${status} ${isOverweight ? 'overweight' : ''}">
             <div class="parcel-header">
               <span class="parcel-title">Parcel ${idx + 1}</span>
-              <span class="parcel-status ${status}">${status === 'ready' ? 'Ready' : 'Pending'}</span>
+              <span class="parcel-status ${status}">${status === 'ready' ? 'Ready' : isOverweight ? 'Overweight!' : 'Pending'}</span>
             </div>
             <div class="parcel-body">
               <div class="weight-row">
@@ -778,6 +790,12 @@
                     All items distributed
                   </div>
                 `}
+                ${isOverweight ? `
+                  <div class="overweight-warning">
+                    <span class="material-symbols-outlined">warning</span>
+                    <span>Parcel exceeds ${MAX_PARCEL_WEIGHT}kg limit! Split items into multiple parcels.</span>
+                  </div>
+                ` : ''}
               </div>
               ${parcel.sscc ? `
                 <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #252532;">
@@ -823,6 +841,19 @@
       if (unpackedItems.length > 0) {
         const totalUnpacked = unpackedItems.reduce((sum, [, qty]) => sum + qty, 0);
         if (!confirm(`Warning: ${totalUnpacked} units are not yet assigned to any parcel.\n\nDo you want to continue anyway?`)) {
+          return;
+        }
+      }
+
+      // Check for overweight parcels
+      const MAX_WEIGHT = 15;
+      const overweightParcels = parcels.filter(p => p.weight > MAX_WEIGHT);
+      if (overweightParcels.length > 0) {
+        const overweightList = overweightParcels.map((p, i) =>
+          `Parcel ${parcels.indexOf(p) + 1}: ${p.weight.toFixed(1)}kg`
+        ).join('\n');
+
+        if (!confirm(`⚠️ WARNING: ${overweightParcels.length} parcel(s) exceed the ${MAX_WEIGHT}kg limit!\n\n${overweightList}\n\nAmazon may reject or fine overweight parcels.\n\nDo you want to continue anyway?`)) {
           return;
         }
       }

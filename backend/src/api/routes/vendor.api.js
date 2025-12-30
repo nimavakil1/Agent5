@@ -445,6 +445,7 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
             odooProductName: item.odooProductName,
             odooSku: item.odooSku,
             totalQty: 0,
+            weight: item.weight || 0, // Unit weight from Odoo
             unitOfMeasure: item.orderedQuantity?.unitOfMeasure || 'Each',
             netCost: item.netCost,
             orders: []
@@ -3797,7 +3798,8 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
 /**
  * @route POST /api/vendor/packing/estimate-weight
  * @desc Estimate total weight for parcel items
- * @body items - Array of { sku, quantity }
+ * @body items - Array of { sku, quantity, weight? }
+ * Items can include weight directly (from Odoo/orders), or falls back to defaults
  */
 router.post('/packing/estimate-weight', async (req, res) => {
   try {
@@ -3807,7 +3809,8 @@ router.post('/packing/estimate-weight', async (req, res) => {
     const breakdown = [];
 
     for (const item of items) {
-      const unitWeight = DEFAULT_PRODUCT_WEIGHTS[item.sku] || DEFAULT_PRODUCT_WEIGHTS.default;
+      // Use provided weight (from order item) if available, otherwise fallback to defaults
+      const unitWeight = item.weight || DEFAULT_PRODUCT_WEIGHTS[item.sku] || DEFAULT_PRODUCT_WEIGHTS.default;
       const itemWeight = unitWeight * (item.quantity || 1);
       totalWeight += itemWeight;
 
