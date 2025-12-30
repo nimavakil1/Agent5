@@ -472,11 +472,35 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
     const itemMap = {}; // Key by product identifier
     const consolidatedItems = [];
 
+    // Collect all SKUs to look up weights from products collection
+    const allSkus = new Set();
+    for (const order of orders) {
+      for (const item of (order.items || [])) {
+        if (item.odooSku) allSkus.add(item.odooSku);
+      }
+    }
+
+    // Fetch product weights from MongoDB
+    const productWeights = {};
+    if (allSkus.size > 0) {
+      const products = await db.collection('products').find(
+        { sku: { $in: Array.from(allSkus) } },
+        { projection: { sku: 1, weight: 1 } }
+      ).toArray();
+      for (const p of products) {
+        if (p.weight) productWeights[p.sku] = p.weight;
+      }
+    }
+
     for (const order of orders) {
       for (const item of (order.items || [])) {
         const key = item.vendorProductIdentifier || item.amazonProductIdentifier;
 
         if (!itemMap[key]) {
+          // Get weight: first from item, then from products collection, then default to 0
+          const sku = item.odooSku;
+          const weight = item.weight || (sku && productWeights[sku]) || 0;
+
           itemMap[key] = {
             vendorProductIdentifier: item.vendorProductIdentifier,
             amazonProductIdentifier: item.amazonProductIdentifier,
@@ -484,7 +508,7 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
             odooProductName: item.odooProductName,
             odooSku: item.odooSku,
             totalQty: 0,
-            weight: item.weight || 0, // Unit weight from Odoo
+            weight, // Unit weight from item, products collection, or 0
             unitOfMeasure: item.orderedQuantity?.unitOfMeasure || 'Each',
             netCost: item.netCost,
             orders: []

@@ -603,7 +603,7 @@
     }
 
     // Confirm adding items from modal
-    function confirmAddItems() {
+    async function confirmAddItems() {
       if (currentModalParcelIndex < 0) return;
 
       const inputs = document.querySelectorAll('.item-select-qty');
@@ -634,8 +634,8 @@
       });
 
       if (addedCount > 0) {
-        // Recalculate weight for this parcel
-        recalculateParcelWeight(currentModalParcelIndex);
+        // Recalculate weight for this parcel (await to ensure weight is updated before render)
+        await recalculateParcelWeight(currentModalParcelIndex);
         renderParcels();
         renderItemsTable();
         showToast(`Added ${addedCount} units to Parcel ${currentModalParcelIndex + 1}`);
@@ -645,9 +645,9 @@
     }
 
     // Remove item from parcel
-    function removeItemFromParcel(parcelIndex, itemIndex) {
+    async function removeItemFromParcel(parcelIndex, itemIndex) {
       parcels[parcelIndex].items.splice(itemIndex, 1);
-      recalculateParcelWeight(parcelIndex);
+      await recalculateParcelWeight(parcelIndex);
       renderParcels();
       renderItemsTable();
     }
