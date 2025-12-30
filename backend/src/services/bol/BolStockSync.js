@@ -275,6 +275,7 @@ class BolStockSync {
 
     const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
     const offers = [];
+    let fbbSkipped = 0;
 
     // Find column indices
     const offerIdIdx = headers.indexOf('offerId');
@@ -295,9 +296,15 @@ class BolStockSync {
       const fulfillmentType = values[fulfillmentIdx] || '';
       const reference = values[refIdx] || '';
 
-      // Only include FBR offers (we manage stock for FBR, not FBB)
-      // FBB stock is managed by Bol.com
+      // Skip invalid entries
       if (!offerId || !ean) continue;
+
+      // Only include FBR offers (we manage stock for FBR, not FBB)
+      // FBB stock is managed by Bol.com - updating FBB stock returns "Bad request"
+      if (fulfillmentType && fulfillmentType.toUpperCase() === 'FBB') {
+        fbbSkipped++;
+        continue;
+      }
 
       offers.push({
         offerId,
@@ -308,7 +315,7 @@ class BolStockSync {
       });
     }
 
-    console.log(`[BolStockSync] Parsed ${offers.length} offers from CSV`);
+    console.log(`[BolStockSync] Parsed ${offers.length} FBR offers from CSV (${fbbSkipped} FBB skipped)`);
     return offers;
   }
 

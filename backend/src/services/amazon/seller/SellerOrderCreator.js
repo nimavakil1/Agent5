@@ -461,19 +461,35 @@ class SellerOrderCreator {
   async findOrCreateCustomerAndAddress(order, config) {
     const address = order.shippingAddress;
 
-    // If no address data, use generic customer
-    if (!address || !address.name) {
+    // If no address data at all, use generic customer
+    if (!address) {
       console.warn(`[SellerOrderCreator] No shipping address for ${order.amazonOrderId}, using generic customer`);
       const genericCustomerId = await this.findOrCreateGenericCustomer(config.shipToCountry);
       return { customerId: genericCustomerId, shippingAddressId: genericCustomerId };
     }
 
     // Build customer name
-    // For B2B: use company name if available, otherwise recipient name
-    // For B2C: use recipient name
+    // Priority: name > buyerName > location-based name > generic
     let customerName = address.name;
+
+    // Try buyer name if shipping name is empty
+    if (!customerName && order.buyerName) {
+      customerName = order.buyerName;
+    }
+
+    // For B2B: use company name if available
     if (order.isBusinessOrder && order.buyerCompanyName) {
       customerName = order.buyerCompanyName;
+    }
+
+    // If still no name, create location-based customer using city/postal code
+    // This is for orders where Amazon doesn't return PII (name)
+    if (!customerName) {
+      const city = address.city || 'Unknown';
+      const postalCode = address.postalCode || '';
+      const countryCode = address.countryCode || config.shipToCountry;
+      customerName = `Amazon Customer (${city}${postalCode ? ' ' + postalCode : ''}, ${countryCode})`;
+      console.log(`[SellerOrderCreator] Using location-based customer name for ${order.amazonOrderId}: ${customerName}`);
     }
 
     const countryId = this.countryCache[address.countryCode] || null;
@@ -514,18 +530,31 @@ class SellerOrderCreator {
     }
 
     // Now create/find the shipping address as a child contact
-    const addressCacheKey = `shipping|${customerId}|${address.postalCode}|${address.addressLine1}`;
+    // Use available data for cache key (some orders may not have street address from Amazon)
+    const streetKey = address.addressLine1 || address.city || 'no-street';
+    const addressCacheKey = `shipping|${customerId}|${address.postalCode || 'no-zip'}|${streetKey}`;
     let shippingAddressId = this.partnerCache[addressCacheKey];
 
     if (!shippingAddressId) {
+      // Build search criteria based on available data
+      const searchCriteria = [
+        ['parent_id', '=', customerId],
+        ['type', '=', 'delivery']
+      ];
+
+      // Add zip to search if available
+      if (address.postalCode) {
+        searchCriteria.push(['zip', '=', address.postalCode]);
+      }
+
+      // Add city to search if available (as fallback when no street)
+      if (address.city) {
+        searchCriteria.push(['city', '=', address.city]);
+      }
+
       // Try to find existing shipping address under this customer
       const existingAddress = await this.odoo.searchRead('res.partner',
-        [
-          ['parent_id', '=', customerId],
-          ['type', '=', 'delivery'],
-          ['zip', '=', address.postalCode],
-          ['street', '=', address.addressLine1]
-        ],
+        searchCriteria,
         ['id']
       );
 
@@ -533,19 +562,21 @@ class SellerOrderCreator {
         shippingAddressId = existingAddress[0].id;
       } else {
         // Create new shipping address as child contact
+        // Use customerName as delivery contact name if address.name is missing
+        const deliveryName = address.name || customerName;
         shippingAddressId = await this.odoo.create('res.partner', {
           parent_id: customerId,
           type: 'delivery',
-          name: address.name,  // Recipient name for delivery
-          street: address.addressLine1,
+          name: deliveryName,
+          street: address.addressLine1 || null,  // May be null if PII not available
           street2: address.addressLine2 || null,
-          city: address.city,
-          zip: address.postalCode,
+          city: address.city || null,
+          zip: address.postalCode || null,
           country_id: countryId,
           phone: address.phone || null,
-          comment: `Shipping address from Amazon order ${order.amazonOrderId}`
+          comment: `Shipping address from Amazon order ${order.amazonOrderId}${!address.name ? ' (PII limited by Amazon)' : ''}`
         });
-        console.log(`[SellerOrderCreator] Created shipping address for ${customerName} (ID: ${shippingAddressId})`);
+        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (ID: ${shippingAddressId})`);
       }
 
       this.partnerCache[addressCacheKey] = shippingAddressId;

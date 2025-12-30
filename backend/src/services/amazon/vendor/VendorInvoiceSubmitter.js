@@ -391,6 +391,214 @@ class VendorInvoiceSubmitter {
   }
 
   /**
+   * Validate invoice against PO before submission
+   * Checks: totals match, quantities match, all items present
+   *
+   * @param {Object} po - Purchase order from MongoDB
+   * @param {Object} odooInvoice - Invoice from Odoo
+   * @returns {Object} Validation result with isValid, errors, warnings
+   */
+  async validateInvoice(po, odooInvoice) {
+    const result = {
+      isValid: true,
+      errors: [],
+      warnings: [],
+      comparison: {
+        poTotal: 0,
+        invoiceTotal: 0,
+        difference: 0,
+        percentDiff: 0,
+        itemsMatched: 0,
+        itemsMissing: [],
+        itemsExtra: [],
+        quantityMismatches: []
+      }
+    };
+
+    // Calculate expected PO total (net cost * qty for each item)
+    let poNetTotal = 0;
+    const poItems = {};
+
+    for (const item of (po.items || [])) {
+      const qty = item.acknowledgeQty ?? item.orderedQuantity?.amount ?? 0;
+      const netCost = parseFloat(item.netCost?.amount) || 0;
+      const sku = item.vendorProductIdentifier;
+
+      poNetTotal += qty * netCost;
+
+      if (sku) {
+        poItems[sku] = {
+          sku,
+          asin: item.amazonProductIdentifier,
+          qty,
+          netCost,
+          lineTotal: qty * netCost
+        };
+      }
+    }
+
+    result.comparison.poTotal = parseFloat(poNetTotal.toFixed(2));
+    result.comparison.invoiceTotal = odooInvoice.amount_untaxed || 0;
+    result.comparison.difference = parseFloat((result.comparison.invoiceTotal - result.comparison.poTotal).toFixed(2));
+
+    if (result.comparison.poTotal > 0) {
+      result.comparison.percentDiff = parseFloat(((result.comparison.difference / result.comparison.poTotal) * 100).toFixed(2));
+    }
+
+    // Check total difference - allow 1% tolerance for rounding
+    const tolerancePercent = 1;
+    if (Math.abs(result.comparison.percentDiff) > tolerancePercent) {
+      result.errors.push(`Invoice total (€${result.comparison.invoiceTotal}) differs from PO total (€${result.comparison.poTotal}) by ${result.comparison.percentDiff}%`);
+      result.isValid = false;
+    } else if (result.comparison.difference !== 0) {
+      result.warnings.push(`Minor total difference: €${result.comparison.difference} (${result.comparison.percentDiff}%)`);
+    }
+
+    // Compare line items
+    const invoiceItems = {};
+    for (const line of (odooInvoice.lines || [])) {
+      if (!line.product_id) continue;
+
+      // Get product SKU/barcode
+      const products = await this.odoo.read('product.product',
+        [line.product_id[0]],
+        ['default_code', 'barcode']
+      );
+      const product = products?.[0];
+      const sku = product?.barcode || product?.default_code;
+
+      if (sku) {
+        invoiceItems[sku] = {
+          sku,
+          qty: line.quantity,
+          unitPrice: line.price_unit,
+          lineTotal: line.price_subtotal
+        };
+      }
+    }
+
+    // Check for missing items in invoice
+    for (const [sku, poItem] of Object.entries(poItems)) {
+      if (!invoiceItems[sku]) {
+        result.comparison.itemsMissing.push({
+          sku,
+          asin: poItem.asin,
+          expectedQty: poItem.qty,
+          expectedTotal: poItem.lineTotal
+        });
+        result.errors.push(`Missing item in invoice: ${sku} (expected qty: ${poItem.qty})`);
+        result.isValid = false;
+      } else {
+        result.comparison.itemsMatched++;
+
+        // Check quantity
+        const invoiceItem = invoiceItems[sku];
+        if (invoiceItem.qty !== poItem.qty) {
+          result.comparison.quantityMismatches.push({
+            sku,
+            poQty: poItem.qty,
+            invoiceQty: invoiceItem.qty,
+            difference: invoiceItem.qty - poItem.qty
+          });
+          result.warnings.push(`Quantity mismatch for ${sku}: PO has ${poItem.qty}, invoice has ${invoiceItem.qty}`);
+        }
+
+        // Check unit price
+        if (Math.abs(invoiceItem.unitPrice - poItem.netCost) > 0.01) {
+          result.warnings.push(`Price mismatch for ${sku}: PO has €${poItem.netCost}, invoice has €${invoiceItem.unitPrice}`);
+        }
+      }
+    }
+
+    // Check for extra items in invoice (not in PO)
+    for (const [sku, invoiceItem] of Object.entries(invoiceItems)) {
+      if (!poItems[sku]) {
+        result.comparison.itemsExtra.push({
+          sku,
+          qty: invoiceItem.qty,
+          total: invoiceItem.lineTotal
+        });
+        result.warnings.push(`Extra item in invoice not in PO: ${sku}`);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Validate invoice for a PO without submitting
+   *
+   * @param {string} poNumber - Purchase order number
+   * @param {Object} options - Validation options
+   * @returns {Object} Validation result
+   */
+  async validateInvoiceForPO(poNumber, options = {}) {
+    const { odooInvoiceId = null } = options;
+
+    const result = {
+      purchaseOrderNumber: poNumber,
+      hasInvoice: false,
+      validation: null,
+      po: null,
+      invoice: null,
+      errors: []
+    };
+
+    try {
+      // Get PO from MongoDB
+      const po = await this.importer.getPurchaseOrder(poNumber);
+      if (!po) {
+        result.errors.push(`PO not found: ${poNumber}`);
+        return result;
+      }
+
+      result.po = {
+        purchaseOrderNumber: po.purchaseOrderNumber,
+        marketplaceId: po.marketplaceId,
+        purchaseOrderState: po.purchaseOrderState,
+        itemCount: po.items?.length || 0,
+        odooOrderId: po.odoo?.saleOrderId,
+        odooOrderName: po.odoo?.saleOrderName
+      };
+
+      // Get Odoo invoice
+      const invoiceId = odooInvoiceId || po.odoo?.invoiceId;
+      let odooInvoice = null;
+
+      if (invoiceId) {
+        odooInvoice = await this.getOdooInvoice(invoiceId);
+      } else if (po.odoo?.saleOrderId) {
+        odooInvoice = await this.findOdooInvoiceBySaleOrder(po.odoo.saleOrderId);
+      }
+
+      if (!odooInvoice) {
+        result.errors.push('No Odoo invoice found for this PO');
+        return result;
+      }
+
+      result.hasInvoice = true;
+      result.invoice = {
+        id: odooInvoice.id,
+        name: odooInvoice.name,
+        state: odooInvoice.state,
+        invoiceDate: odooInvoice.invoice_date,
+        amountTotal: odooInvoice.amount_total,
+        amountUntaxed: odooInvoice.amount_untaxed,
+        amountTax: odooInvoice.amount_tax,
+        lineCount: odooInvoice.lines?.length || 0
+      };
+
+      // Run validation
+      result.validation = await this.validateInvoice(po, odooInvoice);
+
+    } catch (error) {
+      result.errors.push(error.message);
+    }
+
+    return result;
+  }
+
+  /**
    * Find existing invoice submission
    */
   async findExistingInvoice(poNumber) {
