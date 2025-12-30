@@ -251,13 +251,17 @@
       <div class="card-body">
         <div class="parcel-count-input">
           <label>Number of Parcels:</label>
-          <input type="number" id="parcel-count" min="1" max="50" value="1" onchange="updateParcels()">
-          <button class="btn btn-secondary btn-sm" onclick="updateParcels()">
+          <input type="number" id="parcel-count" min="1" max="50" value="1" onchange="validateParcelCount()">
+          <button class="btn btn-secondary btn-sm" id="update-parcels-btn" onclick="updateParcels()">
             <span class="material-symbols-outlined">refresh</span>Update
           </button>
-          <button class="btn btn-primary btn-sm" onclick="autoDistributeItems()">
+          <button class="btn btn-primary btn-sm" id="auto-distribute-btn" onclick="autoDistributeItems()">
             <span class="material-symbols-outlined">auto_fix_high</span>Auto-Distribute Items
           </button>
+          <span id="all-packed-msg" style="display: none; color: #4ade80; font-size: 13px; margin-left: 12px;">
+            <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">check_circle</span>
+            All items packed
+          </span>
         </div>
 
         <div class="parcels-grid" id="parcels-grid">
@@ -377,6 +381,50 @@
     // Get remaining qty for an item
     function getRemainingQty(sku) {
       return itemsRemaining[sku] || 0;
+    }
+
+    // Check if all items are packed
+    function allItemsPacked() {
+      calculateRemaining();
+      return Object.values(itemsRemaining).every(qty => qty <= 0);
+    }
+
+    // Update parcel controls based on packing status
+    function updateParcelControls() {
+      const allPacked = allItemsPacked();
+      const parcelCountInput = document.getElementById('parcel-count');
+      const updateBtn = document.getElementById('update-parcels-btn');
+      const autoDistributeBtn = document.getElementById('auto-distribute-btn');
+      const allPackedMsg = document.getElementById('all-packed-msg');
+
+      if (allPacked) {
+        // Disable adding more parcels
+        parcelCountInput.max = parcels.length;
+        parcelCountInput.value = parcels.length;
+        updateBtn.disabled = true;
+        autoDistributeBtn.disabled = true;
+        allPackedMsg.style.display = 'inline';
+      } else {
+        // Allow adding parcels
+        parcelCountInput.max = 50;
+        updateBtn.disabled = false;
+        autoDistributeBtn.disabled = false;
+        allPackedMsg.style.display = 'none';
+      }
+    }
+
+    // Validate parcel count input
+    function validateParcelCount() {
+      const input = document.getElementById('parcel-count');
+      const newCount = parseInt(input.value) || 1;
+
+      if (allItemsPacked() && newCount > parcels.length) {
+        input.value = parcels.length;
+        showToast('All items are already packed - cannot add more parcels', true);
+        return;
+      }
+
+      updateParcels();
     }
 
     // Open add items modal
@@ -683,6 +731,7 @@
     function renderParcels() {
       calculateRemaining();
       const grid = document.getElementById('parcels-grid');
+      const hasRemainingItems = Object.values(itemsRemaining).some(qty => qty > 0);
 
       grid.innerHTML = parcels.map((parcel, idx) => {
         const status = parcel.sscc ? 'ready' : 'pending';
@@ -719,9 +768,16 @@
               <div class="parcel-field">
                 <label>Items (${parcel.items.reduce((sum, i) => sum + i.quantity, 0)} units)</label>
                 <div class="parcel-items">${itemsHtml}</div>
-                <button class="add-item-btn" onclick="openAddItemsModal(${idx})">
-                  <span class="material-symbols-outlined">add</span>Add Items
-                </button>
+                ${hasRemainingItems ? `
+                  <button class="add-item-btn" onclick="openAddItemsModal(${idx})">
+                    <span class="material-symbols-outlined">add</span>Add Items
+                  </button>
+                ` : `
+                  <div style="text-align: center; padding: 10px; color: #4ade80; font-size: 12px;">
+                    <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">check_circle</span>
+                    All items distributed
+                  </div>
+                `}
               </div>
               ${parcel.sscc ? `
                 <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #252532;">
@@ -737,6 +793,9 @@
           </div>
         `;
       }).join('');
+
+      // Update parcel controls based on packing status
+      updateParcelControls();
     }
 
     // Update parcel weight
