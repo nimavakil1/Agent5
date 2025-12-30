@@ -697,13 +697,25 @@ router.get('/orders/consolidate', async (req, res) => {
     const collection = db.collection('vendor_purchase_orders');
 
     // Build filter - default to orders ready to ship
+    // Include both New and Acknowledged states for consolidation
     const query = {
-      purchaseOrderState: req.query.state || 'Acknowledged',
-      shipmentStatus: req.query.shipmentStatus || 'not_shipped'
+      shipmentStatus: req.query.shipmentStatus || { $in: ['not_shipped', null, undefined] }
     };
+
+    // State filter - default to both New and Acknowledged
+    if (req.query.state) {
+      query.purchaseOrderState = req.query.state;
+    } else {
+      query.purchaseOrderState = { $in: ['New', 'Acknowledged'] };
+    }
 
     if (req.query.marketplace) {
       query.marketplaceId = req.query.marketplace.toUpperCase();
+    }
+
+    // CRITICAL: Filter out test data unless test mode is enabled
+    if (!isTestMode()) {
+      query._testData = { $ne: true };
     }
 
     // Get orders
@@ -805,12 +817,17 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid group ID' });
     }
 
-    // Build query
+    // Build query - include both New and Acknowledged states
     const query = {
       'shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
-      purchaseOrderState: 'Acknowledged',
-      shipmentStatus: 'not_shipped'
+      purchaseOrderState: { $in: ['New', 'Acknowledged'] },
+      shipmentStatus: { $in: ['not_shipped', null, undefined] }
     };
+
+    // CRITICAL: Filter out test data unless test mode is enabled
+    if (!isTestMode()) {
+      query._testData = { $ne: true };
+    }
 
     // Add date filter if present
     if (dateStr && dateStr !== 'nodate') {
