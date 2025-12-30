@@ -3216,4 +3216,569 @@ router.post('/test-mode/cleanup', async (req, res) => {
   }
 });
 
+// ==================== PACKING / GLS INTEGRATION ====================
+
+const { getGLSClient } = require('../../services/shipping/GLSClient');
+
+// Acropaq sender address for GLS shipments
+const ACROPAQ_SENDER = {
+  name: 'Acropaq NV',
+  street: 'Zoggelaan',
+  streetNumber: '2',
+  zipCode: '2960',
+  city: 'Brecht',
+  countryCode: 'BE',
+  email: 'info@acropaq.com',
+  phone: '+32 3 355 03 10'
+};
+
+// Default product weights (kg) - used for weight estimation
+const DEFAULT_PRODUCT_WEIGHTS = {
+  'LAM-A4-100': 1.8,
+  'LAM-A4-80': 1.5,
+  'LAM-A3-50': 2.2,
+  'LAM-A3-80': 2.8,
+  'TRIM-A4': 0.8,
+  'TRIM-A3': 1.2,
+  'PROT-A4': 0.4,
+  'PROT-A3': 0.6,
+  default: 1.0
+};
+
+/**
+ * @route POST /api/vendor/packing/create-shipment
+ * @desc Create a packing shipment for a consolidation group with parcels
+ * @body groupId - Consolidation group ID
+ * @body parcels - Array of parcel definitions { items, weight, estimatedWeight }
+ * @body fcAddress - Fulfillment center address
+ * @body fcName - FC name
+ * @body purchaseOrders - Array of PO numbers
+ */
+router.post('/packing/create-shipment', async (req, res) => {
+  try {
+    const db = getDb();
+    const { groupId, parcels = [], fcAddress, fcName, purchaseOrders = [] } = req.body;
+
+    if (!groupId) {
+      return res.status(400).json({ success: false, error: 'groupId is required' });
+    }
+
+    if (parcels.length === 0) {
+      return res.status(400).json({ success: false, error: 'At least one parcel is required' });
+    }
+
+    // Create shipment record
+    const shipmentId = `PKG-${Date.now()}`;
+    const shipment = {
+      shipmentId,
+      groupId,
+      fcName: fcName || '',
+      fcAddress: fcAddress || {},
+      purchaseOrders,
+      status: 'created',
+      parcels: parcels.map((p, idx) => ({
+        parcelNumber: idx + 1,
+        items: p.items || [],
+        weight: parseFloat(p.weight) || 1.0,
+        estimatedWeight: parseFloat(p.estimatedWeight) || parseFloat(p.weight) || 1.0,
+        sscc: null,
+        ssccFormatted: null,
+        glsTrackingNumber: null,
+        glsParcelNumber: null,
+        glsLabelPdf: null
+      })),
+      totalParcels: parcels.length,
+      totalWeight: parcels.reduce((sum, p) => sum + (parseFloat(p.weight) || 1.0), 0),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    await db.collection('packing_shipments').insertOne(shipment);
+
+    res.json({
+      success: true,
+      shipment: {
+        shipmentId: shipment.shipmentId,
+        groupId: shipment.groupId,
+        parcelCount: shipment.parcels.length,
+        totalWeight: shipment.totalWeight,
+        status: shipment.status
+      }
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /packing/create-shipment error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/packing/shipment/:shipmentId
+ * @desc Get packing shipment details
+ */
+router.get('/packing/shipment/:shipmentId', async (req, res) => {
+  try {
+    const db = getDb();
+    const shipment = await db.collection('packing_shipments').findOne({
+      shipmentId: req.params.shipmentId
+    });
+
+    if (!shipment) {
+      return res.status(404).json({ success: false, error: 'Shipment not found' });
+    }
+
+    res.json({ success: true, shipment });
+  } catch (error) {
+    console.error('[VendorAPI] GET /packing/shipment/:shipmentId error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/packing/by-group/:groupId
+ * @desc Get packing shipments for a consolidation group
+ */
+router.get('/packing/by-group/:groupId', async (req, res) => {
+  try {
+    const db = getDb();
+    const shipments = await db.collection('packing_shipments')
+      .find({ groupId: req.params.groupId })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      count: shipments.length,
+      shipments
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /packing/by-group/:groupId error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/packing/:shipmentId/generate-labels
+ * @desc Generate GLS labels and SSCC codes for all parcels in a packing shipment
+ */
+router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
+  try {
+    const db = getDb();
+    const generator = await getSSCCGenerator();
+
+    const shipment = await db.collection('packing_shipments').findOne({
+      shipmentId: req.params.shipmentId
+    });
+
+    if (!shipment) {
+      return res.status(404).json({ success: false, error: 'Shipment not found' });
+    }
+
+    // Initialize GLS client (may not be configured)
+    let glsClient = null;
+    try {
+      glsClient = getGLSClient();
+    } catch (err) {
+      console.warn('[VendorAPI] GLS not configured:', err.message);
+    }
+
+    const results = [];
+    const updatedParcels = [...shipment.parcels];
+
+    for (let i = 0; i < updatedParcels.length; i++) {
+      const parcel = updatedParcels[i];
+      const parcelResult = {
+        parcelNumber: parcel.parcelNumber,
+        sscc: null,
+        ssccFormatted: null,
+        glsTrackingNumber: null,
+        glsError: null
+      };
+
+      try {
+        // Generate SSCC if not already assigned
+        if (!parcel.sscc) {
+          const ssccResult = await generator.generateSSCC({
+            type: 'carton',
+            purchaseOrderNumber: shipment.purchaseOrders[0] || '',
+            shipmentId: shipment.shipmentId
+          });
+          parcel.sscc = ssccResult.sscc;
+          parcel.ssccFormatted = ssccResult.ssccFormatted;
+          parcelResult.sscc = ssccResult.sscc;
+          parcelResult.ssccFormatted = ssccResult.ssccFormatted;
+
+          // Update SSCC contents
+          await generator.updateContents(parcel.sscc, parcel.items);
+        } else {
+          parcelResult.sscc = parcel.sscc;
+          parcelResult.ssccFormatted = parcel.ssccFormatted;
+        }
+
+        // Generate GLS label if client is available
+        if (glsClient && !parcel.glsTrackingNumber && shipment.fcAddress) {
+          const receiverAddress = {
+            name: shipment.fcName || 'Amazon FC',
+            street: shipment.fcAddress.addressLine1 || shipment.fcAddress.street || '',
+            streetNumber: shipment.fcAddress.streetNumber || '',
+            zipCode: shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
+            city: shipment.fcAddress.city || '',
+            countryCode: shipment.fcAddress.countryCode || 'DE',
+            email: '',
+            phone: ''
+          };
+
+          const glsResult = await glsClient.createShipment({
+            sender: ACROPAQ_SENDER,
+            receiver: receiverAddress,
+            reference: `${shipment.shipmentId}-P${parcel.parcelNumber}`,
+            weight: parcel.weight,
+            product: 'Parcel'
+          });
+
+          if (glsResult.success) {
+            parcel.glsTrackingNumber = glsResult.trackingNumber;
+            parcel.glsParcelNumber = glsResult.parcelNumber;
+            parcel.glsLabelPdf = glsResult.labelPdf ? glsResult.labelPdf.toString('base64') : null;
+            parcelResult.glsTrackingNumber = glsResult.trackingNumber;
+          } else {
+            parcelResult.glsError = glsResult.error;
+          }
+        } else if (!glsClient) {
+          parcelResult.glsError = 'GLS not configured';
+        }
+      } catch (err) {
+        parcelResult.error = err.message;
+      }
+
+      results.push(parcelResult);
+    }
+
+    // Update shipment
+    await db.collection('packing_shipments').updateOne(
+      { shipmentId: req.params.shipmentId },
+      {
+        $set: {
+          parcels: updatedParcels,
+          status: 'labels_generated',
+          labelsGeneratedAt: new Date(),
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    res.json({
+      success: true,
+      shipmentId: shipment.shipmentId,
+      parcels: results,
+      glsConfigured: !!glsClient
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /packing/:shipmentId/generate-labels error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/packing/:shipmentId/labels
+ * @desc Get combined labels page (GLS + SSCC) for printing
+ */
+router.get('/packing/:shipmentId/labels', async (req, res) => {
+  try {
+    const db = getDb();
+    const labelGen = await getSSCCLabelGenerator();
+
+    const shipment = await db.collection('packing_shipments').findOne({
+      shipmentId: req.params.shipmentId
+    });
+
+    if (!shipment) {
+      return res.status(404).json({ success: false, error: 'Shipment not found' });
+    }
+
+    // Parse groupId for FC info
+    const lastUnderscoreIndex = (shipment.groupId || '').lastIndexOf('_');
+    const fcPartyId = lastUnderscoreIndex > 0
+      ? shipment.groupId.substring(0, lastUnderscoreIndex)
+      : (shipment.groupId || '');
+
+    const shipTo = {
+      fcPartyId,
+      fcName: shipment.fcName || FC_NAMES[fcPartyId] || fcPartyId,
+      address: shipment.fcAddress
+    };
+
+    // Build combined labels HTML
+    const labelsHtml = [];
+    labelsHtml.push(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Shipment Labels - ${shipment.shipmentId}</title>
+        <style>
+          @media print {
+            .page-break { page-break-after: always; }
+            .no-print { display: none !important; }
+            body { margin: 0; padding: 0; }
+          }
+          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .header h1 { margin: 0 0 10px 0; color: #333; }
+          .header-info { display: flex; gap: 30px; color: #666; }
+          .label-container { background: white; margin-bottom: 20px; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .parcel-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; border-bottom: 2px solid #eee; margin-bottom: 15px; }
+          .parcel-header h2 { margin: 0; color: #333; }
+          .parcel-meta { color: #666; font-size: 14px; }
+          .label-section { border: 2px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 6px; }
+          .label-section.gls { border-color: #ffc107; background: #fffef0; }
+          .label-section.sscc { border-color: #28a745; background: #f0fff4; }
+          .label-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+          .label-title.gls { color: #856404; }
+          .label-title.sscc { color: #155724; }
+          .tracking-code { font-family: monospace; font-size: 18px; background: #f8f9fa; padding: 8px 12px; border-radius: 4px; display: inline-block; }
+          .gls-pdf { width: 100%; height: 400px; border: 1px solid #ddd; border-radius: 4px; }
+          .print-btn {
+            position: fixed; top: 20px; right: 20px; z-index: 1000;
+            padding: 15px 30px; font-size: 18px; font-weight: bold;
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            color: white; border: none; border-radius: 8px; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+          }
+          .print-btn:hover { background: linear-gradient(135deg, #218838 0%, #1e7e34 100%); }
+          .items-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+          .items-table th, .items-table td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
+          .items-table th { background: #f8f9fa; font-weight: 600; color: #666; }
+          .no-label { color: #999; font-style: italic; padding: 20px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <button class="print-btn no-print" onclick="window.print()">🖨️ Print All Labels</button>
+
+        <div class="header no-print">
+          <h1>📦 Shipment: ${shipment.shipmentId}</h1>
+          <div class="header-info">
+            <div><strong>Destination:</strong> ${shipTo.fcName}</div>
+            <div><strong>Parcels:</strong> ${shipment.parcels.length}</div>
+            <div><strong>Total Weight:</strong> ${shipment.totalWeight} kg</div>
+            <div><strong>Status:</strong> ${shipment.status}</div>
+          </div>
+        </div>
+    `);
+
+    for (let i = 0; i < shipment.parcels.length; i++) {
+      const parcel = shipment.parcels[i];
+      const isLast = i === shipment.parcels.length - 1;
+
+      labelsHtml.push(`
+        <div class="label-container${!isLast ? ' page-break' : ''}">
+          <div class="parcel-header">
+            <h2>📦 Parcel ${parcel.parcelNumber} of ${shipment.parcels.length}</h2>
+            <div class="parcel-meta">
+              <strong>Weight:</strong> ${parcel.weight} kg |
+              <strong>Items:</strong> ${parcel.items?.length || 0} SKUs
+            </div>
+          </div>
+      `);
+
+      // GLS Label section
+      labelsHtml.push('<div class="label-section gls">');
+      labelsHtml.push('<div class="label-title gls">🚚 GLS Shipping Label</div>');
+
+      if (parcel.glsTrackingNumber) {
+        labelsHtml.push(`
+          <p><strong>Tracking Number:</strong> <span class="tracking-code">${parcel.glsTrackingNumber}</span></p>
+          ${parcel.glsLabelPdf ? `
+            <iframe class="gls-pdf" src="data:application/pdf;base64,${parcel.glsLabelPdf}"></iframe>
+          ` : '<p class="no-label">GLS label PDF not available - print from GLS portal</p>'}
+        `);
+      } else {
+        labelsHtml.push('<p class="no-label">GLS label not generated (GLS integration not configured or disabled)</p>');
+      }
+      labelsHtml.push('</div>');
+
+      // SSCC Label section
+      labelsHtml.push('<div class="label-section sscc">');
+      labelsHtml.push('<div class="label-title sscc">📋 Amazon SSCC Label</div>');
+
+      if (parcel.sscc) {
+        const ssccLabelHtml = await labelGen.generateCartonLabelHTML({
+          sscc: parcel.sscc,
+          shipTo,
+          purchaseOrders: shipment.purchaseOrders || [],
+          items: parcel.items || []
+        });
+        labelsHtml.push(`<p><strong>SSCC:</strong> <span class="tracking-code">${parcel.ssccFormatted || parcel.sscc}</span></p>`);
+        labelsHtml.push(ssccLabelHtml);
+      } else {
+        labelsHtml.push('<p class="no-label">SSCC not generated</p>');
+      }
+      labelsHtml.push('</div>');
+
+      // Items in this parcel
+      if (parcel.items && parcel.items.length > 0) {
+        labelsHtml.push(`
+          <div style="margin-top: 15px;">
+            <strong>Items in this parcel:</strong>
+            <table class="items-table">
+              <thead>
+                <tr><th>SKU</th><th>EAN</th><th>Description</th><th style="text-align: right;">Qty</th></tr>
+              </thead>
+              <tbody>
+                ${parcel.items.map(item => `
+                  <tr>
+                    <td>${item.sku || '-'}</td>
+                    <td>${item.ean || '-'}</td>
+                    <td>${item.name || 'Unknown'}</td>
+                    <td style="text-align: right; font-weight: bold; color: #28a745;">${item.quantity || 0}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `);
+      }
+
+      labelsHtml.push('</div>'); // Close label-container
+    }
+
+    labelsHtml.push('</body></html>');
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(labelsHtml.join(''));
+  } catch (error) {
+    console.error('[VendorAPI] GET /packing/:shipmentId/labels error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/packing/:shipmentId/submit-asn
+ * @desc Submit ASN (Advance Shipment Notice) to Amazon for a packing shipment
+ */
+router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
+  try {
+    const db = getDb();
+
+    const shipment = await db.collection('packing_shipments').findOne({
+      shipmentId: req.params.shipmentId
+    });
+
+    if (!shipment) {
+      return res.status(404).json({ success: false, error: 'Shipment not found' });
+    }
+
+    if (shipment.status !== 'labels_generated') {
+      return res.status(400).json({
+        success: false,
+        error: 'Labels must be generated before submitting ASN'
+      });
+    }
+
+    // TODO: Implement actual ASN submission to Amazon via Vendor Central API
+    // For now, just mark as ASN submitted and record the submission
+
+    await db.collection('packing_shipments').updateOne(
+      { shipmentId: req.params.shipmentId },
+      {
+        $set: {
+          status: 'asn_submitted',
+          asnSubmittedAt: new Date(),
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    res.json({
+      success: true,
+      shipmentId: shipment.shipmentId,
+      message: 'ASN marked as submitted (actual Amazon API integration coming soon)',
+      status: 'asn_submitted',
+      parcels: shipment.parcels.map(p => ({
+        parcelNumber: p.parcelNumber,
+        sscc: p.ssccFormatted || p.sscc,
+        glsTracking: p.glsTrackingNumber
+      }))
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /packing/:shipmentId/submit-asn error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/packing/estimate-weight
+ * @desc Estimate total weight for parcel items
+ * @body items - Array of { sku, quantity }
+ */
+router.post('/packing/estimate-weight', async (req, res) => {
+  try {
+    const { items = [] } = req.body;
+
+    let totalWeight = 0;
+    const breakdown = [];
+
+    for (const item of items) {
+      const unitWeight = DEFAULT_PRODUCT_WEIGHTS[item.sku] || DEFAULT_PRODUCT_WEIGHTS.default;
+      const itemWeight = unitWeight * (item.quantity || 1);
+      totalWeight += itemWeight;
+
+      breakdown.push({
+        sku: item.sku,
+        quantity: item.quantity,
+        unitWeight,
+        totalWeight: Math.round(itemWeight * 100) / 100
+      });
+    }
+
+    // Add packaging weight (0.5 kg per carton box)
+    const packagingWeight = 0.5;
+    totalWeight += packagingWeight;
+
+    res.json({
+      success: true,
+      estimatedWeight: Math.round(totalWeight * 100) / 100,
+      packagingWeight,
+      productWeight: Math.round((totalWeight - packagingWeight) * 100) / 100,
+      breakdown
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /packing/estimate-weight error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/packing/gls-status
+ * @desc Check if GLS integration is configured
+ */
+router.get('/packing/gls-status', async (req, res) => {
+  try {
+    let glsConfigured = false;
+    let testResult = null;
+
+    try {
+      const glsClient = getGLSClient();
+      glsConfigured = true;
+
+      if (req.query.test === 'true') {
+        testResult = await glsClient.testConnection();
+      }
+    } catch (err) {
+      // GLS not configured
+    }
+
+    res.json({
+      success: true,
+      glsConfigured,
+      message: glsConfigured
+        ? 'GLS integration is configured'
+        : 'GLS integration not configured - set GLS_USER_ID and GLS_PASSWORD in .env',
+      testResult
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /packing/gls-status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

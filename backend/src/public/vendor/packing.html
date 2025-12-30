@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carton Packing - Amazon Vendor</title>
+  <title>Packing Workflow - Amazon Vendor</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
   <script src="/shell-v2.js"></script>
   <style>
-    .page { max-width: 1600px; margin: 0 auto; padding: 24px; }
+    .page { max-width: 1400px; margin: 0 auto; padding: 24px; }
     .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
     .page-title { font-size: 24px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 12px; }
     .page-title .material-symbols-outlined { font-size: 32px; color: #f97316; }
@@ -22,81 +22,101 @@
     .btn-danger { background: #ef4444; color: white; }
     .btn-danger:hover { background: #dc2626; }
     .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn-lg { padding: 14px 28px; font-size: 16px; }
     .btn .material-symbols-outlined { font-size: 20px; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* Stats */
-    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-    .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 12px; padding: 16px; }
-    .stat-value { font-size: 24px; font-weight: 700; color: #fff; }
-    .stat-label { font-size: 12px; color: #71717a; }
-
-    /* Layout */
-    .packing-layout { display: grid; grid-template-columns: 1fr 400px; gap: 24px; }
-    @media (max-width: 1200px) { .packing-layout { grid-template-columns: 1fr; } }
-
     /* Cards */
-    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; margin-bottom: 24px; }
     .card-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; align-items: center; justify-content: space-between; }
     .card-title { font-size: 16px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .card-title .material-symbols-outlined { color: #f97316; }
     .card-body { padding: 20px; }
+
+    /* Workflow Steps */
+    .workflow-steps { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+    .workflow-step { display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: #252532; border-radius: 10px; color: #71717a; }
+    .workflow-step.active { background: #f97316; color: white; }
+    .workflow-step.completed { background: #22c55e; color: white; }
+    .workflow-step .step-number { width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; }
+    .workflow-step.active .step-number { background: rgba(255,255,255,0.3); }
+    .workflow-step.completed .step-number { background: rgba(255,255,255,0.3); }
+
+    /* Group Info */
+    .group-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .info-item { background: #1a1a28; padding: 16px; border-radius: 10px; }
+    .info-label { font-size: 12px; color: #71717a; margin-bottom: 4px; }
+    .info-value { font-size: 16px; font-weight: 600; color: #fff; }
+
+    /* Parcel Setup */
+    .parcel-count-input { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+    .parcel-count-input label { font-size: 16px; color: #e4e4e7; }
+    .parcel-count-input input { width: 80px; padding: 12px 16px; background: #252532; border: 1px solid #3f3f50; border-radius: 10px; color: #fff; font-size: 18px; text-align: center; }
+    .parcel-count-input input:focus { outline: none; border-color: #f97316; }
+
+    /* Parcels Grid */
+    .parcels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
+    .parcel-card { background: #1a1a28; border: 2px solid #252532; border-radius: 12px; overflow: hidden; }
+    .parcel-card.ready { border-color: #22c55e; }
+    .parcel-card.error { border-color: #ef4444; }
+    .parcel-header { padding: 16px; background: #12121a; display: flex; justify-content: space-between; align-items: center; }
+    .parcel-title { font-size: 16px; font-weight: 600; color: #fff; }
+    .parcel-status { font-size: 12px; padding: 4px 10px; border-radius: 20px; }
+    .parcel-status.pending { background: #3f3f50; color: #a1a1aa; }
+    .parcel-status.ready { background: #22c55e20; color: #4ade80; }
+    .parcel-status.error { background: #ef444420; color: #f87171; }
+    .parcel-body { padding: 16px; }
+    .parcel-field { margin-bottom: 16px; }
+    .parcel-field label { display: block; font-size: 12px; color: #71717a; margin-bottom: 6px; }
+    .parcel-field input, .parcel-field select { width: 100%; padding: 10px 14px; background: #252532; border: 1px solid #3f3f50; border-radius: 8px; color: #fff; font-size: 14px; }
+    .parcel-field input:focus, .parcel-field select:focus { outline: none; border-color: #f97316; }
+    .weight-row { display: flex; gap: 12px; }
+    .weight-row .parcel-field { flex: 1; }
+    .estimated-weight { font-size: 12px; color: #71717a; margin-top: 4px; }
+    .parcel-items { max-height: 150px; overflow-y: auto; }
+    .parcel-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #252532; font-size: 13px; }
+    .parcel-item:last-child { border-bottom: none; }
+    .parcel-item-sku { color: #a1a1aa; }
+    .parcel-item-qty { color: #4ade80; font-weight: 600; }
+
+    /* Labels Section */
+    .labels-section { margin-top: 24px; }
+    .labels-info { display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap; }
+    .label-stat { background: #1a1a28; padding: 16px 24px; border-radius: 10px; text-align: center; }
+    .label-stat-value { font-size: 24px; font-weight: 700; color: #fff; }
+    .label-stat-label { font-size: 12px; color: #71717a; }
+    .label-stat.success .label-stat-value { color: #4ade80; }
+    .label-stat.warning .label-stat-value { color: #fbbf24; }
+
+    /* Action Bar */
+    .action-bar { position: sticky; bottom: 0; background: #18181f; border-top: 1px solid #252532; padding: 16px 24px; margin: 24px -24px -24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .action-bar-status { color: #71717a; font-size: 14px; }
+    .action-bar-buttons { display: flex; gap: 12px; }
 
     /* Items Table */
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #252532; }
-    th { font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; }
+    th { font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; background: #12121a; }
     td { font-size: 13px; color: #e4e4e7; }
-    .qty-cell { text-align: center; }
-    .qty-input { width: 60px; padding: 6px 8px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #fff; text-align: center; font-size: 13px; }
-    .qty-input:focus { outline: none; border-color: #f97316; }
-
-    /* Cartons List */
-    .cartons-list { display: flex; flex-direction: column; gap: 12px; max-height: 500px; overflow-y: auto; }
-    .carton-item { background: #1a1a28; border: 1px solid #252532; border-radius: 10px; padding: 12px; }
-    .carton-item.active { border-color: #f97316; background: rgba(249, 115, 22, 0.1); }
-    .carton-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-    .carton-sscc { font-family: monospace; font-size: 12px; color: #a1a1aa; }
-    .carton-stats { display: flex; gap: 16px; font-size: 12px; color: #71717a; }
-    .carton-actions { display: flex; gap: 6px; }
-    .carton-contents { margin-top: 8px; padding-top: 8px; border-top: 1px solid #252532; }
-    .carton-contents-item { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
-    .carton-contents-item .qty { color: #4ade80; font-weight: 600; }
-
-    /* Action buttons */
-    .action-btn { width: 28px; height: 28px; border-radius: 6px; background: #252532; border: none; color: #71717a; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .action-btn:hover { background: #3f3f50; color: #e4e4e7; }
-    .action-btn .material-symbols-outlined { font-size: 16px; }
-
-    /* Pallet Section */
-    .pallet-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid #252532; }
-    .pallet-item { background: #12121a; border: 2px solid #3f3f50; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
-    .pallet-item.active { border-color: #8b5cf6; }
-    .pallet-header { display: flex; align-items: center; justify-content: space-between; }
-    .pallet-badge { background: #8b5cf6; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-    .pallet-cartons { margin-top: 8px; font-size: 12px; color: #71717a; }
-
-    /* Empty state */
-    .empty-state { padding: 40px; text-align: center; color: #71717a; }
-    .empty-state .material-symbols-outlined { font-size: 48px; margin-bottom: 12px; display: block; }
+    .qty-cell { text-align: center; color: #4ade80; font-weight: 600; }
 
     /* Toast */
     .toast { position: fixed; bottom: 24px; right: 24px; padding: 14px 20px; background: #22c55e; color: white; border-radius: 10px; font-weight: 600; display: none; z-index: 3000; }
     .toast.error { background: #ef4444; }
     .toast.show { display: flex; align-items: center; gap: 8px; }
 
-    /* Modal */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 2000; }
-    .modal-overlay.open { display: flex; }
-    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; width: 100%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
-    .modal-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; align-items: center; justify-content: space-between; }
-    .modal-title { font-size: 18px; font-weight: 600; color: #fff; }
-    .modal-close { background: none; border: none; color: #71717a; cursor: pointer; padding: 4px; }
-    .modal-body { padding: 20px; }
-    .modal-footer { padding: 16px 20px; border-top: 1px solid #252532; display: flex; justify-content: flex-end; gap: 12px; }
+    /* Loading */
+    .loading { display: flex; align-items: center; justify-content: center; padding: 60px; color: #71717a; }
+    .loading .material-symbols-outlined { animation: spin 1s linear infinite; margin-right: 8px; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    /* Select Order */
-    .order-select { width: 100%; padding: 12px; background: #252532; border: 1px solid #3f3f50; border-radius: 10px; color: #e4e4e7; font-size: 14px; margin-bottom: 16px; }
-    .order-select:focus { outline: none; border-color: #f97316; }
+    /* GLS Status */
+    .gls-status { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #1a1a28; border-radius: 8px; margin-bottom: 16px; }
+    .gls-status.configured { border-left: 3px solid #22c55e; }
+    .gls-status.not-configured { border-left: 3px solid #fbbf24; }
+    .gls-status .material-symbols-outlined { font-size: 20px; }
+    .gls-status.configured .material-symbols-outlined { color: #22c55e; }
+    .gls-status.not-configured .material-symbols-outlined { color: #fbbf24; }
   </style>
 </head>
 <body>
@@ -104,143 +124,153 @@
     <header class="page-header">
       <h1 class="page-title">
         <span class="material-symbols-outlined">package_2</span>
-        Carton Packing & Labels
+        Packing Workflow
       </h1>
       <div class="header-actions">
-        <button class="btn btn-secondary" onclick="loadSSCCStats()">
-          <span class="material-symbols-outlined">refresh</span>Refresh
-        </button>
+        <a href="/ui/vendor/consolidate" class="btn btn-secondary">
+          <span class="material-symbols-outlined">arrow_back</span>Back to Consolidation
+        </a>
       </div>
     </header>
 
-    <!-- Stats -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-value" id="stat-cartons">0</div>
-        <div class="stat-label">Cartons Created</div>
+    <!-- Workflow Steps -->
+    <div class="workflow-steps">
+      <div class="workflow-step" id="step-1">
+        <span class="step-number">1</span>
+        <span>Setup Parcels</span>
       </div>
-      <div class="stat-card">
-        <div class="stat-value" id="stat-pallets">0</div>
-        <div class="stat-label">Pallets Created</div>
+      <div class="workflow-step" id="step-2">
+        <span class="step-number">2</span>
+        <span>Generate Labels</span>
       </div>
-      <div class="stat-card">
-        <div class="stat-value" id="stat-printed">0</div>
-        <div class="stat-label">Labels Printed</div>
+      <div class="workflow-step" id="step-3">
+        <span class="step-number">3</span>
+        <span>Print Labels</span>
       </div>
-      <div class="stat-card">
-        <div class="stat-value" id="stat-shipped">0</div>
-        <div class="stat-label">Shipped</div>
+      <div class="workflow-step" id="step-4">
+        <span class="step-number">4</span>
+        <span>Submit ASN</span>
       </div>
     </div>
 
-    <!-- Order Selection -->
-    <div class="card" style="margin-bottom: 24px;">
+    <!-- GLS Status -->
+    <div class="gls-status" id="gls-status">
+      <span class="material-symbols-outlined">local_shipping</span>
+      <span id="gls-status-text">Checking GLS integration...</span>
+    </div>
+
+    <!-- Group Info -->
+    <div class="card" id="group-card">
       <div class="card-header">
         <div class="card-title">
-          <span class="material-symbols-outlined">shopping_cart</span>
-          Select Consolidation Group
+          <span class="material-symbols-outlined">inventory_2</span>
+          Consolidation Group
         </div>
       </div>
       <div class="card-body">
-        <select class="order-select" id="group-select" onchange="loadGroupDetails()">
-          <option value="">-- Select a consolidation group to pack --</option>
-        </select>
-        <div id="group-info" style="display: none;">
-          <div style="display: flex; gap: 24px; flex-wrap: wrap;">
-            <div><strong>FC:</strong> <span id="info-fc"></span></div>
-            <div><strong>Deliver By:</strong> <span id="info-delivery"></span></div>
-            <div><strong>Orders:</strong> <span id="info-orders"></span></div>
-            <div><strong>Total Units:</strong> <span id="info-units"></span></div>
-          </div>
+        <div class="loading" id="group-loading">
+          <span class="material-symbols-outlined">sync</span>
+          Loading group details...
         </div>
-      </div>
-    </div>
+        <div id="group-content" style="display: none;">
+          <div class="group-info">
+            <div class="info-item">
+              <div class="info-label">Fulfillment Center</div>
+              <div class="info-value" id="info-fc">-</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Delivery Date</div>
+              <div class="info-value" id="info-delivery">-</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Orders</div>
+              <div class="info-value" id="info-orders">-</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Total Units</div>
+              <div class="info-value" id="info-units">-</div>
+            </div>
+          </div>
 
-    <!-- Main Layout -->
-    <div class="packing-layout">
-      <!-- Items to Pack -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">
-            <span class="material-symbols-outlined">inventory</span>
-            Items to Pack
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="addItemsToCarton()" id="add-to-carton-btn" disabled>
-            <span class="material-symbols-outlined">add_box</span>Add to Carton
-          </button>
-        </div>
-        <div class="card-body" style="padding: 0;">
-          <div class="table-container">
+          <!-- Items Table -->
+          <div style="margin-top: 20px;">
+            <h3 style="font-size: 14px; color: #a1a1aa; margin-bottom: 12px;">Items to Pack</h3>
             <table>
               <thead>
                 <tr>
-                  <th><input type="checkbox" id="select-all" onchange="toggleSelectAll()"></th>
                   <th>SKU</th>
                   <th>EAN</th>
                   <th>Product</th>
-                  <th class="qty-cell">Total</th>
-                  <th class="qty-cell">Packed</th>
-                  <th class="qty-cell">Remaining</th>
-                  <th class="qty-cell">Pack Qty</th>
+                  <th class="qty-cell">Quantity</th>
                 </tr>
               </thead>
               <tbody id="items-table">
-                <tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span>Select a consolidation group above</div></td></tr>
               </tbody>
             </table>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Cartons & Pallets -->
-      <div>
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <span class="material-symbols-outlined">deployed_code</span>
-              Cartons (<span id="carton-count">0</span>)
-            </div>
-            <button class="btn btn-success btn-sm" onclick="createCarton()" id="create-carton-btn" disabled>
-              <span class="material-symbols-outlined">add</span>New Carton
-            </button>
-          </div>
-          <div class="card-body">
-            <div class="cartons-list" id="cartons-list">
-              <div class="empty-state">
-                <span class="material-symbols-outlined">package_2</span>
-                No cartons yet
-              </div>
-            </div>
-          </div>
+    <!-- Parcel Setup -->
+    <div class="card" id="parcels-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="material-symbols-outlined">deployed_code</span>
+          Parcel Configuration
         </div>
-
-        <!-- Pallets -->
-        <div class="card" style="margin-top: 16px;">
-          <div class="card-header">
-            <div class="card-title">
-              <span class="material-symbols-outlined">pallet</span>
-              Pallets (<span id="pallet-count">0</span>)
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="createPallet()" id="create-pallet-btn" disabled>
-              <span class="material-symbols-outlined">add</span>New Pallet
-            </button>
-          </div>
-          <div class="card-body">
-            <div id="pallets-list">
-              <div class="empty-state" style="padding: 20px;">
-                <span class="material-symbols-outlined">pallet</span>
-                No pallets yet
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Actions -->
-        <div style="margin-top: 16px; display: flex; gap: 12px;">
-          <button class="btn btn-primary" onclick="printAllLabels()" id="print-labels-btn" disabled style="flex: 1;">
-            <span class="material-symbols-outlined">print</span>Print All Labels
+      </div>
+      <div class="card-body">
+        <div class="parcel-count-input">
+          <label>Number of Parcels:</label>
+          <input type="number" id="parcel-count" min="1" max="50" value="1" onchange="updateParcels()">
+          <button class="btn btn-secondary btn-sm" onclick="updateParcels()">
+            <span class="material-symbols-outlined">refresh</span>Update
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="autoDistributeItems()">
+            <span class="material-symbols-outlined">auto_fix_high</span>Auto-Distribute Items
           </button>
         </div>
+
+        <div class="parcels-grid" id="parcels-grid">
+          <!-- Parcels will be rendered here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Labels Section -->
+    <div class="card" id="labels-card" style="display: none;">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="material-symbols-outlined">qr_code_2</span>
+          Generated Labels
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="labels-info" id="labels-info">
+          <!-- Labels stats will be rendered here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Bar -->
+    <div class="action-bar">
+      <div class="action-bar-status" id="action-status">
+        Configure parcels and generate labels
+      </div>
+      <div class="action-bar-buttons">
+        <button class="btn btn-primary btn-lg" id="generate-btn" onclick="generateLabels()">
+          <span class="material-symbols-outlined">qr_code_2</span>
+          Generate Labels (GLS + SSCC)
+        </button>
+        <button class="btn btn-success btn-lg" id="print-btn" onclick="printLabels()" disabled>
+          <span class="material-symbols-outlined">print</span>
+          Print All Labels
+        </button>
+        <button class="btn btn-secondary btn-lg" id="asn-btn" onclick="submitASN()" disabled>
+          <span class="material-symbols-outlined">send</span>
+          Submit ASN to Amazon
+        </button>
       </div>
     </div>
   </div>
@@ -249,12 +279,11 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    let consolidationGroups = [];
-    let currentGroup = null;
-    let currentItems = []; // Items with packing state
-    let cartons = []; // Created cartons
-    let pallets = []; // Created pallets
-    let activeCartonIndex = -1;
+    let groupId = null;
+    let groupData = null;
+    let currentShipmentId = null;
+    let parcels = [];
+    let glsConfigured = false;
 
     // Show toast
     function showToast(message, isError = false) {
@@ -264,469 +293,396 @@
       setTimeout(() => toast.className = 'toast', 3000);
     }
 
-    // Load SSCC stats
-    async function loadSSCCStats() {
-      try {
-        const res = await fetch('/api/vendor/sscc/stats', { credentials: 'include' });
-        const data = await res.json();
-        if (data.success) {
-          document.getElementById('stat-cartons').textContent = data.stats.cartons || 0;
-          document.getElementById('stat-pallets').textContent = data.stats.pallets || 0;
-          document.getElementById('stat-printed').textContent = data.stats.printed || 0;
-          document.getElementById('stat-shipped').textContent = data.stats.shipped || 0;
-        }
-      } catch (err) {
-        console.error('Failed to load stats:', err);
+    // Update workflow step
+    function setWorkflowStep(step) {
+      for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById(`step-${i}`);
+        el.classList.remove('active', 'completed');
+        if (i < step) el.classList.add('completed');
+        if (i === step) el.classList.add('active');
       }
     }
 
-    // Load consolidation groups
-    async function loadConsolidationGroups() {
+    // Check GLS status
+    async function checkGLSStatus() {
       try {
-        const res = await fetch('/api/vendor/orders/consolidate', { credentials: 'include' });
+        const res = await fetch('/api/vendor/packing/gls-status', { credentials: 'include' });
         const data = await res.json();
-        if (data.success) {
-          consolidationGroups = data.groups;
-          renderGroupSelect();
+
+        glsConfigured = data.glsConfigured;
+        const statusEl = document.getElementById('gls-status');
+        const textEl = document.getElementById('gls-status-text');
+
+        if (data.glsConfigured) {
+          statusEl.classList.add('configured');
+          statusEl.classList.remove('not-configured');
+          textEl.textContent = 'GLS integration is configured - shipping labels will be generated automatically';
+        } else {
+          statusEl.classList.add('not-configured');
+          statusEl.classList.remove('configured');
+          textEl.textContent = 'GLS not configured - only SSCC labels will be generated (configure GLS_USER_ID and GLS_PASSWORD in .env)';
         }
       } catch (err) {
-        console.error('Failed to load groups:', err);
+        console.error('Failed to check GLS status:', err);
       }
     }
 
-    // Render group select dropdown
-    function renderGroupSelect() {
-      const select = document.getElementById('group-select');
-      select.innerHTML = '<option value="">-- Select a consolidation group to pack --</option>';
-      consolidationGroups.forEach((g, i) => {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = `${g.fcName} - ${g.orders.length} orders, ${g.totalUnits} units (Deliver by ${new Date(g.deliveryWindow?.endDate).toLocaleDateString()})`;
-        select.appendChild(opt);
-      });
-    }
+    // Load group data
+    async function loadGroupData() {
+      const params = new URLSearchParams(window.location.search);
+      groupId = params.get('group');
 
-    // Load group details
-    async function loadGroupDetails() {
-      const select = document.getElementById('group-select');
-      const idx = parseInt(select.value);
-      if (isNaN(idx)) {
-        currentGroup = null;
-        document.getElementById('group-info').style.display = 'none';
-        document.getElementById('items-table').innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span>Select a consolidation group above</div></td></tr>';
-        document.getElementById('create-carton-btn').disabled = true;
+      if (!groupId) {
+        document.getElementById('group-loading').innerHTML = `
+          <div style="text-align: center;">
+            <span class="material-symbols-outlined" style="font-size: 48px; color: #ef4444;">error</span>
+            <p style="color: #f87171; margin-top: 12px;">No consolidation group specified</p>
+            <a href="/ui/vendor/consolidate" class="btn btn-primary" style="margin-top: 16px;">Go to Consolidation</a>
+          </div>
+        `;
         return;
       }
 
-      const group = consolidationGroups[idx];
       try {
-        const res = await fetch(`/api/vendor/orders/consolidate/${encodeURIComponent(group.groupId)}`, { credentials: 'include' });
+        const res = await fetch(`/api/vendor/orders/consolidate/${encodeURIComponent(groupId)}`, { credentials: 'include' });
         const data = await res.json();
-        if (data.success) {
-          currentGroup = { ...group, ...data };
 
-          // Show info
-          document.getElementById('group-info').style.display = 'block';
-          document.getElementById('info-fc').textContent = data.fcName;
-          document.getElementById('info-delivery').textContent = new Date(data.deliveryWindow?.endDate).toLocaleDateString();
-          document.getElementById('info-orders').textContent = data.orders.map(o => o.purchaseOrderNumber).join(', ');
-          document.getElementById('info-units').textContent = data.summary.totalUnits;
+        if (!data.success) throw new Error(data.error);
 
-          // Initialize items with packing state
-          currentItems = data.consolidatedItems.map(item => ({
-            ...item,
-            packed: 0,
-            remaining: item.totalQty
-          }));
-
-          renderItemsTable();
-          document.getElementById('create-carton-btn').disabled = false;
-
-          // Reset cartons and pallets
-          cartons = [];
-          pallets = [];
-          renderCartons();
-          renderPallets();
-        }
+        groupData = data;
+        renderGroupInfo();
+        setWorkflowStep(1);
       } catch (err) {
-        showToast('Failed to load group details: ' + err.message, true);
+        document.getElementById('group-loading').innerHTML = `
+          <div style="text-align: center;">
+            <span class="material-symbols-outlined" style="font-size: 48px; color: #ef4444;">error</span>
+            <p style="color: #f87171; margin-top: 12px;">${err.message}</p>
+          </div>
+        `;
       }
     }
 
-    // Render items table
-    function renderItemsTable() {
+    // Render group info
+    function renderGroupInfo() {
+      document.getElementById('group-loading').style.display = 'none';
+      document.getElementById('group-content').style.display = 'block';
+
+      document.getElementById('info-fc').textContent = groupData.fcName;
+      document.getElementById('info-delivery').textContent = new Date(groupData.deliveryWindow?.endDate).toLocaleDateString();
+      document.getElementById('info-orders').textContent = groupData.orders.map(o => o.purchaseOrderNumber).join(', ');
+      document.getElementById('info-units').textContent = groupData.summary.totalUnits;
+
+      // Render items table
       const tbody = document.getElementById('items-table');
-      if (currentItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">No items</div></td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = currentItems.map((item, i) => `
+      tbody.innerHTML = groupData.consolidatedItems.map(item => `
         <tr>
-          <td><input type="checkbox" class="item-check" data-index="${i}" ${item.remaining > 0 ? '' : 'disabled'}></td>
           <td>${item.odooSku || '-'}</td>
           <td style="font-family: monospace; font-size: 12px;">${item.vendorProductIdentifier || '-'}</td>
-          <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${item.odooProductName || 'Unknown'}</td>
+          <td>${item.odooProductName || 'Unknown'}</td>
           <td class="qty-cell">${item.totalQty}</td>
-          <td class="qty-cell" style="color: #4ade80;">${item.packed}</td>
-          <td class="qty-cell" style="color: ${item.remaining > 0 ? '#fbbf24' : '#4ade80'};">${item.remaining}</td>
-          <td class="qty-cell">
-            <input type="number" class="qty-input pack-qty" data-index="${i}"
-                   value="${item.remaining}" min="0" max="${item.remaining}"
-                   ${item.remaining === 0 ? 'disabled' : ''}>
-          </td>
         </tr>
       `).join('');
 
-      updateAddToCartonBtn();
+      // Initialize parcels
+      updateParcels();
     }
 
-    // Toggle select all
-    function toggleSelectAll() {
-      const checked = document.getElementById('select-all').checked;
-      document.querySelectorAll('.item-check:not(:disabled)').forEach(cb => cb.checked = checked);
-      updateAddToCartonBtn();
-    }
+    // Update parcels
+    function updateParcels() {
+      const count = parseInt(document.getElementById('parcel-count').value) || 1;
 
-    // Update add to carton button state
-    function updateAddToCartonBtn() {
-      const anyChecked = document.querySelectorAll('.item-check:checked').length > 0;
-      const hasCarton = cartons.length > 0 && activeCartonIndex >= 0;
-      document.getElementById('add-to-carton-btn').disabled = !anyChecked || !hasCarton;
-    }
-
-    // Create a new carton
-    async function createCarton() {
-      if (!currentGroup) return;
-
-      try {
-        const res = await fetch('/api/vendor/sscc/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            count: 1,
-            type: 'carton',
-            purchaseOrderNumber: currentGroup.orders[0]?.purchaseOrderNumber
-          })
+      // Create or update parcels array
+      while (parcels.length < count) {
+        parcels.push({
+          items: [],
+          weight: 1.0,
+          estimatedWeight: 1.0
         });
+      }
+      while (parcels.length > count) {
+        parcels.pop();
+      }
 
-        const data = await res.json();
-        if (data.success && data.ssccs.length > 0) {
-          const sscc = data.ssccs[0];
-          cartons.push({
-            sscc: sscc.sscc,
-            ssccFormatted: sscc.ssccFormatted,
-            items: [],
-            totalUnits: 0
+      renderParcels();
+    }
+
+    // Auto-distribute items across parcels
+    function autoDistributeItems() {
+      if (!groupData) return;
+
+      const count = parseInt(document.getElementById('parcel-count').value) || 1;
+      const items = groupData.consolidatedItems;
+      const totalUnits = items.reduce((sum, i) => sum + i.totalQty, 0);
+      const unitsPerParcel = Math.ceil(totalUnits / count);
+
+      // Reset parcels
+      parcels = Array.from({ length: count }, () => ({
+        items: [],
+        weight: 0,
+        estimatedWeight: 0
+      }));
+
+      // Distribute items
+      let currentParcel = 0;
+      let currentUnits = 0;
+
+      for (const item of items) {
+        let remaining = item.totalQty;
+
+        while (remaining > 0) {
+          const spaceInParcel = unitsPerParcel - currentUnits;
+          const toAdd = Math.min(remaining, spaceInParcel);
+
+          parcels[currentParcel].items.push({
+            sku: item.odooSku,
+            ean: item.vendorProductIdentifier,
+            name: item.odooProductName,
+            quantity: toAdd
           });
-          activeCartonIndex = cartons.length - 1;
-          renderCartons();
-          updateAddToCartonBtn();
-          showToast('Carton created: ' + sscc.ssccFormatted);
-        }
-      } catch (err) {
-        showToast('Failed to create carton: ' + err.message, true);
-      }
-    }
 
-    // Add selected items to active carton
-    async function addItemsToCarton() {
-      if (activeCartonIndex < 0 || activeCartonIndex >= cartons.length) {
-        showToast('No carton selected', true);
-        return;
-      }
+          remaining -= toAdd;
+          currentUnits += toAdd;
 
-      const carton = cartons[activeCartonIndex];
-      const checkedItems = document.querySelectorAll('.item-check:checked');
-
-      checkedItems.forEach(cb => {
-        const idx = parseInt(cb.dataset.index);
-        const qtyInput = document.querySelector(`.pack-qty[data-index="${idx}"]`);
-        const packQty = parseInt(qtyInput.value) || 0;
-
-        if (packQty > 0 && packQty <= currentItems[idx].remaining) {
-          // Add to carton
-          const existingInCarton = carton.items.find(i => i.sku === currentItems[idx].odooSku);
-          if (existingInCarton) {
-            existingInCarton.quantity += packQty;
-          } else {
-            carton.items.push({
-              sku: currentItems[idx].odooSku,
-              ean: currentItems[idx].vendorProductIdentifier,
-              name: currentItems[idx].odooProductName,
-              quantity: packQty
-            });
+          if (currentUnits >= unitsPerParcel && currentParcel < count - 1) {
+            currentParcel++;
+            currentUnits = 0;
           }
-          carton.totalUnits += packQty;
-
-          // Update item state
-          currentItems[idx].packed += packQty;
-          currentItems[idx].remaining -= packQty;
         }
-      });
-
-      // Update SSCC contents on server
-      await fetch(`/api/vendor/sscc/${carton.sscc}/contents`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ items: carton.items })
-      });
-
-      // Uncheck all and refresh
-      document.querySelectorAll('.item-check').forEach(cb => cb.checked = false);
-      document.getElementById('select-all').checked = false;
-      renderItemsTable();
-      renderCartons();
-      showToast('Items added to carton');
-    }
-
-    // Render cartons list
-    function renderCartons() {
-      const container = document.getElementById('cartons-list');
-      document.getElementById('carton-count').textContent = cartons.length;
-      document.getElementById('print-labels-btn').disabled = cartons.length === 0;
-      document.getElementById('create-pallet-btn').disabled = cartons.length === 0;
-
-      if (cartons.length === 0) {
-        container.innerHTML = '<div class="empty-state"><span class="material-symbols-outlined">package_2</span>No cartons yet</div>';
-        return;
       }
 
-      container.innerHTML = cartons.map((c, i) => `
-        <div class="carton-item ${i === activeCartonIndex ? 'active' : ''}" onclick="selectCarton(${i})">
-          <div class="carton-header">
-            <div>
-              <strong>Carton ${i + 1}</strong>
-              <div class="carton-sscc">${c.ssccFormatted}</div>
-            </div>
-            <div class="carton-actions">
-              <button class="action-btn" onclick="event.stopPropagation(); printCartonLabel(${i})" title="Print Label">
-                <span class="material-symbols-outlined">print</span>
-              </button>
-              <button class="action-btn" onclick="event.stopPropagation(); deleteCarton(${i})" title="Delete">
-                <span class="material-symbols-outlined">delete</span>
-              </button>
-            </div>
-          </div>
-          <div class="carton-stats">
-            <span>${c.items.length} SKUs</span>
-            <span>${c.totalUnits} units</span>
-          </div>
-          ${c.items.length > 0 ? `
-            <div class="carton-contents">
-              ${c.items.slice(0, 3).map(item => `
-                <div class="carton-contents-item">
-                  <span>${item.sku || item.ean}</span>
-                  <span class="qty">${item.quantity}</span>
-                </div>
-              `).join('')}
-              ${c.items.length > 3 ? `<div style="font-size: 11px; color: #71717a;">+${c.items.length - 3} more...</div>` : ''}
-            </div>
-          ` : ''}
-        </div>
-      `).join('');
-    }
-
-    // Select carton
-    function selectCarton(index) {
-      activeCartonIndex = index;
-      renderCartons();
-      updateAddToCartonBtn();
-    }
-
-    // Delete carton
-    function deleteCarton(index) {
-      if (!confirm('Delete this carton? Items will be returned to unpacked state.')) return;
-
-      const carton = cartons[index];
-      // Return items to unpacked
-      carton.items.forEach(cartonItem => {
-        const item = currentItems.find(i => i.odooSku === cartonItem.sku);
-        if (item) {
-          item.packed -= cartonItem.quantity;
-          item.remaining += cartonItem.quantity;
-        }
-      });
-
-      cartons.splice(index, 1);
-      if (activeCartonIndex >= cartons.length) {
-        activeCartonIndex = cartons.length - 1;
+      // Estimate weights for each parcel
+      for (const parcel of parcels) {
+        estimateParcelWeight(parcel);
       }
 
-      renderItemsTable();
-      renderCartons();
-      showToast('Carton deleted');
+      renderParcels();
+      showToast(`Items distributed across ${count} parcels`);
     }
 
-    // Print single carton label
-    function printCartonLabel(index) {
-      const carton = cartons[index];
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = `/api/vendor/sscc/${carton.sscc}/label`;
-      form.target = '_blank';
-
-      const data = {
-        format: 'html',
-        shipTo: {
-          fcPartyId: currentGroup.fcPartyId,
-          fcName: currentGroup.fcName,
-          address: currentGroup.fcAddress
-        },
-        purchaseOrders: currentGroup.orders.map(o => o.purchaseOrderNumber),
-        items: carton.items
-      };
-
-      Object.entries(data).forEach(([key, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = typeof value === 'object' ? JSON.stringify(value) : value;
-        form.appendChild(input);
-      });
-
-      document.body.appendChild(form);
-      form.submit();
-      document.body.removeChild(form);
-    }
-
-    // Print all labels
-    async function printAllLabels() {
-      if (cartons.length === 0) return;
-
+    // Estimate parcel weight
+    async function estimateParcelWeight(parcel) {
       try {
-        const res = await fetch('/api/vendor/sscc/labels/batch', {
+        const res = await fetch('/api/vendor/packing/estimate-weight', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({
-            ssccs: cartons.map(c => c.sscc),
-            shipTo: {
-              fcPartyId: currentGroup.fcPartyId,
-              fcName: currentGroup.fcName,
-              address: currentGroup.fcAddress
-            },
-            purchaseOrders: currentGroup.orders.map(o => o.purchaseOrderNumber)
-          })
+          body: JSON.stringify({ items: parcel.items })
         });
-
-        const html = await res.text();
-        const win = window.open('', '_blank');
-        win.document.write(html);
-        win.document.close();
-        showToast('Labels opened for printing');
-      } catch (err) {
-        showToast('Failed to generate labels: ' + err.message, true);
-      }
-    }
-
-    // Create pallet
-    async function createPallet() {
-      if (cartons.length === 0) {
-        showToast('Add cartons first', true);
-        return;
-      }
-
-      const cartonSSCCs = cartons.map(c => c.sscc);
-
-      try {
-        const res = await fetch('/api/vendor/sscc/pallet', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            cartonSSCCs,
-            purchaseOrderNumber: currentGroup.orders[0]?.purchaseOrderNumber
-          })
-        });
-
         const data = await res.json();
         if (data.success) {
-          pallets.push({
-            sscc: data.pallet.sscc,
-            ssccFormatted: data.pallet.ssccFormatted,
-            cartonCount: cartonSSCCs.length,
-            cartonSSCCs
-          });
-          renderPallets();
-          showToast('Pallet created: ' + data.pallet.ssccFormatted);
+          parcel.estimatedWeight = data.estimatedWeight;
+          parcel.weight = data.estimatedWeight;
         }
       } catch (err) {
-        showToast('Failed to create pallet: ' + err.message, true);
+        console.error('Failed to estimate weight:', err);
       }
     }
 
-    // Render pallets
-    function renderPallets() {
-      const container = document.getElementById('pallets-list');
-      document.getElementById('pallet-count').textContent = pallets.length;
+    // Render parcels
+    function renderParcels() {
+      const grid = document.getElementById('parcels-grid');
 
-      if (pallets.length === 0) {
-        container.innerHTML = '<div class="empty-state" style="padding: 20px;"><span class="material-symbols-outlined">pallet</span>No pallets yet</div>';
+      grid.innerHTML = parcels.map((parcel, idx) => {
+        const status = parcel.sscc ? 'ready' : 'pending';
+        const itemsHtml = parcel.items.length > 0
+          ? parcel.items.map(item => `
+              <div class="parcel-item">
+                <span class="parcel-item-sku">${item.sku || item.ean || '-'}</span>
+                <span class="parcel-item-qty">${item.quantity}x</span>
+              </div>
+            `).join('')
+          : '<div style="color: #71717a; font-style: italic; padding: 8px 0;">No items assigned</div>';
+
+        return `
+          <div class="parcel-card ${status}">
+            <div class="parcel-header">
+              <span class="parcel-title">Parcel ${idx + 1}</span>
+              <span class="parcel-status ${status}">${status === 'ready' ? 'Ready' : 'Pending'}</span>
+            </div>
+            <div class="parcel-body">
+              <div class="weight-row">
+                <div class="parcel-field">
+                  <label>Weight (kg)</label>
+                  <input type="number" step="0.1" min="0.1" max="50" value="${parcel.weight.toFixed(1)}"
+                         onchange="updateParcelWeight(${idx}, this.value)">
+                  <div class="estimated-weight">Estimated: ${parcel.estimatedWeight.toFixed(1)} kg</div>
+                </div>
+              </div>
+              <div class="parcel-field">
+                <label>Items (${parcel.items.reduce((sum, i) => sum + i.quantity, 0)} units)</label>
+                <div class="parcel-items">${itemsHtml}</div>
+              </div>
+              ${parcel.sscc ? `
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #252532;">
+                  <div style="font-size: 11px; color: #71717a;">SSCC</div>
+                  <div style="font-family: monospace; font-size: 12px; color: #4ade80;">${parcel.ssccFormatted || parcel.sscc}</div>
+                  ${parcel.glsTrackingNumber ? `
+                    <div style="font-size: 11px; color: #71717a; margin-top: 8px;">GLS Tracking</div>
+                    <div style="font-family: monospace; font-size: 12px; color: #fbbf24;">${parcel.glsTrackingNumber}</div>
+                  ` : ''}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Update parcel weight
+    function updateParcelWeight(index, value) {
+      parcels[index].weight = parseFloat(value) || 1.0;
+    }
+
+    // Generate labels
+    async function generateLabels() {
+      if (!groupData || parcels.length === 0) {
+        showToast('Please configure parcels first', true);
         return;
       }
 
-      container.innerHTML = pallets.map((p, i) => `
-        <div class="pallet-item">
-          <div class="pallet-header">
-            <div>
-              <span class="pallet-badge">PALLET ${i + 1}</span>
-              <div class="carton-sscc" style="margin-top: 4px;">${p.ssccFormatted}</div>
-            </div>
-            <button class="action-btn" onclick="printPalletLabel(${i})" title="Print Label">
-              <span class="material-symbols-outlined">print</span>
-            </button>
-          </div>
-          <div class="pallet-cartons">${p.cartonCount} cartons</div>
-        </div>
-      `).join('');
-    }
+      // Check if all parcels have items
+      const emptyParcels = parcels.filter(p => p.items.length === 0);
+      if (emptyParcels.length > 0) {
+        showToast(`${emptyParcels.length} parcel(s) have no items. Use "Auto-Distribute" first.`, true);
+        return;
+      }
 
-    // Print pallet label
-    async function printPalletLabel(index) {
-      const pallet = pallets[index];
-      const totalUnits = cartons.filter(c => pallet.cartonSSCCs.includes(c.sscc))
-        .reduce((sum, c) => sum + c.totalUnits, 0);
+      const generateBtn = document.getElementById('generate-btn');
+      generateBtn.disabled = true;
+      generateBtn.innerHTML = '<span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">sync</span>Generating...';
+      document.getElementById('action-status').textContent = 'Generating labels...';
 
       try {
-        const res = await fetch(`/api/vendor/sscc/${pallet.sscc}/label`, {
+        // Step 1: Create shipment
+        const createRes = await fetch('/api/vendor/packing/create-shipment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({
-            format: 'html',
-            shipTo: {
-              fcPartyId: currentGroup.fcPartyId,
-              fcName: currentGroup.fcName,
-              address: currentGroup.fcAddress
-            },
-            purchaseOrders: currentGroup.orders.map(o => o.purchaseOrderNumber),
-            items: [] // Will use pallet data
+            groupId,
+            parcels: parcels.map(p => ({
+              items: p.items,
+              weight: p.weight,
+              estimatedWeight: p.estimatedWeight
+            })),
+            fcAddress: groupData.fcAddress,
+            fcName: groupData.fcName,
+            purchaseOrders: groupData.orders.map(o => o.purchaseOrderNumber)
           })
         });
 
-        const html = await res.text();
-        const win = window.open('', '_blank');
-        win.document.write(html);
-        win.document.close();
+        const createData = await createRes.json();
+        if (!createData.success) throw new Error(createData.error);
+
+        currentShipmentId = createData.shipment.shipmentId;
+
+        // Step 2: Generate labels
+        const labelsRes = await fetch(`/api/vendor/packing/${currentShipmentId}/generate-labels`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
+        });
+
+        const labelsData = await labelsRes.json();
+        if (!labelsData.success) throw new Error(labelsData.error);
+
+        // Update parcels with generated labels
+        for (let i = 0; i < labelsData.parcels.length; i++) {
+          const result = labelsData.parcels[i];
+          parcels[i].sscc = result.sscc;
+          parcels[i].ssccFormatted = result.ssccFormatted;
+          parcels[i].glsTrackingNumber = result.glsTrackingNumber;
+          parcels[i].glsError = result.glsError;
+        }
+
+        // Update UI
+        renderParcels();
+        setWorkflowStep(3);
+        document.getElementById('print-btn').disabled = false;
+        document.getElementById('asn-btn').disabled = false;
+        document.getElementById('labels-card').style.display = 'block';
+
+        // Render labels info
+        const ssccCount = labelsData.parcels.filter(p => p.sscc).length;
+        const glsCount = labelsData.parcels.filter(p => p.glsTrackingNumber).length;
+        document.getElementById('labels-info').innerHTML = `
+          <div class="label-stat success">
+            <div class="label-stat-value">${ssccCount}/${parcels.length}</div>
+            <div class="label-stat-label">SSCC Labels</div>
+          </div>
+          <div class="label-stat ${glsCount === parcels.length ? 'success' : 'warning'}">
+            <div class="label-stat-value">${glsCount}/${parcels.length}</div>
+            <div class="label-stat-label">GLS Labels</div>
+          </div>
+          <div class="label-stat">
+            <div class="label-stat-value">${currentShipmentId}</div>
+            <div class="label-stat-label">Shipment ID</div>
+          </div>
+        `;
+
+        document.getElementById('action-status').textContent = `Labels generated: ${ssccCount} SSCC, ${glsCount} GLS`;
+        showToast('Labels generated successfully!');
+
       } catch (err) {
-        showToast('Failed to generate pallet label: ' + err.message, true);
+        showToast('Error: ' + err.message, true);
+        document.getElementById('action-status').textContent = 'Error generating labels';
+      } finally {
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = '<span class="material-symbols-outlined">qr_code_2</span>Generate Labels (GLS + SSCC)';
+      }
+    }
+
+    // Print labels
+    function printLabels() {
+      if (!currentShipmentId) {
+        showToast('Generate labels first', true);
+        return;
+      }
+
+      window.open(`/api/vendor/packing/${currentShipmentId}/labels`, '_blank');
+      showToast('Labels opened for printing');
+    }
+
+    // Submit ASN
+    async function submitASN() {
+      if (!currentShipmentId) {
+        showToast('Generate labels first', true);
+        return;
+      }
+
+      const asnBtn = document.getElementById('asn-btn');
+      asnBtn.disabled = true;
+      asnBtn.innerHTML = '<span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">sync</span>Submitting...';
+
+      try {
+        const res = await fetch(`/api/vendor/packing/${currentShipmentId}/submit-asn`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
+        });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        setWorkflowStep(4);
+        document.getElementById('action-status').textContent = 'ASN submitted successfully!';
+        showToast('ASN submitted to Amazon');
+
+        asnBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span>ASN Submitted';
+        asnBtn.classList.remove('btn-secondary');
+        asnBtn.classList.add('btn-success');
+
+      } catch (err) {
+        showToast('Error: ' + err.message, true);
+        asnBtn.disabled = false;
+        asnBtn.innerHTML = '<span class="material-symbols-outlined">send</span>Submit ASN to Amazon';
       }
     }
 
     // Initialize
     async function init() {
-      await loadSSCCStats();
-      await loadConsolidationGroups();
-
-      // Listen for checkbox changes
-      document.getElementById('items-table').addEventListener('change', (e) => {
-        if (e.target.classList.contains('item-check')) {
-          updateAddToCartonBtn();
-        }
-      });
+      await checkGLSStatus();
+      await loadGroupData();
     }
 
     init();
