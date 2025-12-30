@@ -384,11 +384,14 @@ class BolStockSync {
 
   /**
    * Update stock for a single offer on Bol.com (Emipro workflow step 5)
+   * Note: Bol.com has a maximum stock limit of 999
    */
   async updateOfferStock(offerId, amount) {
     try {
+      // Bol.com API limit: stock must be between 0 and 999
+      const cappedAmount = Math.min(999, Math.max(0, Math.floor(amount)));
       await this.bolRequest(`/offers/${offerId}/stock`, 'PUT', {
-        amount: Math.max(0, Math.floor(amount)),
+        amount: cappedAmount,
         managedByRetailer: true
       });
       return { success: true };
@@ -457,19 +460,23 @@ class BolStockSync {
           continue;
         }
 
-        // Only update if stock changed
-        if (newStock === offer.currentStock) {
+        // Cap stock at 999 (Bol.com limit) for comparison
+        const cappedNewStock = Math.min(999, Math.max(0, Math.floor(newStock)));
+
+        // Only update if stock changed (comparing capped values)
+        if (cappedNewStock === offer.currentStock) {
           skipped++;
           skippedNoChange++;
           continue;
         }
 
         // Update stock on Bol.com
-        const result = await this.updateOfferStock(offer.offerId, newStock);
+        const result = await this.updateOfferStock(offer.offerId, cappedNewStock);
 
         if (result.success) {
           updated++;
-          console.log(`[BolStockSync] Updated ${ean}: ${offer.currentStock} → ${newStock}`);
+          const stockLog = cappedNewStock !== newStock ? `${newStock} (capped to ${cappedNewStock})` : cappedNewStock;
+          console.log(`[BolStockSync] Updated ${ean}: ${offer.currentStock} → ${stockLog}`);
         } else {
           failed++;
           errors.push({ ean, offerId: offer.offerId, error: result.error });
