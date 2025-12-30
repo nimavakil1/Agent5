@@ -92,21 +92,33 @@
     /* Add Item Modal */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
     .modal-overlay.open { display: flex; }
-    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; width: 500px; max-width: 90%; max-height: 80vh; overflow: hidden; }
+    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; width: 850px; max-width: 95%; max-height: 85vh; overflow: hidden; }
     .modal-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; }
     .modal-title { font-size: 18px; font-weight: 600; color: #fff; }
     .modal-close { background: none; border: none; color: #71717a; cursor: pointer; font-size: 24px; }
-    .modal-body { padding: 20px; max-height: 400px; overflow-y: auto; }
+    .modal-body { padding: 20px; max-height: 500px; overflow-y: auto; }
     .modal-footer { padding: 16px 20px; border-top: 1px solid #252532; display: flex; justify-content: flex-end; gap: 12px; }
-    .item-select-row { display: flex; align-items: center; gap: 12px; padding: 12px; background: #1a1a28; border-radius: 8px; margin-bottom: 8px; }
+    .item-select-row { display: flex; align-items: center; gap: 12px; padding: 14px; background: #1a1a28; border-radius: 8px; margin-bottom: 10px; }
     .item-select-row:hover { background: #252532; }
-    .item-select-info { flex: 1; }
+    .item-select-info { flex: 1; min-width: 0; }
     .item-select-sku { color: #e4e4e7; font-weight: 500; }
-    .item-select-name { color: #71717a; font-size: 12px; }
+    .item-select-name { color: #71717a; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .item-select-available { color: #71717a; font-size: 11px; }
     .item-select-available span { color: #4ade80; font-weight: 600; }
-    .item-select-qty { width: 80px; padding: 8px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #fff; text-align: center; }
+    .item-select-controls { display: flex; align-items: center; gap: 8px; }
+    .item-select-badges { display: flex; gap: 6px; align-items: center; }
+    .qty-badge { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .qty-badge.packaging { background: #3f3f50; color: #e4e4e7; }
+    .qty-badge.packaging:hover:not(.disabled) { background: #4f4f60; color: #fff; }
+    .qty-badge.all-rest { background: #f9731630; color: #f97316; }
+    .qty-badge.all-rest:hover:not(.disabled) { background: #f9731650; }
+    .qty-badge.disabled { opacity: 0.3; cursor: not-allowed; }
+    .qty-input-wrapper { display: flex; align-items: center; gap: 4px; }
+    .item-select-qty { width: 70px; padding: 8px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #fff; text-align: center; font-size: 14px; font-weight: 600; }
     .item-select-qty:focus { outline: none; border-color: #f97316; }
+    .qty-clear-btn { background: #ef444430; border: none; color: #ef4444; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .qty-clear-btn:hover { background: #ef444450; }
+    .qty-clear-btn .material-symbols-outlined { font-size: 16px; }
 
     /* Labels Section */
     .labels-section { margin-top: 24px; }
@@ -341,6 +353,36 @@
     let glsConfigured = false;
     let itemsRemaining = {}; // Track remaining qty for each item
     let currentModalParcelIndex = -1; // Which parcel we're adding items to
+    let packagingCache = {}; // Cache packaging data by odooProductId
+
+    // Fetch packaging for a product
+    async function fetchPackaging(odooProductId) {
+      if (!odooProductId) return [];
+      if (packagingCache[odooProductId]) return packagingCache[odooProductId];
+
+      try {
+        const res = await fetch(`/api/odoo/products/${odooProductId}/packaging`, { credentials: 'include' });
+        const data = await res.json();
+        if (data.success && data.packaging) {
+          // Sort by qty descending so larger packages come first
+          packagingCache[odooProductId] = data.packaging.sort((a, b) => b.qty - a.qty);
+          return packagingCache[odooProductId];
+        }
+      } catch (err) {
+        console.error('Failed to fetch packaging for product', odooProductId, err);
+      }
+      packagingCache[odooProductId] = [];
+      return [];
+    }
+
+    // Pre-fetch all packaging when modal opens
+    async function prefetchAllPackaging() {
+      if (!groupData) return;
+      const promises = groupData.consolidatedItems
+        .filter(item => item.odooProductId)
+        .map(item => fetchPackaging(item.odooProductId));
+      await Promise.all(promises);
+    }
 
     // Show toast
     function showToast(message, isError = false) {
@@ -432,37 +474,125 @@
     }
 
     // Open add items modal
-    function openAddItemsModal(parcelIndex) {
+    async function openAddItemsModal(parcelIndex) {
       currentModalParcelIndex = parcelIndex;
       calculateRemaining();
 
       document.getElementById('modal-parcel-num').textContent = parcelIndex + 1;
 
+      // Show loading state
       const modalBody = document.getElementById('modal-items-list');
-      modalBody.innerHTML = groupData.consolidatedItems.map(item => {
+      modalBody.innerHTML = '<div class="loading"><span class="material-symbols-outlined">sync</span>Loading packaging info...</div>';
+      document.getElementById('add-items-modal').classList.add('open');
+
+      // Pre-fetch all packaging data
+      await prefetchAllPackaging();
+
+      // Render items with packaging badges
+      modalBody.innerHTML = groupData.consolidatedItems.map((item, itemIndex) => {
         const key = item.odooSku || item.vendorProductIdentifier;
         const remaining = getRemainingQty(key);
-        const weight = item.weight || 0.5; // Default to 0.5kg if no weight
+        const weight = item.weight || 0.5;
+        const packaging = packagingCache[item.odooProductId] || [];
+        const isAllPacked = remaining === 0;
+
+        // Build packaging badges HTML
+        const packagingBadges = packaging.map(pkg => {
+          const disabled = pkg.qty > remaining;
+          return `<button type="button" class="qty-badge packaging ${disabled ? 'disabled' : ''}"
+                          onclick="${disabled ? '' : `addQtyBadge(${itemIndex}, ${pkg.qty})`}"
+                          title="${pkg.name}">${pkg.qty}</button>`;
+        }).join('');
+
+        // ALL or REST badge
+        const allRestLabel = remaining === item.totalQty ? `ALL ${remaining}` : `REST ${remaining}`;
+        const allRestBadge = remaining > 0
+          ? `<button type="button" class="qty-badge all-rest" onclick="addQtyBadge(${itemIndex}, ${remaining})">${allRestLabel}</button>`
+          : '';
 
         return `
-          <div class="item-select-row">
+          <div class="item-select-row" data-item-index="${itemIndex}" style="${isAllPacked ? 'opacity: 0.4;' : ''}">
             <div class="item-select-info">
-              <div class="item-select-sku">${item.odooSku || '-'} <span style="color: #71717a; font-size: 11px;">(${weight}kg each)</span></div>
+              <div class="item-select-sku">${item.odooSku || '-'} <span style="color: #71717a; font-size: 11px;">(${weight}kg)</span></div>
               <div class="item-select-name">${item.odooProductName || 'Unknown'}</div>
               <div class="item-select-available">Available: <span>${remaining}</span> of ${item.totalQty}</div>
             </div>
-            <input type="number" class="item-select-qty"
-                   data-sku="${item.odooSku || ''}"
-                   data-ean="${item.vendorProductIdentifier || ''}"
-                   data-name="${item.odooProductName || ''}"
-                   data-weight="${weight}"
-                   min="0" max="${remaining}" value="0"
-                   ${remaining === 0 ? 'disabled' : ''}>
+            <div class="item-select-controls">
+              <div class="item-select-badges" id="badges-${itemIndex}">
+                ${packagingBadges}
+                ${allRestBadge}
+              </div>
+              <div class="qty-input-wrapper">
+                <input type="number" class="item-select-qty" id="qty-input-${itemIndex}"
+                       data-sku="${item.odooSku || ''}"
+                       data-ean="${item.vendorProductIdentifier || ''}"
+                       data-name="${item.odooProductName || ''}"
+                       data-weight="${weight}"
+                       data-remaining="${remaining}"
+                       min="0" max="${remaining}" value="0"
+                       onchange="updateBadgeStates(${itemIndex})"
+                       ${isAllPacked ? 'disabled' : ''}>
+                <button type="button" class="qty-clear-btn" onclick="clearQtyInput(${itemIndex})" title="Clear">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
           </div>
         `;
       }).join('');
+    }
 
-      document.getElementById('add-items-modal').classList.add('open');
+    // Add quantity from badge click
+    function addQtyBadge(itemIndex, qty) {
+      const input = document.getElementById(`qty-input-${itemIndex}`);
+      if (!input || input.disabled) return;
+
+      const remaining = parseInt(input.dataset.remaining) || 0;
+      const currentVal = parseInt(input.value) || 0;
+      const newVal = Math.min(currentVal + qty, remaining);
+
+      input.value = newVal;
+      updateBadgeStates(itemIndex);
+    }
+
+    // Clear qty input
+    function clearQtyInput(itemIndex) {
+      const input = document.getElementById(`qty-input-${itemIndex}`);
+      if (!input) return;
+      input.value = 0;
+      updateBadgeStates(itemIndex);
+    }
+
+    // Update badge states based on current qty
+    function updateBadgeStates(itemIndex) {
+      const input = document.getElementById(`qty-input-${itemIndex}`);
+      const badgesContainer = document.getElementById(`badges-${itemIndex}`);
+      if (!input || !badgesContainer) return;
+
+      const totalRemaining = parseInt(input.dataset.remaining) || 0;
+      const currentVal = parseInt(input.value) || 0;
+      const stillAvailable = totalRemaining - currentVal;
+
+      // Get the item to access packaging
+      const item = groupData.consolidatedItems[itemIndex];
+      const packaging = packagingCache[item?.odooProductId] || [];
+
+      // Rebuild badges with updated disabled states
+      const packagingBadges = packaging.map(pkg => {
+        const disabled = pkg.qty > stillAvailable;
+        return `<button type="button" class="qty-badge packaging ${disabled ? 'disabled' : ''}"
+                        onclick="${disabled ? '' : `addQtyBadge(${itemIndex}, ${pkg.qty})`}"
+                        title="${pkg.name}">${pkg.qty}</button>`;
+      }).join('');
+
+      // ALL or REST badge
+      const isOriginal = currentVal === 0;
+      const allRestLabel = isOriginal ? `ALL ${totalRemaining}` : `REST ${stillAvailable}`;
+      const allRestBadge = stillAvailable > 0
+        ? `<button type="button" class="qty-badge all-rest" onclick="addQtyBadge(${itemIndex}, ${stillAvailable})">${allRestLabel}</button>`
+        : '';
+
+      badgesContainer.innerHTML = packagingBadges + allRestBadge;
     }
 
     // Close add items modal
