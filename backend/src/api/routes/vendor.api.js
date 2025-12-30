@@ -423,24 +423,48 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
     const db = getDb();
     const collection = db.collection('vendor_purchase_orders');
 
-    // Parse group ID to get FC and date (split on LAST underscore only, since partyId may contain underscores)
     const groupId = req.params.groupId;
-    const lastUnderscoreIndex = groupId.lastIndexOf('_');
-    const fcPartyId = lastUnderscoreIndex > 0 ? groupId.substring(0, lastUnderscoreIndex) : groupId;
-    const dateStr = lastUnderscoreIndex > 0 ? groupId.substring(lastUnderscoreIndex + 1) : 'nodate';
+    let query;
+    let fcPartyId, dateStr;
 
-    if (!fcPartyId) {
-      return res.status(400).json({ success: false, error: 'Invalid group ID' });
+    // Check if this is a separate/override group (contains _SEP_)
+    if (groupId.includes('_SEP_')) {
+      // Format: FC_DATE_SEP_PONUMBER - query for that specific PO
+      const sepIndex = groupId.indexOf('_SEP_');
+      const poNumber = groupId.substring(sepIndex + 5); // After "_SEP_"
+      const baseGroupId = groupId.substring(0, sepIndex);
+      const lastUnderscoreIndex = baseGroupId.lastIndexOf('_');
+      fcPartyId = lastUnderscoreIndex > 0 ? baseGroupId.substring(0, lastUnderscoreIndex) : baseGroupId;
+      dateStr = lastUnderscoreIndex > 0 ? baseGroupId.substring(lastUnderscoreIndex + 1) : 'nodate';
+
+      query = {
+        purchaseOrderNumber: poNumber,
+        consolidationOverride: true,
+        purchaseOrderState: { $in: ['New', 'Acknowledged'] },
+        shipmentStatus: 'not_shipped'
+      };
+
+      console.log('[VendorAPI] Consolidate detail (SEPARATE) - groupId:', groupId, 'poNumber:', poNumber);
+    } else {
+      // Normal group: parse FC and date
+      const lastUnderscoreIndex = groupId.lastIndexOf('_');
+      fcPartyId = lastUnderscoreIndex > 0 ? groupId.substring(0, lastUnderscoreIndex) : groupId;
+      dateStr = lastUnderscoreIndex > 0 ? groupId.substring(lastUnderscoreIndex + 1) : 'nodate';
+
+      if (!fcPartyId) {
+        return res.status(400).json({ success: false, error: 'Invalid group ID' });
+      }
+
+      // Build query - include both New and Acknowledged states, exclude overridden orders
+      query = {
+        'shipToParty.partyId': fcPartyId,
+        purchaseOrderState: { $in: ['New', 'Acknowledged'] },
+        shipmentStatus: 'not_shipped',
+        consolidationOverride: { $ne: true } // Exclude orders that were removed from consolidation
+      };
+
+      console.log('[VendorAPI] Consolidate detail - groupId:', groupId, 'fcPartyId:', fcPartyId, 'dateStr:', dateStr);
     }
-
-    // Build query - include both New and Acknowledged states
-    const query = {
-      'shipToParty.partyId': fcPartyId,
-      purchaseOrderState: { $in: ['New', 'Acknowledged'] },
-      shipmentStatus: 'not_shipped'
-    };
-
-    console.log('[VendorAPI] Consolidate detail - groupId:', groupId, 'fcPartyId:', fcPartyId, 'dateStr:', dateStr);
 
     // CRITICAL: Isolate test data from production data
     if (isTestMode()) {
@@ -450,7 +474,8 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
     }
 
     // Add date filter if present - use UTC to match database dates
-    if (dateStr && dateStr !== 'nodate') {
+    // Skip date filter for _SEP_ groups since we already filter by PO number
+    if (!groupId.includes('_SEP_') && dateStr && dateStr !== 'nodate') {
       // Parse as UTC to avoid timezone issues
       const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
       const endOfDay = new Date(dateStr + 'T00:00:00.000Z');
