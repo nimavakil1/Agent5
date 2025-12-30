@@ -198,9 +198,11 @@ router.get('/orders/consolidate', async (req, res) => {
       query.marketplaceId = req.query.marketplace.toUpperCase();
     }
 
-    // CRITICAL: Filter out test data unless test mode is enabled
-    if (!isTestMode()) {
-      query._testData = { $ne: true };
+    // CRITICAL: Isolate test data from production data
+    if (isTestMode()) {
+      query._testData = true; // In test mode, ONLY show test data
+    } else {
+      query._testData = { $ne: true }; // In production, exclude test data
     }
 
     // Get orders
@@ -309,9 +311,11 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       shipmentStatus: { $in: ['not_shipped', null, undefined] }
     };
 
-    // CRITICAL: Filter out test data unless test mode is enabled
-    if (!isTestMode()) {
-      query._testData = { $ne: true };
+    // CRITICAL: Isolate test data from production data
+    if (isTestMode()) {
+      query._testData = true; // In test mode, ONLY show test data
+    } else {
+      query._testData = { $ne: true }; // In production, exclude test data
     }
 
     // Add date filter if present
