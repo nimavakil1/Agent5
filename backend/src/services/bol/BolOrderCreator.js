@@ -442,6 +442,9 @@ class BolOrderCreator {
         try {
           await this.odoo.execute('sale.order', 'action_confirm', [[saleOrderId]]);
           result.confirmed = true;
+
+          // Sync delivery addresses to ensure they match the order
+          await this.syncDeliveryAddresses(saleOrderId);
         } catch (confirmError) {
           result.warnings.push(`Order created but auto-confirm failed: ${confirmError.message}`);
         }
@@ -762,6 +765,55 @@ class BolOrderCreator {
 
     console.log(`[BolOrderCreator] Link complete: ${results.linked} linked, ${results.notFound} not found in Odoo`);
     return results;
+  }
+
+  /**
+   * Sync delivery addresses with the order's shipping address
+   * This ensures stock.picking partner_id matches sale.order partner_shipping_id
+   *
+   * @param {number} orderId - The sale order ID
+   * @returns {number} Number of deliveries updated
+   */
+  async syncDeliveryAddresses(orderId) {
+    // Get the order with its shipping address and deliveries
+    const orders = await this.odoo.searchRead('sale.order',
+      [['id', '=', orderId]],
+      ['id', 'name', 'partner_shipping_id', 'picking_ids']
+    );
+
+    if (orders.length === 0) {
+      console.log(`[BolOrderCreator] Order ${orderId} not found for delivery sync`);
+      return 0;
+    }
+
+    const order = orders[0];
+    const shippingPartnerId = order.partner_shipping_id ? order.partner_shipping_id[0] : null;
+
+    if (!shippingPartnerId || !order.picking_ids || order.picking_ids.length === 0) {
+      return 0;
+    }
+
+    // Get all deliveries for this order
+    const pickings = await this.odoo.searchRead('stock.picking',
+      [['id', 'in', order.picking_ids]],
+      ['id', 'name', 'partner_id', 'state']
+    );
+
+    let updated = 0;
+    for (const picking of pickings) {
+      const currentPartnerId = picking.partner_id ? picking.partner_id[0] : null;
+
+      // Only update if different and delivery is not done/cancelled
+      if (currentPartnerId !== shippingPartnerId && !['done', 'cancel'].includes(picking.state)) {
+        await this.odoo.write('stock.picking', [picking.id], {
+          partner_id: shippingPartnerId
+        });
+        console.log(`[BolOrderCreator] Updated delivery ${picking.name} address to match order ${order.name}`);
+        updated++;
+      }
+    }
+
+    return updated;
   }
 }
 

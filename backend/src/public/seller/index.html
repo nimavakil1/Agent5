@@ -63,6 +63,13 @@
     .badge-fbm { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
     .badge-odoo { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
     .badge-no-odoo { background: rgba(113, 113, 122, 0.15); color: #a1a1aa; }
+    .btn-badge { position: relative; }
+    .btn-badge .notification-badge { position: absolute; top: -6px; right: -6px; background: #ef4444; color: white; font-size: 10px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 5px; }
+    .fbm-alert { background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; display: none; }
+    .fbm-alert.show { display: flex; align-items: center; gap: 12px; }
+    .fbm-alert-icon { color: #fb923c; }
+    .fbm-alert-text { flex: 1; font-size: 13px; color: #e4e4e7; }
+    .fbm-alert-text strong { color: #fb923c; }
     .empty-state { padding: 40px 20px; text-align: center; }
     .empty-state .material-symbols-outlined { font-size: 40px; color: #3f3f50; margin-bottom: 12px; }
     .empty-state-title { font-size: 14px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
@@ -120,14 +127,24 @@
         </div>
       </div>
       <div class="header-actions">
-        <a href="/seller/fbm-import.html" class="btn btn-secondary">
+        <a href="/seller/fbm-import.html" class="btn btn-secondary btn-badge" id="fbm-import-btn">
           <span class="material-symbols-outlined">upload_file</span>FBM Import
+          <span class="notification-badge" id="fbm-badge" style="display: none;">0</span>
         </a>
         <button class="btn btn-primary" id="fetch-btn" onclick="fetchOrders()">
           <span class="material-symbols-outlined">sync</span>Fetch Now
         </button>
       </div>
     </header>
+
+    <!-- FBM Alert Banner -->
+    <div class="fbm-alert" id="fbm-alert">
+      <span class="material-symbols-outlined fbm-alert-icon">warning</span>
+      <div class="fbm-alert-text">
+        <strong id="fbm-alert-count">0</strong> FBM orders need manual import via TSV file (Amazon PII permissions not available).
+        <a href="/seller/fbm-import.html" style="color: #fb923c;">Upload TSV file &rarr;</a>
+      </div>
+    </div>
 
     <!-- Stats -->
     <div class="stats-row">
@@ -272,7 +289,28 @@
     }
 
     async function init() {
-      await Promise.all([loadStatus(), loadStats(), loadOrders()]);
+      await Promise.all([loadStatus(), loadStats(), loadOrders(), loadFbmPendingCount()]);
+    }
+
+    async function loadFbmPendingCount() {
+      try {
+        const res = await fetch('/api/seller/fbm-pending-import');
+        const data = await res.json();
+
+        if (data.success && data.count > 0) {
+          // Show badge
+          const badge = document.getElementById('fbm-badge');
+          badge.textContent = data.count;
+          badge.style.display = 'flex';
+
+          // Show alert banner
+          const alert = document.getElementById('fbm-alert');
+          document.getElementById('fbm-alert-count').textContent = data.count;
+          alert.classList.add('show');
+        }
+      } catch (e) {
+        console.error('Error loading FBM pending count:', e);
+      }
     }
 
     function showToast(message, type = 'success') {
@@ -543,7 +581,7 @@
 
         if (data.success) {
           showToast(`Fetched ${data.result.ordersFound} orders, ${data.result.ordersUpserted} updated`);
-          await Promise.all([loadStatus(), loadStats(), loadOrders()]);
+          await Promise.all([loadStatus(), loadStats(), loadOrders(), loadFbmPendingCount()]);
         } else {
           showToast(data.error || 'Fetch failed', 'error');
         }

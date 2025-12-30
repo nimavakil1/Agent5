@@ -472,6 +472,28 @@ router.get('/pending', async (req, res) => {
   }
 });
 
+/**
+ * @route GET /api/seller/fbm-pending-import
+ * @desc Get count of FBM orders that need manual TSV import (no address available)
+ */
+router.get('/fbm-pending-import', async (req, res) => {
+  try {
+    const importer = await getImporter();
+    const count = await importer.countFbmOrdersPendingManualImport();
+
+    res.json({
+      success: true,
+      count,
+      message: count > 0
+        ? `${count} FBM order(s) need manual TSV import - Amazon PII permissions not available`
+        : 'No FBM orders pending manual import'
+    });
+  } catch (error) {
+    console.error('[SellerAPI] GET /fbm-pending-import error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== CONFIGURATION ====================
 
 /**

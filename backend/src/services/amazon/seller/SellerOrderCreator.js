@@ -574,6 +574,7 @@ class SellerOrderCreator {
           zip: address.postalCode || null,
           country_id: countryId,
           phone: address.phone || null,
+          email: order.buyerEmail || null,  // Email for carrier notifications (GLS, etc.)
           comment: `Shipping address from Amazon order ${order.amazonOrderId}${!address.name ? ' (PII limited by Amazon)' : ''}`
         });
         console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (ID: ${shippingAddressId})`);
@@ -820,11 +821,14 @@ class SellerOrderCreator {
 
     // Create order data
     // NOTE: journal_id is NOT set - VCS invoice import will set correct journal
+    // NOTE: Amazon SP-API doesn't provide separate billing address, so we use
+    // shipping address for both invoice and shipping. This ensures the delivery
+    // address on invoices is correct for the customer.
     const orderData = {
       name: orderName,
       partner_id: partnerId,
-      partner_invoice_id: partnerId,
-      partner_shipping_id: shippingPartnerId,  // Separate shipping address
+      partner_invoice_id: shippingPartnerId,  // Use shipping address for invoice (has full address details)
+      partner_shipping_id: shippingPartnerId,  // Shipping address
       client_order_ref: order.amazonOrderId,
       date_order: orderDate,
       warehouse_id: config.warehouseId,
@@ -845,11 +849,63 @@ class SellerOrderCreator {
   }
 
   /**
-   * Confirm a sale order
+   * Confirm a sale order and sync delivery addresses
    */
   async confirmOrder(orderId) {
     await this.odoo.execute('sale.order', 'action_confirm', [[orderId]]);
     console.log(`[SellerOrderCreator] Confirmed order ${orderId}`);
+
+    // Sync delivery addresses to ensure they match the order
+    await this.syncDeliveryAddresses(orderId);
+  }
+
+  /**
+   * Sync delivery addresses with the order's shipping address
+   * This ensures stock.picking partner_id matches sale.order partner_shipping_id
+   *
+   * @param {number} orderId - The sale order ID
+   * @returns {number} Number of deliveries updated
+   */
+  async syncDeliveryAddresses(orderId) {
+    // Get the order with its shipping address and deliveries
+    const orders = await this.odoo.searchRead('sale.order',
+      [['id', '=', orderId]],
+      ['id', 'name', 'partner_shipping_id', 'picking_ids']
+    );
+
+    if (orders.length === 0) {
+      console.log(`[SellerOrderCreator] Order ${orderId} not found for delivery sync`);
+      return 0;
+    }
+
+    const order = orders[0];
+    const shippingPartnerId = order.partner_shipping_id ? order.partner_shipping_id[0] : null;
+
+    if (!shippingPartnerId || !order.picking_ids || order.picking_ids.length === 0) {
+      return 0;
+    }
+
+    // Get all deliveries for this order
+    const pickings = await this.odoo.searchRead('stock.picking',
+      [['id', 'in', order.picking_ids]],
+      ['id', 'name', 'partner_id', 'state']
+    );
+
+    let updated = 0;
+    for (const picking of pickings) {
+      const currentPartnerId = picking.partner_id ? picking.partner_id[0] : null;
+
+      // Only update if different and delivery is not done/cancelled
+      if (currentPartnerId !== shippingPartnerId && !['done', 'cancel'].includes(picking.state)) {
+        await this.odoo.write('stock.picking', [picking.id], {
+          partner_id: shippingPartnerId
+        });
+        console.log(`[SellerOrderCreator] Updated delivery ${picking.name} address to match order ${order.name}`);
+        updated++;
+      }
+    }
+
+    return updated;
   }
 }
 

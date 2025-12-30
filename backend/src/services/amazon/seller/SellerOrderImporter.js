@@ -500,7 +500,12 @@ class SellerOrderImporter {
 
   /**
    * Get orders pending Odoo creation
-   * Orders that are eligible for auto-import but don't have Odoo orders yet
+   * Only returns orders that can be auto-imported:
+   * - FBA orders (AFN) - can use generic customers since Amazon handles fulfillment
+   * - FBM orders (MFN) with complete shipping address (name + street)
+   *
+   * FBM orders without complete addresses should be imported via TSV upload
+   *
    * @param {number} limit - Max orders to return
    */
   async getPendingOdooOrders(limit = 50) {
@@ -510,11 +515,71 @@ class SellerOrderImporter {
       'odoo.saleOrderId': null,
       autoImportEligible: true,
       orderStatus: { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
-      itemsFetched: true
+      itemsFetched: true,
+      // Only auto-import if:
+      // 1. FBA order (AFN) - Amazon handles fulfillment, generic customer OK
+      // 2. FBM order (MFN) with complete address (name AND addressLine1 must exist)
+      $or: [
+        { fulfillmentChannel: 'AFN' },  // FBA orders always eligible
+        {
+          fulfillmentChannel: 'MFN',
+          'shippingAddress.name': { $exists: true, $ne: null, $ne: '' },
+          'shippingAddress.addressLine1': { $exists: true, $ne: null, $ne: '' }
+        }
+      ]
     })
       .sort({ purchaseDate: -1 })
       .limit(limit)
       .toArray();
+  }
+
+  /**
+   * Get FBM orders that need manual import via TSV
+   * These are FBM orders without complete shipping addresses
+   * @param {number} limit - Max orders to return
+   */
+  async getFbmOrdersPendingManualImport(limit = 100) {
+    await this.init();
+
+    return this.collection.find({
+      'odoo.saleOrderId': null,
+      autoImportEligible: true,
+      fulfillmentChannel: 'MFN',
+      orderStatus: { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
+      itemsFetched: true,
+      // Missing name OR missing addressLine1
+      $or: [
+        { 'shippingAddress.name': { $in: [null, ''] } },
+        { 'shippingAddress.name': { $exists: false } },
+        { 'shippingAddress.addressLine1': { $in: [null, ''] } },
+        { 'shippingAddress.addressLine1': { $exists: false } }
+      ]
+    })
+      .sort({ purchaseDate: -1 })
+      .limit(limit)
+      .toArray();
+  }
+
+  /**
+   * Count FBM orders pending manual import
+   * Used for displaying badge/notification in UI
+   */
+  async countFbmOrdersPendingManualImport() {
+    await this.init();
+
+    return this.collection.countDocuments({
+      'odoo.saleOrderId': null,
+      autoImportEligible: true,
+      fulfillmentChannel: 'MFN',
+      orderStatus: { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
+      itemsFetched: true,
+      $or: [
+        { 'shippingAddress.name': { $in: [null, ''] } },
+        { 'shippingAddress.name': { $exists: false } },
+        { 'shippingAddress.addressLine1': { $in: [null, ''] } },
+        { 'shippingAddress.addressLine1': { $exists: false } }
+      ]
+    });
   }
 
   /**

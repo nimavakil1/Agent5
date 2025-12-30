@@ -102,6 +102,11 @@ class FbmOrderImporter {
       if (!orderGroups[orderId]) {
         orderGroups[orderId] = {
           orderId,
+          // Buyer info
+          buyerEmail: cols[headerIndex['buyer-email']]?.trim() || '',
+          buyerName: cols[headerIndex['buyer-name']]?.trim() || '',
+          buyerPhone: cols[headerIndex['buyer-phone-number']]?.trim() || '',
+          // Shipping address
           recipientName: cols[headerIndex['recipient-name']]?.trim() || '',
           address1: cols[headerIndex['ship-address-1']]?.trim() || '',
           address2: cols[headerIndex['ship-address-2']]?.trim() || '',
@@ -110,6 +115,17 @@ class FbmOrderImporter {
           state: cols[headerIndex['ship-state']]?.trim() || '',
           postalCode: cols[headerIndex['ship-postal-code']]?.trim() || '',
           country: cols[headerIndex['ship-country']]?.trim() || '',
+          shipPhone: cols[headerIndex['ship-phone-number']]?.trim() || '',
+          // Billing address
+          billName: cols[headerIndex['bill-name']]?.trim() || '',
+          billAddress1: cols[headerIndex['bill-address-1']]?.trim() || '',
+          billAddress2: cols[headerIndex['bill-address-2']]?.trim() || '',
+          billAddress3: cols[headerIndex['bill-address-3']]?.trim() || '',
+          billCity: cols[headerIndex['bill-city']]?.trim() || '',
+          billState: cols[headerIndex['bill-state']]?.trim() || '',
+          billPostalCode: cols[headerIndex['bill-postal-code']]?.trim() || '',
+          billCountry: cols[headerIndex['bill-country']]?.trim() || '',
+          // Other
           purchaseDate: cols[headerIndex['purchase-date']]?.split('T')[0] || new Date().toISOString().split('T')[0],
           isBusinessOrder: cols[headerIndex['is-business-order']]?.trim() === 'true',
           buyerCompanyName: cols[headerIndex['buyer-company-name']]?.trim() || '',
@@ -217,45 +233,136 @@ class FbmOrderImporter {
   }
 
   /**
-   * Find or create customer with actual details
+   * Find or create customer with separate invoice and shipping addresses
+   * @returns {Object} { customerId, invoiceAddressId, shippingAddressId }
    */
   async findOrCreateCustomer(order) {
-    const customerName = order.recipientName;
-    const countryCode = order.country;
-    const cacheKey = `${customerName}|${order.postalCode}`;
+    // Use buyer name or recipient name for parent customer
+    const customerName = order.buyerName || order.recipientName;
+    const customerCacheKey = `customer|${customerName}|${order.buyerEmail || order.postalCode}`;
 
-    if (this.partnerCache[cacheKey]) return this.partnerCache[cacheKey];
+    let customerId = this.partnerCache[customerCacheKey];
 
-    // Search by name and postal code
-    const existing = await this.odoo.searchRead('res.partner',
-      [['name', '=', customerName], ['zip', '=', order.postalCode]],
-      ['id']
+    if (!customerId) {
+      // Search by name and email (or postal code if no email)
+      const searchCriteria = order.buyerEmail
+        ? [['name', '=', customerName], ['email', '=', order.buyerEmail], ['parent_id', '=', false]]
+        : [['name', '=', customerName], ['zip', '=', order.postalCode], ['parent_id', '=', false]];
+
+      const existing = await this.odoo.searchRead('res.partner', searchCriteria, ['id']);
+
+      if (existing.length > 0) {
+        customerId = existing[0].id;
+      } else {
+        // Create parent customer (no address - addresses are child contacts)
+        const countryId = this.countryCache[order.country] || null;
+
+        customerId = await this.odoo.create('res.partner', {
+          name: customerName,
+          company_type: order.isBusinessOrder ? 'company' : 'person',
+          is_company: order.isBusinessOrder,
+          customer_rank: 1,
+          country_id: countryId,
+          email: order.buyerEmail || false,
+          phone: order.buyerPhone || false,
+          comment: `Created from Amazon FBM order ${order.orderId}`
+        });
+        console.log(`[FbmOrderImporter] Created customer: ${customerName} (ID: ${customerId})`);
+      }
+
+      this.partnerCache[customerCacheKey] = customerId;
+    }
+
+    // Create/find shipping address (child contact)
+    const shippingAddressId = await this.findOrCreateAddress(order, customerId, 'delivery', {
+      name: order.recipientName,
+      street: order.address1,
+      street2: order.address2 || order.address3 || false,
+      city: order.city,
+      zip: order.postalCode,
+      countryCode: order.country,
+      phone: order.shipPhone || order.buyerPhone || false,
+      email: order.buyerEmail || false  // Email for carrier notifications (GLS, etc.)
+    });
+
+    // Check if billing address is different from shipping
+    const billingIsDifferent = order.billName && order.billAddress1 && (
+      order.billName !== order.recipientName ||
+      order.billAddress1 !== order.address1 ||
+      order.billPostalCode !== order.postalCode
     );
+
+    let invoiceAddressId;
+    if (billingIsDifferent) {
+      // Create separate invoice address
+      invoiceAddressId = await this.findOrCreateAddress(order, customerId, 'invoice', {
+        name: order.billName,
+        street: order.billAddress1,
+        street2: order.billAddress2 || order.billAddress3 || false,
+        city: order.billCity,
+        zip: order.billPostalCode,
+        countryCode: order.billCountry || order.country,
+        phone: order.buyerPhone || false
+      });
+      console.log(`[FbmOrderImporter] Order ${order.orderId} has separate billing address`);
+    } else {
+      // Use shipping address for invoicing too (or parent customer if no shipping details differ)
+      invoiceAddressId = shippingAddressId;
+    }
+
+    return { customerId, invoiceAddressId, shippingAddressId };
+  }
+
+  /**
+   * Find or create a child address contact
+   * @param {Object} order - Order data
+   * @param {number} parentId - Parent customer ID
+   * @param {string} addressType - 'delivery' or 'invoice'
+   * @param {Object} addressData - Address details
+   * @returns {number} Address partner ID
+   */
+  async findOrCreateAddress(order, parentId, addressType, addressData) {
+    const cacheKey = `${addressType}|${parentId}|${addressData.zip}|${addressData.street || addressData.city}`;
+
+    if (this.partnerCache[cacheKey]) {
+      return this.partnerCache[cacheKey];
+    }
+
+    // Build search criteria
+    const searchCriteria = [
+      ['parent_id', '=', parentId],
+      ['type', '=', addressType]
+    ];
+    if (addressData.zip) searchCriteria.push(['zip', '=', addressData.zip]);
+    if (addressData.city) searchCriteria.push(['city', '=', addressData.city]);
+
+    const existing = await this.odoo.searchRead('res.partner', searchCriteria, ['id']);
 
     if (existing.length > 0) {
       this.partnerCache[cacheKey] = existing[0].id;
       return existing[0].id;
     }
 
-    // Create new customer with actual details
-    const countryId = this.countryCache[countryCode] || null;
-    const street = order.address1 + (order.address2 ? ', ' + order.address2 : '');
+    // Create new address contact
+    const countryId = this.countryCache[addressData.countryCode] || null;
 
-    const partnerId = await this.odoo.create('res.partner', {
-      name: customerName,
-      company_type: order.isBusinessOrder ? 'company' : 'person',
-      is_company: order.isBusinessOrder,
-      customer_rank: 1,
-      street: street,
-      street2: order.address3 || false,
-      city: order.city,
-      zip: order.postalCode,
+    const addressId = await this.odoo.create('res.partner', {
+      parent_id: parentId,
+      type: addressType,
+      name: addressData.name,
+      street: addressData.street || false,
+      street2: addressData.street2 || false,
+      city: addressData.city || false,
+      zip: addressData.zip || false,
       country_id: countryId,
-      comment: `Created from Amazon FBM order ${order.orderId}`
+      phone: addressData.phone || false,
+      email: addressData.email || false,  // Email for carrier notifications
+      comment: `${addressType === 'delivery' ? 'Shipping' : 'Billing'} address from Amazon order ${order.orderId}`
     });
 
-    this.partnerCache[cacheKey] = partnerId;
-    return partnerId;
+    console.log(`[FbmOrderImporter] Created ${addressType} address: ${addressData.name} (ID: ${addressId})`);
+    this.partnerCache[cacheKey] = addressId;
+    return addressId;
   }
 
   /**
@@ -315,8 +422,14 @@ class FbmOrderImporter {
    * Create sale order in Odoo
    * NOTE: Journal is NOT set here - VcsOdooInvoicer will set the correct journal
    * based on actual ship-from country from VCS report
+   *
+   * @param {Object} order - Parsed order data
+   * @param {number} customerId - Parent customer ID
+   * @param {number} invoiceAddressId - Invoice address ID
+   * @param {number} shippingAddressId - Shipping address ID
+   * @param {Array} orderLines - Order line items
    */
-  async createOdooOrder(order, partnerId, orderLines) {
+  async createOdooOrder(order, customerId, invoiceAddressId, shippingAddressId, orderLines) {
     const odooLines = orderLines.map(line => [0, 0, {
       product_id: line.product_id,
       product_uom_qty: line.quantity,
@@ -325,9 +438,9 @@ class FbmOrderImporter {
     }]);
 
     const orderData = {
-      partner_id: partnerId,
-      partner_invoice_id: partnerId,
-      partner_shipping_id: partnerId,
+      partner_id: customerId,
+      partner_invoice_id: invoiceAddressId,
+      partner_shipping_id: shippingAddressId,
       client_order_ref: order.orderId,
       date_order: order.purchaseDate,
       warehouse_id: FBM_WAREHOUSE_ID,
@@ -348,7 +461,59 @@ class FbmOrderImporter {
     // Confirm order
     await this.odoo.execute('sale.order', 'action_confirm', [[orderId]]);
 
+    // Sync delivery addresses to ensure they match the order
+    await this.syncDeliveryAddresses(orderId);
+
     return { id: orderId, name: createdName };
+  }
+
+  /**
+   * Sync delivery addresses with the order's shipping address
+   * This ensures stock.picking partner_id matches sale.order partner_shipping_id
+   *
+   * @param {number} orderId - The sale order ID
+   * @returns {number} Number of deliveries updated
+   */
+  async syncDeliveryAddresses(orderId) {
+    // Get the order with its shipping address and deliveries
+    const orders = await this.odoo.searchRead('sale.order',
+      [['id', '=', orderId]],
+      ['id', 'name', 'partner_shipping_id', 'picking_ids']
+    );
+
+    if (orders.length === 0) {
+      console.log(`[FbmOrderImporter] Order ${orderId} not found for delivery sync`);
+      return 0;
+    }
+
+    const order = orders[0];
+    const shippingPartnerId = order.partner_shipping_id ? order.partner_shipping_id[0] : null;
+
+    if (!shippingPartnerId || !order.picking_ids || order.picking_ids.length === 0) {
+      return 0;
+    }
+
+    // Get all deliveries for this order
+    const pickings = await this.odoo.searchRead('stock.picking',
+      [['id', 'in', order.picking_ids]],
+      ['id', 'name', 'partner_id', 'state']
+    );
+
+    let updated = 0;
+    for (const picking of pickings) {
+      const currentPartnerId = picking.partner_id ? picking.partner_id[0] : null;
+
+      // Only update if different and delivery is not done/cancelled
+      if (currentPartnerId !== shippingPartnerId && !['done', 'cancel'].includes(picking.state)) {
+        await this.odoo.write('stock.picking', [picking.id], {
+          partner_id: shippingPartnerId
+        });
+        console.log(`[FbmOrderImporter] Updated delivery ${picking.name} address to match order ${order.name}`);
+        updated++;
+      }
+    }
+
+    return updated;
   }
 
   /**
@@ -392,8 +557,8 @@ class FbmOrderImporter {
             continue;
           }
 
-          // Find/create customer
-          const partnerId = await this.findOrCreateCustomer(order);
+          // Find/create customer with separate invoice and shipping addresses
+          const { customerId, invoiceAddressId, shippingAddressId } = await this.findOrCreateCustomer(order);
 
           // Resolve order lines
           const orderLines = [];
@@ -423,8 +588,8 @@ class FbmOrderImporter {
 
           if (hasError) continue;
 
-          // Create order
-          const created = await this.createOdooOrder(order, partnerId, orderLines);
+          // Create order with separate invoice and shipping addresses
+          const created = await this.createOdooOrder(order, customerId, invoiceAddressId, shippingAddressId, orderLines);
           results.created++;
           results.orders.push({
             orderId,
