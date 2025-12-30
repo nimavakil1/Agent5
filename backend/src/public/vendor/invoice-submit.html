@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Submit Invoices - Amazon Vendor</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .page-title { font-size: 24px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 12px; }
+    .page-title .material-symbols-outlined { font-size: 28px; color: #f97316; }
+    .header-actions { display: flex; gap: 12px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #f97316; color: white; }
+    .btn-primary:hover { background: #ea580c; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn .material-symbols-outlined { font-size: 20px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+    .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 1100px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 700px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+    .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.15s; }
+    .stat-card:hover { border-color: #3f3f50; }
+    .stat-card.active { border-color: #f97316; background: rgba(249, 115, 22, 0.1); }
+    .stat-value { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .stat-label { font-size: 13px; color: #71717a; }
+    .stat-card.success .stat-value { color: #4ade80; }
+    .stat-card.warning .stat-value { color: #fbbf24; }
+    .stat-card.danger .stat-value { color: #f87171; }
+    .stat-card.info .stat-value { color: #60a5fa; }
+
+    .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #252532; padding-bottom: 12px; }
+    .tab { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; color: #71717a; cursor: pointer; transition: all 0.15s; }
+    .tab:hover { background: #252532; color: #e4e4e7; }
+    .tab.active { background: #f97316; color: white; }
+    .tab-badge { background: #3f3f50; color: #e4e4e7; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 8px; }
+    .tab.active .tab-badge { background: rgba(255,255,255,0.2); }
+
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; }
+    .card-title { font-size: 16px; font-weight: 600; color: #fff; }
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid #252532; }
+    th { background: #12121a; font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; }
+    td { font-size: 14px; color: #e4e4e7; }
+    tr:hover td { background: #1a1a28; }
+    tr.selected td { background: rgba(249, 115, 22, 0.1); }
+
+    .checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: #f97316; }
+
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    .badge-valid { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .badge-invalid { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+    .badge-warning { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .badge-no-invoice { background: rgba(113, 113, 122, 0.15); color: #a1a1aa; }
+    .badge-submitted { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .badge-pending { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
+
+    .validation-icon { font-size: 18px; vertical-align: middle; }
+    .validation-icon.valid { color: #4ade80; }
+    .validation-icon.invalid { color: #f87171; }
+    .validation-icon.warning { color: #fbbf24; }
+
+    .empty-state { padding: 60px 20px; text-align: center; }
+    .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
+    .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 8px; }
+    .empty-state-desc { font-size: 14px; color: #71717a; }
+
+    .action-btn { width: 32px; height: 32px; border-radius: 8px; background: #252532; border: none; color: #71717a; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .action-btn:hover { background: #3f3f50; color: #e4e4e7; }
+    .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .action-btn .material-symbols-outlined { font-size: 18px; }
+
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal { background: #1a1a24; border: 1px solid #252532; border-radius: 16px; width: 90%; max-width: 700px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; }
+    .modal-header { padding: 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { font-size: 18px; font-weight: 700; color: #fff; }
+    .modal-close { background: none; border: none; color: #71717a; cursor: pointer; font-size: 24px; }
+    .modal-close:hover { color: #e4e4e7; }
+    .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+    .modal-footer { padding: 16px 20px; border-top: 1px solid #252532; display: flex; justify-content: flex-end; gap: 12px; }
+
+    .validation-section { margin-bottom: 20px; }
+    .validation-section-title { font-size: 14px; font-weight: 600; color: #71717a; margin-bottom: 12px; text-transform: uppercase; }
+    .validation-row { display: flex; justify-content: space-between; padding: 12px 16px; background: #12121a; border-radius: 8px; margin-bottom: 8px; }
+    .validation-label { color: #a1a1aa; }
+    .validation-value { color: #fff; font-weight: 600; }
+    .validation-value.match { color: #4ade80; }
+    .validation-value.mismatch { color: #f87171; }
+
+    .error-list, .warning-list { margin: 12px 0; }
+    .error-item, .warning-item { display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; }
+    .error-item { background: rgba(239, 68, 68, 0.1); color: #fca5a5; }
+    .warning-item { background: rgba(251, 191, 36, 0.1); color: #fcd34d; }
+    .error-item .material-symbols-outlined, .warning-item .material-symbols-outlined { font-size: 18px; flex-shrink: 0; }
+
+    .progress-bar { height: 4px; background: #252532; border-radius: 2px; overflow: hidden; margin-bottom: 16px; }
+    .progress-fill { height: 100%; background: #f97316; transition: width 0.3s; }
+
+    .bulk-status { padding: 16px; background: #12121a; border-radius: 8px; margin-bottom: 16px; }
+    .bulk-status-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .bulk-status-label { color: #71717a; }
+    .bulk-status-value { color: #fff; font-weight: 600; }
+
+    .loading-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #3f3f50; border-top-color: #f97316; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast { position: fixed; bottom: 24px; right: 24px; padding: 16px 24px; border-radius: 12px; font-size: 14px; font-weight: 500; z-index: 2000; animation: slideIn 0.3s; }
+    .toast-success { background: #166534; color: #dcfce7; }
+    .toast-error { background: #991b1b; color: #fecaca; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div class="page-title">
+        <span class="material-symbols-outlined">send</span>
+        Submit Invoices to Amazon
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="loadData()">
+          <span class="material-symbols-outlined">refresh</span>Refresh
+        </button>
+        <button class="btn btn-primary" id="btn-validate-all" onclick="validateSelected()">
+          <span class="material-symbols-outlined">fact_check</span>Validate Selected
+        </button>
+        <button class="btn btn-success" id="btn-submit-all" onclick="submitSelected()">
+          <span class="material-symbols-outlined">send</span>Submit Selected
+        </button>
+      </div>
+    </header>
+
+    <div class="stats-row">
+      <div class="stat-card" id="stat-total" onclick="filterByStatus('')">
+        <div class="stat-value" id="stat-total-value">--</div>
+        <div class="stat-label">Total POs with Invoices</div>
+      </div>
+      <div class="stat-card success" id="stat-valid" onclick="filterByStatus('valid')">
+        <div class="stat-value" id="stat-valid-value">--</div>
+        <div class="stat-label">Valid & Ready</div>
+      </div>
+      <div class="stat-card warning" id="stat-warnings" onclick="filterByStatus('warnings')">
+        <div class="stat-value" id="stat-warnings-value">--</div>
+        <div class="stat-label">Has Warnings</div>
+      </div>
+      <div class="stat-card danger" id="stat-invalid" onclick="filterByStatus('invalid')">
+        <div class="stat-value" id="stat-invalid-value">--</div>
+        <div class="stat-label">Validation Failed</div>
+      </div>
+      <div class="stat-card info" id="stat-submitted" onclick="filterByStatus('submitted')">
+        <div class="stat-value" id="stat-submitted-value">--</div>
+        <div class="stat-label">Already Submitted</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="pending" onclick="switchTab('pending')">
+        Pending Submission<span class="tab-badge" id="tab-pending-count">0</span>
+      </div>
+      <div class="tab" data-tab="submitted" onclick="switchTab('submitted')">
+        Submitted<span class="tab-badge" id="tab-submitted-count">0</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title" id="card-title">Invoices Ready for Submission</div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <label style="display: flex; align-items: center; gap: 8px; color: #71717a; font-size: 13px; cursor: pointer;">
+            <input type="checkbox" class="checkbox" id="select-all" onchange="toggleSelectAll()">
+            Select All
+          </label>
+          <span id="selected-count" style="color: #71717a; font-size: 13px;">0 selected</span>
+        </div>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40px;"></th>
+              <th>PO Number</th>
+              <th>Odoo Invoice</th>
+              <th>Amount</th>
+              <th>PO Total</th>
+              <th>Difference</th>
+              <th>Validation</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="invoices-table">
+            <tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading...</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Validation Detail Modal -->
+  <div class="modal-overlay" id="validation-modal" style="display: none;" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">Validation Details</div>
+        <button class="modal-close" onclick="closeValidationModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <!-- Content populated by JS -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeValidationModal()">Close</button>
+        <button class="btn btn-success" id="modal-submit-btn" onclick="submitFromModal()">
+          <span class="material-symbols-outlined">send</span>Submit Invoice
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Submit Modal -->
+  <div class="modal-overlay" id="bulk-modal" style="display: none;" onclick="event.stopPropagation()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title">Bulk Submit Invoices</div>
+        <button class="modal-close" onclick="closeBulkModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="progress-bar"><div class="progress-fill" id="bulk-progress" style="width: 0%;"></div></div>
+        <div class="bulk-status">
+          <div class="bulk-status-row">
+            <span class="bulk-status-label">Total</span>
+            <span class="bulk-status-value" id="bulk-total">0</span>
+          </div>
+          <div class="bulk-status-row">
+            <span class="bulk-status-label">Submitted</span>
+            <span class="bulk-status-value" id="bulk-submitted" style="color: #4ade80;">0</span>
+          </div>
+          <div class="bulk-status-row">
+            <span class="bulk-status-label">Failed</span>
+            <span class="bulk-status-value" id="bulk-failed" style="color: #f87171;">0</span>
+          </div>
+          <div class="bulk-status-row">
+            <span class="bulk-status-label">Skipped</span>
+            <span class="bulk-status-value" id="bulk-skipped" style="color: #fbbf24;">0</span>
+          </div>
+        </div>
+        <div id="bulk-log" style="max-height: 200px; overflow-y: auto; font-size: 13px; color: #a1a1aa;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="bulk-close-btn" onclick="closeBulkModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allData = [];
+    let filteredData = [];
+    let selectedPOs = new Set();
+    let currentTab = 'pending';
+    let currentFilter = '';
+    let currentModalPO = null;
+
+    async function init() {
+      await loadData();
+    }
+
+    async function loadData() {
+      try {
+        // Fetch POs with Odoo orders
+        const poRes = await fetch('/api/vendor/orders?status=acknowledged&hasOdooOrder=true&limit=200', { credentials: 'include' });
+        const poData = await poRes.json();
+
+        if (!poData.success) {
+          throw new Error(poData.error || 'Failed to load POs');
+        }
+
+        allData = poData.orders || [];
+
+        // Batch validate to get current status
+        const poNumbers = allData.map(po => po.purchaseOrderNumber);
+        if (poNumbers.length > 0) {
+          const valRes = await fetch('/api/vendor/invoices/validate-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ poNumbers })
+          });
+          const valData = await valRes.json();
+
+          if (valData.success && valData.results) {
+            // Merge validation results
+            const valMap = {};
+            valData.results.forEach(r => { valMap[r.purchaseOrderNumber] = r; });
+            allData.forEach(po => {
+              po.validationResult = valMap[po.purchaseOrderNumber] || null;
+            });
+          }
+        }
+
+        updateStats();
+        applyFilters();
+
+      } catch (e) {
+        console.error('Load error:', e);
+        showToast('Failed to load data: ' + e.message, 'error');
+      }
+    }
+
+    function updateStats() {
+      let total = 0, valid = 0, warnings = 0, invalid = 0, submitted = 0;
+
+      allData.forEach(po => {
+        const val = po.validationResult;
+        if (!val || !val.hasInvoice) return;
+
+        total++;
+
+        // Check if already submitted
+        if (po.invoice?.status === 'submitted') {
+          submitted++;
+        } else if (val.validation?.isValid) {
+          if (val.validation.warnings?.length > 0) {
+            warnings++;
+          } else {
+            valid++;
+          }
+        } else {
+          invalid++;
+        }
+      });
+
+      document.getElementById('stat-total-value').textContent = total;
+      document.getElementById('stat-valid-value').textContent = valid;
+      document.getElementById('stat-warnings-value').textContent = warnings;
+      document.getElementById('stat-invalid-value').textContent = invalid;
+      document.getElementById('stat-submitted-value').textContent = submitted;
+
+      document.getElementById('tab-pending-count').textContent = valid + warnings + invalid;
+      document.getElementById('tab-submitted-count').textContent = submitted;
+    }
+
+    function filterByStatus(status) {
+      currentFilter = status;
+      document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+      if (status) {
+        document.getElementById('stat-' + status).classList.add('active');
+      }
+      applyFilters();
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+
+      document.getElementById('card-title').textContent =
+        tab === 'pending' ? 'Invoices Ready for Submission' : 'Submitted Invoices';
+
+      currentFilter = '';
+      document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+      applyFilters();
+    }
+
+    function applyFilters() {
+      filteredData = allData.filter(po => {
+        const val = po.validationResult;
+        if (!val || !val.hasInvoice) return false;
+
+        const isSubmitted = po.invoice?.status === 'submitted';
+
+        // Tab filter
+        if (currentTab === 'pending' && isSubmitted) return false;
+        if (currentTab === 'submitted' && !isSubmitted) return false;
+
+        // Status filter
+        if (currentFilter) {
+          if (currentFilter === 'submitted' && !isSubmitted) return false;
+          if (currentFilter === 'valid' && (!val.validation?.isValid || val.validation.warnings?.length > 0)) return false;
+          if (currentFilter === 'warnings' && (!val.validation?.isValid || val.validation.warnings?.length === 0)) return false;
+          if (currentFilter === 'invalid' && val.validation?.isValid) return false;
+        }
+
+        return true;
+      });
+
+      selectedPOs.clear();
+      updateSelectedCount();
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('invoices-table');
+
+      if (filteredData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">
+          <span class="material-symbols-outlined">description</span>
+          <div class="empty-state-title">No invoices found</div>
+          <div class="empty-state-desc">Invoices will appear here once POs have linked Odoo invoices</div>
+        </div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filteredData.map(po => {
+        const val = po.validationResult;
+        const inv = val?.invoice;
+        const validation = val?.validation;
+        const isSubmitted = po.invoice?.status === 'submitted';
+
+        // Validation status badge
+        let validationBadge = '';
+        let validationIcon = '';
+        if (!validation) {
+          validationBadge = '<span class="badge badge-no-invoice">Not Validated</span>';
+        } else if (isSubmitted) {
+          validationBadge = '<span class="badge badge-submitted">Submitted</span>';
+          validationIcon = '<span class="material-symbols-outlined validation-icon valid">check_circle</span>';
+        } else if (validation.isValid) {
+          if (validation.warnings?.length > 0) {
+            validationBadge = '<span class="badge badge-warning">Warnings (' + validation.warnings.length + ')</span>';
+            validationIcon = '<span class="material-symbols-outlined validation-icon warning">warning</span>';
+          } else {
+            validationBadge = '<span class="badge badge-valid">Valid</span>';
+            validationIcon = '<span class="material-symbols-outlined validation-icon valid">check_circle</span>';
+          }
+        } else {
+          validationBadge = '<span class="badge badge-invalid">Invalid (' + validation.errors?.length + ')</span>';
+          validationIcon = '<span class="material-symbols-outlined validation-icon invalid">error</span>';
+        }
+
+        const poTotal = validation?.comparison?.poTotal || 0;
+        const invTotal = validation?.comparison?.invoiceTotal || inv?.amountUntaxed || 0;
+        const diff = validation?.comparison?.difference || 0;
+        const diffClass = Math.abs(diff) < 0.01 ? 'match' : (Math.abs(diff) > poTotal * 0.01 ? 'mismatch' : '');
+
+        const isSelected = selectedPOs.has(po.purchaseOrderNumber);
+
+        return `<tr class="${isSelected ? 'selected' : ''}" data-po="${po.purchaseOrderNumber}">
+          <td>
+            <input type="checkbox" class="checkbox"
+              ${isSelected ? 'checked' : ''}
+              ${isSubmitted ? 'disabled' : ''}
+              onchange="toggleSelect('${po.purchaseOrderNumber}')">
+          </td>
+          <td><strong>${po.purchaseOrderNumber}</strong><br><span style="color:#71717a;font-size:12px;">${po.odoo?.saleOrderName || ''}</span></td>
+          <td>${inv?.name || '-'}<br><span style="color:#71717a;font-size:12px;">${inv?.invoiceDate || ''}</span></td>
+          <td style="font-weight:600;">${formatCurrency(inv?.amountTotal)}</td>
+          <td>${formatCurrency(poTotal)}</td>
+          <td class="${diffClass}">${diff !== 0 ? (diff > 0 ? '+' : '') + formatCurrency(diff) : '-'}</td>
+          <td>${validationIcon} ${validationBadge}</td>
+          <td>
+            <div style="display:flex;gap:8px;">
+              <button class="action-btn" title="View Details" onclick="showValidationDetails('${po.purchaseOrderNumber}')">
+                <span class="material-symbols-outlined">visibility</span>
+              </button>
+              ${!isSubmitted ? `
+              <button class="action-btn" title="Submit" onclick="submitSingle('${po.purchaseOrderNumber}')" ${!validation?.isValid ? 'disabled' : ''}>
+                <span class="material-symbols-outlined">send</span>
+              </button>
+              ` : ''}
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function toggleSelect(poNumber) {
+      if (selectedPOs.has(poNumber)) {
+        selectedPOs.delete(poNumber);
+      } else {
+        selectedPOs.add(poNumber);
+      }
+      updateSelectedCount();
+      renderTable();
+    }
+
+    function toggleSelectAll() {
+      const selectAll = document.getElementById('select-all').checked;
+      selectedPOs.clear();
+
+      if (selectAll) {
+        filteredData.forEach(po => {
+          if (po.invoice?.status !== 'submitted') {
+            selectedPOs.add(po.purchaseOrderNumber);
+          }
+        });
+      }
+
+      updateSelectedCount();
+      renderTable();
+    }
+
+    function updateSelectedCount() {
+      document.getElementById('selected-count').textContent = selectedPOs.size + ' selected';
+      document.getElementById('btn-validate-all').disabled = selectedPOs.size === 0;
+      document.getElementById('btn-submit-all').disabled = selectedPOs.size === 0;
+    }
+
+    async function showValidationDetails(poNumber) {
+      const po = allData.find(p => p.purchaseOrderNumber === poNumber);
+      if (!po) return;
+
+      currentModalPO = poNumber;
+      const val = po.validationResult;
+      const inv = val?.invoice;
+      const validation = val?.validation;
+      const isSubmitted = po.invoice?.status === 'submitted';
+
+      document.getElementById('modal-title').textContent = `Validation: ${poNumber}`;
+      document.getElementById('modal-submit-btn').style.display = isSubmitted ? 'none' : 'flex';
+      document.getElementById('modal-submit-btn').disabled = !validation?.isValid;
+
+      let html = '';
+
+      // Invoice Info
+      html += `<div class="validation-section">
+        <div class="validation-section-title">Invoice Information</div>
+        <div class="validation-row"><span class="validation-label">Odoo Invoice</span><span class="validation-value">${inv?.name || 'N/A'}</span></div>
+        <div class="validation-row"><span class="validation-label">Invoice Date</span><span class="validation-value">${inv?.invoiceDate || 'N/A'}</span></div>
+        <div class="validation-row"><span class="validation-label">Invoice State</span><span class="validation-value">${inv?.state || 'N/A'}</span></div>
+        <div class="validation-row"><span class="validation-label">Invoice Total (incl. tax)</span><span class="validation-value">${formatCurrency(inv?.amountTotal)}</span></div>
+        <div class="validation-row"><span class="validation-label">Invoice Total (excl. tax)</span><span class="validation-value">${formatCurrency(inv?.amountUntaxed)}</span></div>
+      </div>`;
+
+      // Comparison
+      if (validation?.comparison) {
+        const comp = validation.comparison;
+        const diffClass = Math.abs(comp.difference) < 0.01 ? 'match' : 'mismatch';
+
+        html += `<div class="validation-section">
+          <div class="validation-section-title">Total Comparison</div>
+          <div class="validation-row"><span class="validation-label">PO Net Total</span><span class="validation-value">${formatCurrency(comp.poTotal)}</span></div>
+          <div class="validation-row"><span class="validation-label">Invoice Net Total</span><span class="validation-value">${formatCurrency(comp.invoiceTotal)}</span></div>
+          <div class="validation-row"><span class="validation-label">Difference</span><span class="validation-value ${diffClass}">${comp.difference !== 0 ? (comp.difference > 0 ? '+' : '') + formatCurrency(comp.difference) + ' (' + comp.percentDiff + '%)' : 'None'}</span></div>
+          <div class="validation-row"><span class="validation-label">Items Matched</span><span class="validation-value">${comp.itemsMatched}</span></div>
+        </div>`;
+      }
+
+      // Errors
+      if (validation?.errors?.length > 0) {
+        html += `<div class="validation-section">
+          <div class="validation-section-title">Errors</div>
+          <div class="error-list">
+            ${validation.errors.map(e => `<div class="error-item"><span class="material-symbols-outlined">error</span>${e}</div>`).join('')}
+          </div>
+        </div>`;
+      }
+
+      // Warnings
+      if (validation?.warnings?.length > 0) {
+        html += `<div class="validation-section">
+          <div class="validation-section-title">Warnings</div>
+          <div class="warning-list">
+            ${validation.warnings.map(w => `<div class="warning-item"><span class="material-symbols-outlined">warning</span>${w}</div>`).join('')}
+          </div>
+        </div>`;
+      }
+
+      // Missing Items
+      if (validation?.comparison?.itemsMissing?.length > 0) {
+        html += `<div class="validation-section">
+          <div class="validation-section-title">Missing Items in Invoice</div>
+          ${validation.comparison.itemsMissing.map(item => `
+            <div class="validation-row">
+              <span class="validation-label">${item.sku}</span>
+              <span class="validation-value mismatch">Expected qty: ${item.expectedQty}</span>
+            </div>
+          `).join('')}
+        </div>`;
+      }
+
+      document.getElementById('modal-body').innerHTML = html;
+      document.getElementById('validation-modal').style.display = 'flex';
+    }
+
+    function closeValidationModal() {
+      document.getElementById('validation-modal').style.display = 'none';
+      currentModalPO = null;
+    }
+
+    function closeModal(event) {
+      if (event.target.classList.contains('modal-overlay')) {
+        closeValidationModal();
+      }
+    }
+
+    async function submitFromModal() {
+      if (!currentModalPO) return;
+      await submitSingle(currentModalPO);
+      closeValidationModal();
+    }
+
+    async function submitSingle(poNumber) {
+      try {
+        const res = await fetch(`/api/vendor/invoices/${poNumber}/submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ dryRun: false })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showToast(`Invoice ${data.invoiceNumber} submitted successfully!`, 'success');
+          await loadData();
+        } else {
+          showToast('Submission failed: ' + (data.errors?.join(', ') || 'Unknown error'), 'error');
+        }
+      } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+      }
+    }
+
+    async function validateSelected() {
+      if (selectedPOs.size === 0) return;
+
+      const poNumbers = Array.from(selectedPOs);
+
+      try {
+        const res = await fetch('/api/vendor/invoices/validate-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ poNumbers })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          // Merge results
+          const valMap = {};
+          data.results.forEach(r => { valMap[r.purchaseOrderNumber] = r; });
+          allData.forEach(po => {
+            if (valMap[po.purchaseOrderNumber]) {
+              po.validationResult = valMap[po.purchaseOrderNumber];
+            }
+          });
+
+          updateStats();
+          renderTable();
+          showToast(`Validated ${data.summary.total} invoices: ${data.summary.valid} valid, ${data.summary.invalid} invalid`, 'success');
+        }
+      } catch (e) {
+        showToast('Validation error: ' + e.message, 'error');
+      }
+    }
+
+    async function submitSelected() {
+      if (selectedPOs.size === 0) return;
+
+      const poNumbers = Array.from(selectedPOs);
+
+      // Filter to only valid ones
+      const validPOs = poNumbers.filter(poNum => {
+        const po = allData.find(p => p.purchaseOrderNumber === poNum);
+        return po?.validationResult?.validation?.isValid;
+      });
+
+      if (validPOs.length === 0) {
+        showToast('No valid invoices to submit. Please fix validation errors first.', 'error');
+        return;
+      }
+
+      // Show bulk modal
+      document.getElementById('bulk-modal').style.display = 'flex';
+      document.getElementById('bulk-total').textContent = validPOs.length;
+      document.getElementById('bulk-submitted').textContent = '0';
+      document.getElementById('bulk-failed').textContent = '0';
+      document.getElementById('bulk-skipped').textContent = '0';
+      document.getElementById('bulk-progress').style.width = '0%';
+      document.getElementById('bulk-log').innerHTML = '';
+      document.getElementById('bulk-close-btn').disabled = true;
+
+      let submitted = 0, failed = 0, skipped = 0;
+
+      for (let i = 0; i < validPOs.length; i++) {
+        const poNumber = validPOs[i];
+
+        try {
+          const res = await fetch(`/api/vendor/invoices/${poNumber}/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ dryRun: false })
+          });
+
+          const data = await res.json();
+
+          if (data.success) {
+            if (data.skipped) {
+              skipped++;
+              addBulkLog(poNumber, 'Skipped: ' + data.skipReason, 'warning');
+            } else {
+              submitted++;
+              addBulkLog(poNumber, 'Submitted: ' + data.invoiceNumber, 'success');
+            }
+          } else {
+            failed++;
+            addBulkLog(poNumber, 'Failed: ' + (data.errors?.join(', ') || 'Unknown'), 'error');
+          }
+        } catch (e) {
+          failed++;
+          addBulkLog(poNumber, 'Error: ' + e.message, 'error');
+        }
+
+        document.getElementById('bulk-submitted').textContent = submitted;
+        document.getElementById('bulk-failed').textContent = failed;
+        document.getElementById('bulk-skipped').textContent = skipped;
+        document.getElementById('bulk-progress').style.width = ((i + 1) / validPOs.length * 100) + '%';
+      }
+
+      document.getElementById('bulk-close-btn').disabled = false;
+      await loadData();
+    }
+
+    function addBulkLog(poNumber, message, type) {
+      const log = document.getElementById('bulk-log');
+      const color = type === 'success' ? '#4ade80' : type === 'error' ? '#f87171' : '#fbbf24';
+      log.innerHTML += `<div style="color:${color};margin-bottom:4px;">${poNumber}: ${message}</div>`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function closeBulkModal() {
+      document.getElementById('bulk-modal').style.display = 'none';
+    }
+
+    function formatCurrency(amount) {
+      if (amount == null) return '-';
+      return new Intl.NumberFormat('en-EU', { style: 'currency', currency: 'EUR' }).format(amount);
+    }
+
+    function showToast(message, type) {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.className = 'toast toast-' + type;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 5000);
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -108,16 +108,19 @@ class VendorInvoiceSubmitter {
    * @param {Object} options - Submission options
    * @param {number} options.odooInvoiceId - Specific Odoo invoice ID (optional)
    * @param {boolean} options.dryRun - If true, don't submit to Amazon
+   * @param {boolean} options.skipValidation - If true, skip validation checks
+   * @param {boolean} options.forceSubmit - If true, submit even with validation warnings
    * @returns {Object} Result with success status and transaction ID
    */
   async submitInvoice(poNumber, options = {}) {
-    const { odooInvoiceId = null, dryRun = false } = options;
+    const { odooInvoiceId = null, dryRun = false, skipValidation = false, forceSubmit = false } = options;
 
     const result = {
       success: false,
       purchaseOrderNumber: poNumber,
       invoiceNumber: null,
       transactionId: null,
+      validation: null,
       errors: [],
       warnings: []
     };
@@ -164,6 +167,29 @@ class VendorInvoiceSubmitter {
         return result;
       }
 
+      // Check invoice state
+      if (odooInvoice.state !== 'posted') {
+        result.errors.push(`Invoice ${odooInvoice.name} is not posted (state: ${odooInvoice.state}). Please validate the invoice in Odoo first.`);
+        return result;
+      }
+
+      // Run validation unless skipped
+      if (!skipValidation) {
+        const validation = await this.validateInvoice(po, odooInvoice);
+        result.validation = validation;
+        result.warnings.push(...validation.warnings);
+
+        if (!validation.isValid) {
+          result.errors.push(...validation.errors);
+          if (!forceSubmit) {
+            result.errors.push('Validation failed. Use forceSubmit=true to override.');
+            return result;
+          } else {
+            result.warnings.push('Validation errors overridden with forceSubmit');
+          }
+        }
+      }
+
       // Get client for marketplace
       const client = this.getClient(po.marketplaceId);
 
@@ -198,6 +224,7 @@ class VendorInvoiceSubmitter {
         status: 'submitted',
         transactionId: result.transactionId,
         submittedAt: new Date(),
+        validation: result.validation,
         invoiceTotal: {
           currencyCode: invoicePayload.invoices[0].invoiceTotal?.currencyCode || 'EUR',
           amount: invoicePayload.invoices[0].invoiceTotal?.amount || 0

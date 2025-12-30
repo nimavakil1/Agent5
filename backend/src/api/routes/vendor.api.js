@@ -1668,10 +1668,88 @@ router.get('/invoices', async (req, res) => {
 });
 
 /**
+ * @route GET /api/vendor/invoices/:poNumber/validate
+ * @desc Validate invoice against PO before submission
+ * @param poNumber - Purchase order number
+ * @query odooInvoiceId - Optional: specific Odoo invoice ID to validate
+ */
+router.get('/invoices/:poNumber/validate', async (req, res) => {
+  try {
+    const submitter = await getVendorInvoiceSubmitter();
+
+    const result = await submitter.validateInvoiceForPO(req.params.poNumber, {
+      odooInvoiceId: req.query.odooInvoiceId ? parseInt(req.query.odooInvoiceId) : null
+    });
+
+    res.json({
+      success: result.errors.length === 0,
+      ...result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /invoices/:poNumber/validate error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/invoices/validate-batch
+ * @desc Validate multiple invoices at once
+ * @body poNumbers - Array of PO numbers to validate
+ */
+router.post('/invoices/validate-batch', async (req, res) => {
+  try {
+    const submitter = await getVendorInvoiceSubmitter();
+    const { poNumbers = [] } = req.body;
+
+    if (poNumbers.length === 0) {
+      return res.status(400).json({ success: false, error: 'No PO numbers provided' });
+    }
+
+    if (poNumbers.length > 50) {
+      return res.status(400).json({ success: false, error: 'Maximum 50 POs per batch' });
+    }
+
+    const results = [];
+    let valid = 0;
+    let invalid = 0;
+    let noInvoice = 0;
+
+    for (const poNumber of poNumbers) {
+      const result = await submitter.validateInvoiceForPO(poNumber);
+      results.push(result);
+
+      if (!result.hasInvoice) {
+        noInvoice++;
+      } else if (result.validation?.isValid) {
+        valid++;
+      } else {
+        invalid++;
+      }
+    }
+
+    res.json({
+      success: true,
+      summary: {
+        total: poNumbers.length,
+        valid,
+        invalid,
+        noInvoice
+      },
+      results
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /invoices/validate-batch error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route POST /api/vendor/invoices/:poNumber/submit
  * @desc Submit invoice to Amazon for a PO
  * @body odooInvoiceId - Optional: specific Odoo invoice ID to use
  * @body dryRun - Optional: simulate without sending (default false)
+ * @body skipValidation - Optional: skip validation checks (default false)
+ * @body forceSubmit - Optional: submit even with validation errors (default false)
  */
 router.post('/invoices/:poNumber/submit', async (req, res) => {
   try {
@@ -1679,14 +1757,17 @@ router.post('/invoices/:poNumber/submit', async (req, res) => {
 
     const result = await submitter.submitInvoice(req.params.poNumber, {
       odooInvoiceId: req.body.odooInvoiceId || null,
-      dryRun: req.body.dryRun || false
+      dryRun: req.body.dryRun || false,
+      skipValidation: req.body.skipValidation || false,
+      forceSubmit: req.body.forceSubmit || false
     });
 
     if (!result.success && result.errors.length > 0) {
       return res.status(400).json({
         success: false,
         errors: result.errors,
-        warnings: result.warnings
+        warnings: result.warnings,
+        validation: result.validation
       });
     }
 
@@ -1699,6 +1780,7 @@ router.post('/invoices/:poNumber/submit', async (req, res) => {
       purchaseOrderNumber: result.purchaseOrderNumber,
       invoiceNumber: result.invoiceNumber,
       transactionId: result.transactionId,
+      validation: result.validation,
       warnings: result.warnings,
       ...(result.payload && { payload: result.payload })
     });

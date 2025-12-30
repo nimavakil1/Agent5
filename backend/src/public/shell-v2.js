@@ -55,6 +55,7 @@
         { id: 'packing', path: '/vendor/packing.html', name: 'Packing & Labels', icon: 'package_2' },
         { id: 'sscc-history', path: '/vendor/sscc-history.html', name: 'SSCC History', icon: 'history' },
         { id: 'invoices', path: '/vendor/invoices.html', name: 'Invoices', icon: 'description' },
+        { id: 'invoice-submit', path: '/vendor/invoice-submit.html', name: 'Submit Invoices', icon: 'send' },
         { id: 'remittances', path: '/vendor/remittances.html', name: 'Remittances', icon: 'payments' },
         { id: 'shipments', path: '/vendor/shipments.html', name: 'Shipments', icon: 'local_shipping' },
         { id: 'settings', path: '/vendor/settings.html', name: 'Settings', icon: 'settings' }
