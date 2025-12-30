@@ -931,11 +931,11 @@ function createConsolidationGroupId(partyId, deliveryWindowEnd) {
 }
 
 /**
- * @route POST /api/vendor/orders/consolidate/:groupId/packing-list
+ * @route GET/POST /api/vendor/orders/consolidate/:groupId/packing-list
  * @desc Generate a consolidated packing list for a group of orders
- * @body format - Output format: 'json' (default), 'html', 'csv'
+ * @query format - Output format: 'json' (default), 'html', 'csv'
  */
-router.post('/orders/consolidate/:groupId/packing-list', async (req, res) => {
+async function generatePackingList(req, res) {
   try {
     const db = getDb();
     const collection = db.collection('vendor_purchase_orders');
@@ -1034,7 +1034,7 @@ router.post('/orders/consolidate/:groupId/packing-list', async (req, res) => {
     packingList.summary.lineCount = packingList.items.length;
     packingList.summary.totalUnits = packingList.items.reduce((sum, i) => sum + i.quantity, 0);
 
-    const format = req.body.format || 'json';
+    const format = req.body?.format || req.query?.format || 'json';
 
     if (format === 'html') {
       // Generate printable HTML
@@ -1056,10 +1056,14 @@ router.post('/orders/consolidate/:groupId/packing-list', async (req, res) => {
       packingList
     });
   } catch (error) {
-    console.error('[VendorAPI] POST /orders/consolidate/:groupId/packing-list error:', error);
+    console.error('[VendorAPI] /orders/consolidate/:groupId/packing-list error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
-});
+}
+
+// Support both GET and POST for packing list
+router.get('/orders/consolidate/:groupId/packing-list', generatePackingList);
+router.post('/orders/consolidate/:groupId/packing-list', generatePackingList);
 
 /**
  * Generate HTML packing list for printing

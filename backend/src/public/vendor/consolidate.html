@@ -397,21 +397,8 @@
     // Print packing list
     async function printPackingList(groupId) {
       try {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = `/api/vendor/orders/consolidate/${encodeURIComponent(groupId)}/packing-list`;
-        form.target = '_blank';
-
-        const formatInput = document.createElement('input');
-        formatInput.type = 'hidden';
-        formatInput.name = 'format';
-        formatInput.value = 'html';
-        form.appendChild(formatInput);
-
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
-
+        // Open packing list in new window with format as query param
+        window.open(`/api/vendor/orders/consolidate/${encodeURIComponent(groupId)}/packing-list?format=html`, '_blank');
         showToast('Opening packing list for printing...');
       } catch (err) {
         showToast('Error generating packing list: ' + err.message, true);
