@@ -48,6 +48,7 @@
     .group-info { flex: 1; }
     .group-fc-name { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
     .group-fc-code { font-size: 12px; color: #71717a; background: #252532; padding: 2px 8px; border-radius: 4px; }
+    .separate-badge { font-size: 11px; color: #fbbf24; background: #fbbf2420; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
     .group-meta { display: flex; gap: 20px; font-size: 13px; color: #a1a1aa; margin-top: 8px; flex-wrap: wrap; }
     .group-meta-item { display: flex; align-items: center; gap: 4px; }
     .group-meta-item .material-symbols-outlined { font-size: 16px; color: #71717a; }
@@ -66,6 +67,9 @@
     .orders-list-title { font-size: 14px; font-weight: 600; color: #a1a1aa; margin-bottom: 12px; }
     .order-pill { display: inline-flex; align-items: center; gap: 6px; background: #252532; padding: 6px 12px; border-radius: 8px; font-size: 13px; color: #e4e4e7; margin-right: 8px; margin-bottom: 8px; }
     .order-pill .material-symbols-outlined { font-size: 16px; color: #71717a; }
+    .order-pill .remove-po { color: #ef4444; cursor: pointer; margin-left: 4px; }
+    .order-pill .remove-po:hover { color: #f87171; }
+    .order-pill.excluded { background: #3f3f50; opacity: 0.6; text-decoration: line-through; }
 
     /* Items Table */
     .items-section { margin-top: 16px; }
@@ -261,6 +265,8 @@
       const urgencyText = daysUntil !== null
         ? (daysUntil < 0 ? 'OVERDUE' : daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} days`)
         : '-';
+      const isSeparate = group.groupId.includes('_SEP_');
+      const separatePO = isSeparate ? group.groupId.split('_SEP_')[1] : null;
 
       return `
         <div class="group-card" id="group-${group.groupId}" data-group-id="${group.groupId}">
@@ -269,6 +275,7 @@
               <div class="group-fc-name">
                 ${group.fcName}
                 <span class="group-fc-code">${group.fcPartyId}</span>
+                ${isSeparate ? `<span class="separate-badge">Separate Shipment</span>` : ''}
               </div>
               <div class="group-meta">
                 <div class="group-meta-item">
@@ -300,6 +307,11 @@
               </div>
             </div>
             <div class="group-actions">
+              ${isSeparate ? `
+                <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); restorePOToGroup('${separatePO}')" title="Merge back to original consolidation">
+                  <span class="material-symbols-outlined">undo</span>Merge Back
+                </button>
+              ` : ''}
               <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); startPacking('${group.groupId}')">
                 <span class="material-symbols-outlined">package_2</span>Start Packing
               </button>
@@ -350,12 +362,18 @@
     // Render group details
     function renderGroupDetails(groupId, data) {
       const details = document.getElementById(`details-${groupId}`);
+      const canRemove = data.orders.length > 1; // Can only remove if more than 1 order
 
       const ordersHtml = data.orders.map(o => `
-        <div class="order-pill">
+        <div class="order-pill" id="pill-${o.purchaseOrderNumber}">
           <span class="material-symbols-outlined">receipt</span>
           ${o.purchaseOrderNumber}
-          <span style="color: #71717a; font-size: 12px;">${o.itemCount} items</span>
+          <span style="color: #71717a; font-size: 12px;">${o.itemCount} products</span>
+          ${canRemove ? `
+            <span class="material-symbols-outlined remove-po"
+                  onclick="event.stopPropagation(); removePOFromGroup('${groupId}', '${o.purchaseOrderNumber}')"
+                  title="Remove from this consolidation (will create separate shipment)">close</span>
+          ` : ''}
         </div>
       `).join('');
 
@@ -445,6 +463,60 @@
     // Start packing workflow - redirect to packing page with groupId
     function startPacking(groupId) {
       window.location.href = `/vendor/packing.html?group=${encodeURIComponent(groupId)}`;
+    }
+
+    // Remove PO from consolidation group - creates separate shipment
+    async function removePOFromGroup(groupId, poNumber) {
+      if (!confirm(`Remove PO ${poNumber} from this consolidation?\n\nThis will create a separate shipment for this order.`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/vendor/orders/consolidation/remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ groupId, poNumber })
+        });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        showToast(`PO ${poNumber} removed - separate shipment created`);
+
+        // Clear cache and reload
+        groupDetails = {};
+        await loadData();
+      } catch (err) {
+        showToast('Error: ' + err.message, true);
+      }
+    }
+
+    // Restore PO to original consolidation group
+    async function restorePOToGroup(poNumber) {
+      if (!confirm(`Merge PO ${poNumber} back to its original consolidation group?`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/vendor/orders/consolidation/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ poNumber })
+        });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        showToast(`PO ${poNumber} merged back to original consolidation`);
+
+        // Clear cache and reload
+        groupDetails = {};
+        await loadData();
+      } catch (err) {
+        showToast('Error: ' + err.message, true);
+      }
     }
 
     // Initialize

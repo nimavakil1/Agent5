@@ -217,7 +217,10 @@ router.get('/orders/consolidate', async (req, res) => {
     for (const order of orders) {
       const partyId = order.shipToParty?.partyId || 'UNKNOWN';
       const deliveryEnd = order.deliveryWindow?.endDate;
-      const groupId = createConsolidationGroupId(partyId, deliveryEnd);
+      // If order has a consolidationOverride, it gets its own separate group
+      const groupId = order.consolidationOverride
+        ? `${createConsolidationGroupId(partyId, deliveryEnd)}_SEP_${order.purchaseOrderNumber}`
+        : createConsolidationGroupId(partyId, deliveryEnd);
 
       if (!groups[groupId]) {
         groups[groupId] = {
@@ -285,6 +288,92 @@ router.get('/orders/consolidate', async (req, res) => {
     });
   } catch (error) {
     console.error('[VendorAPI] GET /orders/consolidate error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/orders/consolidation/remove
+ * @desc Remove a PO from its consolidation group (creates separate shipment)
+ */
+router.post('/orders/consolidation/remove', async (req, res) => {
+  try {
+    const { groupId, poNumber } = req.body;
+
+    if (!poNumber) {
+      return res.status(400).json({ success: false, error: 'PO number required' });
+    }
+
+    const db = getDb();
+    const collection = db.collection('vendor_purchase_orders');
+
+    // Find the order
+    const order = await collection.findOne({ purchaseOrderNumber: poNumber });
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+
+    // Set consolidationOverride to force separate group
+    await collection.updateOne(
+      { purchaseOrderNumber: poNumber },
+      {
+        $set: {
+          consolidationOverride: true,
+          consolidationOverrideAt: new Date(),
+          consolidationOverrideReason: `Removed from group ${groupId}`
+        }
+      }
+    );
+
+    console.log(`[VendorAPI] PO ${poNumber} removed from consolidation group ${groupId}`);
+
+    res.json({
+      success: true,
+      message: `PO ${poNumber} will now ship separately`,
+      poNumber
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /orders/consolidation/remove error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/orders/consolidation/restore
+ * @desc Restore a PO to its original consolidation group
+ */
+router.post('/orders/consolidation/restore', async (req, res) => {
+  try {
+    const { poNumber } = req.body;
+
+    if (!poNumber) {
+      return res.status(400).json({ success: false, error: 'PO number required' });
+    }
+
+    const db = getDb();
+    const collection = db.collection('vendor_purchase_orders');
+
+    // Remove consolidationOverride
+    await collection.updateOne(
+      { purchaseOrderNumber: poNumber },
+      {
+        $unset: {
+          consolidationOverride: '',
+          consolidationOverrideAt: '',
+          consolidationOverrideReason: ''
+        }
+      }
+    );
+
+    console.log(`[VendorAPI] PO ${poNumber} restored to original consolidation`);
+
+    res.json({
+      success: true,
+      message: `PO ${poNumber} restored to original consolidation`,
+      poNumber
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /orders/consolidation/restore error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
