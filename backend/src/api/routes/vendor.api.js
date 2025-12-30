@@ -946,11 +946,11 @@ router.post('/orders/consolidate/:groupId/packing-list', async (req, res) => {
     const fcPartyId = lastUnderscoreIndex > 0 ? groupId.substring(0, lastUnderscoreIndex) : groupId;
     const dateStr = lastUnderscoreIndex > 0 ? groupId.substring(lastUnderscoreIndex + 1) : 'nodate';
 
-    // Build query
+    // Build query - include both New and Acknowledged states
     const query = {
       'shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
-      purchaseOrderState: 'Acknowledged',
-      shipmentStatus: 'not_shipped'
+      purchaseOrderState: { $in: ['New', 'Acknowledged'] },
+      shipmentStatus: { $ne: 'shipped' }
     };
 
     // CRITICAL: Isolate test data from production data

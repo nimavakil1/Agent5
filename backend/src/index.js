@@ -382,6 +382,8 @@ app.use('/api/print', requireSession, printRouter);
 app.use('/api/shipping', requireSession, shippingRouter);
 // CW Fulfillment module
 app.use('/api/fulfillment', requireSession, fulfillmentRouter);
+// Accounting Agent module
+app.use('/api/accounting', requireSession, accountingRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
