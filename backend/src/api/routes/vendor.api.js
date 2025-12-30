@@ -297,8 +297,11 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
     const db = getDb();
     const collection = db.collection('vendor_purchase_orders');
 
-    // Parse group ID to get FC and date
-    const [fcPartyId, dateStr] = req.params.groupId.split('_');
+    // Parse group ID to get FC and date (split on LAST underscore only, since partyId may contain underscores)
+    const groupId = req.params.groupId;
+    const lastUnderscoreIndex = groupId.lastIndexOf('_');
+    const fcPartyId = lastUnderscoreIndex > 0 ? groupId.substring(0, lastUnderscoreIndex) : groupId;
+    const dateStr = lastUnderscoreIndex > 0 ? groupId.substring(lastUnderscoreIndex + 1) : 'nodate';
 
     if (!fcPartyId) {
       return res.status(400).json({ success: false, error: 'Invalid group ID' });
@@ -934,8 +937,11 @@ router.post('/orders/consolidate/:groupId/packing-list', async (req, res) => {
     const db = getDb();
     const collection = db.collection('vendor_purchase_orders');
 
-    // Parse group ID
-    const [fcPartyId, dateStr] = req.params.groupId.split('_');
+    // Parse group ID (split on LAST underscore only, since partyId may contain underscores)
+    const groupId = req.params.groupId;
+    const lastUnderscoreIndex = groupId.lastIndexOf('_');
+    const fcPartyId = lastUnderscoreIndex > 0 ? groupId.substring(0, lastUnderscoreIndex) : groupId;
+    const dateStr = lastUnderscoreIndex > 0 ? groupId.substring(lastUnderscoreIndex + 1) : 'nodate';
 
     // Build query
     const query = {
@@ -943,6 +949,13 @@ router.post('/orders/consolidate/:groupId/packing-list', async (req, res) => {
       purchaseOrderState: 'Acknowledged',
       shipmentStatus: 'not_shipped'
     };
+
+    // CRITICAL: Isolate test data from production data
+    if (isTestMode()) {
+      query._testData = true;
+    } else {
+      query._testData = { $ne: true };
+    }
 
     if (dateStr && dateStr !== 'nodate') {
       const startOfDay = new Date(dateStr);
