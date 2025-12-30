@@ -49,6 +49,16 @@ const {
   PARTY_TYPES
 } = require('../../services/amazon/vendor');
 
+// Test Mode support
+const {
+  isTestMode,
+  enableTestMode,
+  disableTestMode,
+  getTestModeStatus,
+  generateTestPOs,
+  cleanupTestData
+} = require('../../services/amazon/vendor/TestMode');
+
 // ==================== PURCHASE ORDERS ====================
 
 /**
@@ -3064,6 +3074,95 @@ router.get('/invoices/payment-status', async (req, res) => {
     });
   } catch (error) {
     console.error('[VendorAPI] GET /invoices/payment-status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== TEST MODE ====================
+
+/**
+ * @route GET /api/vendor/test-mode
+ * @desc Get current test mode status
+ */
+router.get('/test-mode', (req, res) => {
+  res.json({
+    success: true,
+    testMode: getTestModeStatus()
+  });
+});
+
+/**
+ * @route POST /api/vendor/test-mode/enable
+ * @desc Enable test mode - mocks all Amazon API calls
+ */
+router.post('/test-mode/enable', (req, res) => {
+  const user = req.body.user || 'api';
+  const status = enableTestMode(user);
+
+  res.json({
+    success: true,
+    message: 'Test mode ENABLED - All Amazon API calls will be mocked',
+    testMode: status
+  });
+});
+
+/**
+ * @route POST /api/vendor/test-mode/disable
+ * @desc Disable test mode - resume normal Amazon API calls
+ */
+router.post('/test-mode/disable', (req, res) => {
+  const result = disableTestMode();
+
+  res.json({
+    success: true,
+    message: 'Test mode DISABLED - Normal Amazon API calls resumed',
+    wasEnabled: result.wasEnabled,
+    duration: result.duration
+  });
+});
+
+/**
+ * @route POST /api/vendor/test-mode/generate-pos
+ * @desc Generate test POs from historical data
+ * @body count - Number of test POs to generate (default 5)
+ */
+router.post('/test-mode/generate-pos', async (req, res) => {
+  try {
+    if (!isTestMode()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Test mode must be enabled to generate test POs'
+      });
+    }
+
+    const count = parseInt(req.body.count) || 5;
+    const result = await generateTestPOs(count);
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /test-mode/generate-pos error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/test-mode/cleanup
+ * @desc Clean up all test data (POs marked with _testData: true)
+ */
+router.post('/test-mode/cleanup', async (req, res) => {
+  try {
+    const result = await cleanupTestData();
+
+    res.json({
+      success: true,
+      message: `Cleaned up ${result.deleted} test records`,
+      ...result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /test-mode/cleanup error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

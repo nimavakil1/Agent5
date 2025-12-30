@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Mode - Amazon Vendor</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page { max-width: 900px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .page-title { font-size: 24px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 12px; }
+    .page-title .material-symbols-outlined { font-size: 28px; color: #f97316; }
+
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; padding: 24px; margin-bottom: 24px; }
+    .card-title { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+    .card-title .material-symbols-outlined { color: #f97316; }
+
+    .status-banner { padding: 20px 24px; border-radius: 12px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; }
+    .status-banner.enabled { background: rgba(251, 191, 36, 0.15); border: 2px solid #fbbf24; }
+    .status-banner.disabled { background: rgba(34, 197, 94, 0.1); border: 2px solid #22c55e; }
+    .status-text { display: flex; align-items: center; gap: 12px; }
+    .status-text .material-symbols-outlined { font-size: 28px; }
+    .status-banner.enabled .status-text .material-symbols-outlined { color: #fbbf24; }
+    .status-banner.disabled .status-text .material-symbols-outlined { color: #22c55e; }
+    .status-label { font-size: 18px; font-weight: 600; color: #fff; }
+    .status-detail { font-size: 13px; color: #a1a1aa; margin-top: 4px; }
+
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #f97316; color: white; }
+    .btn-primary:hover { background: #ea580c; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn .material-symbols-outlined { font-size: 20px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-lg { padding: 16px 32px; font-size: 16px; }
+
+    .warning-box { background: rgba(251, 191, 36, 0.1); border: 1px solid #fbbf24; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+    .warning-box-title { font-size: 14px; font-weight: 600; color: #fbbf24; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .warning-box-text { font-size: 13px; color: #fcd34d; line-height: 1.6; }
+
+    .info-box { background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+    .info-box-title { font-size: 14px; font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .info-box-text { font-size: 13px; color: #93c5fd; line-height: 1.6; }
+
+    .feature-list { list-style: none; padding: 0; margin: 0; }
+    .feature-list li { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid #252532; }
+    .feature-list li:last-child { border-bottom: none; }
+    .feature-list .material-symbols-outlined { color: #4ade80; font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+    .feature-text { color: #e4e4e7; font-size: 14px; }
+    .feature-text strong { color: #fff; }
+
+    .action-section { display: flex; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
+
+    .test-data-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid #252532; }
+
+    .input-group { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .input-group label { color: #a1a1aa; font-size: 14px; min-width: 150px; }
+    .input-group input { padding: 10px 14px; background: #12121a; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 14px; width: 80px; }
+    .input-group input:focus { outline: none; border-color: #f97316; }
+
+    .log-output { background: #12121a; border: 1px solid #252532; border-radius: 8px; padding: 16px; margin-top: 16px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 13px; color: #a1a1aa; }
+    .log-entry { margin-bottom: 8px; }
+    .log-entry.success { color: #4ade80; }
+    .log-entry.error { color: #f87171; }
+    .log-entry.info { color: #60a5fa; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    @media (max-width: 600px) { .stats-grid { grid-template-columns: 1fr; } }
+    .stat-item { background: #12121a; border-radius: 8px; padding: 16px; text-align: center; }
+    .stat-value { font-size: 28px; font-weight: 700; color: #fff; }
+    .stat-label { font-size: 12px; color: #71717a; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div class="page-title">
+        <span class="material-symbols-outlined">science</span>
+        Test Mode
+      </div>
+    </header>
+
+    <div class="status-banner" id="status-banner">
+      <div class="status-text">
+        <span class="material-symbols-outlined" id="status-icon">hourglass_empty</span>
+        <div>
+          <div class="status-label" id="status-label">Loading...</div>
+          <div class="status-detail" id="status-detail"></div>
+        </div>
+      </div>
+      <button class="btn btn-lg" id="toggle-btn" onclick="toggleTestMode()" disabled>
+        <span class="material-symbols-outlined">power_settings_new</span>
+        <span id="toggle-btn-text">Loading...</span>
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span class="material-symbols-outlined">info</span>
+        What is Test Mode?
+      </div>
+
+      <div class="info-box">
+        <div class="info-box-title"><span class="material-symbols-outlined">lightbulb</span>For Training & Testing</div>
+        <div class="info-box-text">
+          Test Mode allows you to test the entire Amazon Vendor workflow without sending any data to Amazon.
+          Use it to train warehouse staff, take screenshots, or verify the system works correctly.
+        </div>
+      </div>
+
+      <ul class="feature-list">
+        <li>
+          <span class="material-symbols-outlined">check_circle</span>
+          <div class="feature-text"><strong>Mock API Calls</strong> - All Amazon API calls return realistic mock responses</div>
+        </li>
+        <li>
+          <span class="material-symbols-outlined">check_circle</span>
+          <div class="feature-text"><strong>Real Historical Data</strong> - Uses your actual past orders for realistic testing</div>
+        </li>
+        <li>
+          <span class="material-symbols-outlined">check_circle</span>
+          <div class="feature-text"><strong>Full Workflow Testing</strong> - Test PO acknowledgment, packing, shipping, invoicing</div>
+        </li>
+        <li>
+          <span class="material-symbols-outlined">check_circle</span>
+          <div class="feature-text"><strong>Safe for Screenshots</strong> - Perfect for creating training documentation</div>
+        </li>
+        <li>
+          <span class="material-symbols-outlined">check_circle</span>
+          <div class="feature-text"><strong>Visual Indicator</strong> - Clear banner shows when test mode is active</div>
+        </li>
+      </ul>
+
+      <div class="warning-box">
+        <div class="warning-box-title"><span class="material-symbols-outlined">warning</span>Important</div>
+        <div class="warning-box-text">
+          When test mode is enabled, <strong>NO data is sent to Amazon</strong>. All submissions (acknowledgments, invoices, shipments) are mocked.
+          <br><br>
+          Remember to <strong>disable test mode</strong> before processing real orders!
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="test-data-card" style="display: none;">
+      <div class="card-title">
+        <span class="material-symbols-outlined">data_object</span>
+        Generate Test Data
+      </div>
+
+      <p style="color: #a1a1aa; margin-bottom: 16px;">
+        Generate simulated new POs based on your historical order data. These test POs will appear as "New" and can be used to test the full workflow.
+      </p>
+
+      <div class="input-group">
+        <label>Number of Test POs:</label>
+        <input type="number" id="test-po-count" value="5" min="1" max="20">
+      </div>
+
+      <div class="action-section">
+        <button class="btn btn-primary" onclick="generateTestPOs()">
+          <span class="material-symbols-outlined">add_circle</span>
+          Generate Test POs
+        </button>
+        <button class="btn btn-danger" onclick="cleanupTestData()">
+          <span class="material-symbols-outlined">delete</span>
+          Clean Up Test Data
+        </button>
+      </div>
+
+      <div class="log-output" id="log-output" style="display: none;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span class="material-symbols-outlined">checklist</span>
+        Test Workflow Checklist
+      </div>
+
+      <ol style="color: #e4e4e7; padding-left: 20px; line-height: 2;">
+        <li>Enable Test Mode (above)</li>
+        <li>Go to <a href="/vendor/" style="color: #f97316;">Purchase Orders</a> to see orders</li>
+        <li>Try acknowledging a PO</li>
+        <li>Go to <a href="/vendor/consolidate.html" style="color: #f97316;">Consolidate</a> to group orders</li>
+        <li>Go to <a href="/vendor/packing.html" style="color: #f97316;">Packing & Labels</a> to create cartons and print labels</li>
+        <li>Go to <a href="/vendor/invoice-submit.html" style="color: #f97316;">Submit Invoices</a> to test invoice submission</li>
+        <li>Take screenshots for training</li>
+        <li><strong style="color: #fbbf24;">Disable Test Mode when done!</strong></li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    let testModeEnabled = false;
+
+    async function init() {
+      await checkTestModeStatus();
+    }
+
+    async function checkTestModeStatus() {
+      try {
+        const res = await fetch('/api/vendor/test-mode', { credentials: 'include' });
+        const data = await res.json();
+
+        testModeEnabled = data.testMode?.enabled || false;
+        updateUI();
+      } catch (e) {
+        console.error('Failed to check test mode status:', e);
+      }
+    }
+
+    function updateUI() {
+      const banner = document.getElementById('status-banner');
+      const icon = document.getElementById('status-icon');
+      const label = document.getElementById('status-label');
+      const detail = document.getElementById('status-detail');
+      const toggleBtn = document.getElementById('toggle-btn');
+      const toggleBtnText = document.getElementById('toggle-btn-text');
+      const testDataCard = document.getElementById('test-data-card');
+
+      if (testModeEnabled) {
+        banner.className = 'status-banner enabled';
+        icon.textContent = 'science';
+        label.textContent = 'TEST MODE ACTIVE';
+        detail.textContent = 'All Amazon API calls are being mocked';
+        toggleBtn.className = 'btn btn-lg btn-danger';
+        toggleBtnText.textContent = 'Disable Test Mode';
+        testDataCard.style.display = 'block';
+      } else {
+        banner.className = 'status-banner disabled';
+        icon.textContent = 'verified';
+        label.textContent = 'PRODUCTION MODE';
+        detail.textContent = 'All API calls are live';
+        toggleBtn.className = 'btn btn-lg btn-primary';
+        toggleBtnText.textContent = 'Enable Test Mode';
+        testDataCard.style.display = 'none';
+      }
+
+      toggleBtn.disabled = false;
+    }
+
+    async function toggleTestMode() {
+      const toggleBtn = document.getElementById('toggle-btn');
+      toggleBtn.disabled = true;
+
+      try {
+        const endpoint = testModeEnabled ? '/api/vendor/test-mode/disable' : '/api/vendor/test-mode/enable';
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ user: 'ui' })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          testModeEnabled = !testModeEnabled;
+          updateUI();
+
+          // Trigger shell update
+          if (window.parent && window.parent.updateTestModeIndicator) {
+            window.parent.updateTestModeIndicator(testModeEnabled);
+          }
+
+          // Dispatch event for shell
+          window.dispatchEvent(new CustomEvent('testModeChanged', { detail: { enabled: testModeEnabled } }));
+        }
+      } catch (e) {
+        console.error('Failed to toggle test mode:', e);
+        alert('Failed to toggle test mode: ' + e.message);
+      }
+
+      toggleBtn.disabled = false;
+    }
+
+    async function generateTestPOs() {
+      const count = parseInt(document.getElementById('test-po-count').value) || 5;
+      const logOutput = document.getElementById('log-output');
+      logOutput.style.display = 'block';
+      logOutput.innerHTML = '<div class="log-entry info">Generating ' + count + ' test POs...</div>';
+
+      try {
+        const res = await fetch('/api/vendor/test-mode/generate-pos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ count })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          logOutput.innerHTML += '<div class="log-entry success">Generated ' + data.generated + ' test POs:</div>';
+          data.poNumbers.forEach(po => {
+            logOutput.innerHTML += '<div class="log-entry">&nbsp;&nbsp;' + po + '</div>';
+          });
+        } else {
+          logOutput.innerHTML += '<div class="log-entry error">Error: ' + data.error + '</div>';
+        }
+      } catch (e) {
+        logOutput.innerHTML += '<div class="log-entry error">Error: ' + e.message + '</div>';
+      }
+    }
+
+    async function cleanupTestData() {
+      if (!confirm('This will delete all generated test POs. Continue?')) return;
+
+      const logOutput = document.getElementById('log-output');
+      logOutput.style.display = 'block';
+      logOutput.innerHTML = '<div class="log-entry info">Cleaning up test data...</div>';
+
+      try {
+        const res = await fetch('/api/vendor/test-mode/cleanup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          logOutput.innerHTML += '<div class="log-entry success">Deleted ' + data.deleted + ' test records</div>';
+        } else {
+          logOutput.innerHTML += '<div class="log-entry error">Error: ' + data.error + '</div>';
+        }
+      } catch (e) {
+        logOutput.innerHTML += '<div class="log-entry error">Error: ' + e.message + '</div>';
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

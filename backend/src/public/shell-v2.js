@@ -58,7 +58,8 @@
         { id: 'invoice-submit', path: '/vendor/invoice-submit.html', name: 'Submit Invoices', icon: 'send' },
         { id: 'remittances', path: '/vendor/remittances.html', name: 'Remittances', icon: 'payments' },
         { id: 'shipments', path: '/vendor/shipments.html', name: 'Shipments', icon: 'local_shipping' },
-        { id: 'settings', path: '/vendor/settings.html', name: 'Settings', icon: 'settings' }
+        { id: 'settings', path: '/vendor/settings.html', name: 'Settings', icon: 'settings' },
+        { id: 'test-mode', path: '/vendor/test-mode.html', name: 'Test Mode', icon: 'science' }
       ]
     },
     'bol': {
@@ -736,7 +737,58 @@
           border-top-color: transparent;
           border-right-color: #1f1f2e;
         }
+        /* Test Mode Banner */
+        .shell-test-mode-banner {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 36px;
+          background: linear-gradient(90deg, #f59e0b, #d97706);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          z-index: 1001;
+          font-size: 13px;
+          font-weight: 600;
+          color: #000;
+          animation: testModePulse 2s infinite;
+        }
+
+        .shell-test-mode-banner .material-symbols-outlined {
+          font-size: 18px;
+        }
+
+        .shell-test-mode-banner a {
+          color: #000;
+          text-decoration: underline;
+        }
+
+        @keyframes testModePulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.85; }
+        }
+
+        body.test-mode-active {
+          padding-top: calc(${isHome ? '64px' : '112px'} + 36px) !important;
+        }
+
+        body.test-mode-active .shell-topbar {
+          top: 36px;
+        }
+
+        body.test-mode-active .shell-subnav {
+          top: calc(64px + 36px);
+        }
       </style>
+
+      <!-- Test Mode Banner (hidden by default, shown via JS) -->
+      <div class="shell-test-mode-banner" id="shell-test-mode-banner" style="display: none;">
+        <span class="material-symbols-outlined">science</span>
+        <span>TEST MODE ACTIVE - No data is being sent to Amazon</span>
+        <a href="/vendor/test-mode.html">Manage</a>
+      </div>
 
       <!-- Top Bar -->
       <header class="shell-topbar">
@@ -877,7 +929,48 @@
     }
 
     injectShell(u);
+
+    // Check test mode status for vendor pages
+    if (location.pathname.startsWith('/vendor')) {
+      checkTestModeStatus();
+      // Re-check periodically
+      setInterval(checkTestModeStatus, 30000);
+    }
   })();
+
+  // Test mode status check
+  async function checkTestModeStatus() {
+    try {
+      const res = await fetch('/api/vendor/test-mode', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      updateTestModeIndicator(data.testMode?.enabled || false);
+    } catch (e) {
+      // Silently fail
+    }
+  }
+
+  // Update test mode indicator
+  function updateTestModeIndicator(enabled) {
+    const banner = document.getElementById('shell-test-mode-banner');
+    if (!banner) return;
+
+    if (enabled) {
+      banner.style.display = 'flex';
+      document.body.classList.add('test-mode-active');
+    } else {
+      banner.style.display = 'none';
+      document.body.classList.remove('test-mode-active');
+    }
+  }
+
+  // Listen for test mode changes from child pages
+  window.addEventListener('testModeChanged', (e) => {
+    updateTestModeIndicator(e.detail.enabled);
+  });
+
+  // Expose for child pages
+  window.updateTestModeIndicator = updateTestModeIndicator;
 
   // Show toast notification
   function showToast(message, type = 'info', duration = 4000) {

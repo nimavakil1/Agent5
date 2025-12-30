@@ -18,6 +18,7 @@ const { getDb } = require('../../../db');
 const { VendorClient } = require('./VendorClient');
 const { getVendorPOImporter } = require('./VendorPOImporter');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
+const { isTestMode, wrapWithTestMode } = require('./TestMode');
 
 /**
  * Invoice types
@@ -93,12 +94,16 @@ class VendorInvoiceSubmitter {
 
   /**
    * Get or create VendorClient for marketplace
+   * Wraps with test mode support when test mode is enabled
    */
   getClient(marketplace) {
-    if (!this.clients[marketplace]) {
-      this.clients[marketplace] = new VendorClient(marketplace);
+    const cacheKey = `${marketplace}_${isTestMode() ? 'test' : 'prod'}`;
+    if (!this.clients[cacheKey]) {
+      const client = new VendorClient(marketplace);
+      // Wrap with test mode support
+      this.clients[cacheKey] = wrapWithTestMode(client);
     }
-    return this.clients[marketplace];
+    return this.clients[cacheKey];
   }
 
   /**
