@@ -15,6 +15,7 @@
 const { getDb } = require('../../../db');
 const { VendorClient, VENDOR_TOKEN_MAP, MARKETPLACE_IDS, PO_STATES } = require('./VendorClient');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
+const { isTestMode } = require('./TestMode');
 
 /**
  * MongoDB collection name for vendor purchase orders
@@ -483,9 +484,15 @@ class VendorPOImporter {
 
   /**
    * Build query object from filters (shared helper)
+   * IMPORTANT: Excludes test data unless test mode is enabled
    */
   _buildQuery(filters = {}) {
     const query = {};
+
+    // CRITICAL: Only show test data when test mode is enabled
+    if (!isTestMode()) {
+      query._testData = { $ne: true };
+    }
 
     if (filters.marketplace) {
       query.marketplaceId = filters.marketplace;
@@ -553,11 +560,16 @@ class VendorPOImporter {
 
   /**
    * Get statistics
+   * IMPORTANT: Excludes test data unless test mode is enabled
    */
   async getStats() {
     const collection = this.db.collection(COLLECTION_NAME);
 
+    // Filter out test data unless in test mode
+    const matchStage = isTestMode() ? {} : { _testData: { $ne: true } };
+
     const stats = await collection.aggregate([
+      { $match: matchStage },
       {
         $group: {
           _id: null,
@@ -599,6 +611,7 @@ class VendorPOImporter {
 
     // Stats by marketplace
     const byMarketplace = await collection.aggregate([
+      { $match: matchStage },
       {
         $group: {
           _id: '$marketplaceId',
@@ -609,8 +622,8 @@ class VendorPOImporter {
       { $sort: { count: -1 } }
     ]).toArray();
 
-    // Recent POs
-    const recentPOs = await collection.find()
+    // Recent POs (also filter out test data in production)
+    const recentPOs = await collection.find(matchStage)
       .sort({ purchaseOrderDate: -1 })
       .limit(10)
       .project({
@@ -740,14 +753,22 @@ class VendorPOImporter {
 
   /**
    * Get POs that need acknowledgment
+   * Excludes test data unless test mode is enabled
    */
   async getPendingAcknowledgment(limit = 50) {
     const collection = this.db.collection(COLLECTION_NAME);
 
-    return collection.find({
+    const query = {
       'acknowledgment.acknowledged': false,
       purchaseOrderState: PO_STATES.NEW
-    })
+    };
+
+    // Exclude test data in production
+    if (!isTestMode()) {
+      query._testData = { $ne: true };
+    }
+
+    return collection.find(query)
       .sort({ purchaseOrderDate: 1 })
       .limit(limit)
       .toArray();
@@ -755,14 +776,22 @@ class VendorPOImporter {
 
   /**
    * Get POs that need Odoo orders created
+   * Excludes test data unless test mode is enabled
    */
   async getPendingOdooOrders(limit = 50) {
     const collection = this.db.collection(COLLECTION_NAME);
 
-    return collection.find({
+    const query = {
       'odoo.saleOrderId': null,
       purchaseOrderState: { $ne: PO_STATES.CLOSED }
-    })
+    };
+
+    // Exclude test data in production
+    if (!isTestMode()) {
+      query._testData = { $ne: true };
+    }
+
+    return collection.find(query)
       .sort({ purchaseOrderDate: 1 })
       .limit(limit)
       .toArray();
@@ -770,6 +799,7 @@ class VendorPOImporter {
 
   /**
    * Get POs that are ready for invoicing
+   * Excludes test data unless test mode is enabled
    * Criteria:
    * - Has Odoo sale order linked
    * - No invoice linked yet
@@ -778,14 +808,21 @@ class VendorPOImporter {
   async getReadyForInvoicing(limit = 50) {
     const collection = this.db.collection(COLLECTION_NAME);
 
-    return collection.find({
+    const query = {
       'odoo.saleOrderId': { $ne: null },
       'odoo.invoiceId': null,
       $or: [
         { 'acknowledgment.acknowledged': true },
         { purchaseOrderState: 'Acknowledged' }
       ]
-    })
+    };
+
+    // Exclude test data in production
+    if (!isTestMode()) {
+      query._testData = { $ne: true };
+    }
+
+    return collection.find(query)
       .sort({ purchaseOrderDate: 1 })
       .limit(limit)
       .toArray();
