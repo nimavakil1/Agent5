@@ -147,8 +147,12 @@ class BolStockSync {
     }
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || `Bol.com API error: ${response.status}`);
+      const errorBody = await response.json().catch(() => ({ detail: response.statusText }));
+      // Include full error details for debugging
+      const errorMsg = errorBody.detail || errorBody.title ||
+                       (errorBody.violations ? errorBody.violations.map(v => v.reason).join(', ') : null) ||
+                       JSON.stringify(errorBody);
+      throw new Error(`${errorMsg} (status: ${response.status})`);
     }
 
     if (response.status === 202 || response.status === 204) {
