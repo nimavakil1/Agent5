@@ -164,6 +164,243 @@ router.get('/orders', async (req, res) => {
   }
 });
 
+// =============================================================================
+// CONSOLIDATION ROUTES - Must be defined before :poNumber wildcard route
+// =============================================================================
+
+/**
+ * @route GET /api/vendor/orders/consolidate
+ * @desc Get orders grouped by FC (shipToParty) and delivery window for consolidated shipping
+ * @query marketplace - Filter by marketplace
+ * @query state - Filter by PO state (default: Acknowledged)
+ * @query shipmentStatus - Filter by shipment status (default: not_shipped)
+ * @query daysAhead - Days ahead to include delivery windows (default: 14)
+ */
+router.get('/orders/consolidate', async (req, res) => {
+  try {
+    const db = getDb();
+    const collection = db.collection('vendor_purchase_orders');
+
+    // Build filter - default to orders ready to ship
+    // Include both New and Acknowledged states for consolidation
+    const query = {
+      shipmentStatus: req.query.shipmentStatus || { $in: ['not_shipped', null, undefined] }
+    };
+
+    // State filter - default to both New and Acknowledged
+    if (req.query.state) {
+      query.purchaseOrderState = req.query.state;
+    } else {
+      query.purchaseOrderState = { $in: ['New', 'Acknowledged'] };
+    }
+
+    if (req.query.marketplace) {
+      query.marketplaceId = req.query.marketplace.toUpperCase();
+    }
+
+    // CRITICAL: Filter out test data unless test mode is enabled
+    if (!isTestMode()) {
+      query._testData = { $ne: true };
+    }
+
+    // Get orders
+    const orders = await collection.find(query)
+      .sort({ 'deliveryWindow.endDate': 1, 'shipToParty.partyId': 1 })
+      .toArray();
+
+    // Group by FC + delivery window end date
+    const groups = {};
+
+    for (const order of orders) {
+      const partyId = order.shipToParty?.partyId || 'UNKNOWN';
+      const deliveryEnd = order.deliveryWindow?.endDate;
+      const groupId = createConsolidationGroupId(partyId, deliveryEnd);
+
+      if (!groups[groupId]) {
+        groups[groupId] = {
+          groupId,
+          fcPartyId: partyId,
+          fcName: getFCName(partyId, order.shipToParty?.address),
+          fcAddress: order.shipToParty?.address || null,
+          deliveryWindow: order.deliveryWindow,
+          marketplace: order.marketplaceId,
+          orders: [],
+          totalItems: 0,
+          totalUnits: 0,
+          totalAmount: 0,
+          currency: 'EUR'
+        };
+      }
+
+      const group = groups[groupId];
+      group.orders.push({
+        purchaseOrderNumber: order.purchaseOrderNumber,
+        purchaseOrderDate: order.purchaseOrderDate,
+        itemCount: order.items?.length || 0,
+        totals: order.totals,
+        odoo: order.odoo
+      });
+
+      group.totalItems += order.items?.length || 0;
+      group.totalUnits += order.totals?.totalUnits || 0;
+      group.totalAmount += order.totals?.totalAmount || 0;
+      if (order.totals?.currency) group.currency = order.totals.currency;
+    }
+
+    // Convert to array and sort by delivery date
+    const consolidatedGroups = Object.values(groups).sort((a, b) => {
+      const dateA = a.deliveryWindow?.endDate ? new Date(a.deliveryWindow.endDate) : new Date(0);
+      const dateB = b.deliveryWindow?.endDate ? new Date(b.deliveryWindow.endDate) : new Date(0);
+      return dateA - dateB;
+    });
+
+    // Summary stats
+    const summary = {
+      totalGroups: consolidatedGroups.length,
+      totalOrders: orders.length,
+      totalUnits: consolidatedGroups.reduce((sum, g) => sum + g.totalUnits, 0),
+      totalAmount: consolidatedGroups.reduce((sum, g) => sum + g.totalAmount, 0),
+      byFC: {}
+    };
+
+    for (const group of consolidatedGroups) {
+      if (!summary.byFC[group.fcPartyId]) {
+        summary.byFC[group.fcPartyId] = {
+          fcName: group.fcName,
+          orderCount: 0,
+          totalUnits: 0
+        };
+      }
+      summary.byFC[group.fcPartyId].orderCount += group.orders.length;
+      summary.byFC[group.fcPartyId].totalUnits += group.totalUnits;
+    }
+
+    res.json({
+      success: true,
+      summary,
+      groups: consolidatedGroups
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /orders/consolidate error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/orders/consolidate/:groupId
+ * @desc Get detailed view of a consolidation group with all items
+ */
+router.get('/orders/consolidate/:groupId', async (req, res) => {
+  try {
+    const db = getDb();
+    const collection = db.collection('vendor_purchase_orders');
+
+    // Parse group ID to get FC and date
+    const [fcPartyId, dateStr] = req.params.groupId.split('_');
+
+    if (!fcPartyId) {
+      return res.status(400).json({ success: false, error: 'Invalid group ID' });
+    }
+
+    // Build query - include both New and Acknowledged states
+    const query = {
+      'shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
+      purchaseOrderState: { $in: ['New', 'Acknowledged'] },
+      shipmentStatus: { $in: ['not_shipped', null, undefined] }
+    };
+
+    // CRITICAL: Filter out test data unless test mode is enabled
+    if (!isTestMode()) {
+      query._testData = { $ne: true };
+    }
+
+    // Add date filter if present
+    if (dateStr && dateStr !== 'nodate') {
+      const startOfDay = new Date(dateStr);
+      const endOfDay = new Date(dateStr);
+      endOfDay.setDate(endOfDay.getDate() + 1);
+      query['deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
+    }
+
+    const orders = await collection.find(query)
+      .sort({ purchaseOrderNumber: 1 })
+      .toArray();
+
+    if (orders.length === 0) {
+      return res.status(404).json({ success: false, error: 'No orders found for this group' });
+    }
+
+    // Consolidate all items across orders
+    const itemMap = {}; // Key by product identifier
+    const consolidatedItems = [];
+
+    for (const order of orders) {
+      for (const item of (order.items || [])) {
+        const key = item.vendorProductIdentifier || item.amazonProductIdentifier;
+
+        if (!itemMap[key]) {
+          itemMap[key] = {
+            vendorProductIdentifier: item.vendorProductIdentifier,
+            amazonProductIdentifier: item.amazonProductIdentifier,
+            odooProductId: item.odooProductId,
+            odooProductName: item.odooProductName,
+            odooSku: item.odooSku,
+            totalQty: 0,
+            unitOfMeasure: item.orderedQuantity?.unitOfMeasure || 'Each',
+            netCost: item.netCost,
+            orders: []
+          };
+          consolidatedItems.push(itemMap[key]);
+        }
+
+        const qty = item.orderedQuantity?.amount || 0;
+        itemMap[key].totalQty += qty;
+        itemMap[key].orders.push({
+          purchaseOrderNumber: order.purchaseOrderNumber,
+          qty,
+          itemSequenceNumber: item.itemSequenceNumber
+        });
+      }
+    }
+
+    // Sort items by total quantity (most first)
+    consolidatedItems.sort((a, b) => b.totalQty - a.totalQty);
+
+    const firstOrder = orders[0];
+
+    res.json({
+      success: true,
+      groupId: req.params.groupId,
+      fcPartyId,
+      fcName: getFCName(fcPartyId, firstOrder.shipToParty?.address),
+      fcAddress: firstOrder.shipToParty?.address,
+      deliveryWindow: firstOrder.deliveryWindow,
+      orderCount: orders.length,
+      orders: orders.map(o => ({
+        purchaseOrderNumber: o.purchaseOrderNumber,
+        purchaseOrderDate: o.purchaseOrderDate,
+        marketplaceId: o.marketplaceId,
+        itemCount: o.items?.length || 0,
+        totals: o.totals,
+        odoo: o.odoo
+      })),
+      consolidatedItems,
+      summary: {
+        totalItems: consolidatedItems.length,
+        totalUnits: consolidatedItems.reduce((sum, i) => sum + i.totalQty, 0),
+        totalAmount: orders.reduce((sum, o) => sum + (o.totals?.totalAmount || 0), 0)
+      }
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /orders/consolidate/:groupId error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =============================================================================
+// WILDCARD ROUTE - Must come after specific routes
+// =============================================================================
+
 /**
  * @route GET /api/vendor/orders/:poNumber
  * @desc Get a specific purchase order with full details
@@ -682,235 +919,6 @@ function createConsolidationGroupId(partyId, deliveryWindowEnd) {
     : 'nodate';
   return `${fcCode}_${dateStr}`;
 }
-
-/**
- * @route GET /api/vendor/orders/consolidate
- * @desc Get orders grouped by FC (shipToParty) and delivery window for consolidated shipping
- * @query marketplace - Filter by marketplace
- * @query state - Filter by PO state (default: Acknowledged)
- * @query shipmentStatus - Filter by shipment status (default: not_shipped)
- * @query daysAhead - Days ahead to include delivery windows (default: 14)
- */
-router.get('/orders/consolidate', async (req, res) => {
-  try {
-    const db = getDb();
-    const collection = db.collection('vendor_purchase_orders');
-
-    // Build filter - default to orders ready to ship
-    // Include both New and Acknowledged states for consolidation
-    const query = {
-      shipmentStatus: req.query.shipmentStatus || { $in: ['not_shipped', null, undefined] }
-    };
-
-    // State filter - default to both New and Acknowledged
-    if (req.query.state) {
-      query.purchaseOrderState = req.query.state;
-    } else {
-      query.purchaseOrderState = { $in: ['New', 'Acknowledged'] };
-    }
-
-    if (req.query.marketplace) {
-      query.marketplaceId = req.query.marketplace.toUpperCase();
-    }
-
-    // CRITICAL: Filter out test data unless test mode is enabled
-    if (!isTestMode()) {
-      query._testData = { $ne: true };
-    }
-
-    // Get orders
-    const orders = await collection.find(query)
-      .sort({ 'deliveryWindow.endDate': 1, 'shipToParty.partyId': 1 })
-      .toArray();
-
-    // Group by FC + delivery window end date
-    const groups = {};
-
-    for (const order of orders) {
-      const partyId = order.shipToParty?.partyId || 'UNKNOWN';
-      const deliveryEnd = order.deliveryWindow?.endDate;
-      const groupId = createConsolidationGroupId(partyId, deliveryEnd);
-
-      if (!groups[groupId]) {
-        groups[groupId] = {
-          groupId,
-          fcPartyId: partyId,
-          fcName: getFCName(partyId, order.shipToParty?.address),
-          fcAddress: order.shipToParty?.address || null,
-          deliveryWindow: order.deliveryWindow,
-          marketplace: order.marketplaceId,
-          orders: [],
-          totalItems: 0,
-          totalUnits: 0,
-          totalAmount: 0,
-          currency: 'EUR'
-        };
-      }
-
-      const group = groups[groupId];
-      group.orders.push({
-        purchaseOrderNumber: order.purchaseOrderNumber,
-        purchaseOrderDate: order.purchaseOrderDate,
-        itemCount: order.items?.length || 0,
-        totals: order.totals,
-        odoo: order.odoo
-      });
-
-      group.totalItems += order.items?.length || 0;
-      group.totalUnits += order.totals?.totalUnits || 0;
-      group.totalAmount += order.totals?.totalAmount || 0;
-      if (order.totals?.currency) group.currency = order.totals.currency;
-    }
-
-    // Convert to array and sort by delivery date
-    const consolidatedGroups = Object.values(groups).sort((a, b) => {
-      const dateA = a.deliveryWindow?.endDate ? new Date(a.deliveryWindow.endDate) : new Date(0);
-      const dateB = b.deliveryWindow?.endDate ? new Date(b.deliveryWindow.endDate) : new Date(0);
-      return dateA - dateB;
-    });
-
-    // Summary stats
-    const summary = {
-      totalGroups: consolidatedGroups.length,
-      totalOrders: orders.length,
-      totalUnits: consolidatedGroups.reduce((sum, g) => sum + g.totalUnits, 0),
-      totalAmount: consolidatedGroups.reduce((sum, g) => sum + g.totalAmount, 0),
-      byFC: {}
-    };
-
-    for (const group of consolidatedGroups) {
-      if (!summary.byFC[group.fcPartyId]) {
-        summary.byFC[group.fcPartyId] = {
-          fcName: group.fcName,
-          orderCount: 0,
-          totalUnits: 0
-        };
-      }
-      summary.byFC[group.fcPartyId].orderCount += group.orders.length;
-      summary.byFC[group.fcPartyId].totalUnits += group.totalUnits;
-    }
-
-    res.json({
-      success: true,
-      summary,
-      groups: consolidatedGroups
-    });
-  } catch (error) {
-    console.error('[VendorAPI] GET /orders/consolidate error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * @route GET /api/vendor/orders/consolidate/:groupId
- * @desc Get detailed view of a consolidation group with all items
- */
-router.get('/orders/consolidate/:groupId', async (req, res) => {
-  try {
-    const db = getDb();
-    const collection = db.collection('vendor_purchase_orders');
-
-    // Parse group ID to get FC and date
-    const [fcPartyId, dateStr] = req.params.groupId.split('_');
-
-    if (!fcPartyId) {
-      return res.status(400).json({ success: false, error: 'Invalid group ID' });
-    }
-
-    // Build query - include both New and Acknowledged states
-    const query = {
-      'shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
-      purchaseOrderState: { $in: ['New', 'Acknowledged'] },
-      shipmentStatus: { $in: ['not_shipped', null, undefined] }
-    };
-
-    // CRITICAL: Filter out test data unless test mode is enabled
-    if (!isTestMode()) {
-      query._testData = { $ne: true };
-    }
-
-    // Add date filter if present
-    if (dateStr && dateStr !== 'nodate') {
-      const startOfDay = new Date(dateStr);
-      const endOfDay = new Date(dateStr);
-      endOfDay.setDate(endOfDay.getDate() + 1);
-      query['deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
-    }
-
-    const orders = await collection.find(query)
-      .sort({ purchaseOrderNumber: 1 })
-      .toArray();
-
-    if (orders.length === 0) {
-      return res.status(404).json({ success: false, error: 'No orders found for this group' });
-    }
-
-    // Consolidate all items across orders
-    const itemMap = {}; // Key by product identifier
-    const consolidatedItems = [];
-
-    for (const order of orders) {
-      for (const item of (order.items || [])) {
-        const key = item.vendorProductIdentifier || item.amazonProductIdentifier;
-
-        if (!itemMap[key]) {
-          itemMap[key] = {
-            vendorProductIdentifier: item.vendorProductIdentifier,
-            amazonProductIdentifier: item.amazonProductIdentifier,
-            odooProductId: item.odooProductId,
-            odooProductName: item.odooProductName,
-            odooSku: item.odooSku,
-            totalQty: 0,
-            unitOfMeasure: item.orderedQuantity?.unitOfMeasure || 'Each',
-            netCost: item.netCost,
-            orders: []
-          };
-          consolidatedItems.push(itemMap[key]);
-        }
-
-        const qty = item.orderedQuantity?.amount || 0;
-        itemMap[key].totalQty += qty;
-        itemMap[key].orders.push({
-          purchaseOrderNumber: order.purchaseOrderNumber,
-          qty,
-          itemSequenceNumber: item.itemSequenceNumber
-        });
-      }
-    }
-
-    // Sort items by total quantity (most first)
-    consolidatedItems.sort((a, b) => b.totalQty - a.totalQty);
-
-    const firstOrder = orders[0];
-
-    res.json({
-      success: true,
-      groupId: req.params.groupId,
-      fcPartyId,
-      fcName: getFCName(fcPartyId, firstOrder.shipToParty?.address),
-      fcAddress: firstOrder.shipToParty?.address,
-      deliveryWindow: firstOrder.deliveryWindow,
-      orderCount: orders.length,
-      orders: orders.map(o => ({
-        purchaseOrderNumber: o.purchaseOrderNumber,
-        purchaseOrderDate: o.purchaseOrderDate,
-        marketplaceId: o.marketplaceId,
-        itemCount: o.items?.length || 0,
-        totals: o.totals,
-        odoo: o.odoo
-      })),
-      consolidatedItems,
-      summary: {
-        totalItems: consolidatedItems.length,
-        totalUnits: consolidatedItems.reduce((sum, i) => sum + i.totalQty, 0),
-        totalAmount: orders.reduce((sum, o) => sum + (o.totals?.totalAmount || 0), 0)
-      }
-    });
-  } catch (error) {
-    console.error('[VendorAPI] GET /orders/consolidate/:groupId error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 /**
  * @route POST /api/vendor/orders/consolidate/:groupId/packing-list
