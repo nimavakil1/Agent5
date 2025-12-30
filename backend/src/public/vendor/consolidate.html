@@ -364,7 +364,7 @@
           <td>${item.odooProductName || 'Unknown Product'}</td>
           <td class="qty-cell">${item.totalQty}</td>
           <td>${item.unitOfMeasure}</td>
-          <td style="font-size: 12px; color: #71717a;">${item.orders.map(o => o.purchaseOrderNumber).join(', ')}</td>
+          <td style="font-size: 12px; color: #71717a;">${item.orders.map(o => `${o.purchaseOrderNumber} (${o.qty}x)`).join(', ')}</td>
         </tr>
       `).join('');
 
