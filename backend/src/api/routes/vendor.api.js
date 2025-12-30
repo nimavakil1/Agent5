@@ -183,8 +183,9 @@ router.get('/orders/consolidate', async (req, res) => {
 
     // Build filter - default to orders ready to ship
     // Include both New and Acknowledged states for consolidation
+    // Note: Using $ne: 'shipped' to match not_shipped, null, and missing fields
     const query = {
-      shipmentStatus: req.query.shipmentStatus || { $in: ['not_shipped', null, undefined] }
+      shipmentStatus: req.query.shipmentStatus || { $ne: 'shipped' }
     };
 
     // State filter - default to both New and Acknowledged
@@ -308,10 +309,12 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
     }
 
     // Build query - include both New and Acknowledged states
+    // Note: In MongoDB, { $in: [null] } matches both null AND missing fields
+    // Using $ne: 'shipped' to include not_shipped, null, and undefined
     const query = {
       'shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
       purchaseOrderState: { $in: ['New', 'Acknowledged'] },
-      shipmentStatus: { $in: ['not_shipped', null, undefined] }
+      shipmentStatus: { $ne: 'shipped' }
     };
 
     // CRITICAL: Isolate test data from production data
