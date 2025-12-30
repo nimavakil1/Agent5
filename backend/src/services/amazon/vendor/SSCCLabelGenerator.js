@@ -40,7 +40,8 @@ const LABEL_SIZES = {
  */
 async function generateBarcodePNG(sscc) {
   // GS1-128 uses Application Identifier 00 for SSCC
-  const barcodeData = `00${sscc}`;
+  // AI must be in parentheses for bwip-js to parse correctly
+  const barcodeData = `(00)${sscc}`;
 
   return new Promise((resolve, reject) => {
     bwipjs.toBuffer({
