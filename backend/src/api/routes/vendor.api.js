@@ -415,15 +415,17 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       query._testData = { $ne: true }; // In production, exclude test data
     }
 
-    // Add date filter if present
+    // Add date filter if present - use UTC to match database dates
     if (dateStr && dateStr !== 'nodate') {
-      const startOfDay = new Date(dateStr);
-      const endOfDay = new Date(dateStr);
-      endOfDay.setDate(endOfDay.getDate() + 1);
+      // Parse as UTC to avoid timezone issues
+      const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
+      const endOfDay = new Date(dateStr + 'T00:00:00.000Z');
+      endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
       query['deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
     }
 
     console.log('[VendorAPI] Consolidate detail query:', JSON.stringify(query));
+    console.log('[VendorAPI] Date range:', dateStr, '- startOfDay:', query['deliveryWindow.endDate']?.$gte, 'endOfDay:', query['deliveryWindow.endDate']?.$lt);
     const orders = await collection.find(query)
       .sort({ purchaseOrderNumber: 1 })
       .toArray();
