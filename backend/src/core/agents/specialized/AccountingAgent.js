@@ -352,6 +352,56 @@ When answering queries, always provide context with numbers (e.g., "3 unpaid inv
       },
     });
 
+    // ============ Payment Advice & Reconciliation Tools ============
+
+    this.registerTool('get_payment_advices', this._getPaymentAdvices.bind(this), {
+      description: 'Get payment advices/remittances received from vendors',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['received', 'matched', 'reconciled', 'error', 'all'], default: 'all' },
+          vendor: { type: 'string', description: 'Filter by vendor name' },
+          days_back: { type: 'number', description: 'Look back this many days', default: 30 },
+          limit: { type: 'number', default: 50 },
+        },
+      },
+    });
+
+    this.registerTool('reconcile_payment_advice', this._reconcilePaymentAdvice.bind(this), {
+      description: 'Match a payment advice with invoices and execute reconciliation in Odoo',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          payment_advice_id: { type: 'string', description: 'Payment advice MongoDB ID' },
+          execute: { type: 'boolean', description: 'Execute reconciliation in Odoo (not just match)', default: false },
+        },
+        required: ['payment_advice_id'],
+      },
+    });
+
+    this.registerTool('get_unmatched_payments', this._getUnmatchedPayments.bind(this), {
+      description: 'Get payment advices that could not be automatically matched to invoices',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          vendor_id: { type: 'number', description: 'Filter by Odoo vendor ID' },
+          min_amount: { type: 'number', description: 'Minimum payment amount' },
+        },
+      },
+    });
+
+    this.registerTool('validate_invoice_amount', this._validateInvoiceAmount.bind(this), {
+      description: 'Validate if invoice total matches PO within €0.02 tolerance',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          invoice_total: { type: 'number', description: 'Invoice total amount' },
+          po_total: { type: 'number', description: 'Purchase order total amount' },
+        },
+        required: ['invoice_total', 'po_total'],
+      },
+    });
+
     this.logger.debug({ toolCount: this.tools.size }, 'Accounting tools loaded');
   }
 
@@ -1049,6 +1099,204 @@ When answering queries, always provide context with numbers (e.g., "3 unpaid inv
 
     return {
       text: response.result,
+    };
+  }
+
+  // ============ Payment Advice Tool Implementations ============
+
+  async _getPaymentAdvices(params) {
+    const PaymentAdvice = require('../../../models/PaymentAdvice');
+
+    const query = {};
+
+    // Status filter
+    if (params.status && params.status !== 'all') {
+      query.status = params.status;
+    }
+
+    // Vendor filter
+    if (params.vendor) {
+      query['payer.name'] = { $regex: params.vendor, $options: 'i' };
+    }
+
+    // Date filter
+    const daysBack = params.days_back || 30;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+    query.createdAt = { $gte: cutoffDate };
+
+    const limit = params.limit || 50;
+
+    const advices = await PaymentAdvice.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    // Format for response
+    const formatted = advices.map(advice => ({
+      id: advice._id.toString(),
+      reference: advice.payment?.reference,
+      payer: advice.payer?.name,
+      payerVat: advice.payer?.vatNumber,
+      date: advice.payment?.date,
+      totalAmount: advice.payment?.totalAmount,
+      currency: advice.payment?.currency || 'EUR',
+      lineCount: advice.lines?.length || 0,
+      status: advice.status,
+      reconciliation: {
+        status: advice.reconciliation?.status,
+        matchedAmount: advice.reconciliation?.matchedAmount,
+        unmatchedAmount: advice.reconciliation?.unmatchedAmount,
+      },
+      source: {
+        type: advice.source?.type,
+        emailSubject: advice.source?.emailSubject,
+        receivedAt: advice.source?.receivedAt,
+      },
+    }));
+
+    // Summary stats
+    const stats = {
+      total: formatted.length,
+      byStatus: {},
+      totalAmount: 0,
+    };
+
+    for (const advice of formatted) {
+      stats.byStatus[advice.status] = (stats.byStatus[advice.status] || 0) + 1;
+      stats.totalAmount += advice.totalAmount || 0;
+    }
+
+    return {
+      paymentAdvices: formatted,
+      stats,
+    };
+  }
+
+  async _reconcilePaymentAdvice(params) {
+    const { PaymentReconciliationEngine } = require('../../../services/accounting');
+    const PaymentAdvice = require('../../../models/PaymentAdvice');
+
+    const paymentAdviceId = params.payment_advice_id;
+    const execute = params.execute || false;
+
+    // Verify payment advice exists
+    const advice = await PaymentAdvice.findById(paymentAdviceId);
+    if (!advice) {
+      throw new Error(`Payment advice not found: ${paymentAdviceId}`);
+    }
+
+    const engine = new PaymentReconciliationEngine(this.odooClient);
+
+    if (execute) {
+      // Match and execute reconciliation in Odoo
+      const result = await engine.executeReconciliation(paymentAdviceId);
+
+      return {
+        success: result.success,
+        paymentAdviceId,
+        action: 'reconciled',
+        odooPaymentId: result.odooPaymentId,
+        odooPaymentName: result.odooPaymentName,
+        reconciledInvoices: result.reconciledInvoices,
+        summary: result.summary,
+        errors: result.errors,
+      };
+    } else {
+      // Just match without executing
+      const result = await engine.reconcilePayment(paymentAdviceId);
+
+      return {
+        success: result.success,
+        paymentAdviceId,
+        action: 'matched',
+        matchedLines: result.matchedLines,
+        unmatchedLines: result.unmatchedLines,
+        matchedAmount: result.matchedAmount,
+        unmatchedAmount: result.unmatchedAmount,
+        summary: `Matched ${result.matchedLines} of ${result.matchedLines + result.unmatchedLines} payment lines. ` +
+          `Matched amount: €${result.matchedAmount?.toFixed(2)}. ` +
+          (result.unmatchedAmount > 0 ? `Unmatched: €${result.unmatchedAmount.toFixed(2)}` : ''),
+      };
+    }
+  }
+
+  async _getUnmatchedPayments(params) {
+    const PaymentAdvice = require('../../../models/PaymentAdvice');
+
+    const query = {
+      $or: [
+        { 'reconciliation.status': 'partial' },
+        { 'reconciliation.status': 'unmatched' },
+        { status: 'matched', 'reconciliation.unmatchedAmount': { $gt: 0 } },
+      ],
+    };
+
+    // Vendor filter
+    if (params.vendor_id) {
+      query['payer.odooPartnerId'] = params.vendor_id;
+    }
+
+    // Minimum amount filter
+    if (params.min_amount) {
+      query['payment.totalAmount'] = { $gte: params.min_amount };
+    }
+
+    const advices = await PaymentAdvice.find(query)
+      .sort({ 'payment.totalAmount': -1 })
+      .limit(100)
+      .lean();
+
+    const unmatched = advices.map(advice => {
+      // Find unmatched lines
+      const unmatchedLines = (advice.lines || []).filter(
+        line => line.match?.status !== 'matched'
+      );
+
+      return {
+        id: advice._id.toString(),
+        reference: advice.payment?.reference,
+        payer: advice.payer?.name,
+        payerOdooId: advice.payer?.odooPartnerId,
+        totalAmount: advice.payment?.totalAmount,
+        unmatchedAmount: advice.reconciliation?.unmatchedAmount || advice.payment?.totalAmount,
+        currency: advice.payment?.currency || 'EUR',
+        date: advice.payment?.date,
+        unmatchedLines: unmatchedLines.map(line => ({
+          invoiceNumber: line.invoiceNumber,
+          amount: line.amount,
+          reason: line.match?.reason || 'No matching invoice found',
+        })),
+      };
+    });
+
+    return {
+      unmatchedPayments: unmatched,
+      totalCount: unmatched.length,
+      totalUnmatchedAmount: unmatched.reduce((sum, p) => sum + (p.unmatchedAmount || 0), 0),
+    };
+  }
+
+  async _validateInvoiceAmount(params) {
+    const { POMatchingEngine } = require('../../../services/accounting');
+
+    const invoiceTotal = params.invoice_total;
+    const poTotal = params.po_total;
+
+    const engine = new POMatchingEngine(this.odooClient);
+    const validation = engine.validateInvoiceAmount(invoiceTotal, poTotal);
+
+    return {
+      invoiceTotal,
+      poTotal,
+      difference: validation.difference,
+      tolerance: validation.tolerance,
+      withinTolerance: validation.valid,
+      canAutoApprove: validation.valid,
+      message: validation.message,
+      recommendation: validation.valid
+        ? 'Invoice amount is within €0.02 tolerance. Auto-approval is allowed.'
+        : 'Invoice amount exceeds €0.02 tolerance. Manual review required before booking.',
     };
   }
 }

@@ -6,9 +6,15 @@
  * 2. Vendor + Amount Match (80-95%)
  * 3. Vendor + Line Item Match (70-90%)
  * 4. Fuzzy Match (50-70%)
+ *
+ * IMPORTANT: Invoice total accuracy tolerance is €0.02 maximum.
+ * Invoices with larger discrepancies require manual review.
  */
 
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+
+// Maximum absolute tolerance for invoice total matching (in EUR)
+const INVOICE_AMOUNT_TOLERANCE = 0.02;
 
 class POMatchingEngine {
   constructor(odooClient = null) {
@@ -16,7 +22,10 @@ class POMatchingEngine {
 
     // Matching tolerances
     this.tolerances = {
-      amountPercent: 5, // 5% variance allowed
+      // CRITICAL: Invoice total must match within €0.02
+      absoluteAmountTolerance: INVOICE_AMOUNT_TOLERANCE,
+      // Secondary tolerance for validation warnings (percentage)
+      amountPercentWarning: 1, // Warn if > 1% even if within €0.02
       dateRangeDays: 90, // Invoice within 90 days of PO
       quantityPercent: 10, // Line quantity variance
     };
@@ -245,30 +254,38 @@ class POMatchingEngine {
 
   /**
    * Score how well an invoice matches a PO
+   * CRITICAL: Invoice amount must match within €0.02 for auto-approval
    */
   async _scorePOMatch(invoice, po) {
     let score = 0;
     const matchDetails = [];
+    let amountWithinTolerance = false;
 
     // Amount match (40 points max)
+    // CRITICAL: Maximum tolerance is €0.02 for invoice totals
     const invoiceAmount = invoice.totals?.totalAmount || 0;
     const poAmount = po.total || 0;
 
     if (poAmount > 0 && invoiceAmount > 0) {
-      const amountVariance = Math.abs(invoiceAmount - poAmount) / poAmount;
+      const absoluteDifference = Math.abs(invoiceAmount - poAmount);
+      const percentageVariance = absoluteDifference / poAmount;
 
-      if (amountVariance <= 0.01) {
+      if (absoluteDifference <= this.tolerances.absoluteAmountTolerance) {
+        // Within €0.02 tolerance - eligible for auto-approval
+        amountWithinTolerance = true;
         score += 40;
-        matchDetails.push('Exact amount match');
-      } else if (amountVariance <= 0.02) {
-        score += 35;
-        matchDetails.push(`Amount within 2% (${(amountVariance * 100).toFixed(1)}%)`);
-      } else if (amountVariance <= this.tolerances.amountPercent / 100) {
-        score += 30;
-        matchDetails.push(`Amount within ${this.tolerances.amountPercent}% (${(amountVariance * 100).toFixed(1)}%)`);
-      } else if (amountVariance <= 0.10) {
+        matchDetails.push(`Amount match within €0.02 tolerance (diff: €${absoluteDifference.toFixed(2)})`);
+      } else if (absoluteDifference <= 1.00) {
+        // Small difference (€0.02 - €1.00) - needs review but close match
+        score += 25;
+        matchDetails.push(`REVIEW: Amount differs by €${absoluteDifference.toFixed(2)} (exceeds €0.02 tolerance)`);
+      } else if (percentageVariance <= 0.05) {
+        // Within 5% but exceeds absolute tolerance - manual review
         score += 15;
-        matchDetails.push(`Amount differs by ${(amountVariance * 100).toFixed(1)}%`);
+        matchDetails.push(`REVIEW: Amount differs by €${absoluteDifference.toFixed(2)} (${(percentageVariance * 100).toFixed(1)}%)`);
+      } else {
+        // Large discrepancy - unlikely match
+        matchDetails.push(`MISMATCH: Amount differs by €${absoluteDifference.toFixed(2)} (${(percentageVariance * 100).toFixed(1)}%)`);
       }
     }
 
@@ -312,16 +329,44 @@ class POMatchingEngine {
     }
 
     // Determine match type
+    // CRITICAL: If amount exceeds €0.02 tolerance, cap confidence at 85% (requires manual review)
     let matchType = 'none';
-    if (score >= 95) matchType = 'exact';
-    else if (score >= 80) matchType = 'high_confidence';
-    else if (score >= 60) matchType = 'medium_confidence';
-    else if (score >= 50) matchType = 'low_confidence';
+    let adjustedScore = score;
+
+    if (!amountWithinTolerance && score >= 80) {
+      // Cap confidence for invoices exceeding €0.02 tolerance
+      adjustedScore = Math.min(score, 85);
+      matchDetails.push('REQUIRES REVIEW: Amount exceeds €0.02 tolerance - cannot auto-approve');
+    }
+
+    if (amountWithinTolerance && adjustedScore >= 95) matchType = 'exact';
+    else if (adjustedScore >= 80) matchType = 'high_confidence';
+    else if (adjustedScore >= 60) matchType = 'medium_confidence';
+    else if (adjustedScore >= 50) matchType = 'low_confidence';
 
     return {
-      confidence: Math.min(score, 100),
+      confidence: Math.min(adjustedScore, 100),
       matchType,
       matchDetails,
+      amountWithinTolerance, // Flag for booking validation
+    };
+  }
+
+  /**
+   * Validate invoice amount against PO before booking
+   * @returns {Object} { valid: boolean, difference: number, message: string }
+   */
+  validateInvoiceAmount(invoiceTotal, poTotal) {
+    const difference = Math.abs(invoiceTotal - poTotal);
+    const isValid = difference <= INVOICE_AMOUNT_TOLERANCE;
+
+    return {
+      valid: isValid,
+      difference,
+      tolerance: INVOICE_AMOUNT_TOLERANCE,
+      message: isValid
+        ? `Amount validated (difference: €${difference.toFixed(2)})`
+        : `REJECTED: Amount difference of €${difference.toFixed(2)} exceeds €${INVOICE_AMOUNT_TOLERANCE.toFixed(2)} tolerance`,
     };
   }
 

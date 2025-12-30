@@ -8,6 +8,13 @@ import AgentStudio from './pages/AgentStudio';
 import Orchestrator from './pages/Orchestrator';
 import AdminUsers from './pages/AdminUsers';
 import Profile from './pages/Profile';
+import {
+  AccountingDashboard,
+  InvoiceQueue,
+  AccountingChat,
+  Reports as AccountingReports,
+  Settings as AccountingSettings,
+} from './pages/accounting';
 import { AuthProvider } from './shell/auth';
 
 const router = createBrowserRouter([
@@ -21,6 +28,12 @@ const router = createBrowserRouter([
       { path: 'orchestrator', element: <Orchestrator /> },
       { path: 'admin/users', element: <AdminUsers /> },
       { path: 'profile', element: <Profile /> },
+      // Accounting Agent
+      { path: 'accounting', element: <AccountingDashboard /> },
+      { path: 'accounting/invoices', element: <InvoiceQueue /> },
+      { path: 'accounting/chat', element: <AccountingChat /> },
+      { path: 'accounting/reports', element: <AccountingReports /> },
+      { path: 'accounting/settings', element: <AccountingSettings /> },
     ]
   }
 ]);

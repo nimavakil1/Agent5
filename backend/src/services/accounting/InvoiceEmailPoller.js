@@ -1,11 +1,13 @@
 /**
- * InvoiceEmailPoller - Monitor email inbox for incoming invoices
+ * InvoiceEmailPoller - Monitor email inbox for incoming invoices and payment advices
  *
  * Uses Microsoft Graph API via existing MicrosoftMCP integration.
+ * Handles both vendor invoices and payment advice/remittance notifications.
  */
 
 const { MicrosoftDirectClient } = require('../../core/agents/integrations/MicrosoftMCP');
 const VendorInvoice = require('../../models/VendorInvoice');
+const PaymentAdvice = require('../../models/PaymentAdvice');
 const AccountingTask = require('../../models/AccountingTask');
 const InvoiceAuditLog = require('../../models/InvoiceAuditLog');
 const InvoiceParser = require('./InvoiceParser');
@@ -29,10 +31,20 @@ class InvoiceEmailPoller {
         'image/tiff',
         'application/xml',
         'text/xml',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       ],
+      // Keywords for invoice detection
       invoiceKeywords: [
         'invoice', 'facture', 'rechnung', 'factuur', 'factura',
-        'bill', 'payment', 'betaling', 'zahlung',
+        'bill', 'credit note', 'debit note',
+      ],
+      // Keywords for payment advice detection
+      paymentKeywords: [
+        'payment advice', 'remittance', 'remittance advice', 'payment notification',
+        'avis de paiement', 'zahlungsavis', 'betalingsadvies', 'aviso de pago',
+        'bank transfer', 'wire transfer', 'sepa', 'betaling', 'zahlung',
+        'payment confirmation', 'paiement', 'virement',
       ],
     };
 
@@ -50,7 +62,7 @@ class InvoiceEmailPoller {
   }
 
   /**
-   * Scan inbox for invoice emails
+   * Scan inbox for invoice and payment advice emails
    * @param {Object} options - Scan options
    */
   async scanForInvoices(options = {}) {
@@ -59,12 +71,14 @@ class InvoiceEmailPoller {
     const folder = options.folder || this.config.targetFolder;
     const hoursBack = options.hoursBack || 24;
 
-    console.log(`[InvoiceEmailPoller] Scanning ${folder} for invoices (last ${hoursBack} hours)`);
+    console.log(`[InvoiceEmailPoller] Scanning ${folder} for invoices and payment advices (last ${hoursBack} hours)`);
 
     const result = {
       scanned: 0,
       invoiceEmails: 0,
-      created: 0,
+      paymentAdviceEmails: 0,
+      invoicesCreated: 0,
+      paymentAdvicesCreated: 0,
       skipped: 0,
       errors: [],
     };
@@ -83,33 +97,62 @@ class InvoiceEmailPoller {
 
       for (const message of messages) {
         try {
-          // Check if likely an invoice
-          if (!this._isLikelyInvoice(message)) {
+          // Detect email type: payment advice or invoice
+          const emailType = this._detectEmailType(message);
+
+          if (emailType === 'unknown') {
             result.skipped++;
             continue;
           }
 
-          result.invoiceEmails++;
+          if (emailType === 'payment_advice') {
+            result.paymentAdviceEmails++;
 
-          // Check if already processed
-          const existing = await VendorInvoice.findOne({
-            'source.emailId': message.id,
-          });
+            // Check if already processed as payment advice
+            const existingPayment = await PaymentAdvice.findOne({
+              'source.emailId': message.id,
+            });
 
-          if (existing) {
-            console.log(`[InvoiceEmailPoller] Email already processed: ${message.id}`);
-            result.skipped++;
-            continue;
-          }
+            if (existingPayment) {
+              console.log(`[InvoiceEmailPoller] Payment advice already processed: ${message.id}`);
+              result.skipped++;
+              continue;
+            }
 
-          // Create invoice record
-          const invoice = await this._createInvoiceFromEmail(message);
-          result.created++;
+            // Create payment advice record
+            const paymentAdvice = await this._createPaymentAdviceFromEmail(message);
+            result.paymentAdvicesCreated++;
 
-          // Process immediately if requested
-          if (options.processImmediately) {
-            const { processInvoice } = require('./InvoiceProcessor');
-            await processInvoice(invoice._id);
+            // Process immediately if requested
+            if (options.processImmediately) {
+              const { reconcilePayment } = require('./PaymentReconciliationEngine');
+              await reconcilePayment(paymentAdvice._id);
+            }
+
+          } else {
+            // It's an invoice
+            result.invoiceEmails++;
+
+            // Check if already processed as invoice
+            const existingInvoice = await VendorInvoice.findOne({
+              'source.emailId': message.id,
+            });
+
+            if (existingInvoice) {
+              console.log(`[InvoiceEmailPoller] Invoice email already processed: ${message.id}`);
+              result.skipped++;
+              continue;
+            }
+
+            // Create invoice record
+            const invoice = await this._createInvoiceFromEmail(message);
+            result.invoicesCreated++;
+
+            // Process immediately if requested
+            if (options.processImmediately) {
+              const { processInvoice } = require('./InvoiceProcessor');
+              await processInvoice(invoice._id);
+            }
           }
 
         } catch (error) {
@@ -124,12 +167,185 @@ class InvoiceEmailPoller {
 
       this.lastPollTime = new Date();
 
+      // Backward compatibility
+      result.created = result.invoicesCreated + result.paymentAdvicesCreated;
+
     } catch (error) {
       console.error('[InvoiceEmailPoller] Scan error:', error.message);
       result.errors.push({ error: error.message });
     }
 
     return result;
+  }
+
+  /**
+   * Detect if email is an invoice or payment advice
+   * @returns {'invoice' | 'payment_advice' | 'unknown'}
+   */
+  _detectEmailType(message) {
+    const subject = (message.subject || '').toLowerCase();
+    const body = (message.bodyPreview || '').toLowerCase();
+    const text = subject + ' ' + body;
+
+    // Check for payment advice keywords first (more specific)
+    const isPaymentAdvice = this.config.paymentKeywords.some(kw => text.includes(kw.toLowerCase()));
+    if (isPaymentAdvice) {
+      return 'payment_advice';
+    }
+
+    // Check for invoice keywords
+    const isInvoice = this.config.invoiceKeywords.some(kw => text.includes(kw.toLowerCase()));
+
+    // Also check for invoice patterns
+    const hasInvoiceNumber = /inv[oice]*[\s\-#:]*\d+/i.test(text);
+    const hasAmount = /(?:€|EUR|USD|\$)\s*\d+[.,]\d{2}/i.test(text);
+
+    if (isInvoice || hasInvoiceNumber || hasAmount) {
+      return 'invoice';
+    }
+
+    return 'unknown';
+  }
+
+  /**
+   * Create a PaymentAdvice record from an email
+   */
+  async _createPaymentAdviceFromEmail(message) {
+    console.log(`[InvoiceEmailPoller] Creating payment advice from email: ${message.subject}`);
+
+    const userId = this.config.targetMailbox;
+
+    // Get attachments
+    const attachments = await this._getMessageAttachments(userId, message.id);
+
+    // Filter to supported types
+    const validAttachments = attachments.filter(att =>
+      this.config.supportedAttachmentTypes.includes(att.contentType)
+    );
+
+    // Parse attachment if available
+    let extractedData = null;
+    let attachmentInfo = null;
+
+    if (validAttachments.length > 0) {
+      const attachment = validAttachments[0];
+      attachmentInfo = {
+        name: attachment.name,
+        size: attachment.size,
+        contentType: attachment.contentType,
+      };
+
+      try {
+        const attachmentBuffer = Buffer.from(attachment.contentBytes, 'base64');
+        extractedData = await this.parser.parsePaymentAdvice(
+          attachmentBuffer,
+          attachment.contentType,
+          attachment.name
+        );
+      } catch (error) {
+        console.error('[InvoiceEmailPoller] Payment advice parse error:', error.message);
+      }
+    }
+
+    // Create payment advice record
+    const paymentAdvice = new PaymentAdvice({
+      source: {
+        type: 'email',
+        emailId: message.id,
+        emailSubject: message.subject,
+        emailFrom: message.from?.emailAddress?.address,
+        receivedAt: new Date(message.receivedDateTime),
+        attachmentName: attachmentInfo?.name,
+      },
+      payer: extractedData?.payer || {
+        name: this._extractVendorFromEmail(message),
+      },
+      payment: extractedData?.payment || {
+        reference: this._extractPaymentReferenceFromSubject(message.subject),
+        date: new Date(),
+        currency: 'EUR',
+        totalAmount: this._extractAmountFromText(message.bodyPreview) || 0,
+      },
+      lines: extractedData?.lines || [],
+      reconciliation: {
+        status: 'pending',
+      },
+      status: extractedData ? 'parsed' : 'received',
+      extractionConfidence: extractedData?.extractionConfidence,
+    });
+
+    paymentAdvice.addProcessingEvent('email_received', {
+      emailId: message.id,
+      subject: message.subject,
+      from: message.from?.emailAddress?.address,
+    });
+
+    await paymentAdvice.save();
+
+    // Log audit
+    await InvoiceAuditLog.log(paymentAdvice._id, 'payment_advice_received', {
+      paymentReference: paymentAdvice.payment?.reference,
+      payerName: paymentAdvice.payer?.name,
+      actor: { type: 'system', name: 'InvoiceEmailPoller' },
+      details: {
+        emailId: message.id,
+        subject: message.subject,
+        from: message.from?.emailAddress?.address,
+        amount: paymentAdvice.payment?.totalAmount,
+      },
+    });
+
+    return paymentAdvice;
+  }
+
+  /**
+   * Extract payment reference from subject
+   */
+  _extractPaymentReferenceFromSubject(subject) {
+    if (!subject) return null;
+
+    const patterns = [
+      /(?:payment|remittance|ref|reference)[\s\-#:]*([A-Z0-9\-\/]+)/i,
+      /(?:virement|zahlung|betaling)[\s\-#:]*([A-Z0-9\-\/]+)/i,
+      /#([A-Z0-9\-\/]+)/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = subject.match(pattern);
+      if (match) {
+        return match[1].trim();
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Extract amount from text
+   */
+  _extractAmountFromText(text) {
+    if (!text) return null;
+
+    const patterns = [
+      /(?:€|EUR)\s*([\d\s.,]+)/i,
+      /([\d\s.,]+)\s*(?:€|EUR)/i,
+      /total[:\s]*([\d.,]+)/i,
+      /amount[:\s]*([\d.,]+)/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        // Clean and parse amount
+        const cleaned = match[1].replace(/\s/g, '').replace(',', '.');
+        const amount = parseFloat(cleaned);
+        if (!isNaN(amount) && amount > 0) {
+          return amount;
+        }
+      }
+    }
+
+    return null;
   }
 
   /**

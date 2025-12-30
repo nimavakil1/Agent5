@@ -400,13 +400,13 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
     }
 
     // Build query - include both New and Acknowledged states
-    // Note: In MongoDB, { $in: [null] } matches both null AND missing fields
-    // Using $ne: 'shipped' to include not_shipped, null, and undefined
     const query = {
-      'shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
+      'shipToParty.partyId': fcPartyId,
       purchaseOrderState: { $in: ['New', 'Acknowledged'] },
-      shipmentStatus: { $ne: 'shipped' }
+      shipmentStatus: 'not_shipped'
     };
+
+    console.log('[VendorAPI] Consolidate detail - groupId:', groupId, 'fcPartyId:', fcPartyId, 'dateStr:', dateStr);
 
     // CRITICAL: Isolate test data from production data
     if (isTestMode()) {
@@ -423,6 +423,7 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       query['deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
     }
 
+    console.log('[VendorAPI] Consolidate detail query:', JSON.stringify(query));
     const orders = await collection.find(query)
       .sort({ purchaseOrderNumber: 1 })
       .toArray();

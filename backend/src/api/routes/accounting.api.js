@@ -10,6 +10,7 @@ const { getAgentRegistry } = require('../../core/agents');
 const VendorInvoice = require('../../models/VendorInvoice');
 const AccountingTask = require('../../models/AccountingTask');
 const InvoiceAuditLog = require('../../models/InvoiceAuditLog');
+const PaymentAdvice = require('../../models/PaymentAdvice');
 
 // Helper to get the AccountingAgent
 function getAccountingAgent() {
@@ -263,6 +264,265 @@ router.post('/invoices/:id/book', async (req, res) => {
     const result = await OdooVendorBillCreator.createVendorBill(invoice, { force });
 
     res.json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== PAYMENT ADVICES ====================
+
+/**
+ * @route GET /api/accounting/payments
+ * @desc Get payment advices/remittances
+ */
+router.get('/payments', async (req, res) => {
+  try {
+    const {
+      status,
+      vendor,
+      date_from,
+      date_to,
+      limit = 50,
+      offset = 0,
+      sort = '-createdAt',
+    } = req.query;
+
+    const query = {};
+
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    if (vendor) {
+      query['payer.name'] = { $regex: vendor, $options: 'i' };
+    }
+
+    if (date_from || date_to) {
+      query['payment.date'] = {};
+      if (date_from) query['payment.date'].$gte = new Date(date_from);
+      if (date_to) query['payment.date'].$lte = new Date(date_to);
+    }
+
+    const [payments, total] = await Promise.all([
+      PaymentAdvice.find(query)
+        .sort(sort)
+        .skip(Number(offset))
+        .limit(Number(limit))
+        .lean(),
+      PaymentAdvice.countDocuments(query),
+    ]);
+
+    res.json({
+      success: true,
+      count: payments.length,
+      total,
+      payments: payments.map(p => ({
+        id: p._id,
+        reference: p.payment?.reference,
+        payerName: p.payer?.name,
+        payerVat: p.payer?.vatNumber,
+        amount: p.payment?.totalAmount,
+        currency: p.payment?.currency || 'EUR',
+        paymentDate: p.payment?.date,
+        lineCount: p.lines?.length || 0,
+        status: p.status,
+        reconciliationStatus: p.reconciliation?.status,
+        matchedAmount: p.reconciliation?.matchedAmount,
+        unmatchedAmount: p.reconciliation?.unmatchedAmount,
+        source: p.source?.type,
+        receivedAt: p.createdAt,
+        odooPaymentId: p.odoo?.paymentId,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/accounting/payments/:id
+ * @desc Get a specific payment advice with full details
+ */
+router.get('/payments/:id', async (req, res) => {
+  try {
+    const payment = await PaymentAdvice.findById(req.params.id).lean();
+
+    if (!payment) {
+      return res.status(404).json({ success: false, error: 'Payment advice not found' });
+    }
+
+    res.json({
+      success: true,
+      payment: {
+        ...payment,
+        id: payment._id,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/accounting/payments/:id/match
+ * @desc Match a payment advice to invoices (without executing reconciliation)
+ */
+router.post('/payments/:id/match', async (req, res) => {
+  try {
+    const payment = await PaymentAdvice.findById(req.params.id);
+
+    if (!payment) {
+      return res.status(404).json({ success: false, error: 'Payment advice not found' });
+    }
+
+    const agent = getAccountingAgent();
+    if (!agent) {
+      return res.status(503).json({ success: false, error: 'Accounting agent not available' });
+    }
+
+    const result = await agent._reconcilePaymentAdvice({
+      payment_advice_id: req.params.id,
+      execute: false,
+    });
+
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/accounting/payments/:id/reconcile
+ * @desc Execute reconciliation in Odoo for a matched payment advice
+ */
+router.post('/payments/:id/reconcile', async (req, res) => {
+  try {
+    const payment = await PaymentAdvice.findById(req.params.id);
+
+    if (!payment) {
+      return res.status(404).json({ success: false, error: 'Payment advice not found' });
+    }
+
+    const agent = getAccountingAgent();
+    if (!agent) {
+      return res.status(503).json({ success: false, error: 'Accounting agent not available' });
+    }
+
+    const result = await agent._reconcilePaymentAdvice({
+      payment_advice_id: req.params.id,
+      execute: true,
+    });
+
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/accounting/payments/unmatched
+ * @desc Get payments that couldn't be automatically matched
+ */
+router.get('/payments/unmatched/list', async (req, res) => {
+  try {
+    const { vendor_id, min_amount } = req.query;
+
+    const agent = getAccountingAgent();
+    if (!agent) {
+      return res.status(503).json({ success: false, error: 'Accounting agent not available' });
+    }
+
+    const result = await agent._getUnmatchedPayments({
+      vendor_id: vendor_id ? Number(vendor_id) : undefined,
+      min_amount: min_amount ? Number(min_amount) : undefined,
+    });
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/accounting/payments/metrics
+ * @desc Get payment reconciliation metrics
+ */
+router.get('/payments/metrics', async (req, res) => {
+  try {
+    const [statusCounts, totals] = await Promise.all([
+      PaymentAdvice.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 }, amount: { $sum: '$payment.totalAmount' } } }
+      ]),
+      PaymentAdvice.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: '$payment.totalAmount' },
+            matchedAmount: { $sum: '$reconciliation.matchedAmount' },
+            unmatchedAmount: { $sum: '$reconciliation.unmatchedAmount' },
+          }
+        }
+      ]),
+    ]);
+
+    const metrics = {
+      byStatus: {},
+      totalPayments: 0,
+      totalAmount: totals[0]?.totalAmount || 0,
+      matchedAmount: totals[0]?.matchedAmount || 0,
+      unmatchedAmount: totals[0]?.unmatchedAmount || 0,
+      matchRate: 0,
+    };
+
+    for (const { _id, count, amount } of statusCounts) {
+      metrics.byStatus[_id] = { count, amount };
+      metrics.totalPayments += count;
+    }
+
+    if (metrics.totalAmount > 0) {
+      metrics.matchRate = metrics.matchedAmount / metrics.totalAmount;
+    }
+
+    res.json({ success: true, metrics });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/accounting/invoices/:id/validate-amount
+ * @desc Validate invoice amount against PO within €0.02 tolerance
+ */
+router.post('/invoices/:id/validate-amount', async (req, res) => {
+  try {
+    const { po_total } = req.body;
+    const invoice = await VendorInvoice.findById(req.params.id).lean();
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, error: 'Invoice not found' });
+    }
+
+    if (typeof po_total !== 'number') {
+      return res.status(400).json({ success: false, error: 'PO total amount is required' });
+    }
+
+    const agent = getAccountingAgent();
+    if (!agent) {
+      return res.status(503).json({ success: false, error: 'Accounting agent not available' });
+    }
+
+    const invoiceTotal = invoice.totals?.totalAmount || 0;
+    const result = await agent._validateInvoiceAmount({
+      invoice_total: invoiceTotal,
+      po_total: po_total,
+    });
+
+    res.json({
+      success: true,
+      invoiceId: req.params.id,
+      invoiceNumber: invoice.invoice?.number,
+      ...result,
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

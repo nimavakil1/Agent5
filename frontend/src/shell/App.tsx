@@ -11,6 +11,7 @@ const Sidebar: React.FC = () => (
     <nav style={{padding:8,fontSize:14}}>
       <Link to="/" className="nav">Analytics</Link>
       <Link to="/products" className="nav">Products</Link>
+      <Link to="/accounting" className="nav">Accounting</Link>
       <Link to="/agent-studio" className="nav">Agent Studio</Link>
       <Link to="/orchestrator" className="nav">Orchestrator</Link>
       <Link to="/profile" className="nav">My Profile</Link>

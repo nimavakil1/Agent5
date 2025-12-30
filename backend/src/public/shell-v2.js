@@ -91,6 +91,11 @@
       id: 'accounting', name: 'Accounting', icon: 'account_balance', color: '#14b8a6',
       basePath: '/accounting',
       pages: [
+        { id: 'dashboard', path: '/ui/accounting', name: 'Dashboard', icon: 'dashboard' },
+        { id: 'invoices', path: '/ui/accounting/invoices', name: 'Invoice Queue', icon: 'receipt_long' },
+        { id: 'chat', path: '/ui/accounting/chat', name: 'Agent Chat', icon: 'chat' },
+        { id: 'reports', path: '/ui/accounting/reports', name: 'Reports', icon: 'analytics' },
+        { id: 'settings', path: '/ui/accounting/settings', name: 'Settings', icon: 'settings' },
         { id: 'invoicing', path: '/accounting/', name: 'VCS Invoicing', icon: 'receipt' },
         { id: 'remittances', path: '/accounting/remittances', name: 'Remittances', icon: 'payments' },
         { id: 'chargebacks', path: '/accounting/chargebacks', name: 'Chargebacks', icon: 'money_off' }

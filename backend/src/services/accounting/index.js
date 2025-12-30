@@ -17,6 +17,12 @@ const {
   extractInvoiceFromEmail,
   pollForInvoices,
 } = require('./InvoiceEmailPoller');
+const {
+  PaymentReconciliationEngine,
+  reconcilePayment,
+  executeReconciliation,
+  processReconciliationQueue,
+} = require('./PaymentReconciliationEngine');
 
 module.exports = {
   // Classes
@@ -25,8 +31,9 @@ module.exports = {
   OdooVendorBillCreator,
   InvoiceProcessor,
   InvoiceEmailPoller,
+  PaymentReconciliationEngine,
 
-  // Factory functions
+  // Invoice factory functions
   createVendorBill,
   processInvoice,
   processQueue,
@@ -34,4 +41,9 @@ module.exports = {
   scanForInvoices,
   extractInvoiceFromEmail,
   pollForInvoices,
+
+  // Payment reconciliation factory functions
+  reconcilePayment,
+  executeReconciliation,
+  processReconciliationQueue,
 };

@@ -374,6 +374,194 @@ IMPORTANT:
       return current[key];
     }, obj);
   }
+
+  /**
+   * Parse a payment advice/remittance from a buffer
+   * @param {Buffer} buffer - File content
+   * @param {string} mimeType - MIME type
+   * @param {string} filename - Original filename
+   * @returns {Object} Extracted payment advice data
+   */
+  async parsePaymentAdvice(buffer, mimeType, filename) {
+    console.log(`[InvoiceParser] Parsing payment advice: ${filename} (${mimeType})`);
+
+    // Convert to processable format
+    let content;
+    if (mimeType === 'application/pdf') {
+      const data = await pdf(buffer);
+      content = { text: data.text };
+    } else if (mimeType.startsWith('image/')) {
+      content = { base64: buffer.toString('base64'), mimeType };
+    } else if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) {
+      // For Excel files, we'd need xlsx parsing - fallback to text extraction
+      content = { text: `Excel file: ${filename}` };
+    } else {
+      throw new Error(`Unsupported file type for payment advice: ${mimeType}`);
+    }
+
+    // Extract using vision LLM with payment advice prompt
+    const extractedData = await this._extractPaymentAdviceWithLLM(content, filename);
+
+    // Calculate confidence
+    extractedData.extractionConfidence = this._calculatePaymentAdviceConfidence(extractedData);
+
+    return extractedData;
+  }
+
+  /**
+   * Extract payment advice data using LLM
+   */
+  async _extractPaymentAdviceWithLLM(content, filename) {
+    const systemPrompt = `You are an expert at extracting payment advice/remittance data.
+Extract ALL information from this payment notification and return ONLY valid JSON (no markdown, no code blocks).
+
+PAYMENT DETAILS:
+- payer_name: Name of the company making the payment
+- payer_vat: VAT number if present
+- payer_bank_account: Bank account/IBAN if present
+- payment_reference: Payment reference number
+- payment_date: Date of payment (YYYY-MM-DD)
+- total_amount: Total payment amount (number)
+- currency: ISO currency code (EUR, USD, etc.)
+- payment_method: wire, sepa, check, etc.
+
+INVOICE LINES (array of objects for each invoice being paid):
+- invoice_reference: Invoice number being paid
+- invoice_date: Original invoice date (YYYY-MM-DD) if mentioned
+- invoice_amount: Original invoice amount
+- paid_amount: Amount being paid for this invoice
+- discount_amount: Any discount applied
+- withholding_amount: Any withholding/retention
+
+IMPORTANT:
+- All monetary amounts should be numbers, not strings
+- Dates must be YYYY-MM-DD format
+- Return ONLY the JSON object, no additional text
+- If multiple invoices are being paid in one remittance, list each as a separate line`;
+
+    const messageContent = [];
+
+    if (content.text) {
+      messageContent.push({
+        type: 'text',
+        text: `Payment advice content from ${filename}:\n\n${content.text.substring(0, 15000)}`,
+      });
+    } else if (content.base64 && content.mimeType.startsWith('image/')) {
+      messageContent.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: content.mimeType,
+          data: content.base64,
+        },
+      });
+    }
+
+    messageContent.push({
+      type: 'text',
+      text: 'Please extract the payment advice information and return the JSON object.',
+    });
+
+    try {
+      const response = await this.anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: messageContent }],
+      });
+
+      const responseText = response.content[0].text;
+
+      // Try to parse JSON from response
+      let jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in LLM response');
+      }
+
+      const data = JSON.parse(jsonMatch[0]);
+      return this._normalizePaymentAdviceData(data);
+
+    } catch (error) {
+      console.error('[InvoiceParser] Payment advice extraction error:', error.message);
+      // Return minimal structure
+      return {
+        payer: { name: null },
+        payment: { reference: null, totalAmount: 0, currency: 'EUR' },
+        lines: [],
+      };
+    }
+  }
+
+  /**
+   * Normalize payment advice data
+   */
+  _normalizePaymentAdviceData(data) {
+    const normalized = {
+      payer: {
+        name: data.payer_name || null,
+        vatNumber: data.payer_vat || null,
+        bankAccount: data.payer_bank_account || null,
+      },
+      payment: {
+        reference: data.payment_reference || null,
+        date: data.payment_date ? new Date(data.payment_date) : null,
+        totalAmount: parseFloat(data.total_amount) || 0,
+        currency: data.currency || 'EUR',
+        paymentMethod: data.payment_method || null,
+      },
+      lines: [],
+    };
+
+    // Process invoice lines
+    if (Array.isArray(data.lines || data.invoice_lines)) {
+      const lines = data.lines || data.invoice_lines;
+      for (const line of lines) {
+        normalized.lines.push({
+          invoiceReference: line.invoice_reference || line.invoiceReference || null,
+          invoiceDate: line.invoice_date ? new Date(line.invoice_date) : null,
+          invoiceAmount: parseFloat(line.invoice_amount || line.invoiceAmount) || 0,
+          paidAmount: parseFloat(line.paid_amount || line.paidAmount) || 0,
+          discountAmount: parseFloat(line.discount_amount || line.discountAmount) || 0,
+          withholdingAmount: parseFloat(line.withholding_amount || line.withholdingAmount) || 0,
+        });
+      }
+    }
+
+    return normalized;
+  }
+
+  /**
+   * Calculate confidence for payment advice extraction
+   */
+  _calculatePaymentAdviceConfidence(data) {
+    let score = 0;
+    let total = 0;
+
+    // Check payer info (30%)
+    if (data.payer?.name) { score += 15; }
+    total += 15;
+    if (data.payer?.vatNumber || data.payer?.bankAccount) { score += 15; }
+    total += 15;
+
+    // Check payment info (40%)
+    if (data.payment?.reference) { score += 10; }
+    total += 10;
+    if (data.payment?.date) { score += 10; }
+    total += 10;
+    if (data.payment?.totalAmount > 0) { score += 20; }
+    total += 20;
+
+    // Check lines (30%)
+    if (data.lines?.length > 0) {
+      const hasRefs = data.lines.some(l => l.invoiceReference);
+      const hasAmounts = data.lines.some(l => l.paidAmount > 0);
+      if (hasRefs) { score += 15; }
+      if (hasAmounts) { score += 15; }
+    }
+    total += 30;
+
+    return Math.min(1, score / total);
+  }
 }
 
 module.exports = InvoiceParser;
