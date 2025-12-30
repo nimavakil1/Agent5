@@ -37,6 +37,7 @@ const knowledgeRouter = require('./api/routes/knowledge.api');
 const amazonRouter = require('./api/routes/amazon.api');
 const vendorRouter = require('./api/routes/vendor.api');
 const sellerRouter = require('./api/routes/seller.api');
+const amazonAdsRouter = require('./api/routes/amazonads.api');
 const odooRouter = require('./api/routes/odoo.api');
 const ms365Router = require('./api/routes/ms365.api');
 const bolcomRouter = require('./api/routes/bolcom.api');
@@ -360,6 +361,7 @@ app.use('/api/knowledge', requireSession, knowledgeRouter);
 app.use('/api/amazon', amazonRouter); // Webhooks are public (validated by signature), GET routes need auth
 app.use('/api/vendor', requireSession, vendorRouter); // Vendor Central requires auth
 app.use('/api/seller', requireSession, sellerRouter); // Seller Central requires auth
+app.use('/api/amazonads', requireSession, amazonAdsRouter); // Amazon Advertising API
 app.use('/api/odoo', requireSession, odooRouter);
 app.use('/api/ms365', requireSession, ms365Router);
 app.use('/api/bolcom', requireSession, bolcomRouter);

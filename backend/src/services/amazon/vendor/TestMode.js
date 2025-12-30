@@ -339,12 +339,12 @@ async function generateTestPOs(count = 5) {
       _id: undefined, // Will be auto-generated
       purchaseOrderNumber: `TEST-PO-${now.getTime()}-${i + 1}`,
       purchaseOrderState: 'New',
-      purchaseOrderDate: now.toISOString(),
+      purchaseOrderDate: now, // Use Date object, not string
       _testData: true,
       _generatedAt: now,
       deliveryWindow: {
-        startDate: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        startDate: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
+        endDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
       },
       odoo: null, // Clear Odoo link
       invoice: null,
