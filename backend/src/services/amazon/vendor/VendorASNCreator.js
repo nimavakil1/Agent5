@@ -18,6 +18,7 @@ const { getDb } = require('../../../db');
 const { VendorClient } = require('./VendorClient');
 const { getVendorPOImporter } = require('./VendorPOImporter');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
+const { isTestMode, wrapWithTestMode } = require('./TestMode');
 
 /**
  * Shipment types
@@ -101,12 +102,15 @@ class VendorASNCreator {
 
   /**
    * Get or create VendorClient for marketplace
+   * Wraps with test mode support when enabled
    */
   getClient(marketplace) {
-    if (!this.clients[marketplace]) {
-      this.clients[marketplace] = new VendorClient(marketplace);
+    const cacheKey = `${marketplace}_${isTestMode() ? 'test' : 'prod'}`;
+    if (!this.clients[cacheKey]) {
+      const client = new VendorClient(marketplace);
+      this.clients[cacheKey] = wrapWithTestMode(client);
     }
-    return this.clients[marketplace];
+    return this.clients[cacheKey];
   }
 
   /**
@@ -136,17 +140,26 @@ class VendorASNCreator {
         return result;
       }
 
-      // Check if PO has Odoo order linked
-      if (!po.odoo?.saleOrderId) {
-        result.errors.push('PO has no linked Odoo sale order');
-        return result;
-      }
+      // Check if PO has Odoo order linked (skip for test mode)
+      let picking = null;
 
-      // Get delivery from Odoo
-      const picking = await this._getDeliveryFromOdoo(po.odoo.saleOrderId, odooPickingId);
-      if (!picking) {
-        result.errors.push('No completed delivery found for this order');
-        return result;
+      if (isTestMode() && po._testData) {
+        // TEST MODE: Generate mock delivery for test POs
+        picking = this._generateMockDelivery(po);
+        result.warnings.push('TEST MODE: Using mock Odoo delivery');
+        console.log(`[VendorASNCreator] TEST MODE: Generated mock delivery for PO ${poNumber}`);
+      } else {
+        if (!po.odoo?.saleOrderId) {
+          result.errors.push('PO has no linked Odoo sale order');
+          return result;
+        }
+
+        // Get delivery from Odoo
+        picking = await this._getDeliveryFromOdoo(po.odoo.saleOrderId, odooPickingId);
+        if (!picking) {
+          result.errors.push('No completed delivery found for this order');
+          return result;
+        }
       }
 
       // Check if already submitted
@@ -682,6 +695,39 @@ class VendorASNCreator {
       successful: results.filter(r => r.success).length,
       failed: results.filter(r => !r.success).length,
       results
+    };
+  }
+
+  /**
+   * Generate mock Odoo delivery for test mode
+   * @param {Object} po - Purchase order
+   * @returns {Object} Mock picking matching Odoo format
+   */
+  _generateMockDelivery(po) {
+    const mockPickingId = 700000 + Math.floor(Math.random() * 100000);
+    const now = new Date();
+
+    // Build mock move lines from PO items
+    const moveLines = (po.items || []).map((item, idx) => ({
+      id: mockPickingId * 100 + idx,
+      product_id: [item.odooProductId || 2000 + idx, item.vendorProductIdentifier || 'TEST-PRODUCT'],
+      product_uom_qty: item.acknowledgeQty ?? item.orderedQuantity?.amount ?? 1,
+      quantity_done: item.acknowledgeQty ?? item.orderedQuantity?.amount ?? 1,
+      state: 'done'
+    }));
+
+    return {
+      id: mockPickingId,
+      name: `TEST-WH/OUT/${po.purchaseOrderNumber}`,
+      state: 'done',
+      date_done: now.toISOString(),
+      scheduled_date: now.toISOString(),
+      carrier_id: [1, 'Test Carrier'],
+      carrier_tracking_ref: `TEST-TRACK-${po.purchaseOrderNumber}`,
+      move_line_ids: moveLines.map(ml => ml.id),
+      move_lines: moveLines,
+      _testMode: true,
+      _mockResponse: true
     };
   }
 }

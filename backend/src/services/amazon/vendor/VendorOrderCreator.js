@@ -20,6 +20,7 @@ const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP'
 const { getVendorPOImporter, COLLECTION_NAME } = require('./VendorPOImporter');
 const { getVendorPartyMapping } = require('./VendorPartyMapping');
 const { skuResolver } = require('../SkuResolver');
+const { isTestMode } = require('./TestMode');
 
 /**
  * Amazon Vendor Partner IDs in Odoo (by marketplace)
@@ -238,6 +239,25 @@ class VendorOrderCreator {
         result.dryRun = true;
         result.orderData = orderData;
         result.warnings.push('Dry run - order not created');
+        return result;
+      }
+
+      // TEST MODE: Return mock Odoo order without actually creating
+      if (isTestMode()) {
+        const mockOrderId = 900000 + Math.floor(Math.random() * 100000);
+        const mockOrderName = `TEST-SO-${poNumber}`;
+
+        result.success = true;
+        result.odooOrderId = mockOrderId;
+        result.odooOrderName = mockOrderName;
+        result._testMode = true;
+        result._mockResponse = true;
+        result.warnings.push('TEST MODE: Odoo order creation mocked');
+
+        // Update MongoDB with mock Odoo link so the flow continues
+        await this.importer.linkToOdooOrder(poNumber, mockOrderId, mockOrderName);
+
+        console.log(`[VendorOrderCreator] TEST MODE: Mock Odoo order ${mockOrderName} for PO ${poNumber}`);
         return result;
       }
 

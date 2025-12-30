@@ -167,6 +167,13 @@ class VendorInvoiceSubmitter {
         odooInvoice = await this.findOdooInvoiceBySaleOrder(po.odoo.saleOrderId);
       }
 
+      // TEST MODE: Generate mock invoice if no real one exists for test POs
+      if (!odooInvoice && isTestMode() && po._testData) {
+        odooInvoice = this.generateMockOdooInvoice(po);
+        result.warnings.push('TEST MODE: Using mock Odoo invoice');
+        console.log(`[VendorInvoiceSubmitter] TEST MODE: Generated mock invoice ${odooInvoice.name} for PO ${poNumber}`);
+      }
+
       if (!odooInvoice) {
         result.errors.push('No Odoo invoice found for this PO');
         return result;
@@ -256,6 +263,53 @@ class VendorInvoiceSubmitter {
       console.error(`[VendorInvoiceSubmitter] Error submitting invoice for ${poNumber}:`, error);
       return result;
     }
+  }
+
+  /**
+   * Generate mock Odoo invoice for test mode
+   * @param {object} po - Purchase order data
+   * @returns {object} Mock invoice matching Odoo format
+   */
+  generateMockOdooInvoice(po) {
+    const mockInvoiceId = 800000 + Math.floor(Math.random() * 100000);
+    const mockInvoiceName = `TEST-INV/${po.purchaseOrderNumber}`;
+
+    // Calculate totals from PO items
+    let totalUntaxed = 0;
+    const mockLines = (po.items || []).map((item, idx) => {
+      const qty = item.acknowledgeQty ?? item.orderedQuantity?.amount ?? 1;
+      const price = parseFloat(item.netCost?.amount) || 0;
+      const subtotal = qty * price;
+      totalUntaxed += subtotal;
+
+      return {
+        id: mockInvoiceId * 100 + idx,
+        product_id: [item.odooProductId || 1000 + idx, item.vendorProductIdentifier || 'TEST-PRODUCT'],
+        name: item.vendorProductIdentifier || 'Test Product',
+        quantity: qty,
+        price_unit: price,
+        price_subtotal: subtotal,
+        price_total: subtotal, // No tax for simplicity
+        tax_ids: []
+      };
+    });
+
+    return {
+      id: mockInvoiceId,
+      name: mockInvoiceName,
+      partner_id: [po.odoo?.customerId || 1, 'Amazon Vendor (Test)'],
+      invoice_date: new Date().toISOString().split('T')[0],
+      amount_total: totalUntaxed,
+      amount_untaxed: totalUntaxed,
+      amount_tax: 0,
+      currency_id: [1, po.items?.[0]?.netCost?.currencyCode || 'EUR'],
+      state: 'posted',
+      move_type: 'out_invoice',
+      invoice_line_ids: mockLines.map(l => l.id),
+      lines: mockLines,
+      _testMode: true,
+      _mockResponse: true
+    };
   }
 
   /**
