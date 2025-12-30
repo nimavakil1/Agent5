@@ -421,9 +421,17 @@ class BolStockSync {
       const odooStock = await this.getOdooStock(allEans);
       console.log(`[BolStockSync] Got Odoo stock for ${Object.keys(odooStock).length} of ${allEans.length} EANs`);
 
+      // Log EANs not found in Odoo
+      const notFoundEans = allEans.filter(ean => odooStock[ean] === undefined);
+      if (notFoundEans.length > 0) {
+        console.log(`[BolStockSync] EANs NOT FOUND in Odoo (${notFoundEans.length}): ${notFoundEans.join(', ')}`);
+      }
+
       // Step 5: Update stock for each offer
       let updated = 0;
       let skipped = 0;
+      let skippedNotInOdoo = 0;
+      let skippedNoChange = 0;
       let failed = 0;
       const errors = [];
 
@@ -434,12 +442,14 @@ class BolStockSync {
         // Skip if no Odoo stock data (product doesn't exist in Odoo)
         if (newStock === undefined) {
           skipped++;
+          skippedNotInOdoo++;
           continue;
         }
 
         // Only update if stock changed
         if (newStock === offer.currentStock) {
           skipped++;
+          skippedNoChange++;
           continue;
         }
 
@@ -461,9 +471,25 @@ class BolStockSync {
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
       this.lastSync = new Date();
-      this.lastResult = { updated, skipped, failed, duration, totalOffers: offers.length, errors: errors.slice(0, 10) };
+      this.lastResult = {
+        updated,
+        skipped,
+        skippedNotInOdoo,
+        skippedNoChange,
+        failed,
+        duration,
+        totalOffers: offers.length,
+        notFoundEans,
+        errors: errors.slice(0, 30)  // Keep all 30 errors
+      };
 
-      console.log(`[BolStockSync] Sync complete in ${duration}s: ${updated} updated, ${skipped} skipped, ${failed} failed`);
+      console.log(`[BolStockSync] Sync complete in ${duration}s: ${updated} updated, ${skipped} skipped (${skippedNotInOdoo} not in Odoo, ${skippedNoChange} no change), ${failed} failed`);
+
+      // Log all failed updates
+      if (errors.length > 0) {
+        console.log(`[BolStockSync] Failed updates (${errors.length}):`);
+        errors.forEach(e => console.log(`  - ${e.ean} (${e.offerId}): ${e.error}`));
+      }
 
       return {
         success: true,

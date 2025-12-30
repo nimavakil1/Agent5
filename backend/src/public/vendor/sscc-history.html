@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSCC History - Amazon Vendor</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page { max-width: 1600px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .page-title { font-size: 24px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 12px; }
+    .page-title .material-symbols-outlined { font-size: 32px; color: #f97316; }
+    .header-actions { display: flex; gap: 12px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #f97316; color: white; }
+    .btn-primary:hover { background: #ea580c; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn .material-symbols-outlined { font-size: 20px; }
+
+    /* Stats Row */
+    .stats-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 768px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+    .stat-card { background: #18181f; border: 1px solid #252532; border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.15s; }
+    .stat-card:hover { border-color: #3f3f50; }
+    .stat-card.active { border-color: #f97316; background: rgba(249, 115, 22, 0.1); }
+    .stat-value { font-size: 24px; font-weight: 700; color: #fff; }
+    .stat-label { font-size: 12px; color: #71717a; }
+    .stat-card.cartons .stat-value { color: #60a5fa; }
+    .stat-card.pallets .stat-value { color: #a78bfa; }
+    .stat-card.generated .stat-value { color: #fbbf24; }
+    .stat-card.printed .stat-value { color: #4ade80; }
+    .stat-card.shipped .stat-value { color: #22d3ee; }
+
+    /* GS1 Info */
+    .gs1-info { background: linear-gradient(135deg, #1e1e2e 0%, #252532 100%); border: 1px solid #3f3f50; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: flex; align-items: center; gap: 20px; }
+    .gs1-prefix { font-family: 'Courier New', monospace; font-size: 24px; font-weight: bold; color: #f97316; letter-spacing: 2px; }
+    .gs1-label { font-size: 12px; color: #71717a; }
+    .gs1-detail { font-size: 13px; color: #a1a1aa; }
+
+    /* Filters */
+    .filters-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .filter-select, .filter-input { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; }
+    .filter-select:focus, .filter-input:focus { outline: none; border-color: #f97316; }
+
+    /* Table */
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #252532; }
+    th { background: #12121a; font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { font-size: 13px; color: #e4e4e7; }
+    tr:hover td { background: #1a1a28; }
+    .sscc-code { font-family: 'Courier New', monospace; font-size: 13px; font-weight: 600; color: #f97316; }
+    .sscc-formatted { font-family: 'Courier New', monospace; font-size: 12px; color: #a1a1aa; }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .badge-carton { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+    .badge-pallet { background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
+    .badge-generated { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .badge-printed { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+    .badge-shipped { background: rgba(34, 211, 238, 0.15); color: #22d3ee; }
+    .badge-received { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+
+    /* Contents preview */
+    .contents-preview { font-size: 11px; color: #71717a; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .contents-count { font-weight: 600; color: #a1a1aa; }
+
+    /* Action buttons */
+    .action-btn { width: 32px; height: 32px; border-radius: 8px; background: #252532; border: none; color: #71717a; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+    .action-btn:hover { background: #3f3f50; color: #e4e4e7; }
+    .action-btn .material-symbols-outlined { font-size: 18px; }
+    .actions { display: flex; gap: 6px; }
+
+    /* Pagination */
+    .pagination { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-top: 1px solid #252532; }
+    .pagination-info { font-size: 13px; color: #71717a; }
+    .pagination-buttons { display: flex; gap: 8px; }
+
+    /* Empty state */
+    .empty-state { padding: 60px 20px; text-align: center; }
+    .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
+    .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
+    .empty-state-text { font-size: 14px; color: #71717a; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 2000; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; width: 100%; max-width: 700px; max-height: 80vh; overflow-y: auto; }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; align-items: center; justify-content: space-between; }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; }
+    .modal-close { background: none; border: none; color: #71717a; cursor: pointer; padding: 4px; }
+    .modal-body { padding: 20px; }
+    .detail-row { display: flex; margin-bottom: 12px; }
+    .detail-label { width: 140px; font-size: 13px; color: #71717a; }
+    .detail-value { flex: 1; font-size: 13px; color: #e4e4e7; }
+    .detail-value.mono { font-family: 'Courier New', monospace; }
+    .contents-table { margin-top: 16px; }
+    .contents-table th { background: #1a1a28; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 24px; right: 24px; padding: 14px 20px; background: #22c55e; color: white; border-radius: 10px; font-weight: 600; display: none; z-index: 3000; }
+    .toast.error { background: #ef4444; }
+    .toast.show { display: flex; align-items: center; gap: 8px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">
+        <span class="material-symbols-outlined">qr_code_2</span>
+        SSCC History
+      </h1>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="loadData()">
+          <span class="material-symbols-outlined">refresh</span>Refresh
+        </button>
+        <button class="btn btn-primary" onclick="exportCSV()">
+          <span class="material-symbols-outlined">download</span>Export CSV
+        </button>
+      </div>
+    </header>
+
+    <!-- GS1 Info -->
+    <div class="gs1-info">
+      <div>
+        <div class="gs1-label">GS1 Company Prefix</div>
+        <div class="gs1-prefix" id="gs1-prefix">5400882</div>
+      </div>
+      <div style="border-left: 1px solid #3f3f50; padding-left: 20px;">
+        <div class="gs1-label">Carton Counter</div>
+        <div class="gs1-detail"><span id="counter-carton">0</span> used</div>
+      </div>
+      <div style="border-left: 1px solid #3f3f50; padding-left: 20px;">
+        <div class="gs1-label">Pallet Counter</div>
+        <div class="gs1-detail"><span id="counter-pallet">0</span> used</div>
+      </div>
+      <div style="border-left: 1px solid #3f3f50; padding-left: 20px;">
+        <div class="gs1-label">Capacity</div>
+        <div class="gs1-detail">1,000,000,000 per type</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card" onclick="filterBy('all')" id="stat-all">
+        <div class="stat-value" id="stat-total">0</div>
+        <div class="stat-label">Total SSCCs</div>
+      </div>
+      <div class="stat-card cartons" onclick="filterBy('carton')" id="stat-cartons">
+        <div class="stat-value" id="stat-cartons-val">0</div>
+        <div class="stat-label">Cartons</div>
+      </div>
+      <div class="stat-card pallets" onclick="filterBy('pallet')" id="stat-pallets">
+        <div class="stat-value" id="stat-pallets-val">0</div>
+        <div class="stat-label">Pallets</div>
+      </div>
+      <div class="stat-card generated" onclick="filterBy('generated')" id="stat-generated">
+        <div class="stat-value" id="stat-generated-val">0</div>
+        <div class="stat-label">Generated</div>
+      </div>
+      <div class="stat-card printed" onclick="filterBy('printed')" id="stat-printed">
+        <div class="stat-value" id="stat-printed-val">0</div>
+        <div class="stat-label">Printed</div>
+      </div>
+      <div class="stat-card shipped" onclick="filterBy('shipped')" id="stat-shipped">
+        <div class="stat-value" id="stat-shipped-val">0</div>
+        <div class="stat-label">Shipped</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <input type="text" class="filter-input" id="filter-sscc" placeholder="Search SSCC..." oninput="applyFilters()" style="width: 200px;">
+      <input type="text" class="filter-input" id="filter-po" placeholder="Search PO..." oninput="applyFilters()" style="width: 160px;">
+      <select class="filter-select" id="filter-type" onchange="applyFilters()">
+        <option value="">All Types</option>
+        <option value="carton">Cartons</option>
+        <option value="pallet">Pallets</option>
+      </select>
+      <select class="filter-select" id="filter-status" onchange="applyFilters()">
+        <option value="">All Statuses</option>
+        <option value="generated">Generated</option>
+        <option value="printed">Printed</option>
+        <option value="shipped">Shipped</option>
+        <option value="received">Received</option>
+      </select>
+      <input type="date" class="filter-input" id="filter-date-from" onchange="applyFilters()">
+      <input type="date" class="filter-input" id="filter-date-to" onchange="applyFilters()">
+      <button class="btn btn-secondary btn-sm" onclick="clearFilters()">
+        <span class="material-symbols-outlined">clear</span>Clear
+      </button>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>SSCC</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Serial #</th>
+              <th>PO Number</th>
+              <th>Contents</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sscc-table">
+            <tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading...</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <div class="pagination-info" id="pagination-info">Showing 0 of 0 SSCCs</div>
+        <div class="pagination-buttons">
+          <button class="btn btn-secondary btn-sm" onclick="prevPage()" id="prev-btn" disabled>
+            <span class="material-symbols-outlined">chevron_left</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="nextPage()" id="next-btn" disabled>
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="detail-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">SSCC Details</div>
+        <button class="modal-close" onclick="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let allSSCCs = [];
+    let filteredSSCCs = [];
+    let stats = {};
+    let currentPage = 0;
+    const pageSize = 50;
+    let activeFilter = 'all';
+
+    // Format SSCC for display
+    function formatSSCC(sscc) {
+      if (!sscc || sscc.length !== 18) return sscc;
+      return `${sscc[0]} ${sscc.substring(1, 8)} ${sscc.substring(8)}`;
+    }
+
+    // Format date
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Format date short
+    function formatDateShort(dateStr) {
+      if (!dateStr) return '-';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    }
+
+    // Show toast
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast show' + (isError ? ' error' : '');
+      setTimeout(() => toast.className = 'toast', 3000);
+    }
+
+    // Load stats
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/vendor/sscc/stats', { credentials: 'include' });
+        const data = await res.json();
+        if (data.success) {
+          stats = data.stats;
+          document.getElementById('gs1-prefix').textContent = stats.gs1Prefix || '5400882';
+          document.getElementById('counter-carton').textContent = (stats.counters?.sscc_0 || 0).toLocaleString();
+          document.getElementById('counter-pallet').textContent = (stats.counters?.sscc_1 || 0).toLocaleString();
+          document.getElementById('stat-total').textContent = stats.total || 0;
+          document.getElementById('stat-cartons-val').textContent = stats.cartons || 0;
+          document.getElementById('stat-pallets-val').textContent = stats.pallets || 0;
+          document.getElementById('stat-generated-val').textContent = stats.generated || 0;
+          document.getElementById('stat-printed-val').textContent = stats.printed || 0;
+          document.getElementById('stat-shipped-val').textContent = stats.shipped || 0;
+        }
+      } catch (err) {
+        console.error('Failed to load stats:', err);
+      }
+    }
+
+    // Load all SSCCs
+    async function loadSSCCs() {
+      try {
+        const res = await fetch('/api/vendor/sscc/history', { credentials: 'include' });
+        const data = await res.json();
+        if (data.success) {
+          allSSCCs = data.ssccs || [];
+          applyFilters();
+        }
+      } catch (err) {
+        console.error('Failed to load SSCCs:', err);
+        document.getElementById('sscc-table').innerHTML = `<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Error loading data</div><div class="empty-state-text">${err.message}</div></div></td></tr>`;
+      }
+    }
+
+    // Load all data
+    async function loadData() {
+      await Promise.all([loadStats(), loadSSCCs()]);
+    }
+
+    // Filter by stat card
+    function filterBy(type) {
+      // Update active state
+      document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+      document.getElementById(`stat-${type === 'all' ? 'all' : type === 'carton' ? 'cartons' : type === 'pallet' ? 'pallets' : type}`).classList.add('active');
+
+      activeFilter = type;
+
+      // Update dropdowns
+      if (type === 'all') {
+        document.getElementById('filter-type').value = '';
+        document.getElementById('filter-status').value = '';
+      } else if (type === 'carton' || type === 'pallet') {
+        document.getElementById('filter-type').value = type;
+        document.getElementById('filter-status').value = '';
+      } else {
+        document.getElementById('filter-type').value = '';
+        document.getElementById('filter-status').value = type;
+      }
+
+      applyFilters();
+    }
+
+    // Apply filters
+    function applyFilters() {
+      const ssccSearch = document.getElementById('filter-sscc').value.toLowerCase();
+      const poSearch = document.getElementById('filter-po').value.toLowerCase();
+      const typeFilter = document.getElementById('filter-type').value;
+      const statusFilter = document.getElementById('filter-status').value;
+      const dateFrom = document.getElementById('filter-date-from').value;
+      const dateTo = document.getElementById('filter-date-to').value;
+
+      filteredSSCCs = allSSCCs.filter(s => {
+        if (ssccSearch && !s.sscc.toLowerCase().includes(ssccSearch)) return false;
+        if (poSearch && !(s.purchaseOrderNumber || '').toLowerCase().includes(poSearch)) return false;
+        if (typeFilter && s.type !== typeFilter) return false;
+        if (statusFilter && s.status !== statusFilter) return false;
+        if (dateFrom) {
+          const d = new Date(s.createdAt);
+          if (d < new Date(dateFrom)) return false;
+        }
+        if (dateTo) {
+          const d = new Date(s.createdAt);
+          const to = new Date(dateTo);
+          to.setDate(to.getDate() + 1);
+          if (d >= to) return false;
+        }
+        return true;
+      });
+
+      currentPage = 0;
+      renderTable();
+    }
+
+    // Clear filters
+    function clearFilters() {
+      document.getElementById('filter-sscc').value = '';
+      document.getElementById('filter-po').value = '';
+      document.getElementById('filter-type').value = '';
+      document.getElementById('filter-status').value = '';
+      document.getElementById('filter-date-from').value = '';
+      document.getElementById('filter-date-to').value = '';
+      document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+      activeFilter = 'all';
+      applyFilters();
+    }
+
+    // Render table
+    function renderTable() {
+      const tbody = document.getElementById('sscc-table');
+      const start = currentPage * pageSize;
+      const end = start + pageSize;
+      const pageData = filteredSSCCs.slice(start, end);
+
+      if (pageData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span><div class="empty-state-title">No SSCCs found</div><div class="empty-state-text">No SSCCs match your filters</div></div></td></tr>`;
+      } else {
+        tbody.innerHTML = pageData.map(s => {
+          const contentsCount = s.contents?.items?.length || 0;
+          const contentsSummary = contentsCount > 0
+            ? s.contents.items.slice(0, 2).map(i => i.sku || i.ean).join(', ') + (contentsCount > 2 ? '...' : '')
+            : (s.contents?.cartonCount ? `${s.contents.cartonCount} cartons` : '-');
+
+          return `
+            <tr>
+              <td>
+                <div class="sscc-code">${s.sscc}</div>
+                <div class="sscc-formatted">(00) ${formatSSCC(s.sscc)}</div>
+              </td>
+              <td><span class="badge badge-${s.type}">${s.type}</span></td>
+              <td><span class="badge badge-${s.status}">${s.status}</span></td>
+              <td style="font-family: monospace;">#${s.serialNumber}</td>
+              <td>${s.purchaseOrderNumber || '-'}</td>
+              <td>
+                <span class="contents-count">${contentsCount > 0 ? contentsCount + ' items' : (s.contents?.cartonCount ? s.contents.cartonCount + ' cartons' : '-')}</span>
+                <div class="contents-preview">${contentsSummary}</div>
+              </td>
+              <td>${formatDateShort(s.createdAt)}</td>
+              <td class="actions">
+                <button class="action-btn" onclick="viewDetails('${s.sscc}')" title="View Details">
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+                <button class="action-btn" onclick="printLabel('${s.sscc}')" title="Print Label">
+                  <span class="material-symbols-outlined">print</span>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // Update pagination
+      const total = filteredSSCCs.length;
+      const showing = Math.min(end, total);
+      document.getElementById('pagination-info').textContent = `Showing ${start + 1}-${showing} of ${total} SSCCs`;
+      document.getElementById('prev-btn').disabled = currentPage === 0;
+      document.getElementById('next-btn').disabled = end >= total;
+    }
+
+    // Pagination
+    function prevPage() {
+      if (currentPage > 0) {
+        currentPage--;
+        renderTable();
+      }
+    }
+
+    function nextPage() {
+      if ((currentPage + 1) * pageSize < filteredSSCCs.length) {
+        currentPage++;
+        renderTable();
+      }
+    }
+
+    // View details
+    async function viewDetails(sscc) {
+      try {
+        const res = await fetch(`/api/vendor/sscc/${sscc}`, { credentials: 'include' });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const s = data.sscc;
+        const modal = document.getElementById('detail-modal');
+        const body = document.getElementById('modal-body');
+
+        let contentsHtml = '';
+        if (s.contents?.items?.length > 0) {
+          contentsHtml = `
+            <div class="contents-table">
+              <table>
+                <thead>
+                  <tr><th>SKU</th><th>EAN</th><th>Product</th><th>Qty</th></tr>
+                </thead>
+                <tbody>
+                  ${s.contents.items.map(i => `
+                    <tr>
+                      <td>${i.sku || '-'}</td>
+                      <td style="font-family: monospace;">${i.ean || '-'}</td>
+                      <td>${i.name || '-'}</td>
+                      <td style="font-weight: 600; color: #4ade80;">${i.quantity}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } else if (s.contents?.cartonSSCCs?.length > 0) {
+          contentsHtml = `
+            <div style="margin-top: 16px;">
+              <div style="font-weight: 600; margin-bottom: 8px;">Cartons on this pallet:</div>
+              ${s.contents.cartonSSCCs.map(c => `<div style="font-family: monospace; font-size: 13px; padding: 4px 0;">${c}</div>`).join('')}
+            </div>
+          `;
+        }
+
+        body.innerHTML = `
+          <div class="detail-row">
+            <div class="detail-label">SSCC</div>
+            <div class="detail-value mono" style="font-size: 16px; font-weight: 600; color: #f97316;">${s.sscc}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Formatted</div>
+            <div class="detail-value mono">(00) ${formatSSCC(s.sscc)}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Type</div>
+            <div class="detail-value"><span class="badge badge-${s.type}">${s.type}</span></div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Status</div>
+            <div class="detail-value"><span class="badge badge-${s.status}">${s.status}</span></div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Serial Number</div>
+            <div class="detail-value mono">#${s.serialNumber}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">GS1 Prefix</div>
+            <div class="detail-value mono">${s.gs1Prefix}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Check Digit</div>
+            <div class="detail-value mono">${s.checkDigit}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">PO Number</div>
+            <div class="detail-value">${s.purchaseOrderNumber || '-'}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Shipment ID</div>
+            <div class="detail-value">${s.shipmentId || '-'}</div>
+          </div>
+          ${s.palletSSCC ? `
+          <div class="detail-row">
+            <div class="detail-label">Pallet SSCC</div>
+            <div class="detail-value mono">${s.palletSSCC}</div>
+          </div>
+          ` : ''}
+          <div class="detail-row">
+            <div class="detail-label">Created</div>
+            <div class="detail-value">${formatDate(s.createdAt)}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Updated</div>
+            <div class="detail-value">${formatDate(s.updatedAt)}</div>
+          </div>
+          ${contentsHtml}
+          <div style="margin-top: 20px; display: flex; gap: 12px;">
+            <button class="btn btn-primary" onclick="printLabel('${s.sscc}')">
+              <span class="material-symbols-outlined">print</span>Print Label
+            </button>
+            <button class="btn btn-secondary" onclick="updateStatus('${s.sscc}')">
+              <span class="material-symbols-outlined">edit</span>Update Status
+            </button>
+          </div>
+        `;
+
+        modal.classList.add('open');
+      } catch (err) {
+        showToast('Error loading details: ' + err.message, true);
+      }
+    }
+
+    // Close modal
+    function closeModal() {
+      document.getElementById('detail-modal').classList.remove('open');
+    }
+
+    // Print label
+    function printLabel(sscc) {
+      window.open(`/api/vendor/sscc/${sscc}/label`, '_blank');
+    }
+
+    // Update status
+    async function updateStatus(sscc) {
+      const newStatus = prompt('Enter new status (generated, printed, shipped, received):');
+      if (!newStatus) return;
+
+      if (!['generated', 'printed', 'shipped', 'received'].includes(newStatus)) {
+        showToast('Invalid status', true);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/vendor/sscc/${sscc}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ status: newStatus })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Status updated');
+          closeModal();
+          loadData();
+        } else {
+          throw new Error(data.error);
+        }
+      } catch (err) {
+        showToast('Error updating status: ' + err.message, true);
+      }
+    }
+
+    // Export CSV
+    function exportCSV() {
+      const rows = [
+        ['SSCC', 'Type', 'Status', 'Serial', 'PO Number', 'Shipment ID', 'Items', 'Created']
+      ];
+
+      filteredSSCCs.forEach(s => {
+        rows.push([
+          s.sscc,
+          s.type,
+          s.status,
+          s.serialNumber,
+          s.purchaseOrderNumber || '',
+          s.shipmentId || '',
+          s.contents?.items?.length || s.contents?.cartonCount || 0,
+          s.createdAt ? new Date(s.createdAt).toISOString() : ''
+        ]);
+      });
+
+      const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sscc-history-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('CSV exported');
+    }
+
+    // Close modal on escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // Initialize
+    loadData();
+  </script>
+</body>
+</html>

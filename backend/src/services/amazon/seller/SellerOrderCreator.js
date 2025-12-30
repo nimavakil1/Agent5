@@ -453,16 +453,19 @@ class SellerOrderCreator {
 
   /**
    * Find or create customer and shipping address from order data
-   * ALWAYS creates real customer with actual shipping address (not generic)
+   * Creates real customer with actual shipping address when available,
+   * falls back to generic customer if no address data.
    *
    * @returns {Object} { customerId, shippingAddressId }
    */
   async findOrCreateCustomerAndAddress(order, config) {
     const address = order.shippingAddress;
 
-    // Must have address data
+    // If no address data, use generic customer
     if (!address || !address.name) {
-      throw new Error('Order has no shipping address');
+      console.warn(`[SellerOrderCreator] No shipping address for ${order.amazonOrderId}, using generic customer`);
+      const genericCustomerId = await this.findOrCreateGenericCustomer(config.shipToCountry);
+      return { customerId: genericCustomerId, shippingAddressId: genericCustomerId };
     }
 
     // Build customer name
@@ -549,6 +552,45 @@ class SellerOrderCreator {
     }
 
     return { customerId, shippingAddressId };
+  }
+
+  /**
+   * Find or create a generic customer for orders without address data
+   * @param {string} countryCode - Country code (DE, FR, etc.)
+   */
+  async findOrCreateGenericCustomer(countryCode) {
+    const customerName = `Amazon | AMZ_B2C_${countryCode}`;
+
+    // Check cache
+    if (this.partnerCache[customerName]) {
+      return this.partnerCache[customerName];
+    }
+
+    // Search for existing
+    const existing = await this.odoo.searchRead('res.partner',
+      [['name', '=', customerName]],
+      ['id']
+    );
+
+    if (existing.length > 0) {
+      this.partnerCache[customerName] = existing[0].id;
+      return existing[0].id;
+    }
+
+    // Create generic customer
+    const countryId = this.countryCache[countryCode] || null;
+    const partnerId = await this.odoo.create('res.partner', {
+      name: customerName,
+      company_type: 'company',
+      is_company: true,
+      customer_rank: 1,
+      country_id: countryId,
+      comment: 'Generic Amazon B2C customer - used when shipping address not available'
+    });
+
+    console.log(`[SellerOrderCreator] Created generic customer: ${customerName} (ID: ${partnerId})`);
+    this.partnerCache[customerName] = partnerId;
+    return partnerId;
   }
 
   /**

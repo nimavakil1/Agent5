@@ -1465,6 +1465,177 @@ router.post('/sscc/labels/batch', async (req, res) => {
   }
 });
 
+/**
+ * @route GET /api/vendor/sscc/history
+ * @desc Get SSCC history with filtering and pagination
+ * @query type - Filter by type (carton, pallet)
+ * @query status - Filter by status (active, shipped, delivered, cancelled)
+ * @query search - Search by SSCC or PO number
+ * @query startDate - Filter by creation date (ISO string)
+ * @query endDate - Filter by creation date (ISO string)
+ * @query limit - Number of results (default 50, max 500)
+ * @query skip - Offset for pagination
+ */
+router.get('/sscc/history', async (req, res) => {
+  try {
+    const db = getDb();
+    const ssccCollection = db.collection('sscc_codes');
+    const counterCollection = db.collection('sscc_counters');
+
+    // Build query
+    const query = {};
+
+    if (req.query.type) {
+      query.type = req.query.type;
+    }
+
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+
+    if (req.query.search) {
+      const searchTerm = req.query.search.trim();
+      query.$or = [
+        { sscc: { $regex: searchTerm, $options: 'i' } },
+        { purchaseOrderNumber: { $regex: searchTerm, $options: 'i' } }
+      ];
+    }
+
+    if (req.query.startDate || req.query.endDate) {
+      query.createdAt = {};
+      if (req.query.startDate) {
+        query.createdAt.$gte = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        query.createdAt.$lte = new Date(req.query.endDate);
+      }
+    }
+
+    // Pagination
+    const limit = Math.min(parseInt(req.query.limit) || 50, 500);
+    const skip = parseInt(req.query.skip) || 0;
+
+    // Get SSCCs with pagination
+    const ssccs = await ssccCollection.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+
+    // Get total count for pagination
+    const totalCount = await ssccCollection.countDocuments(query);
+
+    // Get stats
+    const stats = await ssccCollection.aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          cartons: { $sum: { $cond: [{ $eq: ['$type', 'carton'] }, 1, 0] } },
+          pallets: { $sum: { $cond: [{ $eq: ['$type', 'pallet'] }, 1, 0] } },
+          active: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+          shipped: { $sum: { $cond: [{ $eq: ['$status', 'shipped'] }, 1, 0] } },
+          delivered: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
+          cancelled: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } }
+        }
+      }
+    ]).toArray();
+
+    // Get counter info
+    const counters = await counterCollection.find({}).toArray();
+    const counterInfo = {};
+    for (const c of counters) {
+      counterInfo[c._id] = c.seq;
+    }
+
+    res.json({
+      success: true,
+      gs1Prefix: '5400882',
+      counters: counterInfo,
+      stats: stats[0] || {
+        total: 0,
+        cartons: 0,
+        pallets: 0,
+        active: 0,
+        shipped: 0,
+        delivered: 0,
+        cancelled: 0
+      },
+      pagination: {
+        total: totalCount,
+        limit,
+        skip,
+        hasMore: skip + ssccs.length < totalCount
+      },
+      ssccs
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /sscc/history error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route PATCH /api/vendor/sscc/:sscc/status
+ * @desc Update SSCC status
+ * @body status - New status (active, shipped, delivered, cancelled)
+ */
+router.patch('/sscc/:sscc/status', async (req, res) => {
+  try {
+    const db = getDb();
+    const collection = db.collection('sscc_codes');
+
+    const { status } = req.body;
+    const validStatuses = ['active', 'shipped', 'delivered', 'cancelled'];
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+      });
+    }
+
+    const result = await collection.updateOne(
+      { sscc: req.params.sscc },
+      {
+        $set: {
+          status,
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, error: 'SSCC not found' });
+    }
+
+    res.json({ success: true, sscc: req.params.sscc, status });
+  } catch (error) {
+    console.error('[VendorAPI] PATCH /sscc/:sscc/status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/sscc/:sscc
+ * @desc Get single SSCC details
+ */
+router.get('/sscc/:sscc', async (req, res) => {
+  try {
+    const generator = await getSSCCGenerator();
+    const record = await generator.getSSCC(req.params.sscc);
+
+    if (!record) {
+      return res.status(404).json({ success: false, error: 'SSCC not found' });
+    }
+
+    res.json({ success: true, sscc: record });
+  } catch (error) {
+    console.error('[VendorAPI] GET /sscc/:sscc error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== INVOICES ====================
 
 /**
