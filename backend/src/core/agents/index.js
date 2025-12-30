@@ -29,6 +29,9 @@ const { ProductDevelopmentAgent, ProductStage, ProductCategory } = require('./sp
 const { MarketingAgent, CampaignType, CampaignStatus, LeadStatus, Channel } = require('./specialized/MarketingAgent');
 const { MeetingIntelligenceAgent, MeetingType, MeetingStatus, ActionPriority, EngagementLevel } = require('./specialized/MeetingIntelligenceAgent');
 
+// Specialized agents - Phase 4: Accounting Agent
+const { AccountingAgent, InvoiceProcessingStatus, TransactionType } = require('./specialized/AccountingAgent');
+
 // Integrations - Phase 1
 const { createOdooMCPConfig, OdooDirectClient } = require('./integrations/OdooMCP');
 
@@ -111,6 +114,11 @@ module.exports = {
   MeetingStatus,
   ActionPriority,
   EngagementLevel,
+
+  // Specialized Agents - Phase 4: Accounting
+  AccountingAgent,
+  InvoiceProcessingStatus,
+  TransactionType,
 
   // Integrations - Odoo
   createOdooMCPConfig,
