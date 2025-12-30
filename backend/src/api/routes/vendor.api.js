@@ -59,6 +59,40 @@ const {
   cleanupTestData
 } = require('../../services/amazon/vendor/TestMode');
 
+// ==================== PRODUCT PACKAGING ====================
+
+/**
+ * @route GET /api/vendor/products/:sku/packaging
+ * @desc Get packaging info for a product from MongoDB
+ * @param sku - Product SKU
+ */
+router.get('/products/:sku/packaging', async (req, res) => {
+  try {
+    const db = getDb();
+    const { sku } = req.params;
+
+    // Find product by SKU in MongoDB products collection
+    const product = await db.collection('products').findOne({ sku });
+
+    if (!product) {
+      return res.json({ success: true, packaging: [] });
+    }
+
+    // Return packaging array, sorted by qty descending
+    const packaging = (product.packaging || [])
+      .map(p => ({
+        name: p.name,
+        qty: p.qty
+      }))
+      .sort((a, b) => b.qty - a.qty);
+
+    res.json({ success: true, packaging });
+  } catch (error) {
+    console.error('Product packaging fetch error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== PURCHASE ORDERS ====================
 
 /**

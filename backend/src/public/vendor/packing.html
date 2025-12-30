@@ -353,35 +353,35 @@
     let glsConfigured = false;
     let itemsRemaining = {}; // Track remaining qty for each item
     let currentModalParcelIndex = -1; // Which parcel we're adding items to
-    let packagingCache = {}; // Cache packaging data by odooProductId
+    let packagingCache = {}; // Cache packaging data by SKU
 
-    // Fetch packaging for a product
-    async function fetchPackaging(odooProductId) {
-      if (!odooProductId) return [];
-      if (packagingCache[odooProductId]) return packagingCache[odooProductId];
+    // Fetch packaging for a product by SKU
+    async function fetchPackaging(sku) {
+      if (!sku) return [];
+      if (packagingCache[sku]) return packagingCache[sku];
 
       try {
-        const res = await fetch(`/api/odoo/products/${odooProductId}/packaging`, { credentials: 'include' });
+        const res = await fetch(`/api/vendor/products/${encodeURIComponent(sku)}/packaging`, { credentials: 'include' });
         const data = await res.json();
         if (data.success && data.packaging) {
           // Sort by qty descending so larger packages come first
-          packagingCache[odooProductId] = data.packaging.sort((a, b) => b.qty - a.qty);
-          return packagingCache[odooProductId];
+          packagingCache[sku] = data.packaging.sort((a, b) => b.qty - a.qty);
+          return packagingCache[sku];
         }
       } catch (err) {
-        console.error('Failed to fetch packaging for product', odooProductId, err);
+        console.error('Failed to fetch packaging for product', sku, err);
       }
-      packagingCache[odooProductId] = [];
+      packagingCache[sku] = [];
       return [];
     }
 
     // Pre-fetch all packaging when modal opens
     async function prefetchAllPackaging() {
       if (!groupData) return;
-      const promises = groupData.consolidatedItems
-        .filter(item => item.odooProductId)
-        .map(item => fetchPackaging(item.odooProductId));
-      await Promise.all(promises);
+      const skus = [...new Set(groupData.consolidatedItems
+        .map(item => item.odooSku || item.vendorProductIdentifier)
+        .filter(Boolean))];
+      await Promise.all(skus.map(sku => fetchPackaging(sku)));
     }
 
     // Show toast
@@ -493,7 +493,7 @@
         const key = item.odooSku || item.vendorProductIdentifier;
         const remaining = getRemainingQty(key);
         const weight = item.weight || 0.5;
-        const packaging = packagingCache[item.odooProductId] || [];
+        const packaging = packagingCache[key] || [];
         const isAllPacked = remaining === 0;
 
         // Build packaging badges HTML
@@ -575,7 +575,8 @@
 
       // Get the item to access packaging
       const item = groupData.consolidatedItems[itemIndex];
-      const packaging = packagingCache[item?.odooProductId] || [];
+      const sku = item?.odooSku || item?.vendorProductIdentifier;
+      const packaging = packagingCache[sku] || [];
 
       // Rebuild badges with updated disabled states
       const packagingBadges = packaging.map(pkg => {
