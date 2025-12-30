@@ -55,10 +55,11 @@
     .parcel-count-input input:focus { outline: none; border-color: #f97316; }
 
     /* Parcels Grid */
-    .parcels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
+    .parcels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 20px; }
     .parcel-card { background: #1a1a28; border: 2px solid #252532; border-radius: 12px; overflow: hidden; }
     .parcel-card.ready { border-color: #22c55e; }
     .parcel-card.error { border-color: #ef4444; }
+    .parcel-card.active { border-color: #f97316; }
     .parcel-header { padding: 16px; background: #12121a; display: flex; justify-content: space-between; align-items: center; }
     .parcel-title { font-size: 16px; font-weight: 600; color: #fff; }
     .parcel-status { font-size: 12px; padding: 4px 10px; border-radius: 20px; }
@@ -73,11 +74,36 @@
     .weight-row { display: flex; gap: 12px; }
     .weight-row .parcel-field { flex: 1; }
     .estimated-weight { font-size: 12px; color: #71717a; margin-top: 4px; }
-    .parcel-items { max-height: 150px; overflow-y: auto; }
-    .parcel-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #252532; font-size: 13px; }
-    .parcel-item:last-child { border-bottom: none; }
-    .parcel-item-sku { color: #a1a1aa; }
-    .parcel-item-qty { color: #4ade80; font-weight: 600; }
+    .parcel-items { max-height: 200px; overflow-y: auto; }
+    .parcel-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; margin-bottom: 6px; background: #252532; border-radius: 6px; font-size: 13px; }
+    .parcel-item:last-child { margin-bottom: 0; }
+    .parcel-item-info { flex: 1; }
+    .parcel-item-sku { color: #e4e4e7; font-weight: 500; }
+    .parcel-item-name { color: #71717a; font-size: 11px; margin-top: 2px; }
+    .parcel-item-qty { color: #4ade80; font-weight: 600; margin: 0 12px; }
+    .parcel-item-remove { background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px; border-radius: 4px; }
+    .parcel-item-remove:hover { background: #ef444420; }
+    .add-item-btn { width: 100%; padding: 10px; background: #252532; border: 2px dashed #3f3f50; border-radius: 8px; color: #71717a; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; }
+    .add-item-btn:hover { border-color: #f97316; color: #f97316; }
+
+    /* Add Item Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; width: 500px; max-width: 90%; max-height: 80vh; overflow: hidden; }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; }
+    .modal-close { background: none; border: none; color: #71717a; cursor: pointer; font-size: 24px; }
+    .modal-body { padding: 20px; max-height: 400px; overflow-y: auto; }
+    .modal-footer { padding: 16px 20px; border-top: 1px solid #252532; display: flex; justify-content: flex-end; gap: 12px; }
+    .item-select-row { display: flex; align-items: center; gap: 12px; padding: 12px; background: #1a1a28; border-radius: 8px; margin-bottom: 8px; }
+    .item-select-row:hover { background: #252532; }
+    .item-select-info { flex: 1; }
+    .item-select-sku { color: #e4e4e7; font-weight: 500; }
+    .item-select-name { color: #71717a; font-size: 12px; }
+    .item-select-available { color: #71717a; font-size: 11px; }
+    .item-select-available span { color: #4ade80; font-weight: 600; }
+    .item-select-qty { width: 80px; padding: 8px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #fff; text-align: center; }
+    .item-select-qty:focus { outline: none; border-color: #f97316; }
 
     /* Labels Section */
     .labels-section { margin-top: 24px; }
@@ -201,7 +227,9 @@
                   <th>SKU</th>
                   <th>EAN</th>
                   <th>Product</th>
-                  <th class="qty-cell">Quantity</th>
+                  <th class="qty-cell">Total</th>
+                  <th class="qty-cell">Packed</th>
+                  <th class="qty-cell">Remaining</th>
                 </tr>
               </thead>
               <tbody id="items-table">
@@ -278,12 +306,33 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
+  <!-- Add Items Modal -->
+  <div class="modal-overlay" id="add-items-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Add Items to Parcel <span id="modal-parcel-num"></span></div>
+        <button class="modal-close" onclick="closeAddItemsModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-items-list">
+        <!-- Items will be rendered here -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAddItemsModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmAddItems()">
+          <span class="material-symbols-outlined">add</span>Add Selected Items
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let groupId = null;
     let groupData = null;
     let currentShipmentId = null;
     let parcels = [];
     let glsConfigured = false;
+    let itemsRemaining = {}; // Track remaining qty for each item
+    let currentModalParcelIndex = -1; // Which parcel we're adding items to
 
     // Show toast
     function showToast(message, isError = false) {
@@ -300,6 +349,140 @@
         el.classList.remove('active', 'completed');
         if (i < step) el.classList.add('completed');
         if (i === step) el.classList.add('active');
+      }
+    }
+
+    // Calculate remaining quantities
+    function calculateRemaining() {
+      if (!groupData) return;
+
+      // Reset to total quantities
+      itemsRemaining = {};
+      for (const item of groupData.consolidatedItems) {
+        const key = item.odooSku || item.vendorProductIdentifier;
+        itemsRemaining[key] = item.totalQty;
+      }
+
+      // Subtract what's already in parcels
+      for (const parcel of parcels) {
+        for (const pItem of parcel.items) {
+          const key = pItem.sku || pItem.ean;
+          if (itemsRemaining[key] !== undefined) {
+            itemsRemaining[key] -= pItem.quantity;
+          }
+        }
+      }
+    }
+
+    // Get remaining qty for an item
+    function getRemainingQty(sku) {
+      return itemsRemaining[sku] || 0;
+    }
+
+    // Open add items modal
+    function openAddItemsModal(parcelIndex) {
+      currentModalParcelIndex = parcelIndex;
+      calculateRemaining();
+
+      document.getElementById('modal-parcel-num').textContent = parcelIndex + 1;
+
+      const modalBody = document.getElementById('modal-items-list');
+      modalBody.innerHTML = groupData.consolidatedItems.map(item => {
+        const key = item.odooSku || item.vendorProductIdentifier;
+        const remaining = getRemainingQty(key);
+
+        return `
+          <div class="item-select-row">
+            <div class="item-select-info">
+              <div class="item-select-sku">${item.odooSku || '-'}</div>
+              <div class="item-select-name">${item.odooProductName || 'Unknown'}</div>
+              <div class="item-select-available">Available: <span>${remaining}</span> of ${item.totalQty}</div>
+            </div>
+            <input type="number" class="item-select-qty"
+                   data-sku="${item.odooSku || ''}"
+                   data-ean="${item.vendorProductIdentifier || ''}"
+                   data-name="${item.odooProductName || ''}"
+                   min="0" max="${remaining}" value="0"
+                   ${remaining === 0 ? 'disabled' : ''}>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('add-items-modal').classList.add('open');
+    }
+
+    // Close add items modal
+    function closeAddItemsModal() {
+      document.getElementById('add-items-modal').classList.remove('open');
+      currentModalParcelIndex = -1;
+    }
+
+    // Confirm adding items from modal
+    function confirmAddItems() {
+      if (currentModalParcelIndex < 0) return;
+
+      const inputs = document.querySelectorAll('.item-select-qty');
+      let addedCount = 0;
+
+      inputs.forEach(input => {
+        const qty = parseInt(input.value) || 0;
+        if (qty > 0) {
+          const sku = input.dataset.sku;
+          const ean = input.dataset.ean;
+          const name = input.dataset.name;
+
+          // Check if item already exists in parcel
+          const existing = parcels[currentModalParcelIndex].items.find(i =>
+            (i.sku && i.sku === sku) || (i.ean && i.ean === ean)
+          );
+
+          if (existing) {
+            existing.quantity += qty;
+          } else {
+            parcels[currentModalParcelIndex].items.push({
+              sku, ean, name, quantity: qty
+            });
+          }
+          addedCount += qty;
+        }
+      });
+
+      if (addedCount > 0) {
+        // Recalculate weight for this parcel
+        recalculateParcelWeight(currentModalParcelIndex);
+        renderParcels();
+        renderItemsTable();
+        showToast(`Added ${addedCount} units to Parcel ${currentModalParcelIndex + 1}`);
+      }
+
+      closeAddItemsModal();
+    }
+
+    // Remove item from parcel
+    function removeItemFromParcel(parcelIndex, itemIndex) {
+      parcels[parcelIndex].items.splice(itemIndex, 1);
+      recalculateParcelWeight(parcelIndex);
+      renderParcels();
+      renderItemsTable();
+    }
+
+    // Recalculate parcel weight
+    async function recalculateParcelWeight(parcelIndex) {
+      const parcel = parcels[parcelIndex];
+      try {
+        const res = await fetch('/api/vendor/packing/estimate-weight', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ items: parcel.items })
+        });
+        const data = await res.json();
+        if (data.success) {
+          parcel.estimatedWeight = data.estimatedWeight;
+          parcel.weight = data.estimatedWeight;
+        }
+      } catch (err) {
+        console.error('Failed to estimate weight:', err);
       }
     }
 
@@ -373,18 +556,36 @@
       document.getElementById('info-units').textContent = groupData.summary.totalUnits;
 
       // Render items table
-      const tbody = document.getElementById('items-table');
-      tbody.innerHTML = groupData.consolidatedItems.map(item => `
-        <tr>
-          <td>${item.odooSku || '-'}</td>
-          <td style="font-family: monospace; font-size: 12px;">${item.vendorProductIdentifier || '-'}</td>
-          <td>${item.odooProductName || 'Unknown'}</td>
-          <td class="qty-cell">${item.totalQty}</td>
-        </tr>
-      `).join('');
+      renderItemsTable();
 
       // Initialize parcels
       updateParcels();
+    }
+
+    // Render items table with packed/remaining counts
+    function renderItemsTable() {
+      calculateRemaining();
+      const tbody = document.getElementById('items-table');
+      tbody.innerHTML = groupData.consolidatedItems.map(item => {
+        const key = item.odooSku || item.vendorProductIdentifier;
+        const remaining = getRemainingQty(key);
+        const packed = item.totalQty - remaining;
+        const isComplete = remaining === 0;
+        const hasPartial = packed > 0 && remaining > 0;
+
+        return `
+          <tr style="${isComplete ? 'opacity: 0.5;' : ''}">
+            <td>${item.odooSku || '-'}</td>
+            <td style="font-family: monospace; font-size: 12px;">${item.vendorProductIdentifier || '-'}</td>
+            <td>${item.odooProductName || 'Unknown'}</td>
+            <td class="qty-cell">${item.totalQty}</td>
+            <td class="qty-cell" style="color: ${packed > 0 ? '#4ade80' : '#71717a'};">${packed}</td>
+            <td class="qty-cell" style="color: ${remaining > 0 ? '#f97316' : '#4ade80'}; font-weight: ${remaining > 0 ? '600' : '400'};">
+              ${remaining}${isComplete ? ' ✓' : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
     // Update parcels
@@ -480,18 +681,25 @@
 
     // Render parcels
     function renderParcels() {
+      calculateRemaining();
       const grid = document.getElementById('parcels-grid');
 
       grid.innerHTML = parcels.map((parcel, idx) => {
         const status = parcel.sscc ? 'ready' : 'pending';
         const itemsHtml = parcel.items.length > 0
-          ? parcel.items.map(item => `
+          ? parcel.items.map((item, itemIdx) => `
               <div class="parcel-item">
-                <span class="parcel-item-sku">${item.sku || item.ean || '-'}</span>
+                <div class="parcel-item-info">
+                  <div class="parcel-item-sku">${item.sku || item.ean || '-'}</div>
+                  <div class="parcel-item-name">${item.name || ''}</div>
+                </div>
                 <span class="parcel-item-qty">${item.quantity}x</span>
+                <button class="parcel-item-remove" onclick="removeItemFromParcel(${idx}, ${itemIdx})" title="Remove item">
+                  <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
+                </button>
               </div>
             `).join('')
-          : '<div style="color: #71717a; font-style: italic; padding: 8px 0;">No items assigned</div>';
+          : '<div style="color: #71717a; font-style: italic; padding: 8px 0;">No items assigned - click "Add Items" below</div>';
 
         return `
           <div class="parcel-card ${status}">
@@ -511,6 +719,9 @@
               <div class="parcel-field">
                 <label>Items (${parcel.items.reduce((sum, i) => sum + i.quantity, 0)} units)</label>
                 <div class="parcel-items">${itemsHtml}</div>
+                <button class="add-item-btn" onclick="openAddItemsModal(${idx})">
+                  <span class="material-symbols-outlined">add</span>Add Items
+                </button>
               </div>
               ${parcel.sscc ? `
                 <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #252532;">
@@ -543,8 +754,18 @@
       // Check if all parcels have items
       const emptyParcels = parcels.filter(p => p.items.length === 0);
       if (emptyParcels.length > 0) {
-        showToast(`${emptyParcels.length} parcel(s) have no items. Use "Auto-Distribute" first.`, true);
+        showToast(`${emptyParcels.length} parcel(s) have no items assigned`, true);
         return;
+      }
+
+      // Check if all items are packed
+      calculateRemaining();
+      const unpackedItems = Object.entries(itemsRemaining).filter(([key, qty]) => qty > 0);
+      if (unpackedItems.length > 0) {
+        const totalUnpacked = unpackedItems.reduce((sum, [, qty]) => sum + qty, 0);
+        if (!confirm(`Warning: ${totalUnpacked} units are not yet assigned to any parcel.\n\nDo you want to continue anyway?`)) {
+          return;
+        }
       }
 
       const generateBtn = document.getElementById('generate-btn');
