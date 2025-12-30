@@ -318,11 +318,14 @@ class BolStockSync {
   async getOdooStock(eans) {
     if (!eans || eans.length === 0) return {};
 
-    // Find products by barcode (EAN)
+    // Find products by barcode (EAN) - no limit to get all matches
     const products = await this.odoo.searchRead('product.product',
       [['barcode', 'in', eans]],
-      ['id', 'barcode']
+      ['id', 'barcode'],
+      { limit: 10000 }  // Override default limit of 100
     );
+
+    console.log(`[BolStockSync] Found ${products.length} products in Odoo matching ${eans.length} EANs`);
 
     if (products.length === 0) return {};
 
@@ -332,13 +335,14 @@ class BolStockSync {
       if (p.barcode) eanToProductId[p.barcode] = p.id;
     });
 
-    // Get stock.quants for these products in Central Warehouse
+    // Get stock.quants for these products in Central Warehouse - no limit
     const quants = await this.odoo.searchRead('stock.quant',
       [
         ['product_id', 'in', productIds],
         ['location_id', '=', this.cwLocationId]
       ],
-      ['product_id', 'quantity', 'reserved_quantity']
+      ['product_id', 'quantity', 'reserved_quantity'],
+      { limit: 10000 }  // Override default limit of 100
     );
 
     // Calculate free stock per product
