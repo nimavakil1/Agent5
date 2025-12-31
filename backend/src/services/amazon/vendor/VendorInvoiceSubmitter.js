@@ -414,18 +414,20 @@ class VendorInvoiceSubmitter {
 
   /**
    * Clean party object for Amazon API
-   * When address is null, provide minimal address with country code
-   * Amazon requires at least country code for billToParty
+   * When address is null, provide minimal address with required fields
+   * Amazon requires: name, addressLine1, city, countryCode
    */
   cleanPartyForPayload(party, countryCode = 'DE') {
     if (!party) return null;
 
-    // If address is null or empty, provide minimal address with country code
+    // If address is null or empty, provide minimal address
     if (!party.address || Object.keys(party.address).length === 0) {
       return {
         partyId: party.partyId,
         address: {
-          name: 'Amazon',
+          name: 'Amazon EU Sarl',
+          addressLine1: 'Amazon Fulfillment Center',
+          city: this.getDefaultCity(countryCode),
           countryCode: countryCode
         }
       };
@@ -436,6 +438,24 @@ class VendorInvoiceSubmitter {
       partyId: party.partyId,
       address: party.address
     };
+  }
+
+  /**
+   * Get default city for a country (for Amazon fulfillment centers)
+   */
+  getDefaultCity(countryCode) {
+    const defaultCities = {
+      'DE': 'Dortmund',
+      'FR': 'Paris',
+      'IT': 'Milano',
+      'ES': 'Madrid',
+      'NL': 'Amsterdam',
+      'GB': 'London',
+      'SE': 'Stockholm',
+      'PL': 'Warsaw',
+      'BE': 'Brussels'
+    };
+    return defaultCities[countryCode] || 'Dortmund';
   }
 
   /**
@@ -481,11 +501,17 @@ class VendorInvoiceSubmitter {
 
     // Clean party objects - provide minimal address with country code when null
     const countryCode = this.getCountryFromMarketplace(po.marketplaceId);
+    const defaultAddress = {
+      name: 'Amazon EU Sarl',
+      addressLine1: 'Amazon Fulfillment Center',
+      city: this.getDefaultCity(countryCode),
+      countryCode: countryCode
+    };
     const shipToParty = this.cleanPartyForPayload(po.shipToParty, countryCode) ||
-      { partyId: po.buyingParty?.partyId || 'AMAZON', address: { name: 'Amazon', countryCode } };
+      { partyId: po.buyingParty?.partyId || 'AMAZON', address: defaultAddress };
     const billToParty = this.cleanPartyForPayload(po.billToParty, countryCode) ||
       this.cleanPartyForPayload(po.buyingParty, countryCode) ||
-      { partyId: 'AMAZON', address: { name: 'Amazon', countryCode } };
+      { partyId: 'AMAZON', address: defaultAddress };
 
     // Build sellingParty from PO or use ACROPAQ default
     const sellingParty = po.sellingParty?.partyId
