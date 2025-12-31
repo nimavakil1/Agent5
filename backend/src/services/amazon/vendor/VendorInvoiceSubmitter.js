@@ -513,18 +513,24 @@ class VendorInvoiceSubmitter {
       this.cleanPartyForPayload(po.buyingParty, countryCode) ||
       { partyId: 'AMAZON', address: defaultAddress };
 
+    // Use the vendor partyId from the PO (Amazon assigns different codes per marketplace)
+    const vendorPartyId = po.sellingParty?.partyId || ACROPAQ_COMPANY.partyId;
+
     // Build invoice
     // Note: Amazon invoice schema expects: invoiceType, id, referenceNumber, remitToParty,
     // shipToParty, shipFromParty, paymentTerms, invoiceTotal, chargeDetails, allowanceDetails, items
-    // billToParty and sellingParty are NOT supported in this schema
     return {
       invoices: [{
         invoiceType: INVOICE_TYPES.INVOICE,
         id: invoiceNumber,
         date: invoiceDate,
-        remitToParty: ACROPAQ_COMPANY,
+        remitToParty: {
+          partyId: vendorPartyId,
+          address: ACROPAQ_COMPANY.address,
+          taxRegistrationDetails: ACROPAQ_COMPANY.taxRegistrationDetails
+        },
         shipFromParty: {
-          partyId: ACROPAQ_COMPANY.partyId,
+          partyId: vendorPartyId,
           address: ACROPAQ_COMPANY.address
         },
         shipToParty,
