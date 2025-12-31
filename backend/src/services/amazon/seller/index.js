@@ -51,6 +51,7 @@ const { SellerInventoryExport, getSellerInventoryExport, INVENTORY_FEED_TYPE } =
 const { SellerFbaReportsSync, getSellerFbaReportsSync, STOCK_ADJUSTMENT_REPORT, REMOVAL_ORDER_REPORT } = require('./SellerFbaReportsSync');
 const { SellerInboundShipmentSync, getSellerInboundShipmentSync, SHIPMENT_STATUSES } = require('./SellerInboundShipmentSync');
 const { SellerFulfillmentSync, getSellerFulfillmentSync } = require('./SellerFulfillmentSync');
+const { AddressCleaner, getAddressCleaner, LEGAL_TERMS_REGEX } = require('./AddressCleaner');
 
 module.exports = {
   // Client
