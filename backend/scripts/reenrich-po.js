@@ -1,9 +1,13 @@
 const { MongoClient } = require("mongodb");
 const { OdooDirectClient } = require("../src/core/agents/integrations/OdooMCP");
+const { connectDb } = require("../src/db");
 const { getAmazonProductMapper } = require("../src/services/amazon/AmazonProductMapper");
 
 async function reenrich() {
   const poNumber = process.argv[2] || "4WZ7I1UZ";
+
+  // Connect via shared db module for AmazonProductMapper to work
+  await connectDb("mongodb://localhost:27017/agent5");
 
   const client = new MongoClient("mongodb://localhost:27017");
   await client.connect();
