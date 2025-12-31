@@ -494,10 +494,24 @@ class VendorPOImporter {
 
   /**
    * Get purchase order by number
+   * Automatically re-enriches items that are missing Odoo product data
    */
   async getPurchaseOrder(poNumber) {
     const collection = this.db.collection(COLLECTION_NAME);
-    return collection.findOne({ purchaseOrderNumber: poNumber });
+    const po = await collection.findOne({ purchaseOrderNumber: poNumber });
+
+    // Auto-enrich missing products when PO is accessed
+    if (po && po.items) {
+      const missingProducts = po.items.filter(item => !item.odooProductId);
+      if (missingProducts.length > 0) {
+        console.log(`[VendorPOImporter] PO ${poNumber} has ${missingProducts.length} items missing product data, re-enriching...`);
+        await this.enrichItemsWithOdooData(poNumber);
+        // Return fresh data after enrichment
+        return collection.findOne({ purchaseOrderNumber: poNumber });
+      }
+    }
+
+    return po;
   }
 
   /**
