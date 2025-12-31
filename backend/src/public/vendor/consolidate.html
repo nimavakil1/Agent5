@@ -380,12 +380,14 @@
       const itemsHtml = data.consolidatedItems.map((item, idx) => {
         // Only show SKU if it's different from EAN
         const sku = item.odooSku && item.odooSku !== item.vendorProductIdentifier ? item.odooSku : '-';
+        // Use odooBarcode (real EAN from Odoo) if available, otherwise vendorProductIdentifier
+        const ean = item.odooBarcode || item.vendorProductIdentifier || '-';
         const description = item.odooProductName || '-';
         return `
         <tr>
           <td>${idx + 1}</td>
           <td class="sku-cell">${sku}</td>
-          <td class="sku-cell">${item.vendorProductIdentifier || '-'}</td>
+          <td class="sku-cell">${ean}</td>
           <td>${description}</td>
           <td class="qty-cell">${item.totalQty}</td>
           <td style="font-size: 12px; color: #71717a;">${item.orders.map(o => `${o.purchaseOrderNumber} (${o.qty}x)`).join(', ')}</td>

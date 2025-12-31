@@ -532,6 +532,7 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
             odooProductId: item.odooProductId,
             odooProductName: item.odooProductName,
             odooSku: item.odooSku,
+            odooBarcode: item.odooBarcode, // Real EAN from Odoo
             totalQty: 0,
             weight, // Unit weight from item, products collection, or 0
             netCost: item.netCost,
@@ -1206,10 +1207,12 @@ async function generatePackingList(req, res) {
           const sku = item.odooSku && item.odooSku !== item.vendorProductIdentifier
             ? item.odooSku
             : '-';
+          // Use odooBarcode (real EAN from Odoo) if available
+          const ean = item.odooBarcode || item.vendorProductIdentifier;
           itemMap[key] = {
             line: 0,
             sku,
-            ean: item.vendorProductIdentifier,
+            ean,
             asin: item.amazonProductIdentifier,
             description: item.odooProductName || '-',
             quantity: 0,

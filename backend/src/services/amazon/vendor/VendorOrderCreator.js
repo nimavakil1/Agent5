@@ -390,8 +390,9 @@ class VendorOrderCreator {
           continue;
         }
 
-        // Use acknowledgeQty (accepted quantity) if set, otherwise fall back to orderedQuantity
-        const quantity = item.acknowledgeQty ?? item.orderedQuantity?.amount ?? 1;
+        // Use acknowledgeQty (accepted quantity) if > 0, otherwise fall back to orderedQuantity
+        // Note: acknowledgeQty defaults to 0, so we must check > 0, not just nullish
+        const quantity = (item.acknowledgeQty > 0) ? item.acknowledgeQty : (item.orderedQuantity?.amount ?? 1);
         const netCost = parseFloat(item.netCost?.amount) || 0;
         const priceUnit = netCost > 0 ? netCost : 0;
 
