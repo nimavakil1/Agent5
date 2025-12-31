@@ -669,6 +669,28 @@ router.post('/orders/sync-shipment-status', async (req, res) => {
 });
 
 /**
+ * @route POST /api/vendor/orders/sync-invoices
+ * @desc Sync invoice data from Odoo to MongoDB
+ * Links Odoo invoices to MongoDB vendor_purchase_orders
+ */
+router.post('/orders/sync-invoices', async (req, res) => {
+  try {
+    const importer = await getVendorPOImporter();
+    const result = await importer.syncInvoicesFromOdoo({
+      limit: req.body.limit || 500
+    });
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /orders/sync-invoices error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route POST /api/vendor/orders/:poNumber/acknowledge
  * @desc Send acknowledgment to Amazon for a PO
  * @body status - Acknowledgment status: Accepted, Rejected, Backordered

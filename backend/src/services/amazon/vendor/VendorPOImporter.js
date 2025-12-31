@@ -1158,6 +1158,133 @@ class VendorPOImporter {
     console.log(`[VendorPOImporter] Sync complete: ${updated} updated, ${errors.length} errors`);
     return { synced: orders.length, updated, errors };
   }
+
+  /**
+   * Sync invoice data from Odoo to MongoDB
+   * Finds Odoo invoices linked to vendor sale orders and updates MongoDB
+   * @param {Object} options - Sync options
+   * @param {number} options.limit - Max orders to process (default: 500)
+   * @returns {Object} Sync results
+   */
+  async syncInvoicesFromOdoo(options = {}) {
+    const { limit = 500 } = options;
+    const collection = this.db.collection(COLLECTION_NAME);
+
+    console.log('[VendorPOImporter] Starting invoice sync from Odoo...');
+
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+
+    // Get Amazon Vendor team ID
+    const teams = await odoo.searchRead('crm.team',
+      [['name', 'ilike', 'Amazon Vendor']],
+      ['id', 'name']
+    );
+
+    if (teams.length === 0) {
+      console.log('[VendorPOImporter] Amazon Vendor team not found');
+      return { synced: 0, updated: 0, alreadySynced: 0, errors: [] };
+    }
+
+    const teamId = teams[0].id;
+
+    // Get vendor sale orders with invoices from Odoo
+    const vendorOrders = await odoo.searchRead('sale.order',
+      [
+        ['team_id', '=', teamId],
+        ['invoice_status', '=', 'invoiced'],
+        ['client_order_ref', '!=', false]
+      ],
+      ['id', 'name', 'client_order_ref', 'invoice_ids'],
+      limit
+    );
+
+    console.log(`[VendorPOImporter] Found ${vendorOrders.length} invoiced vendor orders in Odoo`);
+
+    let updated = 0;
+    let alreadySynced = 0;
+    const errors = [];
+    const updates = [];
+
+    for (const order of vendorOrders) {
+      const poNumber = order.client_order_ref;
+      if (!poNumber || !order.invoice_ids || order.invoice_ids.length === 0) continue;
+
+      try {
+        // Check if MongoDB has this PO and if invoice is already linked
+        const mongoPO = await collection.findOne({ purchaseOrderNumber: poNumber });
+
+        if (!mongoPO) {
+          // PO not in MongoDB - might be old or from different source
+          continue;
+        }
+
+        if (mongoPO.odoo?.invoiceId) {
+          // Already synced
+          alreadySynced++;
+          continue;
+        }
+
+        // Get invoice details from Odoo
+        const invoices = await odoo.searchRead('account.move',
+          [
+            ['id', 'in', order.invoice_ids],
+            ['move_type', '=', 'out_invoice'],
+            ['state', '=', 'posted']
+          ],
+          ['id', 'name', 'invoice_date', 'amount_total']
+        );
+
+        if (invoices.length === 0) {
+          // No posted invoices yet
+          continue;
+        }
+
+        // Use the first posted invoice
+        const invoice = invoices[0];
+
+        // Update MongoDB with invoice info
+        await collection.updateOne(
+          { purchaseOrderNumber: poNumber },
+          {
+            $set: {
+              'odoo.invoiceId': invoice.id,
+              'odoo.invoiceName': invoice.name,
+              'odoo.invoiceDate': invoice.invoice_date,
+              'odoo.invoiceAmount': invoice.amount_total,
+              lastInvoiceSyncAt: new Date(),
+              updatedAt: new Date()
+            }
+          }
+        );
+
+        updates.push({
+          poNumber,
+          saleOrder: order.name,
+          invoiceId: invoice.id,
+          invoiceName: invoice.name,
+          amount: invoice.amount_total
+        });
+
+        console.log(`[VendorPOImporter] ${poNumber}: Linked invoice ${invoice.name} (€${invoice.amount_total})`);
+        updated++;
+
+      } catch (err) {
+        errors.push({ poNumber, error: err.message });
+        console.error(`[VendorPOImporter] Error syncing ${poNumber}:`, err.message);
+      }
+    }
+
+    console.log(`[VendorPOImporter] Invoice sync complete: ${updated} updated, ${alreadySynced} already synced, ${errors.length} errors`);
+
+    return {
+      synced: vendorOrders.length,
+      updated,
+      alreadySynced,
+      errors,
+      updates
+    };
+  }
 }
 
 // Singleton instance
