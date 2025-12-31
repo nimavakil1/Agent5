@@ -4007,7 +4007,7 @@ router.get('/packing/:shipmentId/delivery-note.pdf', async (req, res) => {
     const allItems = Object.values(allItemsMap).sort((a, b) => (a.sku || '').localeCompare(b.sku || ''));
     const totalUnits = allItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
 
-    // Generate delivery note HTML
+    // Generate delivery note HTML - compact to fit on single A4 page
     const deliveryNoteHtml = `
 <!DOCTYPE html>
 <html>
@@ -4015,40 +4015,38 @@ router.get('/packing/:shipmentId/delivery-note.pdf', async (req, res) => {
   <meta charset="UTF-8">
   <title>Delivery Note - ${shipment.shipmentId}</title>
   <style>
-    @page { size: A4; margin: 15mm; }
+    @page { size: A4; margin: 10mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.4; color: #333; }
-    .header { display: flex; justify-content: space-between; border-bottom: 3px solid #000; padding-bottom: 15px; margin-bottom: 20px; }
-    .logo-section { }
-    .logo { font-size: 24pt; font-weight: bold; color: #1a5f7a; }
-    .company-name { font-size: 10pt; color: #666; }
+    body { font-family: Arial, sans-serif; font-size: 9pt; line-height: 1.3; color: #333; }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
+    .logo { font-size: 20pt; font-weight: bold; color: #1a5f7a; }
+    .company-name { font-size: 8pt; color: #666; }
     .doc-info { text-align: right; }
-    .doc-title { font-size: 20pt; font-weight: bold; margin-bottom: 5px; }
-    .doc-number { font-size: 12pt; color: #666; }
-    .doc-date { font-size: 10pt; color: #888; margin-top: 5px; }
-    .addresses { display: flex; gap: 40px; margin-bottom: 25px; }
-    .address-box { flex: 1; border: 1px solid #ddd; padding: 15px; border-radius: 4px; }
-    .address-label { font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin-bottom: 8px; }
-    .address-name { font-size: 14pt; font-weight: bold; margin-bottom: 5px; }
-    .address-line { font-size: 10pt; }
-    .shipment-info { background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 25px; }
-    .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
-    .info-item { }
-    .info-label { font-size: 9pt; color: #666; text-transform: uppercase; }
-    .info-value { font-size: 12pt; font-weight: bold; }
-    .section-title { font-size: 14pt; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #1a5f7a; padding-bottom: 5px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th { background: #1a5f7a; color: white; padding: 10px 8px; text-align: left; font-size: 10pt; text-transform: uppercase; }
-    td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 10pt; }
+    .doc-title { font-size: 16pt; font-weight: bold; margin-bottom: 2px; }
+    .doc-number { font-size: 10pt; color: #666; }
+    .doc-date { font-size: 9pt; color: #888; }
+    .addresses { display: flex; gap: 20px; margin-bottom: 10px; }
+    .address-box { flex: 1; border: 1px solid #ddd; padding: 8px; border-radius: 4px; }
+    .address-label { font-size: 8pt; color: #666; text-transform: uppercase; font-weight: bold; margin-bottom: 4px; }
+    .address-name { font-size: 11pt; font-weight: bold; margin-bottom: 2px; }
+    .address-line { font-size: 9pt; }
+    .shipment-info { background: #f8f9fa; padding: 8px; border-radius: 4px; margin-bottom: 10px; }
+    .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .info-label { font-size: 8pt; color: #666; text-transform: uppercase; }
+    .info-value { font-size: 10pt; font-weight: bold; }
+    .section-title { font-size: 11pt; font-weight: bold; margin-bottom: 5px; border-bottom: 2px solid #1a5f7a; padding-bottom: 3px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    th { background: #1a5f7a; color: white; padding: 5px 6px; text-align: left; font-size: 8pt; text-transform: uppercase; }
+    td { padding: 5px 6px; border-bottom: 1px solid #eee; font-size: 9pt; }
     tr:nth-child(even) { background: #f9f9f9; }
     .qty-cell { text-align: center; font-weight: bold; }
-    .parcels-section { margin-top: 25px; }
-    .parcel-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-    .parcel-box { border: 1px solid #ddd; padding: 12px; border-radius: 4px; }
-    .parcel-header { font-weight: bold; font-size: 11pt; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 8px; }
-    .parcel-detail { font-size: 9pt; color: #666; }
-    .sscc-code { font-family: 'Courier New', monospace; font-size: 8pt; background: #f0f0f0; padding: 3px 6px; border-radius: 3px; display: inline-block; margin-top: 5px; }
-    .footer { margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px; font-size: 9pt; color: #888; text-align: center; }
+    .parcels-section { margin-top: 10px; }
+    .parcel-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .parcel-box { border: 1px solid #ddd; padding: 6px; border-radius: 4px; font-size: 8pt; }
+    .parcel-header { font-weight: bold; font-size: 9pt; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 4px; }
+    .parcel-detail { font-size: 8pt; color: #666; }
+    .sscc-code { font-family: 'Courier New', monospace; font-size: 7pt; background: #f0f0f0; padding: 2px 4px; border-radius: 2px; display: inline-block; margin-top: 3px; }
+    .footer { margin-top: 10px; border-top: 1px solid #ddd; padding-top: 5px; font-size: 7pt; color: #aaa; text-align: center; }
     .totals-row { background: #1a5f7a !important; color: white; font-weight: bold; }
     .totals-row td { border: none; }
   </style>
@@ -4070,14 +4068,12 @@ router.get('/packing/:shipmentId/delivery-note.pdf', async (req, res) => {
     <div class="address-box">
       <div class="address-label">From</div>
       <div class="address-name">ACROPAQ BV</div>
-      <div class="address-line">Schoonheidslaan 10-12</div>
-      <div class="address-line">2980 Zoersel, Belgium</div>
+      <div class="address-line">Schoonheidslaan 10-12, 2980 Zoersel, Belgium</div>
     </div>
     <div class="address-box">
       <div class="address-label">Ship To</div>
       <div class="address-name">${fcName}</div>
-      <div class="address-line">${fcAddress.addressLine1 || ''}</div>
-      <div class="address-line">${fcAddress.postalCode || ''} ${fcAddress.city || ''}, ${fcAddress.countryCode || ''}</div>
+      <div class="address-line">${fcAddress.addressLine1 || ''}, ${fcAddress.postalCode || ''} ${fcAddress.city || ''}, ${fcAddress.countryCode || ''}</div>
     </div>
   </div>
 
@@ -4106,7 +4102,7 @@ router.get('/packing/:shipmentId/delivery-note.pdf', async (req, res) => {
   <table>
     <thead>
       <tr>
-        <th style="width: 15%;">SKU</th>
+        <th style="width: 12%;">SKU</th>
         <th style="width: 20%;">EAN</th>
         <th style="width: 50%;">Description</th>
         <th style="width: 15%; text-align: center;">Quantity</th>
@@ -4160,7 +4156,7 @@ router.get('/packing/:shipmentId/delivery-note.pdf', async (req, res) => {
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' }
+      margin: { top: 0, right: 0, bottom: 0, left: 0 }
     });
 
     await browser.close();
