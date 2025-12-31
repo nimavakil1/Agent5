@@ -20,6 +20,17 @@ const CACHE_MAX_SIZE = 1000;
 // Legal terms to remove (for fallback regex cleaning)
 const LEGAL_TERMS_REGEX = /\b(GmbH|AG|KG|OHG|UG|e\.?V\.?|mbH|Co\.?\s*KG|Inhaber|Inh\.|Ltd\.?|Inc\.?|LLC|PLC|SA|SARL|SAS|BV|NV)\b\.?/gi;
 
+// Amazon billing entities - these are INVOICE recipients, NOT delivery locations
+// When these appear as buyer-name, they should be IGNORED for delivery addresses
+const AMAZON_BILLING_ENTITIES = [
+  'Amazon Business EU SARL',
+  'Amazon Business EU S.a.r.l',
+  'Amazon EU SARL',
+  'Amazon EU S.a.r.l',
+  'Amazon Business',
+  'AMAZON BUSINESS EU SARL',
+];
+
 /**
  * AddressCleaner class
  */
@@ -46,6 +57,31 @@ class AddressCleaner {
   }
 
   /**
+   * Check if a name is an Amazon billing entity (not a real delivery location)
+   */
+  _isAmazonBillingEntity(name) {
+    if (!name) return false;
+    const normalized = name.trim().toLowerCase();
+    return AMAZON_BILLING_ENTITIES.some(entity =>
+      normalized === entity.toLowerCase() ||
+      normalized.includes('amazon business eu') ||
+      normalized.includes('amazon eu sarl')
+    );
+  }
+
+  /**
+   * Filter out Amazon billing entities from buyer name
+   * These are invoice recipients, NOT delivery locations
+   */
+  _filterBuyerName(buyerName) {
+    if (!buyerName) return null;
+    if (this._isAmazonBillingEntity(buyerName)) {
+      return null; // Ignore Amazon billing entities for delivery
+    }
+    return buyerName;
+  }
+
+  /**
    * Clean and parse a shipping address
    *
    * @param {Object} rawAddress - Raw address from Amazon TSV
@@ -63,8 +99,14 @@ class AddressCleaner {
   async cleanAddress(rawAddress) {
     await this.init();
 
-    // Generate cache key
-    const cacheKey = this._getCacheKey(rawAddress);
+    // Filter out Amazon billing entities from buyer name BEFORE processing
+    const filteredAddress = {
+      ...rawAddress,
+      buyerName: this._filterBuyerName(rawAddress.buyerName)
+    };
+
+    // Generate cache key (use filtered address)
+    const cacheKey = this._getCacheKey(filteredAddress);
     if (addressCache.has(cacheKey)) {
       return addressCache.get(cacheKey);
     }
@@ -73,13 +115,13 @@ class AddressCleaner {
 
     if (this.llm) {
       try {
-        result = await this._cleanWithAI(rawAddress);
+        result = await this._cleanWithAI(filteredAddress);
       } catch (error) {
         console.error('[AddressCleaner] AI cleaning failed, using fallback:', error.message);
-        result = this._cleanWithFallback(rawAddress);
+        result = this._cleanWithFallback(filteredAddress);
       }
     } else {
-      result = this._cleanWithFallback(rawAddress);
+      result = this._cleanWithFallback(filteredAddress);
     }
 
     // Cache the result
@@ -310,4 +352,5 @@ module.exports = {
   AddressCleaner,
   getAddressCleaner,
   LEGAL_TERMS_REGEX,
+  AMAZON_BILLING_ENTITIES,
 };
