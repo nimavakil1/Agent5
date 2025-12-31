@@ -387,15 +387,40 @@ class VendorInvoiceSubmitter {
   }
 
   /**
-   * Clean party object for Amazon API - remove null addresses
-   * Amazon expects either a complete address or just partyId
+   * Get country code from marketplace ID
    */
-  cleanPartyForPayload(party) {
+  getCountryFromMarketplace(marketplaceId) {
+    const marketplaceToCountry = {
+      'A1PA6795UKMFR9': 'DE',
+      'A1RKKUPIHCS9HS': 'ES',
+      'A13V1IB3VIYZZH': 'FR',
+      'APJ6JRA9NG5V4': 'IT',
+      'A1805IZSGTT6HS': 'NL',
+      'A1F83G8C2ARO7P': 'GB',
+      'A2NODRKZP88ZB9': 'SE',
+      'A1C3SOZRARQ6R3': 'PL',
+      'AMEN7PMS3EDWL': 'BE'
+    };
+    return marketplaceToCountry[marketplaceId] || 'DE';
+  }
+
+  /**
+   * Clean party object for Amazon API
+   * When address is null, provide minimal address with country code
+   * Amazon requires at least country code for billToParty
+   */
+  cleanPartyForPayload(party, countryCode = 'DE') {
     if (!party) return null;
 
-    // If address is null or empty, only return partyId
+    // If address is null or empty, provide minimal address with country code
     if (!party.address || Object.keys(party.address).length === 0) {
-      return { partyId: party.partyId };
+      return {
+        partyId: party.partyId,
+        address: {
+          name: 'Amazon',
+          countryCode: countryCode
+        }
+      };
     }
 
     // Return full party with address
@@ -446,12 +471,13 @@ class VendorInvoiceSubmitter {
       });
     }
 
-    // Clean party objects - remove null addresses
-    const shipToParty = this.cleanPartyForPayload(po.shipToParty) ||
-      { partyId: po.buyingParty?.partyId || 'AMAZON' };
-    const billToParty = this.cleanPartyForPayload(po.billToParty) ||
-      this.cleanPartyForPayload(po.buyingParty) ||
-      { partyId: 'AMAZON' };
+    // Clean party objects - provide minimal address with country code when null
+    const countryCode = this.getCountryFromMarketplace(po.marketplaceId);
+    const shipToParty = this.cleanPartyForPayload(po.shipToParty, countryCode) ||
+      { partyId: po.buyingParty?.partyId || 'AMAZON', address: { name: 'Amazon', countryCode } };
+    const billToParty = this.cleanPartyForPayload(po.billToParty, countryCode) ||
+      this.cleanPartyForPayload(po.buyingParty, countryCode) ||
+      { partyId: 'AMAZON', address: { name: 'Amazon', countryCode } };
 
     // Build invoice
     return {
