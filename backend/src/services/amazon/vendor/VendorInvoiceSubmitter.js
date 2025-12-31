@@ -388,9 +388,16 @@ class VendorInvoiceSubmitter {
   }
 
   /**
-   * Get country code from marketplace ID
+   * Get country code from marketplace ID or country code
    */
   getCountryFromMarketplace(marketplaceId) {
+    // If it's already a 2-letter country code, return it
+    const countryCodes = ['DE', 'ES', 'FR', 'IT', 'NL', 'GB', 'UK', 'SE', 'PL', 'BE'];
+    if (countryCodes.includes(marketplaceId?.toUpperCase())) {
+      return marketplaceId.toUpperCase() === 'UK' ? 'GB' : marketplaceId.toUpperCase();
+    }
+
+    // Map Amazon marketplace IDs to country codes
     const marketplaceToCountry = {
       'A1PA6795UKMFR9': 'DE',
       'A1RKKUPIHCS9HS': 'ES',
