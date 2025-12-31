@@ -647,6 +647,28 @@ router.post('/orders/poll', async (req, res) => {
 });
 
 /**
+ * @route POST /api/vendor/orders/sync-shipment-status
+ * @desc Sync shipment status from Odoo pickings
+ * Checks if orders have been delivered in Odoo and updates shipmentStatus
+ */
+router.post('/orders/sync-shipment-status', async (req, res) => {
+  try {
+    const importer = await getVendorPOImporter();
+    const result = await importer.syncShipmentStatusFromOdoo({
+      limit: req.body.limit || 500
+    });
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /orders/sync-shipment-status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route POST /api/vendor/orders/:poNumber/acknowledge
  * @desc Send acknowledgment to Amazon for a PO
  * @body status - Acknowledgment status: Accepted, Rejected, Backordered

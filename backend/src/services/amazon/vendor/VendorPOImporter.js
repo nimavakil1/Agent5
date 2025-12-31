@@ -1066,6 +1066,98 @@ class VendorPOImporter {
       }
     );
   }
+
+  /**
+   * Sync shipment status from Odoo pickings
+   * Checks if orders have been delivered in Odoo and updates our shipmentStatus
+   * @param {Object} options - Sync options
+   * @param {boolean} options.onlyLinked - Only sync orders linked to Odoo (default: true)
+   * @param {number} options.limit - Max orders to process (default: 500)
+   * @returns {Object} Sync results
+   */
+  async syncShipmentStatusFromOdoo(options = {}) {
+    const { onlyLinked = true, limit = 500 } = options;
+    const collection = this.db.collection(COLLECTION_NAME);
+
+    // Find orders that need syncing
+    const query = {
+      shipmentStatus: { $in: ['not_shipped', 'partially_shipped', null, undefined] }
+    };
+
+    if (onlyLinked) {
+      query['odoo.saleOrderId'] = { $ne: null };
+    }
+
+    // Exclude test data
+    if (!isTestMode()) {
+      query._testData = { $ne: true };
+    }
+
+    const orders = await collection.find(query).limit(limit).toArray();
+    console.log(`[VendorPOImporter] Syncing shipment status for ${orders.length} orders`);
+
+    if (orders.length === 0) {
+      return { synced: 0, updated: 0, errors: [] };
+    }
+
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
+
+    let updated = 0;
+    const errors = [];
+
+    for (const order of orders) {
+      try {
+        const saleOrderId = order.odoo?.saleOrderId;
+        if (!saleOrderId) continue;
+
+        // Get pickings for this sale order
+        const pickings = await odoo.searchRead('stock.picking',
+          [
+            ['sale_id', '=', saleOrderId],
+            ['picking_type_code', '=', 'outgoing']
+          ],
+          ['id', 'name', 'state']
+        );
+
+        // Determine shipment status based on pickings
+        let newStatus = 'not_shipped';
+        if (pickings.length > 0) {
+          const doneCount = pickings.filter(p => p.state === 'done').length;
+          const cancelCount = pickings.filter(p => p.state === 'cancel').length;
+
+          if (doneCount === pickings.length) {
+            newStatus = 'fully_shipped';
+          } else if (doneCount > 0) {
+            newStatus = 'partially_shipped';
+          } else if (cancelCount === pickings.length) {
+            newStatus = 'cancelled';
+          }
+        }
+
+        // Update if status changed
+        if (newStatus !== order.shipmentStatus) {
+          await collection.updateOne(
+            { purchaseOrderNumber: order.purchaseOrderNumber },
+            {
+              $set: {
+                shipmentStatus: newStatus,
+                lastPickingSyncAt: new Date(),
+                updatedAt: new Date()
+              }
+            }
+          );
+          console.log(`[VendorPOImporter] ${order.purchaseOrderNumber}: ${order.shipmentStatus || 'null'} -> ${newStatus}`);
+          updated++;
+        }
+      } catch (err) {
+        errors.push({ poNumber: order.purchaseOrderNumber, error: err.message });
+      }
+    }
+
+    console.log(`[VendorPOImporter] Sync complete: ${updated} updated, ${errors.length} errors`);
+    return { synced: orders.length, updated, errors };
+  }
 }
 
 // Singleton instance
