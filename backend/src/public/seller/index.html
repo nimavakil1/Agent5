@@ -297,16 +297,21 @@
         const res = await fetch('/api/seller/fbm-pending-import');
         const data = await res.json();
 
-        if (data.success && data.count > 0) {
-          // Show badge
-          const badge = document.getElementById('fbm-badge');
+        const badge = document.getElementById('fbm-badge');
+        const alert = document.getElementById('fbm-alert');
+
+        if (data.success) {
+          // Always show badge with count (even if 0)
           badge.textContent = data.count;
           badge.style.display = 'flex';
 
-          // Show alert banner
-          const alert = document.getElementById('fbm-alert');
-          document.getElementById('fbm-alert-count').textContent = data.count;
-          alert.classList.add('show');
+          // Only show alert banner if count > 0
+          if (data.count > 0) {
+            document.getElementById('fbm-alert-count').textContent = data.count;
+            alert.classList.add('show');
+          } else {
+            alert.classList.remove('show');
+          }
         }
       } catch (e) {
         console.error('Error loading FBM pending count:', e);
