@@ -65,10 +65,10 @@ async function migrate() {
         'seller_sku',
         'product_id',
         'instance_id',
-        'marketplace_id',
         'fulfillment_by',
         'exported_to_amazon',
-        'active'
+        'active',
+        'barcode'
       ],
       { limit: batchSize, offset }
     );
@@ -104,15 +104,18 @@ async function migrate() {
           continue;
         }
 
-        // Determine marketplace code
+        // Determine marketplace code from instance
         let marketplace = 'ALL';
-        if (ept.marketplace_id) {
-          const mpId = Array.isArray(ept.marketplace_id) ? ept.marketplace_id[1] : null;
-          // Try to extract marketplace ID from the name or use the ID directly
-          for (const [amzId, code] of Object.entries(MARKETPLACE_MAP)) {
-            if (mpId && mpId.includes(code)) {
-              marketplace = code;
-              break;
+        if (ept.instance_id) {
+          const instanceName = Array.isArray(ept.instance_id) ? ept.instance_id[1] : null;
+          // Try to extract marketplace code from instance name (e.g., "Amazon DE", "Amazon.fr")
+          if (instanceName) {
+            for (const code of Object.values(MARKETPLACE_MAP)) {
+              if (instanceName.toUpperCase().includes(code) ||
+                  instanceName.toLowerCase().includes(code.toLowerCase())) {
+                marketplace = code;
+                break;
+              }
             }
           }
         }
@@ -122,6 +125,7 @@ async function migrate() {
 
         // Upsert into MongoDB
         const now = new Date();
+        const barcode = productData.barcode || ept.barcode || null;
         const result = await collection.updateOne(
           { asin, marketplace },
           {
@@ -132,7 +136,7 @@ async function migrate() {
               odooSku: productData.default_code,
               odooProductName: productData.name,
               sellerSku: ept.seller_sku,
-              barcode: productData.barcode,
+              barcode,
               fulfillmentBy,
               active: ept.active !== false,
               eptId: ept.id, // Keep reference to original EPT record
