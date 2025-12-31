@@ -120,7 +120,7 @@ const AVAILABLE_MODELS = {
       contextWindow: 200000,
       capabilities: ['tool-use', 'vision'],
     },
-    'claude-haiku-3-5-20241022': {
+    'claude-3-5-haiku-20241022': {
       name: 'Claude Haiku 3.5',
       description: 'Fast, cheap for simple tasks',
       inputCost: 0.25,

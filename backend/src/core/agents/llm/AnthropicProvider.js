@@ -4,7 +4,7 @@
  * Supports Claude models:
  * - claude-opus-4-5-20251101 (Opus 4.5) - Best for complex reasoning, agentic tasks
  * - claude-sonnet-4-20250514 (Sonnet 4) - Balanced speed/quality
- * - claude-haiku-3-5-20241022 (Haiku 3.5) - Fast, cheap for simple tasks
+ * - claude-3-5-haiku-20241022 (Haiku 3.5) - Fast, cheap for simple tasks
  */
 
 const Anthropic = require('@anthropic-ai/sdk');
@@ -16,8 +16,8 @@ const MODEL_ALIASES = {
   'opus-4.5': 'claude-opus-4-5-20251101',
   'sonnet': 'claude-sonnet-4-20250514',
   'sonnet-4': 'claude-sonnet-4-20250514',
-  'haiku': 'claude-haiku-3-5-20241022',
-  'haiku-3.5': 'claude-haiku-3-5-20241022',
+  'haiku': 'claude-3-5-haiku-20241022',
+  'haiku-3.5': 'claude-3-5-haiku-20241022',
 };
 
 class AnthropicProvider extends LLMProvider {
