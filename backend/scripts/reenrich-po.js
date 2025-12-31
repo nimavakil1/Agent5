@@ -1,5 +1,6 @@
 const { MongoClient } = require("mongodb");
 const { OdooDirectClient } = require("../src/core/agents/integrations/OdooMCP");
+const { getAmazonProductMapper } = require("../src/services/amazon/AmazonProductMapper");
 
 async function reenrich() {
   const poNumber = process.argv[2] || "4WZ7I1UZ";
@@ -71,7 +72,28 @@ async function reenrich() {
       }
     }
 
-    // Fallback 2: search by ASIN in amazon.product.ept
+    // Fallback 2: search by ASIN in our own amazon_product_mappings collection
+    if (!productData && asin) {
+      try {
+        const mapper = await getAmazonProductMapper();
+        const mapping = await mapper.findByAsin(asin, po.marketplaceId || 'ALL');
+        if (mapping && mapping.odooProductId) {
+          const products = await odoo.searchRead('product.product',
+            [['id', '=', mapping.odooProductId]],
+            ['id', 'name', 'default_code', 'barcode'],
+            { limit: 1 }
+          );
+          if (products.length > 0) {
+            productData = products[0];
+            console.log("Found via Amazon mapping:", productData.default_code);
+          }
+        }
+      } catch (mapErr) {
+        console.log("Amazon mapping search error:", mapErr.message);
+      }
+    }
+
+    // Fallback 3: search by ASIN in amazon.product.ept (deprecated)
     if (!productData && asin) {
       try {
         const eptMappings = await odoo.searchRead('amazon.product.ept',
@@ -88,7 +110,7 @@ async function reenrich() {
           );
           if (products.length > 0) {
             productData = products[0];
-            console.log("Found via EPT mapping:", productData.default_code);
+            console.log("Found via EPT mapping (deprecated):", productData.default_code);
           }
         }
       } catch (eptErr) {
