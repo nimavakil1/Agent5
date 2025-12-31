@@ -517,6 +517,55 @@ class FbmOrderImporter {
   }
 
   /**
+   * Update MongoDB seller_orders with data from TSV file
+   * This fills in customer names and addresses that Amazon API doesn't provide
+   *
+   * @param {string} amazonOrderId - Amazon Order ID
+   * @param {Object} tsvOrder - Order data from TSV
+   * @param {Object} odooInfo - Optional Odoo order info to update
+   */
+  async updateMongoWithTsvData(amazonOrderId, tsvOrder, odooInfo = null) {
+    try {
+      const db = getDb();
+      const collection = db.collection('seller_orders');
+
+      const updateData = {
+        // Update shipping address with TSV data
+        'shippingAddress.name': tsvOrder.recipientName || null,
+        'shippingAddress.addressLine1': tsvOrder.address1 || null,
+        'shippingAddress.addressLine2': tsvOrder.address2 || tsvOrder.address3 || null,
+        'shippingAddress.city': tsvOrder.city || null,
+        'shippingAddress.postalCode': tsvOrder.postalCode || null,
+        'shippingAddress.countryCode': tsvOrder.country || null,
+        'shippingAddress.phone': tsvOrder.shipPhone || tsvOrder.buyerPhone || null,
+        // Update buyer info
+        buyerName: tsvOrder.buyerName || tsvOrder.recipientName || null,
+        buyerEmail: tsvOrder.buyerEmail || null,
+        // Mark as updated from TSV
+        tsvImportedAt: new Date()
+      };
+
+      // Add Odoo info if provided
+      if (odooInfo) {
+        updateData['odoo.partnerId'] = odooInfo.partnerId || null;
+        updateData['odoo.saleOrderId'] = odooInfo.saleOrderId || null;
+        updateData['odoo.saleOrderName'] = odooInfo.saleOrderName || null;
+        updateData['odoo.createdAt'] = new Date();
+      }
+
+      await collection.updateOne(
+        { amazonOrderId },
+        { $set: updateData }
+      );
+
+      console.log(`[FbmOrderImporter] Updated MongoDB with TSV data for ${amazonOrderId}`);
+    } catch (error) {
+      console.error(`[FbmOrderImporter] Error updating MongoDB for ${amazonOrderId}:`, error.message);
+      // Don't throw - this is a non-critical update
+    }
+  }
+
+  /**
    * Import orders from TSV content
    * @param {string} tsvContent - TSV file content
    * @param {Object} options - Import options
@@ -547,6 +596,9 @@ class FbmOrderImporter {
           // Check if valid order already exists
           const existing = await this.findValidOrder(orderId);
           if (existing) {
+            // Update MongoDB with customer name from TSV (even for skipped orders)
+            await this.updateMongoWithTsvData(orderId, order);
+
             results.skipped++;
             results.orders.push({
               orderId,
@@ -590,6 +642,14 @@ class FbmOrderImporter {
 
           // Create order with separate invoice and shipping addresses
           const created = await this.createOdooOrder(order, customerId, invoiceAddressId, shippingAddressId, orderLines);
+
+          // Update MongoDB with customer name and Odoo info from TSV
+          await this.updateMongoWithTsvData(orderId, order, {
+            partnerId: customerId,
+            saleOrderId: created.id,
+            saleOrderName: created.name
+          });
+
           results.created++;
           results.orders.push({
             orderId,
