@@ -226,6 +226,13 @@ async function syncOrders(mode = 'RECENT', onProgress = null) {
       // Calculate total
       const totalAmount = items.reduce((sum, i) => sum + (i.totalPrice || i.unitPrice * i.quantity || 0), 0);
 
+      // Determine fulfillment method from multiple sources
+      // Priority: item fulfilment, shipment method (LVB = FBB), default null
+      let orderFulfilmentMethod = items.find(i => i.fulfilmentMethod)?.fulfilmentMethod || null;
+      if (!orderFulfilmentMethod && orderData.shipmentDetails?.shipmentMethod === 'LVB') {
+        orderFulfilmentMethod = 'FBB';  // LVB = Logistics Via Bol = FBB
+      }
+
       try {
         await BolOrder.findOneAndUpdate(
           { orderId: orderData.orderId },
@@ -239,7 +246,7 @@ async function syncOrders(mode = 'RECENT', onProgress = null) {
             orderItems: items,
             totalAmount,
             itemCount: items.length,
-            fulfilmentMethod: items[0]?.fulfilmentMethod || null,
+            fulfilmentMethod: orderFulfilmentMethod,
             status,
             syncedAt: new Date(),
             rawResponse: success ? orderData : null

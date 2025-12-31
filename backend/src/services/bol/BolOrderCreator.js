@@ -18,6 +18,7 @@
 
 const BolOrder = require('../../models/BolOrder');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+const { getAddressCleaner } = require('../amazon/seller/AddressCleaner');
 
 // Warehouse IDs in Odoo
 const CENTRAL_WAREHOUSE_ID = 1;  // CW - for FBR orders (we ship from our warehouse)
@@ -53,6 +54,7 @@ class BolOrderCreator {
     this.partnerCache = {};
     this.journalCache = {};
     this.shippingProductId = null;
+    this.addressCleaner = null;
   }
 
   /**
@@ -62,6 +64,10 @@ class BolOrderCreator {
     if (!this.odoo.authenticated) {
       await this.odoo.authenticate();
     }
+
+    // Initialize AI address cleaner
+    this.addressCleaner = getAddressCleaner({ useAI: true });
+    await this.addressCleaner.init();
 
     // Find or create shipping product
     await this.findShippingProduct();
@@ -180,7 +186,7 @@ class BolOrderCreator {
   }
 
   /**
-   * Find or create customer from shipping details
+   * Find or create customer from shipping details with AI address cleaning
    * @param {object} shipmentDetails - Bol order shipping details
    */
   async findOrCreatePartner(shipmentDetails) {
@@ -190,23 +196,61 @@ class BolOrderCreator {
 
     const firstName = shipmentDetails.firstName || '';
     const surname = shipmentDetails.surname || '';
-    const fullName = `${firstName} ${surname}`.trim();
+    const rawName = `${firstName} ${surname}`.trim();
     const zipCode = shipmentDetails.zipCode || '';
     const countryCode = shipmentDetails.countryCode || 'NL';
 
-    if (!fullName) {
+    if (!rawName) {
       throw new Error('No customer name in shipping details');
     }
 
+    // Build raw street address
+    let rawStreet = shipmentDetails.streetName || '';
+    if (shipmentDetails.houseNumber) {
+      rawStreet += ' ' + shipmentDetails.houseNumber;
+    }
+    if (shipmentDetails.houseNumberExtension) {
+      rawStreet += shipmentDetails.houseNumberExtension;
+    }
+
+    // Clean address with AI
+    let cleanedAddress;
+    try {
+      cleanedAddress = await this.addressCleaner.cleanAddress({
+        recipientName: rawName,
+        addressLine1: rawStreet.trim(),
+        addressLine2: shipmentDetails.extraAddressInformation || '',
+        city: shipmentDetails.city || '',
+        postalCode: zipCode,
+        countryCode: countryCode
+      });
+    } catch (err) {
+      console.warn(`[BolOrderCreator] AI cleaning failed, using raw data: ${err.message}`);
+      cleanedAddress = {
+        name: rawName,
+        company: null,
+        street: rawStreet.trim(),
+        street2: null,
+        city: shipmentDetails.city || '',
+        zip: zipCode,
+        country: countryCode
+      };
+    }
+
+    // Build display name: company first, then personal name
+    const displayName = cleanedAddress.company
+      ? (cleanedAddress.name ? `${cleanedAddress.company}, ${cleanedAddress.name}` : cleanedAddress.company)
+      : (cleanedAddress.name || rawName);
+
     // Check cache first
-    const cacheKey = `${fullName}|${zipCode}`;
+    const cacheKey = `${displayName}|${zipCode}`;
     if (this.partnerCache[cacheKey]) {
       return this.partnerCache[cacheKey];
     }
 
-    // Search by name + postal code
+    // Search by cleaned name + postal code
     const existing = await this.odoo.searchRead('res.partner', [
-      ['name', '=', fullName],
+      ['name', '=', displayName],
       ['zip', '=', zipCode]
     ], ['id', 'name']);
 
@@ -215,24 +259,39 @@ class BolOrderCreator {
       return existing[0].id;
     }
 
-    // Build street address
-    let street = shipmentDetails.streetName || '';
-    if (shipmentDetails.houseNumber) {
-      street += ' ' + shipmentDetails.houseNumber;
-    }
-    if (shipmentDetails.houseNumberExtension) {
-      street += shipmentDetails.houseNumberExtension;
+    // Also try raw name (in case partner was created before)
+    if (displayName !== rawName) {
+      const existingRaw = await this.odoo.searchRead('res.partner', [
+        ['name', '=', rawName],
+        ['zip', '=', zipCode]
+      ], ['id', 'name']);
+
+      if (existingRaw.length > 0) {
+        // Update existing partner with cleaned address
+        const partnerId = existingRaw[0].id;
+        await this.odoo.write('res.partner', [partnerId], {
+          name: displayName,
+          street: cleanedAddress.street || false,
+          street2: cleanedAddress.street2 || false,
+          city: cleanedAddress.city || false,
+          zip: cleanedAddress.zip || false
+        });
+        console.log(`[BolOrderCreator] Updated partner ${partnerId} with cleaned address: ${displayName}`);
+        this.partnerCache[cacheKey] = partnerId;
+        return partnerId;
+      }
     }
 
     // Get country ID
     const countryId = COUNTRY_IDS[countryCode] || COUNTRY_IDS['NL'];
 
-    // Create new partner
+    // Create new partner with cleaned address
     const partnerId = await this.odoo.create('res.partner', {
-      name: fullName,
-      street: street.trim(),
-      zip: zipCode,
-      city: shipmentDetails.city || '',
+      name: displayName,
+      street: cleanedAddress.street || rawStreet.trim(),
+      street2: cleanedAddress.street2 || false,
+      zip: cleanedAddress.zip || zipCode,
+      city: cleanedAddress.city || shipmentDetails.city || '',
       country_id: countryId,
       email: shipmentDetails.email || '',
       phone: shipmentDetails.deliveryPhoneNumber || '',
@@ -241,7 +300,7 @@ class BolOrderCreator {
     });
 
     this.partnerCache[cacheKey] = partnerId;
-    console.log(`[BolOrderCreator] Created partner ${partnerId}: ${fullName}`);
+    console.log(`[BolOrderCreator] Created partner ${partnerId}: ${displayName}`);
 
     return partnerId;
   }
@@ -301,7 +360,29 @@ class BolOrderCreator {
       }
 
       // Step 2: Determine prefix based on fulfillment method
-      const fulfilmentMethod = bolOrder.fulfilmentMethod || bolOrder.orderItems?.[0]?.fulfilmentMethod || 'FBR';
+      // Check multiple sources for FBB detection to avoid defaulting to FBR incorrectly
+      let fulfilmentMethod = bolOrder.fulfilmentMethod || bolOrder.orderItems?.[0]?.fulfilmentMethod;
+
+      // If still not determined, check shipment method (LVB = Logistics Via Bol = FBB)
+      if (!fulfilmentMethod && bolOrder.shipmentDetails?.shipmentMethod === 'LVB') {
+        fulfilmentMethod = 'FBB';
+      }
+
+      // Check if any order item indicates FBB
+      if (!fulfilmentMethod && bolOrder.orderItems?.length > 0) {
+        const hasFBB = bolOrder.orderItems.some(item =>
+          item.fulfilmentMethod === 'FBB' ||
+          item.fulfilment?.method === 'FBB'
+        );
+        if (hasFBB) fulfilmentMethod = 'FBB';
+      }
+
+      // Default to FBR only as last resort, but log a warning
+      if (!fulfilmentMethod) {
+        console.warn(`[BolOrderCreator] No fulfilmentMethod found for order ${orderId}, defaulting to FBR`);
+        fulfilmentMethod = 'FBR';
+      }
+
       const prefix = fulfilmentMethod === 'FBB' ? 'FBB' : 'FBR';
       const orderRef = `${prefix}${orderId}`;
 
