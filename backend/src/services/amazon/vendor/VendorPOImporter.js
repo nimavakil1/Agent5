@@ -284,6 +284,31 @@ class VendorPOImporter {
           }
         }
 
+        // Fallback 2: search by ASIN in amazon.product.ept (Emipro EPT mapping)
+        if (!productData && asin) {
+          try {
+            const eptMappings = await odoo.searchRead('amazon.product.ept',
+              [['product_asin', '=', asin]],
+              ['id', 'product_id'],
+              { limit: 1 }
+            );
+            if (eptMappings.length > 0 && eptMappings[0].product_id) {
+              const productId = eptMappings[0].product_id[0];
+              const products = await odoo.searchRead('product.product',
+                [['id', '=', productId]],
+                ['id', 'name', 'default_code', 'barcode'],
+                { limit: 1 }
+              );
+              if (products.length > 0) {
+                productData = products[0];
+                console.log(`[VendorPOImporter] Found product via EPT mapping: ASIN ${asin} -> ${productData.default_code}`);
+              }
+            }
+          } catch (eptErr) {
+            // EPT table may not exist, ignore error
+          }
+        }
+
         if (productData) {
           // Get stock from Central Warehouse using stock.quant
           const quants = await odoo.searchRead('stock.quant',

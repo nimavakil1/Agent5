@@ -1107,12 +1107,31 @@
         if (!data.success) throw new Error(data.error);
 
         setWorkflowStep(4);
-        document.getElementById('action-status').textContent = 'Odoo updated & ASN submitted successfully!';
-        showToast('Odoo deliveries completed & ASN submitted to Amazon');
 
-        asnBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span>Completed';
+        // Show comprehensive status message from the server
+        const statusMsg = data.message || 'Completed';
+        document.getElementById('action-status').textContent = statusMsg;
+
+        // Show different toast based on what was accomplished
+        if (data.amazon?.invoicesSubmitted?.length > 0) {
+          showToast('Deliveries validated, invoices created & submitted to Amazon!');
+        } else if (data.amazon?.asnSubmitted) {
+          showToast('ASN submitted. Check errors for invoice details.');
+        } else {
+          showToast('Completed with some errors. Check console.');
+        }
+
+        // Update button based on final status
+        const btnText = data.status === 'invoiced' ? 'Invoiced' : 'Completed';
+        asnBtn.innerHTML = `<span class="material-symbols-outlined">check_circle</span>${btnText}`;
         asnBtn.classList.remove('btn-secondary');
         asnBtn.classList.add('btn-success');
+
+        // Log any errors for debugging
+        if (data.odoo?.errors?.length > 0 || data.amazon?.errors?.length > 0) {
+          console.log('Odoo errors:', data.odoo?.errors);
+          console.log('Amazon errors:', data.amazon?.errors);
+        }
 
       } catch (err) {
         showToast('Error: ' + err.message, true);

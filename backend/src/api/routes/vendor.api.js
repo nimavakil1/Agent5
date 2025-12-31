@@ -4277,8 +4277,8 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
     const result = {
       success: true,
       shipmentId: shipment.shipmentId,
-      odoo: { pickingsValidated: [], attachmentsCreated: [], errors: [] },
-      amazon: { asnSubmitted: false, transactionIds: [], errors: [] }
+      odoo: { pickingsValidated: [], attachmentsCreated: [], invoicesCreated: [], invoicesPosted: [], errors: [] },
+      amazon: { asnSubmitted: false, transactionIds: [], invoicesSubmitted: [], errors: [] }
     };
 
     // ========================================
@@ -4426,9 +4426,205 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
     }
 
     // ========================================
-    // STEP 4: Update shipment status
+    // STEP 4: Create Invoices from Delivered Quantities
     // ========================================
-    const newStatus = result.amazon.asnSubmitted ? 'completed' : 'asn_submitted';
+    // Only create invoices for pickings that were successfully validated and confirmed as 'done'
+    const invoiceSubmitter = await getVendorInvoiceSubmitter();
+
+    for (const pickingInfo of result.odoo.pickingsValidated) {
+      try {
+        // Re-fetch the picking to VERIFY it's actually in 'done' state
+        const [verifiedPicking] = await odoo.searchRead('stock.picking',
+          [['id', '=', pickingInfo.id]],
+          ['id', 'name', 'state', 'sale_id', 'move_ids_without_package']
+        );
+
+        if (!verifiedPicking || verifiedPicking.state !== 'done') {
+          result.odoo.errors.push(`Picking ${pickingInfo.name}: Not in 'done' state (${verifiedPicking?.state || 'not found'}), skipping invoice`);
+          continue;
+        }
+
+        const saleOrderId = verifiedPicking.sale_id?.[0];
+        if (!saleOrderId) {
+          result.odoo.errors.push(`Picking ${pickingInfo.name}: No linked sale order, skipping invoice`);
+          continue;
+        }
+
+        // Check if invoice already exists for this sale order
+        const existingInvoices = await odoo.searchRead('account.move',
+          [['invoice_origin', 'ilike', verifiedPicking.sale_id[1]], ['move_type', '=', 'out_invoice']],
+          ['id', 'name', 'state']
+        );
+
+        if (existingInvoices.length > 0) {
+          console.log(`[VendorAPI] Invoice already exists for ${verifiedPicking.sale_id[1]}: ${existingInvoices[0].name}`);
+          // If it's already posted, we can try to submit it to Amazon
+          if (existingInvoices[0].state === 'posted') {
+            result.odoo.invoicesCreated.push({
+              id: existingInvoices[0].id,
+              name: existingInvoices[0].name,
+              saleOrder: verifiedPicking.sale_id[1],
+              existing: true
+            });
+          }
+          continue;
+        }
+
+        // Get the sale order details
+        const [saleOrder] = await odoo.searchRead('sale.order',
+          [['id', '=', saleOrderId]],
+          ['id', 'name', 'partner_id', 'order_line']
+        );
+
+        if (!saleOrder) {
+          result.odoo.errors.push(`Picking ${pickingInfo.name}: Sale order ${saleOrderId} not found`);
+          continue;
+        }
+
+        // Get DELIVERED quantities from stock.move (actual shipped quantities)
+        const stockMoves = await odoo.searchRead('stock.move',
+          [['picking_id', '=', pickingInfo.id], ['state', '=', 'done']],
+          ['id', 'product_id', 'product_uom_qty', 'quantity', 'sale_line_id']
+        );
+
+        // Build a map of sale_line_id -> delivered qty
+        const deliveredByLine = {};
+        for (const move of stockMoves) {
+          if (move.sale_line_id) {
+            const lineId = move.sale_line_id[0];
+            deliveredByLine[lineId] = (deliveredByLine[lineId] || 0) + (move.quantity || move.product_uom_qty);
+          }
+        }
+
+        // Get sale order lines with their details
+        const orderLines = await odoo.searchRead('sale.order.line',
+          [['order_id', '=', saleOrderId]],
+          ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'tax_id', 'qty_delivered']
+        );
+
+        // Build invoice lines based on DELIVERED quantities
+        const invoiceLines = [];
+        for (const line of orderLines) {
+          if (!line.product_id) continue;
+
+          // Use delivered quantity from stock moves, or qty_delivered field
+          const deliveredQty = deliveredByLine[line.id] || line.qty_delivered || 0;
+          if (deliveredQty <= 0) continue; // Skip lines with nothing delivered
+
+          invoiceLines.push([0, 0, {
+            product_id: line.product_id[0],
+            name: line.name,
+            quantity: deliveredQty,
+            price_unit: line.price_unit,
+            tax_ids: line.tax_id ? [[6, 0, line.tax_id]] : false,
+            sale_line_ids: [[4, line.id]], // Link to sale order line
+          }]);
+        }
+
+        if (invoiceLines.length === 0) {
+          result.odoo.errors.push(`Picking ${pickingInfo.name}: No delivered items to invoice`);
+          continue;
+        }
+
+        // Create the invoice
+        console.log(`[VendorAPI] Creating invoice for ${saleOrder.name} with ${invoiceLines.length} lines...`);
+        const invoiceId = await odoo.create('account.move', {
+          move_type: 'out_invoice',
+          partner_id: saleOrder.partner_id[0],
+          invoice_origin: saleOrder.name,
+          invoice_line_ids: invoiceLines,
+        });
+
+        if (!invoiceId) {
+          result.odoo.errors.push(`Picking ${pickingInfo.name}: Failed to create invoice`);
+          continue;
+        }
+
+        // Get the invoice details
+        const [newInvoice] = await odoo.searchRead('account.move',
+          [['id', '=', invoiceId]],
+          ['id', 'name', 'state', 'amount_total']
+        );
+
+        result.odoo.invoicesCreated.push({
+          id: invoiceId,
+          name: newInvoice?.name || `INV-${invoiceId}`,
+          saleOrder: saleOrder.name,
+          amount: newInvoice?.amount_total,
+          poNumber: pickingInfo.poNumber
+        });
+
+        console.log(`[VendorAPI] Invoice ${newInvoice?.name} created for ${saleOrder.name}`);
+
+        // ========================================
+        // STEP 4b: Post the invoice
+        // ========================================
+        try {
+          await odoo.execute('account.move', 'action_post', [[invoiceId]]);
+
+          // Verify it's posted
+          const [postedInvoice] = await odoo.searchRead('account.move',
+            [['id', '=', invoiceId]],
+            ['id', 'name', 'state']
+          );
+
+          if (postedInvoice?.state === 'posted') {
+            result.odoo.invoicesPosted.push({
+              id: invoiceId,
+              name: postedInvoice.name,
+              poNumber: pickingInfo.poNumber
+            });
+            console.log(`[VendorAPI] Invoice ${postedInvoice.name} posted successfully`);
+          } else {
+            result.odoo.errors.push(`Invoice ${newInvoice?.name}: Failed to post (state: ${postedInvoice?.state})`);
+          }
+        } catch (postErr) {
+          result.odoo.errors.push(`Invoice ${newInvoice?.name}: Post failed - ${postErr.message}`);
+        }
+
+      } catch (invoiceErr) {
+        result.odoo.errors.push(`Invoice for picking ${pickingInfo.name}: ${invoiceErr.message}`);
+      }
+    }
+
+    // ========================================
+    // STEP 4c: Submit posted invoices to Amazon
+    // ========================================
+    for (const postedInvoice of result.odoo.invoicesPosted) {
+      try {
+        const submitResult = await invoiceSubmitter.submitInvoice(postedInvoice.poNumber, {
+          odooInvoiceId: postedInvoice.id,
+          skipValidation: false,
+          forceSubmit: false
+        });
+
+        if (submitResult.success) {
+          result.amazon.invoicesSubmitted.push({
+            poNumber: postedInvoice.poNumber,
+            invoiceName: postedInvoice.name,
+            invoiceNumber: submitResult.invoiceNumber,
+            transactionId: submitResult.transactionId
+          });
+          console.log(`[VendorAPI] Invoice ${postedInvoice.name} submitted to Amazon (txn: ${submitResult.transactionId})`);
+        } else {
+          const errors = submitResult.errors?.join(', ') || 'Unknown error';
+          result.amazon.errors.push(`Invoice ${postedInvoice.name}: ${errors}`);
+        }
+      } catch (submitErr) {
+        result.amazon.errors.push(`Invoice ${postedInvoice.name}: Submit failed - ${submitErr.message}`);
+      }
+    }
+
+    // ========================================
+    // STEP 5: Update shipment status
+    // ========================================
+    // Determine final status based on what was accomplished
+    let newStatus = 'asn_submitted';
+    if (result.amazon.asnSubmitted && result.amazon.invoicesSubmitted.length > 0) {
+      newStatus = 'invoiced'; // Best case: everything done
+    } else if (result.amazon.asnSubmitted) {
+      newStatus = 'completed'; // ASN done but invoices may have issues
+    }
 
     await db.collection('packing_shipments').updateOne(
       { shipmentId: req.params.shipmentId },
@@ -4437,27 +4633,52 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
           status: newStatus,
           asnSubmittedAt: new Date(),
           odooPickings: result.odoo.pickingsValidated,
+          odooInvoices: result.odoo.invoicesCreated,
           amazonTransactions: result.amazon.transactionIds,
+          amazonInvoices: result.amazon.invoicesSubmitted,
           updatedAt: new Date()
         }
       }
     );
 
-    // Update POs shipment status
-    await db.collection('vendor_purchase_orders').updateMany(
-      { purchaseOrderNumber: { $in: poNumbers } },
-      {
-        $set: {
-          shipmentStatus: 'shipped',
-          updatedAt: new Date()
-        }
+    // Update POs shipment status and invoice info
+    for (const poNumber of poNumbers) {
+      const invoiceInfo = result.amazon.invoicesSubmitted.find(i => i.poNumber === poNumber);
+      const updateData = {
+        shipmentStatus: 'shipped',
+        updatedAt: new Date()
+      };
+      if (invoiceInfo) {
+        updateData.invoiceSubmitted = true;
+        updateData.invoiceNumber = invoiceInfo.invoiceNumber;
+        updateData.invoiceTransactionId = invoiceInfo.transactionId;
       }
-    );
+      await db.collection('vendor_purchase_orders').updateOne(
+        { purchaseOrderNumber: poNumber },
+        { $set: updateData }
+      );
+    }
 
     result.status = newStatus;
-    result.message = result.amazon.asnSubmitted
-      ? 'Odoo deliveries validated and ASN submitted to Amazon'
-      : 'Odoo deliveries processed but ASN submission had errors';
+
+    // Build comprehensive message
+    const parts = [];
+    if (result.odoo.pickingsValidated.length > 0) {
+      parts.push(`${result.odoo.pickingsValidated.length} delivery(ies) validated`);
+    }
+    if (result.amazon.asnSubmitted) {
+      parts.push('ASN submitted to Amazon');
+    }
+    if (result.odoo.invoicesCreated.length > 0) {
+      parts.push(`${result.odoo.invoicesCreated.length} invoice(s) created`);
+    }
+    if (result.odoo.invoicesPosted.length > 0) {
+      parts.push(`${result.odoo.invoicesPosted.length} invoice(s) posted`);
+    }
+    if (result.amazon.invoicesSubmitted.length > 0) {
+      parts.push(`${result.amazon.invoicesSubmitted.length} invoice(s) submitted to Amazon`);
+    }
+    result.message = parts.length > 0 ? parts.join(', ') : 'No operations completed';
 
     res.json(result);
   } catch (error) {
