@@ -185,8 +185,14 @@ class SellerOrderCreator {
       // Check if order already exists in Odoo by client_order_ref
       const existingOrder = await this.findExistingOrder(amazonOrderId);
       if (existingOrder) {
-        // Update MongoDB with existing order info
+        // Get partner name from existing order for UI display
+        const partnerId = existingOrder.partner_id ? existingOrder.partner_id[0] : null;
+        const partnerName = existingOrder.partner_id ? existingOrder.partner_id[1] : null;
+
+        // Update MongoDB with existing order info including partner name
         await this.importer.updateOdooInfo(amazonOrderId, {
+          partnerId,
+          partnerName,  // This updates buyerName and shippingAddress.name in MongoDB
           saleOrderId: existingOrder.id,
           saleOrderName: existingOrder.name
         });
@@ -244,9 +250,11 @@ class SellerOrderCreator {
         }
       }
 
-      // Update MongoDB with Odoo info
+      // Update MongoDB with Odoo info including partner name for UI display
+      const partnerName = await this.getPartnerName(customerId);
       await this.importer.updateOdooInfo(amazonOrderId, {
         partnerId: customerId,
+        partnerName,  // This updates buyerName and shippingAddress.name in MongoDB
         shippingAddressId,
         saleOrderId: createdOrder.id,
         saleOrderName: createdOrder.name,
@@ -322,20 +330,22 @@ class SellerOrderCreator {
    * Find existing VALID (non-cancelled) order in Odoo by Amazon Order ID
    */
   async findExistingOrder(amazonOrderId) {
+    const fields = ['id', 'name', 'state', 'partner_id'];
+
     // Try with both prefix variations
     const prefixes = ['FBA', 'FBM', ''];
     for (const prefix of prefixes) {
       const searchRef = prefix + amazonOrderId;
       const orders = await this.odoo.searchRead('sale.order',
         [['client_order_ref', '=', searchRef], ['state', '!=', 'cancel']],
-        ['id', 'name', 'state']
+        fields
       );
       if (orders.length > 0) return orders[0];
 
       // Also try by name
       const ordersByName = await this.odoo.searchRead('sale.order',
         [['name', '=', searchRef], ['state', '!=', 'cancel']],
-        ['id', 'name', 'state']
+        fields
       );
       if (ordersByName.length > 0) return ordersByName[0];
     }
@@ -343,7 +353,7 @@ class SellerOrderCreator {
     // Try just the order ID
     const orders = await this.odoo.searchRead('sale.order',
       [['client_order_ref', '=', amazonOrderId], ['state', '!=', 'cancel']],
-      ['id', 'name', 'state']
+      fields
     );
     return orders.length > 0 ? orders[0] : null;
   }
@@ -755,6 +765,26 @@ class SellerOrderCreator {
     }
 
     return null;
+  }
+
+  /**
+   * Get partner name from Odoo by ID
+   * @param {number} partnerId - Partner ID in Odoo
+   * @returns {string|null} Partner name or null
+   */
+  async getPartnerName(partnerId) {
+    if (!partnerId) return null;
+
+    try {
+      const partners = await this.odoo.searchRead('res.partner',
+        [['id', '=', partnerId]],
+        ['name']
+      );
+      return partners.length > 0 ? partners[0].name : null;
+    } catch (error) {
+      console.error(`[SellerOrderCreator] Error fetching partner name for ${partnerId}:`, error.message);
+      return null;
+    }
   }
 
   /**

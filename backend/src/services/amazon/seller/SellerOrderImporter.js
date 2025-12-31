@@ -585,26 +585,32 @@ class SellerOrderImporter {
   /**
    * Update Odoo order info for an order
    * @param {string} amazonOrderId - Amazon Order ID
-   * @param {Object} odooInfo - Odoo order info
+   * @param {Object} odooInfo - Odoo order info (can include partnerName to update UI display)
    */
   async updateOdooInfo(amazonOrderId, odooInfo) {
     await this.init();
 
+    const updateData = {
+      'odoo.partnerId': odooInfo.partnerId || null,
+      'odoo.saleOrderId': odooInfo.saleOrderId || null,
+      'odoo.saleOrderName': odooInfo.saleOrderName || null,
+      'odoo.invoiceId': odooInfo.invoiceId || null,
+      'odoo.invoiceName': odooInfo.invoiceName || null,
+      'odoo.pickingId': odooInfo.pickingId || null,
+      'odoo.createdAt': odooInfo.createdAt || new Date(),
+      'odoo.syncError': odooInfo.syncError || null,
+      updatedAt: new Date()
+    };
+
+    // If partner name is provided, update the display fields for the UI
+    if (odooInfo.partnerName) {
+      updateData.buyerName = odooInfo.partnerName;
+      updateData['shippingAddress.name'] = odooInfo.partnerName;
+    }
+
     return this.collection.updateOne(
       { amazonOrderId },
-      {
-        $set: {
-          'odoo.partnerId': odooInfo.partnerId || null,
-          'odoo.saleOrderId': odooInfo.saleOrderId || null,
-          'odoo.saleOrderName': odooInfo.saleOrderName || null,
-          'odoo.invoiceId': odooInfo.invoiceId || null,
-          'odoo.invoiceName': odooInfo.invoiceName || null,
-          'odoo.pickingId': odooInfo.pickingId || null,
-          'odoo.createdAt': odooInfo.createdAt || new Date(),
-          'odoo.syncError': odooInfo.syncError || null,
-          updatedAt: new Date()
-        }
-      }
+      { $set: updateData }
     );
   }
 
