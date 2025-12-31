@@ -207,6 +207,7 @@ class VendorPOImporter {
 
       await collection.insertOne({
         ...document,
+        shipmentStatus: 'not_shipped',
         acknowledgment: {
           acknowledged: isAlreadyAcknowledged,
           acknowledgedAt: isAlreadyAcknowledged ? new Date() : null,
