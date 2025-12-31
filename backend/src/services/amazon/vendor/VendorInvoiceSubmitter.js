@@ -513,25 +513,21 @@ class VendorInvoiceSubmitter {
       this.cleanPartyForPayload(po.buyingParty, countryCode) ||
       { partyId: 'AMAZON', address: defaultAddress };
 
-    // Build sellingParty from PO or use ACROPAQ default
-    const sellingParty = po.sellingParty?.partyId
-      ? { partyId: po.sellingParty.partyId, address: ACROPAQ_COMPANY.address }
-      : { partyId: ACROPAQ_COMPANY.partyId, address: ACROPAQ_COMPANY.address };
-
     // Build invoice
+    // Note: Amazon invoice schema expects: invoiceType, id, referenceNumber, remitToParty,
+    // shipToParty, shipFromParty, paymentTerms, invoiceTotal, chargeDetails, allowanceDetails, items
+    // billToParty and sellingParty are NOT supported in this schema
     return {
       invoices: [{
         invoiceType: INVOICE_TYPES.INVOICE,
         id: invoiceNumber,
         date: invoiceDate,
-        sellingParty,
         remitToParty: ACROPAQ_COMPANY,
         shipFromParty: {
           partyId: ACROPAQ_COMPANY.partyId,
           address: ACROPAQ_COMPANY.address
         },
         shipToParty,
-        billToParty,
         invoiceTotal: {
           currencyCode: currency,
           amount: String(odooInvoice.amount_total.toFixed(2))
