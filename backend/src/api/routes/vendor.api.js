@@ -3748,7 +3748,7 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
           <div class="actions-buttons">
             <a href="/api/vendor/packing/${shipment.shipmentId}/labels.pdf" class="action-btn labels" download>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
-              SSCC Labels PDF (Zebra)
+              All Labels PDF (GLS + SSCC)
             </a>
             <a href="/api/vendor/packing/${shipment.shipmentId}/delivery-note.pdf" class="action-btn delivery" download>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
@@ -3858,7 +3858,7 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
 
 /**
  * @route GET /api/vendor/packing/:shipmentId/labels.pdf
- * @desc Get SSCC labels as PDF for Zebra label printer (100x150mm per label)
+ * @desc Get combined GLS + SSCC labels as PDF for Zebra label printer (100x150mm per label)
  */
 router.get('/packing/:shipmentId/labels.pdf', async (req, res) => {
   let browser = null;
@@ -3866,6 +3866,7 @@ router.get('/packing/:shipmentId/labels.pdf', async (req, res) => {
     const db = getDb();
     const labelGen = await getSSCCLabelGenerator();
     const puppeteer = require('puppeteer');
+    const { PDFDocument } = require('pdf-lib');
 
     const shipment = await db.collection('packing_shipments').findOne({
       shipmentId: req.params.shipmentId
@@ -3893,46 +3894,65 @@ router.get('/packing/:shipmentId/labels.pdf', async (req, res) => {
       address: shipment.fcAddress
     };
 
-    // Generate all SSCC labels HTML
-    const cartons = [];
-    for (const parcel of shipment.parcels) {
-      if (parcel.sscc) {
-        cartons.push({
-          sscc: parcel.sscc,
-          shipTo,
-          purchaseOrders: shipment.purchaseOrders || [],
-          items: parcel.items || []
-        });
-      }
-    }
+    // Create merged PDF document
+    const mergedPdf = await PDFDocument.create();
 
-    if (cartons.length === 0) {
-      return res.status(400).json({ success: false, error: 'No SSCC labels to generate' });
-    }
-
-    const labelsHtml = await labelGen.generateCartonLabelsHTML(cartons);
-
-    // Launch puppeteer and generate PDF
+    // Launch puppeteer for SSCC label generation
     browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
-    await page.setContent(labelsHtml, { waitUntil: 'networkidle0' });
 
-    const pdfBuffer = await page.pdf({
-      width: '100mm',
-      height: '150mm',
-      printBackground: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 }
-    });
+    // Process each parcel: GLS label first, then SSCC label
+    for (const parcel of shipment.parcels) {
+      // 1. Add GLS label if available
+      if (parcel.glsLabelPdf) {
+        try {
+          const glsPdfBytes = Buffer.from(parcel.glsLabelPdf, 'base64');
+          const glsPdf = await PDFDocument.load(glsPdfBytes);
+          const glsPages = await mergedPdf.copyPages(glsPdf, glsPdf.getPageIndices());
+          glsPages.forEach(p => mergedPdf.addPage(p));
+        } catch (glsErr) {
+          console.error(`[VendorAPI] Error adding GLS label for parcel ${parcel.parcelNumber}:`, glsErr.message);
+        }
+      }
+
+      // 2. Add SSCC label if available
+      if (parcel.sscc) {
+        const ssccLabelHtml = await labelGen.generateCartonLabelHTML({
+          sscc: parcel.sscc,
+          shipTo,
+          purchaseOrders: shipment.purchaseOrders || [],
+          items: parcel.items || []
+        });
+
+        await page.setContent(ssccLabelHtml, { waitUntil: 'networkidle0' });
+        const ssccPdfBuffer = await page.pdf({
+          width: '100mm',
+          height: '150mm',
+          printBackground: true,
+          margin: { top: 0, right: 0, bottom: 0, left: 0 }
+        });
+
+        const ssccPdf = await PDFDocument.load(ssccPdfBuffer);
+        const ssccPages = await mergedPdf.copyPages(ssccPdf, ssccPdf.getPageIndices());
+        ssccPages.forEach(p => mergedPdf.addPage(p));
+      }
+    }
 
     await browser.close();
     browser = null;
 
+    if (mergedPdf.getPageCount() === 0) {
+      return res.status(400).json({ success: false, error: 'No labels to generate' });
+    }
+
+    const pdfBuffer = await mergedPdf.save();
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="labels-${shipment.shipmentId}.pdf"`);
-    res.send(pdfBuffer);
+    res.send(Buffer.from(pdfBuffer));
   } catch (error) {
     if (browser) await browser.close();
     console.error('[VendorAPI] GET /packing/:shipmentId/labels.pdf error:', error);
