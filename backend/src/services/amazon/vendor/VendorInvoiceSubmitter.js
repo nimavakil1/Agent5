@@ -387,6 +387,25 @@ class VendorInvoiceSubmitter {
   }
 
   /**
+   * Clean party object for Amazon API - remove null addresses
+   * Amazon expects either a complete address or just partyId
+   */
+  cleanPartyForPayload(party) {
+    if (!party) return null;
+
+    // If address is null or empty, only return partyId
+    if (!party.address || Object.keys(party.address).length === 0) {
+      return { partyId: party.partyId };
+    }
+
+    // Return full party with address
+    return {
+      partyId: party.partyId,
+      address: party.address
+    };
+  }
+
+  /**
    * Build Amazon invoice payload from Odoo invoice
    */
   async buildInvoicePayload(po, odooInvoice) {
@@ -427,6 +446,13 @@ class VendorInvoiceSubmitter {
       });
     }
 
+    // Clean party objects - remove null addresses
+    const shipToParty = this.cleanPartyForPayload(po.shipToParty) ||
+      { partyId: po.buyingParty?.partyId || 'AMAZON' };
+    const billToParty = this.cleanPartyForPayload(po.billToParty) ||
+      this.cleanPartyForPayload(po.buyingParty) ||
+      { partyId: 'AMAZON' };
+
     // Build invoice
     return {
       invoices: [{
@@ -438,12 +464,8 @@ class VendorInvoiceSubmitter {
           partyId: ACROPAQ_COMPANY.partyId,
           address: ACROPAQ_COMPANY.address
         },
-        shipToParty: po.shipToParty || {
-          partyId: po.buyingParty?.partyId || 'AMAZON'
-        },
-        billToParty: po.billToParty || po.buyingParty || {
-          partyId: 'AMAZON'
-        },
+        shipToParty,
+        billToParty,
         invoiceTotal: {
           currencyCode: currency,
           amount: String(odooInvoice.amount_total.toFixed(2))
