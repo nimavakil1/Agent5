@@ -317,7 +317,7 @@
         </button>
         <button class="btn btn-secondary btn-lg" id="asn-btn" onclick="submitASN()" disabled>
           <span class="material-symbols-outlined">send</span>
-          Submit ASN to Amazon
+          Update Odoo & submit ASN to Amazon Vendor Central
         </button>
       </div>
     </div>
@@ -1107,17 +1107,17 @@
         if (!data.success) throw new Error(data.error);
 
         setWorkflowStep(4);
-        document.getElementById('action-status').textContent = 'ASN submitted successfully!';
-        showToast('ASN submitted to Amazon');
+        document.getElementById('action-status').textContent = 'Odoo updated & ASN submitted successfully!';
+        showToast('Odoo deliveries completed & ASN submitted to Amazon');
 
-        asnBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span>ASN Submitted';
+        asnBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span>Completed';
         asnBtn.classList.remove('btn-secondary');
         asnBtn.classList.add('btn-success');
 
       } catch (err) {
         showToast('Error: ' + err.message, true);
         asnBtn.disabled = false;
-        asnBtn.innerHTML = '<span class="material-symbols-outlined">send</span>Submit ASN to Amazon';
+        asnBtn.innerHTML = '<span class="material-symbols-outlined">send</span>Update Odoo & submit ASN to Amazon Vendor Central';
       }
     }
 

@@ -40,12 +40,12 @@ const {
   getVendorPartyMapping,
   MARKETPLACE_IDS,
   VENDOR_ACCOUNTS,
-  PO_STATES,
+  PO_STATES: _PO_STATES,
   ACK_CODES,
-  MARKETPLACE_WAREHOUSE,
-  CHARGEBACK_TYPES,
-  DISPUTE_STATUS,
-  PAYMENT_STATUS,
+  MARKETPLACE_WAREHOUSE: _MARKETPLACE_WAREHOUSE,
+  CHARGEBACK_TYPES: _CHARGEBACK_TYPES,
+  DISPUTE_STATUS: _DISPUTE_STATUS,
+  PAYMENT_STATUS: _PAYMENT_STATUS,
   PARTY_TYPES
 } = require('../../services/amazon/vendor');
 
@@ -1391,7 +1391,7 @@ function generatePackingListCSV(packingList) {
  * @route GET /api/vendor/fc-codes
  * @desc Get list of known Amazon FC codes with names
  */
-router.get('/fc-codes', async (req, res) => {
+router.get('/fc-codes', (req, res) => {
   try {
     const fcList = Object.entries(FC_NAMES).map(([code, name]) => ({ code, name }));
 
@@ -2128,7 +2128,7 @@ router.get('/invoices/odoo', async (req, res) => {
             } else if (resp.transactionStatus?.status === 'Success') {
               status = 'accepted';
             }
-          } catch (e) {}
+          } catch (e) { /* ignore parse errors */ }
         }
         submissionMap[invoiceId] = {
           status,
@@ -2904,7 +2904,7 @@ router.get('/pending', async (req, res) => {
  * @route GET /api/vendor/config
  * @desc Get vendor configuration (marketplaces, accounts)
  */
-router.get('/config', async (req, res) => {
+router.get('/config', (req, res) => {
   try {
     // Check which tokens are configured
     const configuredMarketplaces = [];
@@ -3663,7 +3663,6 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
 router.get('/packing/:shipmentId/labels', async (req, res) => {
   try {
     const db = getDb();
-    const labelGen = await getSSCCLabelGenerator();
 
     const shipment = await db.collection('packing_shipments').findOne({
       shipmentId: req.params.shipmentId
@@ -3714,7 +3713,7 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
           .label-title.gls { color: #856404; }
           .label-title.sscc { color: #155724; }
           .tracking-code { font-family: monospace; font-size: 18px; background: #f8f9fa; padding: 8px 12px; border-radius: 4px; display: inline-block; }
-          .gls-pdf { width: 100%; height: 400px; border: 1px solid #ddd; border-radius: 4px; }
+          .label-pdf { width: 100%; height: 450px; border: 1px solid #ddd; border-radius: 4px; }
           .items-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
           .items-table th, .items-table td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
           .items-table th { background: #f8f9fa; font-weight: 600; color: #666; }
@@ -3792,7 +3791,7 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
         labelsHtml.push(`
           <p><strong>Tracking Number:</strong> <span class="tracking-code">${parcel.glsTrackingNumber}</span></p>
           ${parcel.glsLabelPdf ? `
-            <iframe class="gls-pdf" src="data:application/pdf;base64,${parcel.glsLabelPdf}"></iframe>
+            <iframe class="label-pdf" src="data:application/pdf;base64,${parcel.glsLabelPdf}"></iframe>
           ` : '<p class="no-label">GLS label PDF not available - print from GLS portal</p>'}
         `);
       } else {
@@ -3805,14 +3804,8 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
       labelsHtml.push('<div class="label-title sscc">📋 Amazon SSCC Label</div>');
 
       if (parcel.sscc) {
-        const ssccLabelHtml = await labelGen.generateCartonLabelHTML({
-          sscc: parcel.sscc,
-          shipTo,
-          purchaseOrders: shipment.purchaseOrders || [],
-          items: parcel.items || []
-        });
         labelsHtml.push(`<p><strong>SSCC:</strong> <span class="tracking-code">${parcel.ssccFormatted || parcel.sscc}</span></p>`);
-        labelsHtml.push(ssccLabelHtml);
+        labelsHtml.push(`<iframe class="label-pdf" src="/api/vendor/packing/${shipment.shipmentId}/sscc-label/${parcel.parcelNumber}.pdf"></iframe>`);
       } else {
         labelsHtml.push('<p class="no-label">SSCC not generated</p>');
       }
@@ -3956,6 +3949,84 @@ router.get('/packing/:shipmentId/labels.pdf', async (req, res) => {
   } catch (error) {
     if (browser) await browser.close();
     console.error('[VendorAPI] GET /packing/:shipmentId/labels.pdf error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/packing/:shipmentId/sscc-label/:parcelNumber.pdf
+ * @desc Get individual SSCC label as PDF for preview embedding
+ */
+router.get('/packing/:shipmentId/sscc-label/:parcelNumber.pdf', async (req, res) => {
+  let browser = null;
+  try {
+    const db = getDb();
+    const labelGen = await getSSCCLabelGenerator();
+    const puppeteer = require('puppeteer');
+
+    const shipment = await db.collection('packing_shipments').findOne({
+      shipmentId: req.params.shipmentId
+    });
+
+    if (!shipment) {
+      return res.status(404).json({ success: false, error: 'Shipment not found' });
+    }
+
+    const parcelNumber = parseInt(req.params.parcelNumber);
+    const parcel = shipment.parcels.find(p => p.parcelNumber === parcelNumber);
+
+    if (!parcel || !parcel.sscc) {
+      return res.status(404).json({ success: false, error: 'Parcel or SSCC not found' });
+    }
+
+    // Parse groupId for FC info
+    const sepIndex = (shipment.groupId || '').indexOf('_SEP_');
+    let fcPartyId;
+    if (sepIndex > 0) {
+      const baseGroupId = shipment.groupId.substring(0, sepIndex);
+      const lastUnderscoreIndex = baseGroupId.lastIndexOf('_');
+      fcPartyId = lastUnderscoreIndex > 0 ? baseGroupId.substring(0, lastUnderscoreIndex) : baseGroupId;
+    } else {
+      const lastUnderscoreIndex = (shipment.groupId || '').lastIndexOf('_');
+      fcPartyId = lastUnderscoreIndex > 0 ? shipment.groupId.substring(0, lastUnderscoreIndex) : (shipment.groupId || '');
+    }
+
+    const shipTo = {
+      fcPartyId,
+      fcName: shipment.fcName || FC_NAMES[fcPartyId] || fcPartyId,
+      address: shipment.fcAddress
+    };
+
+    // Generate SSCC label HTML
+    const ssccLabelHtml = await labelGen.generateCartonLabelHTML({
+      sscc: parcel.sscc,
+      shipTo,
+      purchaseOrders: shipment.purchaseOrders || [],
+      items: parcel.items || []
+    });
+
+    // Convert to PDF using puppeteer
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setContent(ssccLabelHtml, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({
+      width: '100mm',
+      height: '150mm',
+      printBackground: true,
+      margin: { top: 0, right: 0, bottom: 0, left: 0 }
+    });
+
+    await browser.close();
+    browser = null;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.send(pdfBuffer);
+  } catch (error) {
+    if (browser) await browser.close();
+    console.error('[VendorAPI] GET /packing/:shipmentId/sscc-label/:parcelNumber.pdf error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -4174,11 +4245,19 @@ router.get('/packing/:shipmentId/delivery-note.pdf', async (req, res) => {
 
 /**
  * @route POST /api/vendor/packing/:shipmentId/submit-asn
- * @desc Submit ASN (Advance Shipment Notice) to Amazon for a packing shipment
+ * @desc Complete Odoo delivery and submit ASN to Amazon for a packing shipment
+ *
+ * This endpoint:
+ * 1. Finds Odoo deliveries for the consolidated POs
+ * 2. Sets quantities done and validates the pickings
+ * 3. Attaches labels PDF and delivery note PDF to Odoo
+ * 4. Submits ASN to Amazon Vendor Central with SSCC data
  */
 router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
   try {
     const db = getDb();
+    const odoo = new OdooDirectClient();
+    await odoo.authenticate();
 
     const shipment = await db.collection('packing_shipments').findOne({
       shipmentId: req.params.shipmentId
@@ -4195,31 +4274,192 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
       });
     }
 
-    // TODO: Implement actual ASN submission to Amazon via Vendor Central API
-    // For now, just mark as ASN submitted and record the submission
+    const result = {
+      success: true,
+      shipmentId: shipment.shipmentId,
+      odoo: { pickingsValidated: [], attachmentsCreated: [], errors: [] },
+      amazon: { asnSubmitted: false, transactionIds: [], errors: [] }
+    };
+
+    // ========================================
+    // STEP 1: Process Odoo Deliveries
+    // ========================================
+    const poNumbers = shipment.purchaseOrders || [];
+    const processedPickings = new Set();
+
+    for (const poNumber of poNumbers) {
+      try {
+        // Get PO from MongoDB to find linked Odoo sale order
+        const po = await db.collection('vendor_purchase_orders').findOne({ purchaseOrderNumber: poNumber });
+        if (!po || !po.odoo?.saleOrderId) {
+          result.odoo.errors.push(`PO ${poNumber}: No linked Odoo sale order`);
+          continue;
+        }
+
+        // Find outgoing deliveries for this sale order
+        const pickings = await odoo.searchRead('stock.picking',
+          [
+            ['sale_id', '=', po.odoo.saleOrderId],
+            ['picking_type_code', '=', 'outgoing'],
+            ['state', 'in', ['assigned', 'confirmed', 'waiting']]
+          ],
+          ['id', 'name', 'state', 'move_ids_without_package']
+        );
+
+        for (const picking of pickings) {
+          if (processedPickings.has(picking.id)) continue;
+          processedPickings.add(picking.id);
+
+          try {
+            // Get move lines for this picking
+            const moves = await odoo.searchRead('stock.move',
+              [['picking_id', '=', picking.id]],
+              ['id', 'product_id', 'product_uom_qty', 'quantity']
+            );
+
+            // Set quantity done on each move
+            for (const move of moves) {
+              await odoo.write('stock.move', [move.id], {
+                quantity: move.product_uom_qty
+              });
+            }
+
+            // Validate the picking (button_validate)
+            await odoo.execute('stock.picking', 'button_validate', [[picking.id]]);
+
+            result.odoo.pickingsValidated.push({
+              id: picking.id,
+              name: picking.name,
+              poNumber
+            });
+
+          } catch (pickingErr) {
+            result.odoo.errors.push(`Picking ${picking.name}: ${pickingErr.message}`);
+          }
+        }
+      } catch (poErr) {
+        result.odoo.errors.push(`PO ${poNumber}: ${poErr.message}`);
+      }
+    }
+
+    // ========================================
+    // STEP 2: Attach PDFs to Odoo (to first validated picking)
+    // ========================================
+    if (result.odoo.pickingsValidated.length > 0) {
+      const firstPicking = result.odoo.pickingsValidated[0];
+
+      try {
+        // Generate labels PDF
+        const labelsPdfUrl = `/api/vendor/packing/${shipment.shipmentId}/labels.pdf`;
+        const deliveryNotePdfUrl = `/api/vendor/packing/${shipment.shipmentId}/delivery-note.pdf`;
+
+        // Create attachments in Odoo
+        // Note: We store the URL reference, actual PDF generation happens on demand
+        const labelsAttachment = await odoo.create('ir.attachment', {
+          name: `Labels-${shipment.shipmentId}.pdf`,
+          type: 'url',
+          url: labelsPdfUrl,
+          res_model: 'stock.picking',
+          res_id: firstPicking.id,
+          mimetype: 'application/pdf'
+        });
+
+        const deliveryNoteAttachment = await odoo.create('ir.attachment', {
+          name: `DeliveryNote-${shipment.shipmentId}.pdf`,
+          type: 'url',
+          url: deliveryNotePdfUrl,
+          res_model: 'stock.picking',
+          res_id: firstPicking.id,
+          mimetype: 'application/pdf'
+        });
+
+        result.odoo.attachmentsCreated.push(
+          { id: labelsAttachment, name: `Labels-${shipment.shipmentId}.pdf` },
+          { id: deliveryNoteAttachment, name: `DeliveryNote-${shipment.shipmentId}.pdf` }
+        );
+      } catch (attachErr) {
+        result.odoo.errors.push(`Attachments: ${attachErr.message}`);
+      }
+    }
+
+    // ========================================
+    // STEP 3: Submit ASN to Amazon
+    // ========================================
+    try {
+      const asnCreator = await getVendorASNCreator();
+
+      // Build carton data from parcels
+      const cartons = shipment.parcels.map(parcel => ({
+        sscc: parcel.sscc,
+        items: (parcel.items || []).map(item => ({
+          ean: item.ean,
+          sku: item.sku,
+          quantity: item.quantity
+        }))
+      }));
+
+      // Submit ASN for each PO
+      for (const poNumber of poNumbers) {
+        try {
+          const asnResult = await asnCreator.submitASNWithSSCC(poNumber, { cartons }, {
+            dryRun: false
+          });
+
+          if (asnResult.success) {
+            result.amazon.asnSubmitted = true;
+            if (asnResult.transactionId) {
+              result.amazon.transactionIds.push({
+                poNumber,
+                transactionId: asnResult.transactionId,
+                shipmentId: asnResult.shipmentId
+              });
+            }
+          } else {
+            result.amazon.errors.push(`PO ${poNumber}: ${asnResult.errors.join(', ')}`);
+          }
+        } catch (asnErr) {
+          result.amazon.errors.push(`PO ${poNumber}: ${asnErr.message}`);
+        }
+      }
+    } catch (amazonErr) {
+      result.amazon.errors.push(`Amazon ASN: ${amazonErr.message}`);
+    }
+
+    // ========================================
+    // STEP 4: Update shipment status
+    // ========================================
+    const newStatus = result.amazon.asnSubmitted ? 'completed' : 'asn_submitted';
 
     await db.collection('packing_shipments').updateOne(
       { shipmentId: req.params.shipmentId },
       {
         $set: {
-          status: 'asn_submitted',
+          status: newStatus,
           asnSubmittedAt: new Date(),
+          odooPickings: result.odoo.pickingsValidated,
+          amazonTransactions: result.amazon.transactionIds,
           updatedAt: new Date()
         }
       }
     );
 
-    res.json({
-      success: true,
-      shipmentId: shipment.shipmentId,
-      message: 'ASN marked as submitted (actual Amazon API integration coming soon)',
-      status: 'asn_submitted',
-      parcels: shipment.parcels.map(p => ({
-        parcelNumber: p.parcelNumber,
-        sscc: p.ssccFormatted || p.sscc,
-        glsTracking: p.glsTrackingNumber
-      }))
-    });
+    // Update POs shipment status
+    await db.collection('vendor_purchase_orders').updateMany(
+      { purchaseOrderNumber: { $in: poNumbers } },
+      {
+        $set: {
+          shipmentStatus: 'shipped',
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    result.status = newStatus;
+    result.message = result.amazon.asnSubmitted
+      ? 'Odoo deliveries validated and ASN submitted to Amazon'
+      : 'Odoo deliveries processed but ASN submission had errors';
+
+    res.json(result);
   } catch (error) {
     console.error('[VendorAPI] POST /packing/:shipmentId/submit-asn error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -4232,7 +4472,7 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
  * @body items - Array of { sku, quantity, weight? }
  * Items can include weight directly (from Odoo/orders), or falls back to defaults
  */
-router.post('/packing/estimate-weight', async (req, res) => {
+router.post('/packing/estimate-weight', (req, res) => {
   try {
     const { items = [] } = req.body;
 
