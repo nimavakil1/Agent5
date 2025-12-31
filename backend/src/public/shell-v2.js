@@ -50,16 +50,21 @@
       id: 'amazon-vendor', name: 'Amazon Vendor', icon: 'local_shipping', color: '#f97316',
       basePath: '/vendor',
       pages: [
-        { id: 'orders', path: '/vendor/', name: 'Purchase Orders', icon: 'receipt_long' },
-        { id: 'consolidate', path: '/vendor/consolidate.html', name: 'Consolidate', icon: 'inventory_2' },
-        { id: 'packing', path: '/vendor/packing.html', name: 'Packing & Labels', icon: 'package_2' },
-        { id: 'sscc-history', path: '/vendor/sscc-history.html', name: 'SSCC History', icon: 'history' },
-        { id: 'invoices', path: '/vendor/invoices.html', name: 'Invoices', icon: 'description' },
-        { id: 'invoice-submit', path: '/vendor/invoice-submit.html', name: 'Submit Invoices', icon: 'send' },
-        { id: 'remittances', path: '/vendor/remittances.html', name: 'Remittances', icon: 'payments' },
-        { id: 'shipments', path: '/vendor/shipments.html', name: 'Shipments', icon: 'local_shipping' },
-        { id: 'settings', path: '/vendor/settings.html', name: 'Settings', icon: 'settings' },
-        { id: 'test-mode', path: '/vendor/test-mode.html', name: 'Test Mode', icon: 'science' }
+        { id: 'orders', path: '/vendor/', name: 'Orders', icon: 'receipt_long' },
+        { id: 'fulfillment', name: 'Fulfillment', icon: 'local_shipping', isGroup: true, children: [
+          { id: 'consolidate', path: '/vendor/consolidate.html', name: 'Consolidate', icon: 'inventory_2' },
+          { id: 'packing', path: '/vendor/packing.html', name: 'Packing & Labels', icon: 'package_2' },
+          { id: 'sscc-history', path: '/vendor/sscc-history.html', name: 'SSCC History', icon: 'history' }
+        ]},
+        { id: 'billing', name: 'Billing', icon: 'payments', isGroup: true, children: [
+          { id: 'invoices', path: '/vendor/invoices.html', name: 'Invoices', icon: 'description' },
+          { id: 'remittances', path: '/vendor/remittances.html', name: 'Remittances', icon: 'account_balance' }
+        ]},
+        { id: 'settings', name: 'Settings', icon: 'settings', isGroup: true, children: [
+          { id: 'party-mappings', path: '/vendor/settings.html', name: 'Party Mappings', icon: 'handshake' },
+          { id: 'product-mappings', path: '/vendor/product-mappings.html', name: 'Product Mappings', icon: 'link' },
+          { id: 'test-mode', path: '/vendor/test-mode.html', name: 'Test Mode', icon: 'science' }
+        ]}
       ]
     },
     'bol': {
@@ -583,6 +588,102 @@
           font-size: 20px;
         }
 
+        /* Subnav Dropdown Groups */
+        .shell-subnav-group {
+          position: relative;
+        }
+
+        .shell-subnav-group-trigger {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          border-radius: 8px;
+          color: var(--shell-muted);
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s;
+          border: 1px solid transparent;
+          background: none;
+        }
+
+        .shell-subnav-group-trigger:hover {
+          color: var(--shell-text);
+          background: var(--shell-hover);
+        }
+
+        .shell-subnav-group-trigger.active {
+          color: var(--shell-text);
+          background: transparent;
+          border-bottom: 2px solid var(--shell-module);
+          border-radius: 0;
+        }
+
+        .shell-subnav-group-trigger .material-symbols-outlined {
+          font-size: 20px;
+        }
+
+        .shell-subnav-group-trigger .dropdown-arrow {
+          font-size: 18px;
+          transition: transform 0.15s;
+        }
+
+        .shell-subnav-group.open .dropdown-arrow {
+          transform: rotate(180deg);
+        }
+
+        .shell-subnav-dropdown {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          min-width: 200px;
+          background: var(--shell-card);
+          border: 1px solid var(--shell-border);
+          border-radius: 10px;
+          padding: 6px;
+          margin-top: 4px;
+          opacity: 0;
+          visibility: hidden;
+          transform: translateY(-8px);
+          transition: all 0.15s;
+          z-index: 1000;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+
+        .shell-subnav-group.open .shell-subnav-dropdown {
+          opacity: 1;
+          visibility: visible;
+          transform: translateY(0);
+        }
+
+        .shell-subnav-dropdown-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 14px;
+          border-radius: 8px;
+          color: var(--shell-muted);
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 500;
+          transition: all 0.15s;
+        }
+
+        .shell-subnav-dropdown-item:hover {
+          color: var(--shell-text);
+          background: var(--shell-hover);
+        }
+
+        .shell-subnav-dropdown-item.active {
+          color: var(--shell-text);
+          background: var(--shell-hover);
+        }
+
+        .shell-subnav-dropdown-item .material-symbols-outlined {
+          font-size: 18px;
+        }
+
         /* Toast Notifications */
         .shell-toast-container {
           position: fixed;
@@ -851,12 +952,34 @@
       ${currentModule ? `
         <!-- Module Sub-Nav -->
         <nav class="shell-subnav">
-          ${currentModule.pages.map(page => `
-            <a href="${page.path}" class="shell-subnav-item ${isActivePage(page.path) ? 'active' : ''}">
-              <span class="material-symbols-outlined">${page.icon}</span>
-              <span>${page.name}</span>
-            </a>
-          `).join('')}
+          ${currentModule.pages.map(page => {
+            if (page.isGroup && page.children) {
+              const isGroupActive = page.children.some(child => isActivePage(child.path));
+              return `
+                <div class="shell-subnav-group" data-group="${page.id}">
+                  <button class="shell-subnav-group-trigger ${isGroupActive ? 'active' : ''}">
+                    <span class="material-symbols-outlined">${page.icon}</span>
+                    <span>${page.name}</span>
+                    <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+                  </button>
+                  <div class="shell-subnav-dropdown">
+                    ${page.children.map(child => `
+                      <a href="${child.path}" class="shell-subnav-dropdown-item ${isActivePage(child.path) ? 'active' : ''}">
+                        <span class="material-symbols-outlined">${child.icon}</span>
+                        <span>${child.name}</span>
+                      </a>
+                    `).join('')}
+                  </div>
+                </div>
+              `;
+            }
+            return `
+              <a href="${page.path}" class="shell-subnav-item ${isActivePage(page.path) ? 'active' : ''}">
+                <span class="material-symbols-outlined">${page.icon}</span>
+                <span>${page.name}</span>
+              </a>
+            `;
+          }).join('')}
         </nav>
       ` : ''}
     `;
@@ -881,6 +1004,26 @@
         userDropdown.classList.remove('open');
       });
     }
+
+    // Subnav dropdown groups toggle
+    const subnavGroups = document.querySelectorAll('.shell-subnav-group');
+    subnavGroups.forEach(group => {
+      const trigger = group.querySelector('.shell-subnav-group-trigger');
+      if (trigger) {
+        trigger.onclick = (e) => {
+          e.stopPropagation();
+          // Close other groups
+          subnavGroups.forEach(g => {
+            if (g !== group) g.classList.remove('open');
+          });
+          group.classList.toggle('open');
+        };
+      }
+    });
+    // Close subnav dropdowns when clicking outside
+    document.addEventListener('click', () => {
+      subnavGroups.forEach(g => g.classList.remove('open'));
+    });
 
     // Logout handler
     const logoutBtn = document.getElementById('shell-logout');
