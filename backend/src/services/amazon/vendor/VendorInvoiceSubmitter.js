@@ -30,9 +30,10 @@ const INVOICE_TYPES = {
 
 /**
  * ACROPAQ company info for remitToParty
+ * Note: partyId 'C86K8' is ACROPAQ's Amazon vendor code
  */
 const ACROPAQ_COMPANY = {
-  partyId: 'ACROPAQ',
+  partyId: 'C86K8',
   address: {
     name: 'ACROPAQ BV',
     addressLine1: 'Patronaatstraat 79',
@@ -479,12 +480,18 @@ class VendorInvoiceSubmitter {
       this.cleanPartyForPayload(po.buyingParty, countryCode) ||
       { partyId: 'AMAZON', address: { name: 'Amazon', countryCode } };
 
+    // Build sellingParty from PO or use ACROPAQ default
+    const sellingParty = po.sellingParty?.partyId
+      ? { partyId: po.sellingParty.partyId, address: ACROPAQ_COMPANY.address }
+      : { partyId: ACROPAQ_COMPANY.partyId, address: ACROPAQ_COMPANY.address };
+
     // Build invoice
     return {
       invoices: [{
         invoiceType: INVOICE_TYPES.INVOICE,
         id: invoiceNumber,
         date: invoiceDate,
+        sellingParty,
         remitToParty: ACROPAQ_COMPANY,
         shipFromParty: {
           partyId: ACROPAQ_COMPANY.partyId,
