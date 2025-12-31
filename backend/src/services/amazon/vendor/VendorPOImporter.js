@@ -16,6 +16,7 @@ const { getDb } = require('../../../db');
 const { VendorClient, VENDOR_TOKEN_MAP, MARKETPLACE_IDS, PO_STATES } = require('./VendorClient');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { isTestMode } = require('./TestMode');
+const { getAmazonProductMapper } = require('../AmazonProductMapper');
 
 /**
  * MongoDB collection name for vendor purchase orders
@@ -284,7 +285,28 @@ class VendorPOImporter {
           }
         }
 
-        // Fallback 2: search by ASIN in amazon.product.ept (Emipro EPT mapping)
+        // Fallback 2: search by ASIN in our own amazon_product_mappings collection
+        if (!productData && asin) {
+          try {
+            const mapper = await getAmazonProductMapper();
+            const mapping = await mapper.findByAsin(asin, po.marketplaceId || 'ALL');
+            if (mapping && mapping.odooProductId) {
+              const products = await odoo.searchRead('product.product',
+                [['id', '=', mapping.odooProductId]],
+                ['id', 'name', 'default_code', 'barcode'],
+                { limit: 1 }
+              );
+              if (products.length > 0) {
+                productData = products[0];
+                console.log(`[VendorPOImporter] Found product via Amazon mapping: ASIN ${asin} -> ${productData.default_code}`);
+              }
+            }
+          } catch (mappingErr) {
+            // Mapping collection may not be initialized, continue to EPT fallback
+          }
+        }
+
+        // Fallback 3: search by ASIN in amazon.product.ept (Emipro EPT mapping - DEPRECATED)
         if (!productData && asin) {
           try {
             const eptMappings = await odoo.searchRead('amazon.product.ept',
@@ -301,11 +323,11 @@ class VendorPOImporter {
               );
               if (products.length > 0) {
                 productData = products[0];
-                console.log(`[VendorPOImporter] Found product via EPT mapping: ASIN ${asin} -> ${productData.default_code}`);
+                console.log(`[VendorPOImporter] Found product via EPT mapping (deprecated): ASIN ${asin} -> ${productData.default_code}`);
               }
             }
           } catch (eptErr) {
-            // EPT table may not exist, ignore error
+            // EPT table may not exist after Emipro uninstall, ignore error
           }
         }
 

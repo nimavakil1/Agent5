@@ -137,6 +137,46 @@ router.get('/products', async (req, res) => {
 });
 
 /**
+ * Search products by SKU, name, or barcode
+ * Returns simplified product data for dropdowns/autocomplete
+ */
+router.get('/products/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.length < 2) {
+      return res.json({ success: true, products: [] });
+    }
+
+    const client = await getOdooClient();
+
+    const domain = [
+      '|', '|',
+      ['name', 'ilike', q],
+      ['default_code', 'ilike', q],
+      ['barcode', 'ilike', q]
+    ];
+
+    const products = await client.searchRead('product.product', domain,
+      ['id', 'name', 'default_code', 'barcode'],
+      { limit: 20, order: 'default_code asc' }
+    );
+
+    res.json({
+      success: true,
+      products: products.map(p => ({
+        id: p.id,
+        name: p.name,
+        default_code: p.default_code || '',
+        barcode: p.barcode || ''
+      }))
+    });
+  } catch (error) {
+    console.error('Odoo product search error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * Get stock by warehouse for all products
  * Returns { productId: { warehouseId: qty, ... }, ... }
  * NOTE: This route MUST be defined before /products/:id to avoid being caught by the param route

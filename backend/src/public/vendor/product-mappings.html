@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Mappings - Amazon</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .page-title { font-size: 20px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 12px; }
+    .page-title .material-symbols-outlined { font-size: 28px; color: #f97316; }
+    .header-actions { display: flex; gap: 12px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #f97316; color: white; }
+    .btn-primary:hover { background: #ea580c; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn .material-symbols-outlined { font-size: 20px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .search-bar { display: flex; gap: 12px; align-items: center; flex: 1; max-width: 400px; }
+    .search-input { flex: 1; padding: 10px 14px; background: #12121a; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 14px; }
+    .search-input:focus { outline: none; border-color: #f97316; }
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; margin-bottom: 24px; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .card-title { font-size: 16px; font-weight: 600; color: #fff; margin: 0; }
+    .card-body { padding: 20px; }
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #12121a; border: 1px solid #252532; border-radius: 10px; padding: 16px; text-align: center; }
+    .stat-value { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    .stat-label { font-size: 12px; color: #71717a; }
+    .stat-card.success .stat-value { color: #4ade80; }
+    .stat-card.warning .stat-value { color: #fbbf24; }
+    .stat-card.info .stat-value { color: #60a5fa; }
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #252532; }
+    th { background: #12121a; font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; position: sticky; top: 0; }
+    td { font-size: 14px; color: #e4e4e7; }
+    tr:hover td { background: #1a1a28; }
+    .badge { display: inline-flex; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    .badge-success { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .badge-warning { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .badge-info { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+    .badge-secondary { background: #252532; color: #a1a1aa; }
+    .empty-state { padding: 40px 20px; text-align: center; }
+    .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
+    .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 8px; }
+    .empty-state-desc { font-size: 14px; color: #71717a; }
+    .action-btn { width: 32px; height: 32px; border-radius: 8px; background: #252532; border: none; color: #71717a; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .action-btn:hover { background: #3f3f50; color: #e4e4e7; }
+    .action-btn.danger:hover { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .action-btn .material-symbols-outlined { font-size: 18px; }
+    .action-btns { display: flex; gap: 8px; align-items: center; }
+    .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 20px; }
+    .pagination button { padding: 8px 14px; background: #252532; border: 1px solid #3f3f50; border-radius: 8px; color: #e4e4e7; cursor: pointer; }
+    .pagination button:hover:not(:disabled) { background: #3f3f50; }
+    .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pagination button.active { background: #f97316; border-color: #f97316; }
+    .pagination-info { font-size: 13px; color: #71717a; margin-left: 12px; }
+    /* Modal */
+    .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; display: none; align-items: center; justify-content: center; }
+    .modal-backdrop.show { display: flex; }
+    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow: hidden; }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid #252532; display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; margin: 0; }
+    .modal-close { width: 32px; height: 32px; border-radius: 8px; background: transparent; border: none; color: #71717a; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .modal-close:hover { background: #252532; color: #e4e4e7; }
+    .modal-body { padding: 20px; overflow-y: auto; max-height: calc(90vh - 140px); }
+    .form-group { margin-bottom: 16px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-label { display: block; font-size: 13px; font-weight: 500; color: #a1a1aa; margin-bottom: 6px; }
+    .form-input, .form-select { width: 100%; padding: 10px 14px; background: #12121a; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 14px; box-sizing: border-box; }
+    .form-input:focus, .form-select:focus { outline: none; border-color: #f97316; }
+    .modal-footer { padding: 16px 20px; border-top: 1px solid #252532; display: flex; justify-content: flex-end; gap: 12px; }
+    .search-results { max-height: 200px; overflow-y: auto; border: 1px solid #252532; border-radius: 8px; margin-top: 8px; }
+    .search-result { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #252532; }
+    .search-result:last-child { border-bottom: none; }
+    .search-result:hover { background: #252532; }
+    .search-result-name { font-size: 14px; color: #e4e4e7; }
+    .search-result-ref { font-size: 12px; color: #71717a; }
+    .filter-select { padding: 8px 12px; background: #12121a; border: 1px solid #252532; border-radius: 8px; color: #e4e4e7; font-size: 13px; }
+    .filter-select:focus { outline: none; border-color: #f97316; }
+    code { background: #252532; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    @media (max-width: 768px) {
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 class="page-title">
+        <span class="material-symbols-outlined">link</span>
+        Amazon Product Mappings
+      </h1>
+      <div class="header-actions">
+        <div class="search-bar">
+          <input type="text" class="search-input" id="search-input" placeholder="Search ASIN, SKU, barcode..." onkeyup="debounceSearch(this.value)">
+        </div>
+        <select class="filter-select" id="marketplace-filter" onchange="loadMappings()">
+          <option value="">All Marketplaces</option>
+          <option value="DE">Germany (DE)</option>
+          <option value="FR">France (FR)</option>
+          <option value="IT">Italy (IT)</option>
+          <option value="ES">Spain (ES)</option>
+          <option value="NL">Netherlands (NL)</option>
+          <option value="BE">Belgium (BE)</option>
+          <option value="PL">Poland (PL)</option>
+          <option value="SE">Sweden (SE)</option>
+          <option value="UK">United Kingdom (UK)</option>
+          <option value="ALL">Global (ALL)</option>
+        </select>
+        <button class="btn btn-primary" onclick="showAddModal()">
+          <span class="material-symbols-outlined">add</span>Add Mapping
+        </button>
+      </div>
+    </header>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card success">
+        <div class="stat-value" id="stat-total">--</div>
+        <div class="stat-label">Total Mappings</div>
+      </div>
+      <div class="stat-card info">
+        <div class="stat-value" id="stat-asins">--</div>
+        <div class="stat-label">Unique ASINs</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-value" id="stat-products">--</div>
+        <div class="stat-label">Odoo Products</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-marketplaces">--</div>
+        <div class="stat-label">Marketplaces</div>
+      </div>
+    </div>
+
+    <!-- Mappings Table -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">ASIN to Odoo Product Mappings</h3>
+        <span class="pagination-info" id="pagination-info"></span>
+      </div>
+      <div class="card-body">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>ASIN</th>
+                <th>Marketplace</th>
+                <th>Odoo SKU</th>
+                <th>Product Name</th>
+                <th>Seller SKU</th>
+                <th>Barcode</th>
+                <th>Type</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="mappings-table">
+              <tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading...</div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div class="modal-backdrop" id="mapping-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">Add Product Mapping</h3>
+        <button class="modal-close" onclick="closeModal()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body">
+        <form id="mapping-form" onsubmit="saveMapping(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">ASIN *</label>
+              <input type="text" class="form-input" id="form-asin" required placeholder="e.g., B08N5WRWNW">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Marketplace</label>
+              <select class="form-select" id="form-marketplace">
+                <option value="ALL">Global (ALL)</option>
+                <option value="DE">Germany (DE)</option>
+                <option value="FR">France (FR)</option>
+                <option value="IT">Italy (IT)</option>
+                <option value="ES">Spain (ES)</option>
+                <option value="NL">Netherlands (NL)</option>
+                <option value="BE">Belgium (BE)</option>
+                <option value="PL">Poland (PL)</option>
+                <option value="SE">Sweden (SE)</option>
+                <option value="UK">United Kingdom (UK)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Odoo Product *</label>
+            <input type="text" class="form-input" id="odoo-search" placeholder="Search by SKU, name, or barcode..." oninput="searchOdooProducts(this.value)">
+            <input type="hidden" id="form-odoo-product-id">
+            <input type="hidden" id="form-odoo-sku">
+            <input type="hidden" id="form-odoo-name">
+            <input type="hidden" id="form-odoo-barcode">
+            <div class="search-results" id="odoo-results" style="display: none;"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Seller SKU</label>
+              <input type="text" class="form-input" id="form-seller-sku" placeholder="Amazon Seller SKU">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fulfillment</label>
+              <select class="form-select" id="form-fulfillment">
+                <option value="FBM">FBM (Merchant)</option>
+                <option value="FBA">FBA (Amazon)</option>
+              </select>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="document.getElementById('mapping-form').requestSubmit()">Save Mapping</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentPage = 1;
+    const pageSize = 50;
+    let searchTimeout;
+
+    async function init() {
+      await Promise.all([loadStats(), loadMappings()]);
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/amazon/mappings/stats', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const stats = data.stats || {};
+        document.getElementById('stat-total').textContent = stats.totalMappings || 0;
+        document.getElementById('stat-asins').textContent = stats.uniqueAsins || 0;
+        document.getElementById('stat-products').textContent = stats.uniqueProducts || 0;
+        document.getElementById('stat-marketplaces').textContent = Object.keys(stats.byMarketplace || {}).length || 0;
+      } catch (e) { console.error('Stats error:', e); }
+    }
+
+    async function loadMappings() {
+      const search = document.getElementById('search-input').value;
+      const marketplace = document.getElementById('marketplace-filter').value;
+
+      try {
+        let url = '/api/amazon/mappings?page=' + currentPage + '&pageSize=' + pageSize;
+        if (search) url += '&search=' + encodeURIComponent(search);
+        if (marketplace) url += '&marketplace=' + encodeURIComponent(marketplace);
+
+        const res = await fetch(url, { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load mappings');
+        const data = await res.json();
+
+        renderMappings(data.mappings || []);
+        renderPagination(data.page, data.totalPages, data.total);
+      } catch (e) {
+        document.getElementById('mappings-table').innerHTML =
+          '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div><div class="empty-state-desc">' + e.message + '</div></div></td></tr>';
+      }
+    }
+
+    function renderMappings(mappings) {
+      const tbody = document.getElementById('mappings-table');
+
+      if (mappings.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">link_off</span><div class="empty-state-title">No mappings found</div><div class="empty-state-desc">Add your first ASIN to Odoo product mapping</div></div></td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = mappings.map(function(m) {
+        var mpBadge = m.marketplace === 'ALL' ? '<span class="badge badge-secondary">ALL</span>' : '<span class="badge badge-info">' + m.marketplace + '</span>';
+        var fbBadge = m.fulfillmentBy === 'FBA' ? '<span class="badge badge-warning">FBA</span>' : '<span class="badge badge-secondary">FBM</span>';
+
+        return '<tr>' +
+          '<td><code>' + (m.asin || '-') + '</code></td>' +
+          '<td>' + mpBadge + '</td>' +
+          '<td><code>' + (m.odooSku || '-') + '</code></td>' +
+          '<td>' + (m.odooProductName || '-').substring(0, 50) + (m.odooProductName && m.odooProductName.length > 50 ? '...' : '') + '</td>' +
+          '<td>' + (m.sellerSku || '-') + '</td>' +
+          '<td>' + (m.barcode || '-') + '</td>' +
+          '<td>' + fbBadge + '</td>' +
+          '<td><div class="action-btns">' +
+            '<button class="action-btn" onclick="editMapping(\'' + m.asin + '\', \'' + m.marketplace + '\')" title="Edit"><span class="material-symbols-outlined">edit</span></button>' +
+            '<button class="action-btn danger" onclick="deleteMapping(\'' + m.asin + '\', \'' + m.marketplace + '\')" title="Delete"><span class="material-symbols-outlined">delete</span></button>' +
+          '</div></td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function renderPagination(page, totalPages, total) {
+      document.getElementById('pagination-info').textContent =
+        'Showing ' + ((page - 1) * pageSize + 1) + '-' + Math.min(page * pageSize, total) + ' of ' + total;
+
+      if (totalPages <= 1) {
+        document.getElementById('pagination').innerHTML = '';
+        return;
+      }
+
+      let html = '<button onclick="goToPage(' + (page - 1) + ')" ' + (page <= 1 ? 'disabled' : '') + '>&laquo; Prev</button>';
+
+      for (let i = 1; i <= totalPages && i <= 7; i++) {
+        html += '<button onclick="goToPage(' + i + ')" class="' + (i === page ? 'active' : '') + '">' + i + '</button>';
+      }
+
+      if (totalPages > 7) {
+        html += '<button disabled>...</button><button onclick="goToPage(' + totalPages + ')">' + totalPages + '</button>';
+      }
+
+      html += '<button onclick="goToPage(' + (page + 1) + ')" ' + (page >= totalPages ? 'disabled' : '') + '>Next &raquo;</button>';
+
+      document.getElementById('pagination').innerHTML = html;
+    }
+
+    function goToPage(page) {
+      currentPage = page;
+      loadMappings();
+    }
+
+    function debounceSearch(value) {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(function() {
+        currentPage = 1;
+        loadMappings();
+      }, 300);
+    }
+
+    function showAddModal() {
+      document.getElementById('modal-title').textContent = 'Add Product Mapping';
+      document.getElementById('mapping-form').reset();
+      document.getElementById('form-odoo-product-id').value = '';
+      document.getElementById('form-odoo-sku').value = '';
+      document.getElementById('form-odoo-name').value = '';
+      document.getElementById('form-odoo-barcode').value = '';
+      document.getElementById('odoo-results').style.display = 'none';
+      document.getElementById('mapping-modal').classList.add('show');
+    }
+
+    async function editMapping(asin, marketplace) {
+      try {
+        const res = await fetch('/api/amazon/mappings/by-asin/' + encodeURIComponent(asin) + '?marketplace=' + encodeURIComponent(marketplace), { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load mapping');
+        const data = await res.json();
+        const m = data.mapping;
+
+        document.getElementById('modal-title').textContent = 'Edit Product Mapping';
+        document.getElementById('form-asin').value = m.asin || '';
+        document.getElementById('form-marketplace').value = m.marketplace || 'ALL';
+        document.getElementById('form-odoo-product-id').value = m.odooProductId || '';
+        document.getElementById('form-odoo-sku').value = m.odooSku || '';
+        document.getElementById('form-odoo-name').value = m.odooProductName || '';
+        document.getElementById('form-odoo-barcode').value = m.barcode || '';
+        document.getElementById('odoo-search').value = (m.odooSku || '') + ' - ' + (m.odooProductName || '');
+        document.getElementById('form-seller-sku').value = m.sellerSku || '';
+        document.getElementById('form-fulfillment').value = m.fulfillmentBy || 'FBM';
+
+        document.getElementById('mapping-modal').classList.add('show');
+      } catch (e) {
+        window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error');
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('mapping-modal').classList.remove('show');
+    }
+
+    let odooSearchTimeout;
+    async function searchOdooProducts(query) {
+      clearTimeout(odooSearchTimeout);
+      if (query.length < 2) {
+        document.getElementById('odoo-results').style.display = 'none';
+        return;
+      }
+      odooSearchTimeout = setTimeout(async function() {
+        try {
+          const res = await fetch('/api/odoo/products/search?q=' + encodeURIComponent(query), { credentials: 'include' });
+          if (!res.ok) return;
+          const data = await res.json();
+          const products = data.products || [];
+          const resultsEl = document.getElementById('odoo-results');
+
+          if (products.length === 0) {
+            resultsEl.innerHTML = '<div class="search-result"><div class="search-result-name">No products found</div></div>';
+          } else {
+            resultsEl.innerHTML = products.map(function(p) {
+              return '<div class="search-result" onclick="selectOdooProduct(' + p.id + ', \'' + (p.default_code || '').replace(/'/g, "\\'") + '\', \'' + (p.name || '').replace(/'/g, "\\'") + '\', \'' + (p.barcode || '').replace(/'/g, "\\'") + '\')">' +
+                '<div class="search-result-name">[' + (p.default_code || 'N/A') + '] ' + p.name + '</div>' +
+                '<div class="search-result-ref">Barcode: ' + (p.barcode || 'N/A') + '</div>' +
+              '</div>';
+            }).join('');
+          }
+          resultsEl.style.display = 'block';
+        } catch (e) { console.error(e); }
+      }, 300);
+    }
+
+    function selectOdooProduct(id, sku, name, barcode) {
+      document.getElementById('form-odoo-product-id').value = id;
+      document.getElementById('form-odoo-sku').value = sku;
+      document.getElementById('form-odoo-name').value = name;
+      document.getElementById('form-odoo-barcode').value = barcode;
+      document.getElementById('odoo-search').value = sku + ' - ' + name;
+      document.getElementById('odoo-results').style.display = 'none';
+    }
+
+    async function saveMapping(e) {
+      e.preventDefault();
+
+      const odooProductId = parseInt(document.getElementById('form-odoo-product-id').value);
+      if (!odooProductId) {
+        window.Agent5Shell?.showToast?.('Please select an Odoo product', 'error');
+        return;
+      }
+
+      const payload = {
+        asin: document.getElementById('form-asin').value,
+        marketplace: document.getElementById('form-marketplace').value,
+        odooProductId: odooProductId,
+        odooSku: document.getElementById('form-odoo-sku').value,
+        odooProductName: document.getElementById('form-odoo-name').value,
+        sellerSku: document.getElementById('form-seller-sku').value || null,
+        barcode: document.getElementById('form-odoo-barcode').value || null,
+        fulfillmentBy: document.getElementById('form-fulfillment').value
+      };
+
+      try {
+        const res = await fetch('/api/amazon/mappings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to save');
+        }
+
+        window.Agent5Shell?.showToast?.('Mapping saved', 'success');
+        closeModal();
+        await Promise.all([loadStats(), loadMappings()]);
+      } catch (e) {
+        window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error');
+      }
+    }
+
+    async function deleteMapping(asin, marketplace) {
+      if (!confirm('Delete mapping for ASIN ' + asin + ' (' + marketplace + ')?')) return;
+
+      try {
+        const res = await fetch('/api/amazon/mappings/' + encodeURIComponent(asin) + '?marketplace=' + encodeURIComponent(marketplace), {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+
+        if (!res.ok) throw new Error('Failed to delete');
+
+        window.Agent5Shell?.showToast?.('Mapping deleted', 'success');
+        await Promise.all([loadStats(), loadMappings()]);
+      } catch (e) {
+        window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

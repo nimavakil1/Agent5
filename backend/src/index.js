@@ -52,6 +52,7 @@ const printRouter = require('./api/routes/print.api');
 const shippingRouter = require('./api/routes/shipping.api');
 const fulfillmentRouter = require('./api/routes/fulfillment.api');
 const accountingRouter = require('./api/routes/accounting.api');
+const amazonMappingsRouter = require('./api/routes/amazonMappings.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -384,6 +385,7 @@ app.use('/api/shipping', requireSession, shippingRouter);
 app.use('/api/fulfillment', requireSession, fulfillmentRouter);
 // Accounting Agent module
 app.use('/api/accounting', requireSession, accountingRouter);
+app.use('/api/amazon/mappings', requireSession, amazonMappingsRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
