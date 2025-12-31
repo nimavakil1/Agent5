@@ -528,6 +528,7 @@ class VendorInvoiceSubmitter {
           address: ACROPAQ_COMPANY.address
         },
         shipToParty,
+        billToParty,
         invoiceTotal: {
           currencyCode: currency,
           amount: String(odooInvoice.amount_total.toFixed(2))
