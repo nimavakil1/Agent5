@@ -534,7 +534,6 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
             odooSku: item.odooSku,
             totalQty: 0,
             weight, // Unit weight from item, products collection, or 0
-            unitOfMeasure: item.orderedQuantity?.unitOfMeasure || 'Each',
             netCost: item.netCost,
             orders: []
           };
@@ -1203,14 +1202,17 @@ async function generatePackingList(req, res) {
         const qty = item.orderedQuantity?.amount || 0;
 
         if (!itemMap[key]) {
+          // Only show SKU if different from EAN
+          const sku = item.odooSku && item.odooSku !== item.vendorProductIdentifier
+            ? item.odooSku
+            : '-';
           itemMap[key] = {
             line: 0,
-            sku: item.odooSku || item.vendorProductIdentifier,
+            sku,
             ean: item.vendorProductIdentifier,
             asin: item.amazonProductIdentifier,
-            description: item.odooProductName || 'Unknown Product',
+            description: item.odooProductName || '-',
             quantity: 0,
-            unitOfMeasure: item.orderedQuantity?.unitOfMeasure || 'Each',
             poNumbers: []
           };
         }
@@ -1336,7 +1338,6 @@ function generatePackingListHTML(packingList) {
         <th>EAN</th>
         <th>Description</th>
         <th class="qty">Qty</th>
-        <th>UOM</th>
       </tr>
     </thead>
     <tbody>
@@ -1347,7 +1348,6 @@ function generatePackingListHTML(packingList) {
         <td>${item.ean || '-'}</td>
         <td>${item.description}</td>
         <td class="qty">${item.quantity}</td>
-        <td>${item.unitOfMeasure}</td>
       </tr>
       `).join('')}
     </tbody>
@@ -1384,7 +1384,7 @@ function generatePackingListCSV(packingList) {
   lines.push('');
 
   // Item headers
-  lines.push('"Line","SKU","EAN","ASIN","Description","Quantity","UOM","PO Numbers"');
+  lines.push('"Line","SKU","EAN","ASIN","Description","Quantity","PO Numbers"');
 
   // Items
   for (const item of packingList.items) {
@@ -1395,7 +1395,6 @@ function generatePackingListCSV(packingList) {
       `"${(item.asin || '').replace(/"/g, '""')}"`,
       `"${(item.description || '').replace(/"/g, '""')}"`,
       item.quantity,
-      `"${item.unitOfMeasure}"`,
       `"${item.poNumbers.join(', ')}"`
     ].join(','));
   }

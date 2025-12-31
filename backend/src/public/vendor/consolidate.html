@@ -377,17 +377,20 @@
         </div>
       `).join('');
 
-      const itemsHtml = data.consolidatedItems.map((item, idx) => `
+      const itemsHtml = data.consolidatedItems.map((item, idx) => {
+        // Only show SKU if it's different from EAN
+        const sku = item.odooSku && item.odooSku !== item.vendorProductIdentifier ? item.odooSku : '-';
+        const description = item.odooProductName || '-';
+        return `
         <tr>
           <td>${idx + 1}</td>
-          <td class="sku-cell">${item.odooSku || item.vendorProductIdentifier || '-'}</td>
+          <td class="sku-cell">${sku}</td>
           <td class="sku-cell">${item.vendorProductIdentifier || '-'}</td>
-          <td>${item.odooProductName || 'Unknown Product'}</td>
+          <td>${description}</td>
           <td class="qty-cell">${item.totalQty}</td>
-          <td>${item.unitOfMeasure}</td>
           <td style="font-size: 12px; color: #71717a;">${item.orders.map(o => `${o.purchaseOrderNumber} (${o.qty}x)`).join(', ')}</td>
         </tr>
-      `).join('');
+      `}).join('');
 
       details.innerHTML = `
         <div class="orders-list">
@@ -404,7 +407,6 @@
                 <th>EAN</th>
                 <th>Description</th>
                 <th style="text-align: center;">Qty</th>
-                <th>UOM</th>
                 <th>PO Numbers</th>
               </tr>
             </thead>
