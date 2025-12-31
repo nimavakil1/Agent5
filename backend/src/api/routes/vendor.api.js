@@ -3715,25 +3715,51 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
           .label-title.sscc { color: #155724; }
           .tracking-code { font-family: monospace; font-size: 18px; background: #f8f9fa; padding: 8px 12px; border-radius: 4px; display: inline-block; }
           .gls-pdf { width: 100%; height: 400px; border: 1px solid #ddd; border-radius: 4px; }
-          .print-btn {
-            position: fixed; top: 20px; right: 20px; z-index: 1000;
-            padding: 15px 30px; font-size: 18px; font-weight: bold;
-            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
-            color: white; border: none; border-radius: 8px; cursor: pointer;
-            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
-          }
-          .print-btn:hover { background: linear-gradient(135deg, #218838 0%, #1e7e34 100%); }
           .items-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
           .items-table th, .items-table td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
           .items-table th { background: #f8f9fa; font-weight: 600; color: #666; }
           .no-label { color: #999; font-style: italic; padding: 20px; text-align: center; }
+          .actions-bar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 15px 30px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          }
+          .actions-bar h2 { color: white; margin: 0; font-size: 18px; }
+          .actions-buttons { display: flex; gap: 12px; }
+          .action-btn {
+            padding: 12px 24px; font-size: 14px; font-weight: bold;
+            border: none; border-radius: 6px; cursor: pointer;
+            display: flex; align-items: center; gap: 8px;
+            text-decoration: none; transition: all 0.2s;
+          }
+          .action-btn.labels { background: #ffc107; color: #000; }
+          .action-btn.labels:hover { background: #e0a800; }
+          .action-btn.delivery { background: #17a2b8; color: white; }
+          .action-btn.delivery:hover { background: #138496; }
+          .action-btn svg { width: 18px; height: 18px; }
+          .content-wrapper { padding-top: 80px; }
         </style>
       </head>
       <body>
-        <button class="print-btn no-print" onclick="window.print()">🖨️ Print All Labels</button>
+        <div class="actions-bar no-print">
+          <h2>Shipment: ${shipment.shipmentId}</h2>
+          <div class="actions-buttons">
+            <a href="/api/vendor/packing/${shipment.shipmentId}/labels.pdf" class="action-btn labels" download>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+              SSCC Labels PDF (Zebra)
+            </a>
+            <a href="/api/vendor/packing/${shipment.shipmentId}/delivery-note.pdf" class="action-btn delivery" download>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              Delivery Note PDF (A4)
+            </a>
+          </div>
+        </div>
 
+        <div class="content-wrapper">
         <div class="header no-print">
-          <h1>📦 Shipment: ${shipment.shipmentId}</h1>
+          <h1>Shipment: ${shipment.shipmentId}</h1>
           <div class="header-info">
             <div><strong>Destination:</strong> ${shipTo.fcName}</div>
             <div><strong>Parcels:</strong> ${shipment.parcels.length}</div>
@@ -3819,12 +3845,313 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
       labelsHtml.push('</div>'); // Close label-container
     }
 
+    labelsHtml.push('</div>'); // Close content-wrapper
     labelsHtml.push('</body></html>');
 
     res.setHeader('Content-Type', 'text/html');
     res.send(labelsHtml.join(''));
   } catch (error) {
     console.error('[VendorAPI] GET /packing/:shipmentId/labels error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/packing/:shipmentId/labels.pdf
+ * @desc Get SSCC labels as PDF for Zebra label printer (100x150mm per label)
+ */
+router.get('/packing/:shipmentId/labels.pdf', async (req, res) => {
+  let browser = null;
+  try {
+    const db = getDb();
+    const labelGen = await getSSCCLabelGenerator();
+    const puppeteer = require('puppeteer');
+
+    const shipment = await db.collection('packing_shipments').findOne({
+      shipmentId: req.params.shipmentId
+    });
+
+    if (!shipment) {
+      return res.status(404).json({ success: false, error: 'Shipment not found' });
+    }
+
+    // Parse groupId for FC info
+    const sepIndex = (shipment.groupId || '').indexOf('_SEP_');
+    let fcPartyId;
+    if (sepIndex > 0) {
+      const baseGroupId = shipment.groupId.substring(0, sepIndex);
+      const lastUnderscoreIndex = baseGroupId.lastIndexOf('_');
+      fcPartyId = lastUnderscoreIndex > 0 ? baseGroupId.substring(0, lastUnderscoreIndex) : baseGroupId;
+    } else {
+      const lastUnderscoreIndex = (shipment.groupId || '').lastIndexOf('_');
+      fcPartyId = lastUnderscoreIndex > 0 ? shipment.groupId.substring(0, lastUnderscoreIndex) : (shipment.groupId || '');
+    }
+
+    const shipTo = {
+      fcPartyId,
+      fcName: shipment.fcName || FC_NAMES[fcPartyId] || fcPartyId,
+      address: shipment.fcAddress
+    };
+
+    // Generate all SSCC labels HTML
+    const cartons = [];
+    for (const parcel of shipment.parcels) {
+      if (parcel.sscc) {
+        cartons.push({
+          sscc: parcel.sscc,
+          shipTo,
+          purchaseOrders: shipment.purchaseOrders || [],
+          items: parcel.items || []
+        });
+      }
+    }
+
+    if (cartons.length === 0) {
+      return res.status(400).json({ success: false, error: 'No SSCC labels to generate' });
+    }
+
+    const labelsHtml = await labelGen.generateCartonLabelsHTML(cartons);
+
+    // Launch puppeteer and generate PDF
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setContent(labelsHtml, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({
+      width: '100mm',
+      height: '150mm',
+      printBackground: true,
+      margin: { top: 0, right: 0, bottom: 0, left: 0 }
+    });
+
+    await browser.close();
+    browser = null;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="labels-${shipment.shipmentId}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    if (browser) await browser.close();
+    console.error('[VendorAPI] GET /packing/:shipmentId/labels.pdf error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/packing/:shipmentId/delivery-note.pdf
+ * @desc Get delivery note as PDF for A4 printer
+ */
+router.get('/packing/:shipmentId/delivery-note.pdf', async (req, res) => {
+  let browser = null;
+  try {
+    const db = getDb();
+    const puppeteer = require('puppeteer');
+
+    const shipment = await db.collection('packing_shipments').findOne({
+      shipmentId: req.params.shipmentId
+    });
+
+    if (!shipment) {
+      return res.status(404).json({ success: false, error: 'Shipment not found' });
+    }
+
+    // Parse groupId for FC info
+    const sepIndex = (shipment.groupId || '').indexOf('_SEP_');
+    let fcPartyId;
+    if (sepIndex > 0) {
+      const baseGroupId = shipment.groupId.substring(0, sepIndex);
+      const lastUnderscoreIndex = baseGroupId.lastIndexOf('_');
+      fcPartyId = lastUnderscoreIndex > 0 ? baseGroupId.substring(0, lastUnderscoreIndex) : baseGroupId;
+    } else {
+      const lastUnderscoreIndex = (shipment.groupId || '').lastIndexOf('_');
+      fcPartyId = lastUnderscoreIndex > 0 ? shipment.groupId.substring(0, lastUnderscoreIndex) : (shipment.groupId || '');
+    }
+
+    const fcName = shipment.fcName || FC_NAMES[fcPartyId] || fcPartyId;
+    const fcAddress = shipment.fcAddress || {};
+
+    // Build all items aggregated across all parcels
+    const allItemsMap = {};
+    for (const parcel of shipment.parcels) {
+      for (const item of (parcel.items || [])) {
+        const key = item.sku || item.ean || item.name;
+        if (!allItemsMap[key]) {
+          allItemsMap[key] = { ...item, quantity: 0 };
+        }
+        allItemsMap[key].quantity += item.quantity || 0;
+      }
+    }
+    const allItems = Object.values(allItemsMap).sort((a, b) => (a.sku || '').localeCompare(b.sku || ''));
+    const totalUnits = allItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
+
+    // Generate delivery note HTML
+    const deliveryNoteHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Delivery Note - ${shipment.shipmentId}</title>
+  <style>
+    @page { size: A4; margin: 15mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.4; color: #333; }
+    .header { display: flex; justify-content: space-between; border-bottom: 3px solid #000; padding-bottom: 15px; margin-bottom: 20px; }
+    .logo-section { }
+    .logo { font-size: 24pt; font-weight: bold; color: #1a5f7a; }
+    .company-name { font-size: 10pt; color: #666; }
+    .doc-info { text-align: right; }
+    .doc-title { font-size: 20pt; font-weight: bold; margin-bottom: 5px; }
+    .doc-number { font-size: 12pt; color: #666; }
+    .doc-date { font-size: 10pt; color: #888; margin-top: 5px; }
+    .addresses { display: flex; gap: 40px; margin-bottom: 25px; }
+    .address-box { flex: 1; border: 1px solid #ddd; padding: 15px; border-radius: 4px; }
+    .address-label { font-size: 9pt; color: #666; text-transform: uppercase; font-weight: bold; margin-bottom: 8px; }
+    .address-name { font-size: 14pt; font-weight: bold; margin-bottom: 5px; }
+    .address-line { font-size: 10pt; }
+    .shipment-info { background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 25px; }
+    .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+    .info-item { }
+    .info-label { font-size: 9pt; color: #666; text-transform: uppercase; }
+    .info-value { font-size: 12pt; font-weight: bold; }
+    .section-title { font-size: 14pt; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #1a5f7a; padding-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th { background: #1a5f7a; color: white; padding: 10px 8px; text-align: left; font-size: 10pt; text-transform: uppercase; }
+    td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 10pt; }
+    tr:nth-child(even) { background: #f9f9f9; }
+    .qty-cell { text-align: center; font-weight: bold; }
+    .parcels-section { margin-top: 25px; }
+    .parcel-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .parcel-box { border: 1px solid #ddd; padding: 12px; border-radius: 4px; }
+    .parcel-header { font-weight: bold; font-size: 11pt; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 8px; }
+    .parcel-detail { font-size: 9pt; color: #666; }
+    .sscc-code { font-family: 'Courier New', monospace; font-size: 8pt; background: #f0f0f0; padding: 3px 6px; border-radius: 3px; display: inline-block; margin-top: 5px; }
+    .footer { margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px; font-size: 9pt; color: #888; text-align: center; }
+    .totals-row { background: #1a5f7a !important; color: white; font-weight: bold; }
+    .totals-row td { border: none; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo-section">
+      <div class="logo">ACROPAQ</div>
+      <div class="company-name">www.acropaq.com</div>
+    </div>
+    <div class="doc-info">
+      <div class="doc-title">DELIVERY NOTE</div>
+      <div class="doc-number">${shipment.shipmentId}</div>
+      <div class="doc-date">${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+    </div>
+  </div>
+
+  <div class="addresses">
+    <div class="address-box">
+      <div class="address-label">From</div>
+      <div class="address-name">ACROPAQ BV</div>
+      <div class="address-line">Schoonheidslaan 10-12</div>
+      <div class="address-line">2980 Zoersel, Belgium</div>
+    </div>
+    <div class="address-box">
+      <div class="address-label">Ship To</div>
+      <div class="address-name">${fcName}</div>
+      <div class="address-line">${fcAddress.addressLine1 || ''}</div>
+      <div class="address-line">${fcAddress.postalCode || ''} ${fcAddress.city || ''}, ${fcAddress.countryCode || ''}</div>
+    </div>
+  </div>
+
+  <div class="shipment-info">
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">Purchase Orders</div>
+        <div class="info-value">${(shipment.purchaseOrders || []).join(', ')}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Total Parcels</div>
+        <div class="info-value">${shipment.parcels.length}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Total Weight</div>
+        <div class="info-value">${shipment.totalWeight || 0} kg</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Total Units</div>
+        <div class="info-value">${totalUnits}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Contents</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 15%;">SKU</th>
+        <th style="width: 20%;">EAN</th>
+        <th style="width: 50%;">Description</th>
+        <th style="width: 15%; text-align: center;">Quantity</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${allItems.map(item => `
+        <tr>
+          <td>${item.sku || '-'}</td>
+          <td>${item.ean || '-'}</td>
+          <td>${item.name || 'Unknown'}</td>
+          <td class="qty-cell">${item.quantity}</td>
+        </tr>
+      `).join('')}
+      <tr class="totals-row">
+        <td colspan="3" style="text-align: right;">TOTAL</td>
+        <td class="qty-cell">${totalUnits}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="parcels-section">
+    <div class="section-title">Parcel Details</div>
+    <div class="parcel-grid">
+      ${shipment.parcels.map((parcel, idx) => `
+        <div class="parcel-box">
+          <div class="parcel-header">Parcel ${idx + 1} of ${shipment.parcels.length}</div>
+          <div class="parcel-detail">Weight: ${parcel.weight || 0} kg</div>
+          <div class="parcel-detail">Items: ${(parcel.items || []).reduce((s, i) => s + (i.quantity || 0), 0)} units</div>
+          ${parcel.glsTrackingNumber ? `<div class="parcel-detail">GLS: ${parcel.glsTrackingNumber}</div>` : ''}
+          ${parcel.sscc ? `<div class="sscc-code">${parcel.ssccFormatted || parcel.sscc}</div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  </div>
+
+  <div class="footer">
+    Generated by ACROPAQ Vendor Management System | ${new Date().toISOString()}
+  </div>
+</body>
+</html>`;
+
+    // Launch puppeteer and generate PDF
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setContent(deliveryNoteHtml, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' }
+    });
+
+    await browser.close();
+    browser = null;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="delivery-note-${shipment.shipmentId}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    if (browser) await browser.close();
+    console.error('[VendorAPI] GET /packing/:shipmentId/delivery-note.pdf error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
