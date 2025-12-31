@@ -94,7 +94,7 @@ class VendorPOImporter {
       totalErrors: 0
     };
 
-    for (const [marketplace, client] of Object.entries(this.clients)) {
+    for (const [marketplace, _client] of Object.entries(this.clients)) {
       try {
         const result = await this.pollMarketplace(marketplace, options);
         results.marketplaces[marketplace] = result;

@@ -276,9 +276,6 @@ class AmazonProductMapper {
    * @returns {Object} Import result stats
    */
   async bulkImport(mappings) {
-    const collection = this.db.collection(COLLECTION_NAME);
-    const now = new Date();
-
     let inserted = 0;
     let updated = 0;
     let errors = [];
