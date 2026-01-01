@@ -56,6 +56,18 @@
     .action-btn:hover { background: #3f3f50; color: #e4e4e7; }
     .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
     .action-btn .material-symbols-outlined { font-size: 18px; }
+    .edit-qty-btn { background: transparent; border: none; color: #71717a; cursor: pointer; padding: 2px; margin-left: 4px; vertical-align: middle; transition: color 0.15s; }
+    .edit-qty-btn:hover { color: #f97316; }
+    .edit-qty-btn .material-symbols-outlined { font-size: 16px; }
+    .qty-edit-container { display: inline-flex; align-items: center; gap: 4px; }
+    .qty-edit-input { width: 60px; padding: 4px 6px; background: #12121a; border: 1px solid #f97316; border-radius: 4px; color: #e4e4e7; text-align: center; font-size: 13px; }
+    .qty-save-btn, .qty-cancel-btn { background: transparent; border: none; cursor: pointer; padding: 2px; }
+    .qty-save-btn { color: #4ade80; }
+    .qty-save-btn:hover { color: #22c55e; }
+    .qty-cancel-btn { color: #ef4444; }
+    .qty-cancel-btn:hover { color: #dc2626; }
+    .qty-save-btn .material-symbols-outlined, .qty-cancel-btn .material-symbols-outlined { font-size: 18px; }
+    .stock-loading { color: #71717a; font-style: italic; }
     .empty-state { padding: 60px 20px; text-align: center; }
     .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
     .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
@@ -311,7 +323,7 @@
     }
     async function viewOrder(po) {
       try {
-        // First get basic order info
+        // First get basic order info - show immediately
         const res = await fetch('/api/vendor/orders/' + po, { credentials: 'include' });
         if (!res.ok) throw new Error('Failed to load order');
         const data = await res.json();
@@ -322,75 +334,192 @@
         // Check if already acknowledged
         const isAcknowledged = o.purchaseOrderState === 'Acknowledged' || o.acknowledgment?.acknowledged;
 
-        // Fetch stock/product info from CW (always, to get product names)
-        let stockInfo = {};
-        try {
-          const stockRes = await fetch('/api/vendor/orders/' + po + '/check-stock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ warehouseCode: 'CW' })
-          });
-          if (stockRes.ok) {
-            const stockData = await stockRes.json();
-            stockInfo = (stockData.items || []).reduce((acc, item) => {
-              acc[item.vendorProductIdentifier] = item;
-              return acc;
-            }, {});
-          }
-        } catch (e) { console.warn('Stock check failed:', e); }
-
-        // Build modal content
-        const headerHtml = '<div class="po-detail-header"><div class="po-detail-info"><h3>' + o.purchaseOrderNumber + '</h3><div class="po-detail-meta"><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span><span>Date: ' + formatDate(o.purchaseOrderDate) + '</span><span>Type: ' + (o.purchaseOrderType || 'Regular') + '</span></div></div><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></div>';
-
-        const deliveryHtml = o.deliveryWindow ? '<div style="margin-bottom:20px;padding:16px;background:#12121a;border-radius:10px;"><strong style="color:#a1a1aa;">Delivery Window:</strong><span style="color:#e4e4e7;margin-left:8px;">' + formatDate(o.deliveryWindow.startDate) + ' - ' + formatDate(o.deliveryWindow.endDate) + '</span></div>' : '';
-
-        // Build items table - editable if not acknowledged
-        let tableHtml = '<div class="po-items-table"><table><thead><tr><th>#</th><th>SKU</th><th>Product</th><th>Ordered</th>';
-        if (!isAcknowledged) {
-          tableHtml += '<th>CW Stock</th><th>Accept Qty</th>';
-        } else {
-          tableHtml += '<th>Accepted</th><th>Shipped</th>';
-        }
-        tableHtml += '<th>Unit Price</th><th>Total</th></tr></thead><tbody>';
-
-        (o.items || []).forEach((it, i) => {
-          const vendorId = it.vendorProductIdentifier || '-';
-          const stock = stockInfo[vendorId] || {};
-          // SKU = Odoo default_code, fallback to Amazon's vendorProductIdentifier
-          const sku = stock.odooSku || it.odooSku || vendorId;
-          const orderedQty = it.orderedQuantity?.amount || 0;
-          const cwStock = stock.qtyAvailable ?? it.qtyAvailable ?? 0;
-          const productName = stock.odooProductName || it.odooProductName || '';
-          const currentAckQty = it.acknowledgeQty ?? orderedQty;
-
-          tableHtml += '<tr data-ean="' + vendorId + '"><td>' + (i+1) + '</td><td style="font-family:monospace;font-size:12px;">' + sku + '</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + productName + '">' + (productName || '-') + '</td><td>' + orderedQty + '</td>';
-
-          if (!isAcknowledged) {
-            const stockColor = cwStock >= orderedQty ? '#4ade80' : (cwStock > 0 ? '#fbbf24' : '#ef4444');
-            tableHtml += '<td style="color:' + stockColor + ';font-weight:600;">' + cwStock + '</td>';
-            tableHtml += '<td><input type="number" class="ack-qty-input" data-ean="' + vendorId + '" value="' + currentAckQty + '" min="0" max="' + orderedQty + '" style="width:60px;padding:6px 8px;background:#12121a;border:1px solid #252532;border-radius:6px;color:#e4e4e7;text-align:center;"></td>';
-          } else {
-            tableHtml += '<td>' + getAcceptedQty(it, o) + '</td>';
-            tableHtml += '<td>' + (it.shippedQuantity?.amount ?? it.receivingStatus?.receivedQuantity?.amount ?? '-') + '</td>';
-          }
-
-          tableHtml += '<td>' + formatCurrency(it.netCost?.amount, it.netCost?.currencyCode) + '</td>';
-          tableHtml += '<td>' + formatCurrency(orderedQty * (it.netCost?.amount || 0), it.netCost?.currencyCode) + '</td></tr>';
-        });
-
-        tableHtml += '<tr class="totals-row"><td colspan="' + (isAcknowledged ? '7' : '7') + '" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td></tr></tbody></table></div>';
-
-        // Auto-fill button (only if not acknowledged)
-        const autoFillHtml = !isAcknowledged ? '<div style="margin-top:16px;display:flex;gap:12px;"><button class="btn btn-secondary" onclick="autoFillFromStock()" title="Fill Accept Qty with available CW stock (min of ordered vs available)"><span class="material-symbols-outlined">auto_fix</span>Auto-fill from CW Stock</button><button class="btn btn-secondary" onclick="fillAllOrdered()" title="Accept all ordered QTYs - good when you KNOW there will be availability before shipment. This just fills the Accept Qty fields."><span class="material-symbols-outlined">select_all</span>Accept All Ordered</button></div>' : '';
-
-        const odooHtml = o.odoo?.saleOrderId ? '<div style="margin-top:20px;padding:16px;background:rgba(99,102,241,0.1);border-radius:10px;border:1px solid rgba(99,102,241,0.3);"><strong style="color:#818cf8;">Odoo Order:</strong><a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link" style="margin-left:8px;">' + o.odoo.saleOrderName + '</a></div>' : '';
-
-        document.getElementById('po-modal-body').innerHTML = headerHtml + deliveryHtml + tableHtml + autoFillHtml + odooHtml;
-        document.getElementById('modal-create-odoo').disabled = !!o.odoo?.saleOrderId;
-        document.getElementById('modal-ack').disabled = isAcknowledged;
+        // Render modal immediately with cached data (if any)
+        renderOrderModal(o, isAcknowledged, false);
         document.getElementById('po-modal').classList.add('open');
+
+        // Lazy load fresh stock info in background (only for non-acknowledged orders)
+        if (!isAcknowledged) {
+          loadStockInBackground(po);
+        }
       } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    function renderOrderModal(o, isAcknowledged, stockLoading) {
+      // Build modal content
+      const headerHtml = '<div class="po-detail-header"><div class="po-detail-info"><h3>' + o.purchaseOrderNumber + '</h3><div class="po-detail-meta"><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span><span>Date: ' + formatDate(o.purchaseOrderDate) + '</span><span>Type: ' + (o.purchaseOrderType || 'Regular') + '</span></div></div><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></div>';
+
+      const deliveryHtml = o.deliveryWindow ? '<div style="margin-bottom:20px;padding:16px;background:#12121a;border-radius:10px;"><strong style="color:#a1a1aa;">Delivery Window:</strong><span style="color:#e4e4e7;margin-left:8px;">' + formatDate(o.deliveryWindow.startDate) + ' - ' + formatDate(o.deliveryWindow.endDate) + '</span></div>' : '';
+
+      // Build items table
+      let tableHtml = '<div class="po-items-table"><table><thead><tr><th>#</th><th>SKU</th><th>Product</th><th>Ordered</th>';
+      if (!isAcknowledged) {
+        tableHtml += '<th>CW Stock' + (stockLoading ? ' <span class="stock-loading">(loading...)</span>' : '') + '</th><th>Accept Qty</th>';
+      } else {
+        tableHtml += '<th>Accepted</th><th>Shipped</th>';
+      }
+      tableHtml += '<th>Unit Price</th><th>Total</th></tr></thead><tbody>';
+
+      (o.items || []).forEach((it, i) => {
+        const vendorId = it.vendorProductIdentifier || '-';
+        // Use cached product info if available
+        const sku = it.odooSku || vendorId;
+        const orderedQty = it.orderedQuantity?.amount || 0;
+        const cwStock = it.qtyAvailable ?? 0;
+        const productName = it.odooProductName || '';
+        const currentAckQty = it.acknowledgeQty ?? orderedQty;
+
+        tableHtml += '<tr data-ean="' + vendorId + '" data-ordered="' + orderedQty + '"><td>' + (i+1) + '</td><td style="font-family:monospace;font-size:12px;">' + sku + '</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + productName + '">' + (productName || '-') + '</td><td>' + orderedQty + '</td>';
+
+        if (!isAcknowledged) {
+          const stockColor = cwStock >= orderedQty ? '#4ade80' : (cwStock > 0 ? '#fbbf24' : '#ef4444');
+          const stockDisplay = it.odooProductId ? cwStock : (stockLoading ? '<span class="stock-loading">...</span>' : '-');
+          tableHtml += '<td class="stock-cell" style="color:' + stockColor + ';font-weight:600;" data-ean="' + vendorId + '">' + stockDisplay + '</td>';
+          tableHtml += '<td><input type="number" class="ack-qty-input" data-ean="' + vendorId + '" value="' + currentAckQty + '" min="0" max="' + orderedQty + '" style="width:60px;padding:6px 8px;background:#12121a;border:1px solid #252532;border-radius:6px;color:#e4e4e7;text-align:center;"></td>';
+        } else {
+          // For acknowledged orders: show accepted qty with pencil icon
+          const acceptedQty = getAcceptedQty(it, o);
+          tableHtml += '<td class="accepted-qty-cell" data-ean="' + vendorId + '" data-accepted="' + acceptedQty + '">';
+          tableHtml += '<span class="accepted-qty-value">' + acceptedQty + '</span>';
+          tableHtml += '<button class="edit-qty-btn" onclick="editAcceptedQty(this, \'' + vendorId + '\', ' + orderedQty + ')" title="Edit accepted quantity"><span class="material-symbols-outlined">edit</span></button>';
+          tableHtml += '</td>';
+          tableHtml += '<td>' + (it.shippedQuantity?.amount ?? it.receivingStatus?.receivedQuantity?.amount ?? '-') + '</td>';
+        }
+
+        tableHtml += '<td>' + formatCurrency(it.netCost?.amount, it.netCost?.currencyCode) + '</td>';
+        tableHtml += '<td>' + formatCurrency(orderedQty * (it.netCost?.amount || 0), it.netCost?.currencyCode) + '</td></tr>';
+      });
+
+      tableHtml += '<tr class="totals-row"><td colspan="7" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td></tr></tbody></table></div>';
+
+      // Auto-fill button (only if not acknowledged)
+      const autoFillHtml = !isAcknowledged ? '<div style="margin-top:16px;display:flex;gap:12px;"><button class="btn btn-secondary" onclick="autoFillFromStock()" title="Fill Accept Qty with available CW stock (min of ordered vs available)"><span class="material-symbols-outlined">auto_fix</span>Auto-fill from CW Stock</button><button class="btn btn-secondary" onclick="fillAllOrdered()" title="Accept all ordered QTYs - good when you KNOW there will be availability before shipment. This just fills the Accept Qty fields."><span class="material-symbols-outlined">select_all</span>Accept All Ordered</button></div>' : '';
+
+      const odooHtml = o.odoo?.saleOrderId ? '<div style="margin-top:20px;padding:16px;background:rgba(99,102,241,0.1);border-radius:10px;border:1px solid rgba(99,102,241,0.3);"><strong style="color:#818cf8;">Odoo Order:</strong><a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link" style="margin-left:8px;">' + o.odoo.saleOrderName + '</a></div>' : '';
+
+      document.getElementById('po-modal-body').innerHTML = headerHtml + deliveryHtml + tableHtml + autoFillHtml + odooHtml;
+      document.getElementById('modal-create-odoo').disabled = !!o.odoo?.saleOrderId;
+      document.getElementById('modal-ack').disabled = isAcknowledged;
+    }
+
+    async function loadStockInBackground(po) {
+      try {
+        const stockRes = await fetch('/api/vendor/orders/' + po + '/check-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ warehouseCode: 'CW' })
+        });
+        if (stockRes.ok && currentPO === po) {
+          const stockData = await stockRes.json();
+          // Update stock cells in the current modal
+          (stockData.items || []).forEach(item => {
+            const cell = document.querySelector('.stock-cell[data-ean="' + item.vendorProductIdentifier + '"]');
+            if (cell) {
+              const row = cell.closest('tr');
+              const orderedQty = parseInt(row.dataset.ordered) || 0;
+              const stock = item.qtyAvailable ?? 0;
+              const stockColor = stock >= orderedQty ? '#4ade80' : (stock > 0 ? '#fbbf24' : '#ef4444');
+              cell.style.color = stockColor;
+              cell.textContent = stock;
+            }
+            // Also update product name if it was missing
+            const row = document.querySelector('tr[data-ean="' + item.vendorProductIdentifier + '"]');
+            if (row && item.odooProductName) {
+              const nameCell = row.cells[2];
+              if (nameCell.textContent === '-') {
+                nameCell.textContent = item.odooProductName;
+                nameCell.title = item.odooProductName;
+              }
+              // Update SKU too
+              if (item.odooSku) {
+                const skuCell = row.cells[1];
+                if (skuCell.textContent === item.vendorProductIdentifier) {
+                  skuCell.textContent = item.odooSku;
+                }
+              }
+            }
+          });
+          // Update cached PO data
+          if (currentPOData) {
+            currentPOData.items = currentPOData.items.map(it => {
+              const updated = stockData.items.find(s => s.vendorProductIdentifier === it.vendorProductIdentifier);
+              return updated ? { ...it, ...updated } : it;
+            });
+          }
+        }
+      } catch (e) { console.warn('Background stock check failed:', e); }
+    }
+
+    function editAcceptedQty(btn, ean, maxQty) {
+      const cell = btn.closest('.accepted-qty-cell');
+      const currentQty = cell.dataset.accepted;
+      cell.innerHTML = '<div class="qty-edit-container">' +
+        '<input type="number" class="qty-edit-input" value="' + currentQty + '" min="0" max="' + maxQty + '" data-ean="' + ean + '" data-original="' + currentQty + '">' +
+        '<button class="qty-save-btn" onclick="saveEditedQty(\'' + ean + '\')" title="Save"><span class="material-symbols-outlined">check</span></button>' +
+        '<button class="qty-cancel-btn" onclick="cancelEditQty(\'' + ean + '\', ' + currentQty + ', ' + maxQty + ')" title="Cancel"><span class="material-symbols-outlined">close</span></button>' +
+        '</div>';
+      cell.querySelector('.qty-edit-input').focus();
+    }
+
+    function cancelEditQty(ean, originalQty, maxQty) {
+      const cell = document.querySelector('.accepted-qty-cell[data-ean="' + ean + '"]');
+      cell.innerHTML = '<span class="accepted-qty-value">' + originalQty + '</span>' +
+        '<button class="edit-qty-btn" onclick="editAcceptedQty(this, \'' + ean + '\', ' + maxQty + ')" title="Edit accepted quantity"><span class="material-symbols-outlined">edit</span></button>';
+    }
+
+    async function saveEditedQty(ean) {
+      const input = document.querySelector('.qty-edit-input[data-ean="' + ean + '"]');
+      const newQty = parseInt(input.value) || 0;
+      const originalQty = parseInt(input.dataset.original) || 0;
+
+      if (newQty === originalQty) {
+        cancelEditQty(ean, originalQty, parseInt(input.max));
+        return;
+      }
+
+      // Find item and prepare update
+      const item = currentPOData.items.find(it => it.vendorProductIdentifier === ean);
+      if (!item) return;
+
+      const orderedQty = item.orderedQuantity?.amount || 0;
+      const updateItems = [{
+        vendorProductIdentifier: ean,
+        acknowledgeQty: newQty,
+        backorderQty: 0,
+        productAvailability: newQty > 0 ? 'accepted' : 'rejected_TemporarilyUnavailable'
+      }];
+
+      try {
+        // Save to MongoDB
+        const saveRes = await fetch('/api/vendor/orders/' + currentPO + '/update-acknowledgments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ items: updateItems })
+        });
+        if (!saveRes.ok) throw new Error('Failed to save');
+
+        // Re-send acknowledgment to Amazon
+        const ackRes = await fetch('/api/vendor/orders/' + currentPO + '/acknowledge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ status: 'Accepted' })
+        });
+        if (!ackRes.ok) throw new Error('Failed to re-acknowledge');
+
+        // Update UI
+        const cell = document.querySelector('.accepted-qty-cell[data-ean="' + ean + '"]');
+        cell.dataset.accepted = newQty;
+        cell.innerHTML = '<span class="accepted-qty-value">' + newQty + '</span>' +
+          '<button class="edit-qty-btn" onclick="editAcceptedQty(this, \'' + ean + '\', ' + orderedQty + ')" title="Edit accepted quantity"><span class="material-symbols-outlined">edit</span></button>';
+
+        window.Agent5Shell?.showToast?.('Quantity updated and re-acknowledged', 'success');
+      } catch (e) {
+        window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error');
+        cancelEditQty(ean, originalQty, parseInt(input.max));
+      }
     }
 
     function autoFillFromStock() {

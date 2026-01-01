@@ -834,6 +834,11 @@ router.post('/orders/create-pending', async (req, res) => {
  * @route POST /api/vendor/orders/:poNumber/check-stock
  * @desc Check Odoo stock levels for PO items and update the PO with product info
  * @body warehouseCode - Optional: warehouse code to check (default from marketplace config)
+ *
+ * OPTIMIZATIONS:
+ * 1. Uses cached product mappings if already stored in PO
+ * 2. Batch searches products by EAN/barcode instead of individual queries
+ * 3. Batch fetches stock quants for all products at once
  */
 router.post('/orders/:poNumber/check-stock', async (req, res) => {
   try {
@@ -862,97 +867,134 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
     const productInfoList = [];
     const errors = [];
 
+    // Separate items into cached (have odooProductId) and uncached
+    const cachedItems = [];
+    const uncachedItems = [];
+
     for (const item of po.items || []) {
-      // vendorProductIdentifier from Amazon = EAN/barcode
-      // amazonProductIdentifier = ASIN
-      const ean = item.vendorProductIdentifier;
-      const asin = item.amazonProductIdentifier;
-
-      if (!ean && !asin) {
+      if (item.odooProductId) {
+        cachedItems.push(item);
+      } else if (item.vendorProductIdentifier || item.amazonProductIdentifier) {
+        uncachedItems.push(item);
+      } else {
         errors.push({ itemSequenceNumber: item.itemSequenceNumber, error: 'No EAN or ASIN' });
-        continue;
       }
+    }
 
-      // Find product in Odoo - try multiple search strategies
-      let productId = null;
-      let productData = null;
+    // Map of vendorProductIdentifier -> product data
+    const productMap = new Map();
 
-      // Strategy 1: Search by barcode (vendorProductIdentifier is often EAN)
-      if (ean) {
-        const products = await odoo.searchRead('product.product',
-          [['barcode', '=', ean]],
-          ['id', 'name', 'default_code', 'barcode', 'qty_available', 'free_qty'],
-          { limit: 1 }
+    // For cached items, we already have the product info
+    for (const item of cachedItems) {
+      productMap.set(item.vendorProductIdentifier, {
+        id: item.odooProductId,
+        name: item.odooProductName,
+        default_code: item.odooSku,
+        barcode: item.odooBarcode
+      });
+    }
+
+    // BATCH SEARCH: For uncached items, search by EAN/barcode in one query
+    if (uncachedItems.length > 0) {
+      const eans = uncachedItems.map(it => it.vendorProductIdentifier).filter(Boolean);
+      const asins = uncachedItems.map(it => it.amazonProductIdentifier).filter(Boolean);
+      const allIdentifiers = [...new Set([...eans, ...asins])];
+
+      if (allIdentifiers.length > 0) {
+        // Search by barcode (batch)
+        const productsByBarcode = await odoo.searchRead('product.product',
+          [['barcode', 'in', allIdentifiers]],
+          ['id', 'name', 'default_code', 'barcode']
         );
-        if (products.length > 0) {
-          productData = products[0];
-          productId = productData.id;
+
+        // Index by barcode for quick lookup
+        const barcodeIndex = new Map();
+        for (const p of productsByBarcode) {
+          if (p.barcode) barcodeIndex.set(p.barcode, p);
+        }
+
+        // Find products not found by barcode, try by default_code
+        const notFoundEans = eans.filter(ean => !barcodeIndex.has(ean));
+        if (notFoundEans.length > 0) {
+          const productsBySku = await odoo.searchRead('product.product',
+            [['default_code', 'in', notFoundEans]],
+            ['id', 'name', 'default_code', 'barcode']
+          );
+          for (const p of productsBySku) {
+            if (p.default_code && !barcodeIndex.has(p.default_code)) {
+              barcodeIndex.set(p.default_code, p);
+            }
+          }
+        }
+
+        // Map each item to its product
+        for (const item of uncachedItems) {
+          const ean = item.vendorProductIdentifier;
+          const asin = item.amazonProductIdentifier;
+
+          let productData = barcodeIndex.get(ean) || barcodeIndex.get(asin);
+
+          if (productData) {
+            productMap.set(ean, productData);
+          } else {
+            errors.push({ itemSequenceNumber: item.itemSequenceNumber, ean, asin, error: 'Product not found in Odoo' });
+            productMap.set(ean, null);
+          }
         }
       }
+    }
 
-      // Strategy 2: Search by default_code/SKU (vendorProductIdentifier is sometimes internal SKU)
-      if (!productId && ean) {
-        const products = await odoo.searchRead('product.product',
-          [['default_code', '=', ean]],
-          ['id', 'name', 'default_code', 'barcode', 'qty_available', 'free_qty'],
-          { limit: 1 }
-        );
-        if (products.length > 0) {
-          productData = products[0];
-          productId = productData.id;
-        }
+    // BATCH STOCK QUERY: Get stock for all products at once
+    const productIds = [...productMap.values()].filter(p => p?.id).map(p => p.id);
+    const stockByProductId = new Map();
+
+    if (productIds.length > 0) {
+      const quants = await odoo.searchRead('stock.quant',
+        [
+          ['product_id', 'in', productIds],
+          ['location_id.usage', '=', 'internal'],
+          ['location_id.warehouse_id', '=', warehouseId]
+        ],
+        ['product_id', 'quantity', 'reserved_quantity'],
+        { limit: 1000 }
+      );
+
+      // Aggregate stock by product
+      for (const q of quants) {
+        const prodId = q.product_id[0];
+        const available = (q.quantity || 0) - (q.reserved_quantity || 0);
+        stockByProductId.set(prodId, (stockByProductId.get(prodId) || 0) + available);
       }
+    }
 
-      // Strategy 3: Try by ASIN in barcode field
-      if (!productId && asin) {
-        const products = await odoo.searchRead('product.product',
-          [['barcode', '=', asin]],
-          ['id', 'name', 'default_code', 'barcode', 'qty_available', 'free_qty'],
-          { limit: 1 }
-        );
-        if (products.length > 0) {
-          productData = products[0];
-          productId = productData.id;
-        }
-      }
+    // Build product info list
+    for (const item of po.items || []) {
+      const ean = item.vendorProductIdentifier;
+      if (!ean) continue;
 
-      if (!productId) {
-        errors.push({ itemSequenceNumber: item.itemSequenceNumber, ean, asin, error: 'Product not found in Odoo' });
+      const productData = productMap.get(ean);
+
+      if (productData) {
+        const qtyAvailable = Math.max(0, stockByProductId.get(productData.id) || 0);
+        productInfoList.push({
+          vendorProductIdentifier: ean,
+          odooProductId: productData.id,
+          odooProductName: productData.name,
+          odooSku: productData.default_code,
+          odooBarcode: productData.barcode,
+          qtyAvailable
+        });
+      } else {
         productInfoList.push({
           vendorProductIdentifier: ean,
           odooProductId: null,
           odooProductName: null,
           qtyAvailable: 0
         });
-        continue;
       }
-
-      // Get stock from Central Warehouse using stock.quant
-      const quants = await odoo.searchRead('stock.quant',
-        [
-          ['product_id', '=', productId],
-          ['location_id.usage', '=', 'internal'],
-          ['location_id.warehouse_id', '=', warehouseId]
-        ],
-        ['quantity', 'reserved_quantity'],
-        { limit: 100 }
-      );
-
-      const qtyAvailable = quants.length > 0
-        ? quants.reduce((sum, q) => sum + (q.quantity - q.reserved_quantity), 0)
-        : 0;
-
-      productInfoList.push({
-        vendorProductIdentifier: ean,
-        odooProductId: productId,
-        odooProductName: productData.name,
-        odooSku: productData.default_code,
-        odooBarcode: productData.barcode,  // Real EAN from Odoo
-        qtyAvailable: Math.max(0, qtyAvailable)
-      });
     }
 
-    // Update PO with product info
+    // Update PO with product info (cache for next time)
     if (productInfoList.length > 0) {
       await importer.updateItemsProductInfo(req.params.poNumber, productInfoList);
     }
@@ -974,7 +1016,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         odooProductId: item.odooProductId,
         odooProductName: item.odooProductName,
         odooSku: item.odooSku,
-        odooBarcode: item.odooBarcode,  // Real EAN from Odoo
+        odooBarcode: item.odooBarcode,
         qtyAvailable: item.qtyAvailable,
         acknowledgeQty: item.acknowledgeQty,
         backorderQty: item.backorderQty,
