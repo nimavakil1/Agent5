@@ -19,6 +19,8 @@
     .btn-secondary:hover { background: #2a2a3a; }
     .btn-success { background: #22c55e; color: white; }
     .btn-success:hover { background: #16a34a; }
+    .btn-blue { background: #6366f1; color: white; }
+    .btn-blue:hover { background: #4f46e5; }
     .btn-sm { padding: 6px 12px; font-size: 13px; }
     .btn .material-symbols-outlined { font-size: 20px; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -111,10 +113,10 @@
         <img src="/assets/logos/amazon_vendor.png" alt="Amazon Vendor Central" class="page-logo">
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary" onclick="syncShipmentStatus()" id="sync-shipments-btn" title="Sync shipment status from Odoo">
+        <button class="btn btn-primary" onclick="syncShipmentStatus()" id="sync-shipments-btn" title="Sync shipment status from Odoo">
           <span class="material-symbols-outlined">local_shipping</span>Sync from Odoo
         </button>
-        <button class="btn btn-secondary" onclick="pollOrders()" id="poll-btn">
+        <button class="btn btn-blue" onclick="pollOrders()" id="poll-btn">
           <span class="material-symbols-outlined">sync</span>Poll Amazon
         </button>
       </div>
