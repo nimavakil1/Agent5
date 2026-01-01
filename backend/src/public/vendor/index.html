@@ -109,7 +109,7 @@
       </div>
       <div class="header-actions">
         <button class="btn btn-secondary" onclick="syncShipmentStatus()" id="sync-shipments-btn" title="Sync shipment status from Odoo">
-          <span class="material-symbols-outlined">local_shipping</span>Sync Shipments
+          <span class="material-symbols-outlined">sync</span>Sync from Odoo
         </button>
         <button class="btn btn-secondary" onclick="pollOrders()" id="poll-btn">
           <span class="material-symbols-outlined">sync</span>Poll Amazon
@@ -564,7 +564,7 @@
     function closeModal() { document.getElementById('po-modal').classList.remove('open'); currentPO = null; currentPOData = null; }
     async function syncShipmentStatus() {
       const btn = document.getElementById('sync-shipments-btn');
-      btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined">local_shipping</span>Syncing...';
+      btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined">sync</span>Syncing...';
       try {
         const res = await fetch('/api/vendor/orders/sync-shipment-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ limit: 500 }) });
         if (!res.ok) throw new Error('Failed');
@@ -572,7 +572,7 @@
         window.Agent5Shell?.showToast?.('Synced: ' + (data.updated || 0) + ' orders updated', 'success');
         await Promise.all([loadStats(), loadOrders()]);
       } catch (e) { window.Agent5Shell?.showToast?.('Sync failed: ' + e.message, 'error'); }
-      finally { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">local_shipping</span>Sync Shipments'; }
+      finally { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">sync</span>Sync from Odoo'; }
     }
 
     async function pollOrders() {
