@@ -841,9 +841,14 @@ router.post('/orders/create-pending', async (req, res) => {
  * 3. Batch fetches stock quants for all products at once
  */
 router.post('/orders/:poNumber/check-stock', async (req, res) => {
+  const startTime = Date.now();
+  const timings = {};
+
   try {
+    let t0 = Date.now();
     const importer = await getVendorPOImporter();
     const po = await importer.getPurchaseOrder(req.params.poNumber);
+    timings.getPO = Date.now() - t0;
 
     if (!po) {
       return res.status(404).json({ success: false, error: 'Purchase order not found' });
@@ -853,12 +858,16 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
     const warehouseCode = 'CW';
 
     // Initialize Odoo client
+    t0 = Date.now();
     const odoo = new OdooDirectClient();
     await odoo.authenticate();
+    timings.odooAuth = Date.now() - t0;
 
     // Find Central Warehouse in Odoo
+    t0 = Date.now();
     const warehouses = await odoo.search('stock.warehouse', [['code', '=', warehouseCode]], { limit: 1 });
     const warehouseId = warehouses.length > 0 ? warehouses[0] : null;
+    timings.warehouseLookup = Date.now() - t0;
 
     if (!warehouseId) {
       return res.status(500).json({ success: false, error: 'Central Warehouse (CW) not found in Odoo' });
@@ -896,6 +905,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
 
     // BATCH SEARCH: For uncached items, search by EAN/barcode in one query
     if (uncachedItems.length > 0) {
+      t0 = Date.now();
       const eans = uncachedItems.map(it => it.vendorProductIdentifier).filter(Boolean);
       const asins = uncachedItems.map(it => it.amazonProductIdentifier).filter(Boolean);
       const allIdentifiers = [...new Set([...eans, ...asins])];
@@ -942,9 +952,11 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
           }
         }
       }
+      timings.productSearch = Date.now() - t0;
     }
 
     // BATCH STOCK QUERY: Get stock for all products at once
+    t0 = Date.now();
     const productIds = [...productMap.values()].filter(p => p?.id).map(p => p.id);
     const stockByProductId = new Map();
 
@@ -966,6 +978,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         stockByProductId.set(prodId, (stockByProductId.get(prodId) || 0) + available);
       }
     }
+    timings.stockQuery = Date.now() - t0;
 
     // Build product info list
     for (const item of po.items || []) {
@@ -995,18 +1008,27 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
     }
 
     // Update PO with product info (cache for next time)
+    t0 = Date.now();
     if (productInfoList.length > 0) {
       await importer.updateItemsProductInfo(req.params.poNumber, productInfoList);
     }
 
     // Get updated PO
     const updatedPO = await importer.getPurchaseOrder(req.params.poNumber);
+    timings.dbUpdate = Date.now() - t0;
+
+    timings.total = Date.now() - startTime;
+    timings.cachedItems = cachedItems.length;
+    timings.uncachedItems = uncachedItems.length;
+
+    console.log(`[VendorAPI] check-stock ${req.params.poNumber}: ${JSON.stringify(timings)}`);
 
     res.json({
       success: true,
       purchaseOrderNumber: req.params.poNumber,
       warehouseCode,
       itemsChecked: productInfoList.length,
+      timings, // Include timings in response for debugging
       errors: errors.length > 0 ? errors : undefined,
       items: updatedPO.items.map(item => ({
         itemSequenceNumber: item.itemSequenceNumber,
