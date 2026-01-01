@@ -15,7 +15,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { getDb } = require('../../db');
-const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+const { OdooDirectClient, getCachedOdooClient } = require('../../core/agents/integrations/OdooMCP');
 
 // Load paid invoices data from remittance import
 let paidInvoicesData = { paidInvoices: {} };
@@ -830,15 +830,20 @@ router.post('/orders/create-pending', async (req, res) => {
   }
 });
 
+// Cache for warehouse ID (CW) - avoids repeated lookups
+let cachedWarehouseId = null;
+
 /**
  * @route POST /api/vendor/orders/:poNumber/check-stock
  * @desc Check Odoo stock levels for PO items and update the PO with product info
  * @body warehouseCode - Optional: warehouse code to check (default from marketplace config)
  *
  * OPTIMIZATIONS:
- * 1. Uses cached product mappings if already stored in PO
- * 2. Batch searches products by EAN/barcode instead of individual queries
- * 3. Batch fetches stock quants for all products at once
+ * 1. Uses cached Odoo client (avoids re-authentication)
+ * 2. Uses cached warehouse ID
+ * 3. Uses cached product mappings if already stored in PO
+ * 4. Batch searches products by EAN/barcode instead of individual queries
+ * 5. Batch fetches stock quants for all products at once
  */
 router.post('/orders/:poNumber/check-stock', async (req, res) => {
   const startTime = Date.now();
@@ -857,16 +862,18 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
     // Always use Central Warehouse (CW) for stock checks
     const warehouseCode = 'CW';
 
-    // Initialize Odoo client
+    // Get cached Odoo client (reuses authenticated session)
     t0 = Date.now();
-    const odoo = new OdooDirectClient();
-    await odoo.authenticate();
+    const odoo = await getCachedOdooClient();
     timings.odooAuth = Date.now() - t0;
 
-    // Find Central Warehouse in Odoo
+    // Find Central Warehouse in Odoo (cached)
     t0 = Date.now();
-    const warehouses = await odoo.search('stock.warehouse', [['code', '=', warehouseCode]], { limit: 1 });
-    const warehouseId = warehouses.length > 0 ? warehouses[0] : null;
+    if (!cachedWarehouseId) {
+      const warehouses = await odoo.search('stock.warehouse', [['code', '=', warehouseCode]], { limit: 1 });
+      cachedWarehouseId = warehouses.length > 0 ? warehouses[0] : null;
+    }
+    const warehouseId = cachedWarehouseId;
     timings.warehouseLookup = Date.now() - t0;
 
     if (!warehouseId) {

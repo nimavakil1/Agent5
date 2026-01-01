@@ -592,7 +592,33 @@ class OdooDirectClient {
   }
 }
 
+// Cached singleton instance for performance
+let cachedOdooClient = null;
+let lastAuthTime = 0;
+const AUTH_CACHE_TTL = 5 * 60 * 1000; // Re-auth every 5 minutes
+
+/**
+ * Get a cached/singleton Odoo client instance
+ * Reuses authenticated session for performance
+ */
+async function getCachedOdooClient() {
+  const now = Date.now();
+
+  // If we have a cached client and it's not expired, return it
+  if (cachedOdooClient && cachedOdooClient.authenticated && (now - lastAuthTime) < AUTH_CACHE_TTL) {
+    return cachedOdooClient;
+  }
+
+  // Create new client and authenticate
+  cachedOdooClient = new OdooDirectClient();
+  await cachedOdooClient.authenticate();
+  lastAuthTime = now;
+
+  return cachedOdooClient;
+}
+
 module.exports = {
   createOdooMCPConfig,
   OdooDirectClient,
+  getCachedOdooClient,
 };
