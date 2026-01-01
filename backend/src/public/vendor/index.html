@@ -76,6 +76,9 @@
     .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
     .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
     .empty-state-text { font-size: 14px; color: #71717a; }
+    .empty-state-link { color: #f97316; cursor: pointer; text-decoration: underline; }
+    .empty-state-link:hover { color: #fb923c; }
+    .empty-state-success .material-symbols-outlined { color: #4ade80; }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 2000; }
     .modal-overlay.open { display: flex; }
     .modal { background: #18181f; border: 1px solid #252532; border-radius: 20px; width: 100%; max-width: 1100px; max-height: 90vh; overflow-y: auto; position: relative; }
@@ -258,7 +261,18 @@
     }
     function renderOrders() {
       const tbody = document.getElementById('orders-table');
-      if (orders.length === 0) { tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span><div class="empty-state-title">No orders found</div></div></td></tr>'; return; }
+      if (orders.length === 0) {
+        // Check if default filters are active (New + Not Shipped)
+        const stateFilter = document.getElementById('col-filter-state').value;
+        const shippingFilter = document.getElementById('col-filter-shipping').value;
+        const isDefaultFilter = stateFilter === 'New' && shippingFilter === 'Not Shipped';
+        if (isDefaultFilter) {
+          tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state empty-state-success"><span class="material-symbols-outlined">check_circle</span><div class="empty-state-title">Great job! All orders are acknowledged and shipped - <span class="empty-state-link" onclick="clearFilters()">show all orders</span></div></div></td></tr>';
+        } else {
+          tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span><div class="empty-state-title">No orders found</div></div></td></tr>';
+        }
+        return;
+      }
       tbody.innerHTML = orders.map(o => {
         const shipStatus = getShippingStatus(o);
         const shipClass = shipStatus === 'Shipped' ? 'badge-acknowledged' : (shipStatus === 'Partial' ? 'badge-new' : 'badge-closed');
