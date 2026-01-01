@@ -1100,25 +1100,41 @@ class VendorPOImporter {
       return { synced: 0, updated: 0, errors: [] };
     }
 
-    const odoo = new OdooDirectClient();
-    await odoo.authenticate();
+    // Use cached Odoo client for performance
+    const { getCachedOdooClient } = require('../../core/agents/integrations/OdooMCP');
+    const odoo = await getCachedOdooClient();
 
     let updated = 0;
     const errors = [];
+
+    // BATCH: Get all sale order IDs and fetch pickings in one query
+    const saleOrderIds = orders.map(o => o.odoo?.saleOrderId).filter(Boolean);
+
+    // Fetch all pickings for these orders at once
+    const allPickings = await odoo.searchRead('stock.picking',
+      [
+        ['sale_id', 'in', saleOrderIds],
+        ['picking_type_code', '=', 'outgoing']
+      ],
+      ['id', 'name', 'state', 'sale_id']
+    );
+
+    // Group pickings by sale order ID
+    const pickingsBySaleId = new Map();
+    for (const p of allPickings) {
+      const soId = p.sale_id?.[0];
+      if (!soId) continue;
+      if (!pickingsBySaleId.has(soId)) pickingsBySaleId.set(soId, []);
+      pickingsBySaleId.get(soId).push(p);
+    }
 
     for (const order of orders) {
       try {
         const saleOrderId = order.odoo?.saleOrderId;
         if (!saleOrderId) continue;
 
-        // Get pickings for this sale order
-        const pickings = await odoo.searchRead('stock.picking',
-          [
-            ['sale_id', '=', saleOrderId],
-            ['picking_type_code', '=', 'outgoing']
-          ],
-          ['id', 'name', 'state']
-        );
+        // Get pickings from our batch result
+        const pickings = pickingsBySaleId.get(saleOrderId) || [];
 
         // Determine shipment status based on pickings
         let newStatus = 'not_shipped';
