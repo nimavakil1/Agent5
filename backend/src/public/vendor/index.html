@@ -340,6 +340,10 @@
       } else {
         updatePagination();
       }
+      // Show success message when default filters result in no visible rows
+      if (visibleCount === 0 && stateFilter === 'New' && shippingFilter === 'Not Shipped') {
+        tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state empty-state-success"><span class="material-symbols-outlined">check_circle</span><div class="empty-state-title">Great job! All orders are acknowledged and shipped - <span class="empty-state-link" onclick="clearFilters()">show all orders</span></div></div></td></tr>';
+      }
     }
     async function viewOrder(po) {
       // Show modal with loading state immediately
