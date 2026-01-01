@@ -37,6 +37,8 @@
     .filters-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
     .filter-select, .filter-input { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; }
     .filter-select:focus, .filter-input:focus { outline: none; border-color: #f97316; }
+    .filter-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(70%) sepia(50%) saturate(1000%) hue-rotate(350deg); cursor: pointer; }
+    .filter-input[type="date"]::-webkit-calendar-picker-indicator:hover { filter: invert(60%) sepia(90%) saturate(1500%) hue-rotate(350deg); }
     .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
     .table-container { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
