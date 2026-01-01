@@ -539,7 +539,8 @@ class VcsOdooInvoicer {
         }
 
         if (dryRun) {
-          const invoiceData = this.buildInvoiceData(order, saleOrder.partner_id[0], saleOrder, orderLines);
+          const partnerId = await this.determinePartner(order, saleOrder);
+          const invoiceData = this.buildInvoiceData(order, partnerId, saleOrder, orderLines);
 
           // Get human-readable names, with fallbacks showing expected values
           const journalName = this.getJournalName(invoiceData.journal_id);
@@ -573,7 +574,8 @@ class VcsOdooInvoicer {
         }
 
         // Create invoice linked to sale order
-        const invoice = await this.createInvoice(order, saleOrder.partner_id[0], saleOrder, orderLines);
+        const partnerId = await this.determinePartner(order, saleOrder);
+        const invoice = await this.createInvoice(order, partnerId, saleOrder, orderLines);
         result.created++;
         result.invoices.push(invoice);
 
@@ -697,7 +699,8 @@ class VcsOdooInvoicer {
         }
 
         if (dryRun) {
-          const invoiceData = this.buildInvoiceData(order, saleOrder.partner_id[0], saleOrder, orderLines);
+          const partnerId = await this.determinePartner(order, saleOrder);
+          const invoiceData = this.buildInvoiceData(order, partnerId, saleOrder, orderLines);
           const journalName = this.getJournalName(invoiceData.journal_id);
           const fiscalPositionName = this.getFiscalPositionName(invoiceData.fiscal_position_id);
           const expectedJournal = this.getExpectedJournalCode(order);
@@ -729,7 +732,8 @@ class VcsOdooInvoicer {
         }
 
         // Create invoice linked to sale order
-        const invoice = await this.createInvoice(order, saleOrder.partner_id[0], saleOrder, orderLines);
+        const partnerId = await this.determinePartner(order, saleOrder);
+        const invoice = await this.createInvoice(order, partnerId, saleOrder, orderLines);
         result.created++;
         result.invoices.push(invoice);
 
@@ -1018,17 +1022,132 @@ class VcsOdooInvoicer {
   }
 
   /**
-   * Determine the correct partner for the invoice
-   * ALWAYS inherit the partner from the sale order to ensure proper linking
-   * (so qty_invoiced updates correctly on the sale order)
+   * Determine the correct partner for the invoice based on VCS data
+   * - B2B (buyer has VAT): Find or create partner by VAT number
+   * - B2C (no VAT): Use generic Amazon B2C partner for the destination country
+   *
+   * Note: Invoice lines link to order lines via sale_line_ids, so the invoice
+   * partner does NOT need to match the order partner for qty_invoiced to update.
+   *
    * @param {object} order - VCS order data
-   * @param {object} saleOrder - Odoo sale.order
-   * @returns {number} Partner ID
+   * @param {object} saleOrder - Odoo sale.order (not used for partner, only for reference)
+   * @returns {Promise<number>} Partner ID
    */
-  determinePartner(order, saleOrder) {
-    // Always use the sale order's partner to maintain proper order-invoice linking
-    // This ensures qty_invoiced is updated on the sale order
-    return saleOrder.partner_id[0];
+  async determinePartner(order, saleOrder) {
+    return await this.findOrCreatePartnerFromVcs(order);
+  }
+
+  /**
+   * Find or create partner based on VCS data
+   * - B2B: Find/create by VAT number
+   * - B2C: Use generic Amazon B2C partner for destination country
+   * @param {object} order - VCS order data
+   * @returns {Promise<number>} Partner ID
+   */
+  async findOrCreatePartnerFromVcs(order) {
+    const buyerVat = order.buyerTaxRegistration;
+    const shipToCountry = order.shipToCountry || 'BE';
+
+    // B2B: Customer has VAT number
+    if (buyerVat && buyerVat.trim() !== '') {
+      return await this.findOrCreateB2BPartner(buyerVat, shipToCountry);
+    }
+
+    // B2C: Use generic country-specific Amazon customer
+    return await this.findOrCreateB2CPartner(shipToCountry);
+  }
+
+  /**
+   * Find or create B2B partner by VAT number
+   * @param {string} vatNumber - Buyer's VAT registration number
+   * @param {string} countryCode - Destination country code
+   * @returns {Promise<number>} Partner ID
+   */
+  async findOrCreateB2BPartner(vatNumber, countryCode) {
+    const cleanVat = vatNumber.trim().toUpperCase();
+
+    // Search for existing partner by VAT
+    const existing = await this.odoo.searchRead('res.partner',
+      [['vat', '=', cleanVat]],
+      ['id', 'name']
+    );
+
+    if (existing.length > 0) {
+      console.log(`[VcsOdooInvoicer] Found B2B partner by VAT ${cleanVat}: ${existing[0].name} (ID: ${existing[0].id})`);
+      return existing[0].id;
+    }
+
+    // Get country ID
+    const countries = await this.odoo.searchRead('res.country',
+      [['code', '=', countryCode]],
+      ['id']
+    );
+    const countryId = countries.length > 0 ? countries[0].id : null;
+
+    // Create new B2B partner
+    const partnerName = `Amazon B2B | ${cleanVat}`;
+    const partnerId = await this.odoo.create('res.partner', {
+      name: partnerName,
+      company_type: 'company',
+      is_company: true,
+      customer_rank: 1,
+      vat: cleanVat,
+      country_id: countryId,
+      comment: `Amazon B2B customer created from VCS report. VAT: ${cleanVat}`,
+    });
+
+    console.log(`[VcsOdooInvoicer] Created B2B partner: ${partnerName} (ID: ${partnerId})`);
+    return partnerId;
+  }
+
+  /**
+   * Find or create generic B2C partner for a country
+   * Uses pattern: "Amazon | AMZ_B2C_{countryCode}"
+   * @param {string} countryCode - Destination country code
+   * @returns {Promise<number>} Partner ID
+   */
+  async findOrCreateB2CPartner(countryCode) {
+    const partnerName = `Amazon | AMZ_B2C_${countryCode}`;
+
+    // Check cache first
+    if (!this._b2cPartnerCache) {
+      this._b2cPartnerCache = {};
+    }
+    if (this._b2cPartnerCache[countryCode]) {
+      return this._b2cPartnerCache[countryCode];
+    }
+
+    // Search for existing B2C partner
+    const existing = await this.odoo.searchRead('res.partner',
+      [['name', '=', partnerName]],
+      ['id']
+    );
+
+    if (existing.length > 0) {
+      this._b2cPartnerCache[countryCode] = existing[0].id;
+      return existing[0].id;
+    }
+
+    // Get country ID
+    const countries = await this.odoo.searchRead('res.country',
+      [['code', '=', countryCode]],
+      ['id']
+    );
+    const countryId = countries.length > 0 ? countries[0].id : null;
+
+    // Create new B2C partner
+    const partnerId = await this.odoo.create('res.partner', {
+      name: partnerName,
+      company_type: 'company',
+      is_company: true,
+      customer_rank: 1,
+      country_id: countryId,
+      comment: `Generic Amazon B2C customer for ${countryCode} marketplace orders`,
+    });
+
+    console.log(`[VcsOdooInvoicer] Created B2C partner: ${partnerName} (ID: ${partnerId})`);
+    this._b2cPartnerCache[countryCode] = partnerId;
+    return partnerId;
   }
 
   /**
@@ -1212,8 +1331,8 @@ class VcsOdooInvoicer {
     const fiscalPosition = this.determineFiscalPosition(order);
     const journalId = this.determineJournal(order);
 
-    // Determine the correct partner (OSS orders use Amazon OSS partners)
-    const invoicePartnerId = this.determinePartner(order, saleOrder);
+    // Use the partnerId passed in (already determined from VCS data by caller)
+    const invoicePartnerId = partnerId;
 
     // VCS Invoice Number for reference fields
     const vcsInvoiceNumber = order.vatInvoiceNumber || null;
@@ -1419,9 +1538,10 @@ class VcsOdooInvoicer {
     }
 
     // Create the invoice linked to the sale order
+    // Use partnerId from VCS data (NOT inherited from sale order)
     const invoiceId = await this.odoo.create('account.move', {
       move_type: 'out_invoice',
-      partner_id: saleOrder.partner_id[0],
+      partner_id: partnerId,
       invoice_origin: saleOrder.name,
       invoice_line_ids: invoiceLines,
     });
@@ -1998,10 +2118,13 @@ class VcsOdooInvoicer {
     const teamId = this.determineSalesTeam(order);
     const returnDate = getEffectiveInvoiceDate(order.returnDate || order.shipmentDate || new Date());
 
+    // Determine partner from VCS data (NOT inherited from sale order)
+    const partnerId = await this.determinePartner(order, saleOrder);
+
     // Create the credit note
     const creditNoteId = await this.odoo.create('account.move', {
       move_type: 'out_refund',
-      partner_id: saleOrder.partner_id[0],
+      partner_id: partnerId,
       invoice_origin: saleOrder.name,
       invoice_date: this.formatDate(returnDate),
       ref: order.vatInvoiceNumber || `RETURN-${order.orderId}`,
