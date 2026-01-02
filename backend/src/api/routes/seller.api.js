@@ -360,6 +360,36 @@ router.post('/orders/preview-fbm', uploadFbm.single('file'), async (req, res) =>
   }
 });
 
+/**
+ * @route POST /api/seller/orders/retry-fbm
+ * @desc Retry importing a single FBM order with corrected SKU mapping
+ * @body orderData - Full order data from failed import
+ * @body skuMappings - Object mapping original SKU to corrected Odoo SKU
+ */
+router.post('/orders/retry-fbm', async (req, res) => {
+  try {
+    const { orderData, skuMappings } = req.body;
+
+    if (!orderData || !orderData.orderId) {
+      return res.status(400).json({ success: false, error: 'Missing orderData' });
+    }
+
+    if (!skuMappings || Object.keys(skuMappings).length === 0) {
+      return res.status(400).json({ success: false, error: 'Missing skuMappings' });
+    }
+
+    const { getFbmOrderImporter } = require('../../services/amazon/seller/FbmOrderImporter');
+    const importer = await getFbmOrderImporter();
+
+    const result = await importer.retryOrderWithSku(orderData, skuMappings);
+
+    res.json(result);
+  } catch (error) {
+    console.error('[SellerAPI] POST /orders/retry-fbm error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== HISTORICAL IMPORT ====================
 
 /**

@@ -76,6 +76,16 @@
     .progress-bar { height: 8px; background: #252532; border-radius: 4px; overflow: hidden; }
     .progress-fill { height: 100%; background: linear-gradient(90deg, #f59e0b, #fbbf24); transition: width 0.3s; }
     .progress-text { font-size: 13px; color: #a1a1aa; margin-top: 8px; text-align: center; }
+    .address-cell { font-size: 12px; line-height: 1.4; }
+    .address-street { color: #e4e4e7; }
+    .address-city { color: #a1a1aa; }
+    .sku-fix-row { background: #1a1a28; }
+    .sku-fix-input { background: #12121a; border: 1px solid #3f3f50; border-radius: 6px; padding: 6px 10px; color: #e4e4e7; font-size: 13px; width: 120px; margin-right: 8px; }
+    .sku-fix-input:focus { border-color: #f59e0b; outline: none; }
+    .btn-small { padding: 5px 12px; font-size: 12px; }
+    .btn-small .material-symbols-outlined { font-size: 16px; }
+    .sku-error-label { color: #f87171; font-weight: 600; }
+    .sku-original { color: #71717a; font-family: monospace; }
   </style>
 </head>
 <body>
@@ -229,7 +239,7 @@
                 <th>Order ID</th>
                 <th>Status</th>
                 <th>Odoo Order</th>
-                <th>Customer</th>
+                <th>Customer / Address</th>
                 <th>Details</th>
               </tr>
             </thead>
@@ -429,6 +439,18 @@
       }
     }
 
+    // Store error data for retries
+    let pendingErrors = [];
+
+    function formatAddress(addr) {
+      if (!addr) return '-';
+      const parts = [];
+      if (addr.street) parts.push(`<span class="address-street">${addr.street}</span>`);
+      const cityLine = [addr.postalCode, addr.city, addr.country].filter(Boolean).join(' ');
+      if (cityLine) parts.push(`<span class="address-city">${cityLine}</span>`);
+      return parts.length > 0 ? `<div class="address-cell">${parts.join('<br>')}</div>` : '-';
+    }
+
     function showResults(data) {
       document.getElementById('preview-section').classList.remove('show');
       document.getElementById('results-section').classList.add('show');
@@ -441,8 +463,14 @@
       const tbody = document.getElementById('results-table');
       const orders = data.orders || [];
 
-      tbody.innerHTML = orders.map(order => {
+      // Store errors for potential retry
+      pendingErrors = (data.errors || []).filter(e => e.errorType === 'sku_not_found');
+
+      let html = orders.map(order => {
         let statusBadge, details;
+        const customerCell = order.customer
+          ? `<strong>${order.customer}</strong><br>${formatAddress(order.address)}`
+          : formatAddress(order.address);
 
         if (order.status === 'created') {
           statusBadge = '<span class="badge badge-created">Created</span>';
@@ -460,28 +488,132 @@
             <td>${order.orderId}</td>
             <td>${statusBadge}</td>
             <td>${order.odooName || '-'}</td>
-            <td>${order.customer || '-'}</td>
+            <td>${customerCell}</td>
             <td>${details}</td>
           </tr>
         `;
       }).join('');
 
-      // Add errors
+      // Add SKU errors with correction UI
       if (data.errors && data.errors.length > 0) {
-        data.errors.forEach(err => {
-          tbody.innerHTML += `
-            <tr>
-              <td>${err.orderId || '-'}</td>
-              <td><span class="badge badge-error">Error</span></td>
-              <td>-</td>
-              <td>-</td>
-              <td>${err.error}</td>
-            </tr>
-          `;
+        data.errors.forEach((err, index) => {
+          const customerCell = err.customer
+            ? `<strong>${err.customer}</strong><br>${formatAddress(err.address)}`
+            : formatAddress(err.address);
+
+          if (err.errorType === 'sku_not_found') {
+            // SKU not found error - show correction UI
+            html += `
+              <tr class="sku-fix-row" id="error-row-${index}">
+                <td>${err.orderId || '-'}</td>
+                <td><span class="badge badge-error">Error</span></td>
+                <td>-</td>
+                <td>${customerCell}</td>
+                <td>
+                  <div class="sku-error-label">SKU not found:</div>
+                  <code class="sku-original">${err.sku}</code>
+                  <div style="margin-top: 8px;">
+                    <span style="color: #a1a1aa;">Correct SKU:</span>
+                    <input type="text" class="sku-fix-input" id="sku-input-${index}" placeholder="e.g. ${err.resolvedSku || err.sku}">
+                    <button class="btn btn-primary btn-small" onclick="retrySku(${index})">
+                      <span class="material-symbols-outlined">save</span>
+                      Save
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          } else {
+            // Other errors
+            html += `
+              <tr>
+                <td>${err.orderId || '-'}</td>
+                <td><span class="badge badge-error">Error</span></td>
+                <td>-</td>
+                <td>${customerCell}</td>
+                <td>${err.error}</td>
+              </tr>
+            `;
+          }
         });
       }
 
+      tbody.innerHTML = html;
       showToast(`Import complete: ${data.created} created, ${data.skipped} skipped`);
+    }
+
+    async function retrySku(errorIndex) {
+      const error = pendingErrors[errorIndex];
+      if (!error || !error.orderData) {
+        showToast('Error: Missing order data for retry', 'error');
+        return;
+      }
+
+      const inputEl = document.getElementById(`sku-input-${errorIndex}`);
+      const correctedSku = inputEl?.value?.trim();
+
+      if (!correctedSku) {
+        showToast('Please enter a correct SKU', 'error');
+        return;
+      }
+
+      const rowEl = document.getElementById(`error-row-${errorIndex}`);
+      const btn = rowEl.querySelector('button');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">sync</span> Saving...';
+
+      try {
+        const res = await fetch('/api/seller/orders/retry-fbm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderData: error.orderData,
+            skuMappings: { [error.sku]: correctedSku }
+          })
+        });
+
+        const result = await res.json();
+
+        if (result.success && result.status === 'created') {
+          // Success! Update the row
+          const customerCell = result.customer
+            ? `<strong>${result.customer}</strong><br>${formatAddress(result.address)}`
+            : formatAddress(result.address);
+
+          rowEl.className = '';
+          rowEl.innerHTML = `
+            <td>${result.orderId}</td>
+            <td><span class="badge badge-created">Created</span></td>
+            <td>${result.odooName || '-'}</td>
+            <td>${customerCell}</td>
+            <td>Fixed: ${error.sku} → ${correctedSku}</td>
+          `;
+
+          // Update counts
+          const createdEl = document.getElementById('result-created');
+          const errorsEl = document.getElementById('result-errors');
+          createdEl.textContent = parseInt(createdEl.textContent) + 1;
+          errorsEl.textContent = Math.max(0, parseInt(errorsEl.textContent) - 1);
+
+          showToast(`Order ${result.odooName} created successfully!`, 'success');
+        } else {
+          // Still error - show new error message
+          const errMsg = result.error || 'Unknown error';
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined">save</span> Save';
+          showToast(`Error: ${errMsg}`, 'error');
+
+          // Update the error label if SKU still not found
+          if (result.errorType === 'sku_not_found') {
+            const label = rowEl.querySelector('.sku-error-label');
+            if (label) label.textContent = `SKU "${correctedSku}" not found. Try again:`;
+          }
+        }
+      } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined">save</span> Save';
+        showToast(`Error: ${e.message}`, 'error');
+      }
     }
 
     function resetImport() {

@@ -604,7 +604,14 @@ class FbmOrderImporter {
               orderId,
               status: 'skipped',
               reason: `Exists as ${existing.name}`,
-              odooName: existing.name
+              odooName: existing.name,
+              customer: order.recipientName,
+              address: {
+                street: order.address1,
+                city: order.city,
+                postalCode: order.postalCode,
+                country: order.country
+              }
             });
             continue;
           }
@@ -621,7 +628,19 @@ class FbmOrderImporter {
             if (!productId) {
               results.errors.push({
                 orderId,
-                error: `Product not found: ${item.sku} -> ${item.resolvedSku}`
+                error: `Product not found: ${item.sku} -> ${item.resolvedSku}`,
+                errorType: 'sku_not_found',
+                sku: item.sku,
+                resolvedSku: item.resolvedSku,
+                customer: order.recipientName,
+                address: {
+                  street: order.address1,
+                  city: order.city,
+                  postalCode: order.postalCode,
+                  country: order.country
+                },
+                // Include full order data for retry
+                orderData: order
               });
               hasError = true;
               break;
@@ -656,7 +675,13 @@ class FbmOrderImporter {
             status: 'created',
             odooId: created.id,
             odooName: created.name,
-            customer: order.recipientName
+            customer: order.recipientName,
+            address: {
+              street: order.address1,
+              city: order.city,
+              postalCode: order.postalCode,
+              country: order.country
+            }
           });
 
         } catch (error) {
@@ -672,6 +697,106 @@ class FbmOrderImporter {
     }
 
     return results;
+  }
+
+  /**
+   * Retry importing a single order with a corrected SKU mapping
+   * @param {Object} orderData - Full order data from previous failed import
+   * @param {Object} skuMappings - Map of original SKU -> correct Odoo SKU
+   * @returns {Object} Import result for this single order
+   */
+  async retryOrderWithSku(orderData, skuMappings) {
+    await this.init();
+
+    const order = orderData;
+    const orderId = order.orderId;
+
+    // Check if valid order already exists
+    const existing = await this.findValidOrder(orderId);
+    if (existing) {
+      return {
+        success: false,
+        orderId,
+        status: 'skipped',
+        reason: `Exists as ${existing.name}`,
+        odooName: existing.name
+      };
+    }
+
+    // Find/create customer
+    const { customerId, invoiceAddressId, shippingAddressId } = await this.findOrCreateCustomer(order);
+
+    // Resolve order lines with corrected SKU mappings
+    const orderLines = [];
+
+    for (const item of order.items) {
+      // Check if there's a corrected SKU for this item
+      const correctedSku = skuMappings[item.sku];
+
+      let productId = null;
+
+      if (correctedSku) {
+        // Use the corrected SKU to find the product
+        const products = await this.odoo.searchRead('product.product',
+          [['default_code', '=', correctedSku]],
+          ['id', 'name']
+        );
+        if (products.length > 0) {
+          productId = products[0].id;
+        }
+      }
+
+      // If still not found, try original resolution
+      if (!productId) {
+        productId = await this.findProduct(item.resolvedSku, item.sku);
+      }
+
+      if (!productId) {
+        return {
+          success: false,
+          orderId,
+          status: 'error',
+          errorType: 'sku_not_found',
+          error: `Product not found: ${correctedSku || item.sku}`,
+          sku: item.sku,
+          correctedSku: correctedSku || null
+        };
+      }
+
+      const priceUnit = item.quantity > 0 ? item.itemPrice / item.quantity : 0;
+
+      orderLines.push({
+        product_id: productId,
+        quantity: item.quantity,
+        price_unit: priceUnit,
+        name: item.productName || correctedSku || item.resolvedSku
+      });
+    }
+
+    // Create order
+    const created = await this.createOdooOrder(order, customerId, invoiceAddressId, shippingAddressId, orderLines);
+
+    // Update MongoDB
+    await this.updateMongoWithTsvData(orderId, order, {
+      partnerId: customerId,
+      saleOrderId: created.id,
+      saleOrderName: created.name
+    });
+
+    return {
+      success: true,
+      orderId,
+      status: 'created',
+      odooId: created.id,
+      odooName: created.name,
+      customer: order.recipientName,
+      address: {
+        street: order.address1,
+        city: order.city,
+        postalCode: order.postalCode,
+        country: order.country
+      }
+    };
   }
 }
 
