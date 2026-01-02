@@ -645,6 +645,7 @@ class VcsOdooInvoicer {
       skipped: 0,
       errors: [],
       invoices: [],
+      skippedOrders: [],  // Track skipped orders with reasons
     };
 
     if (orderIds.length === 0) {
@@ -692,6 +693,11 @@ class VcsOdooInvoicer {
         // Skip orders that shouldn't be invoiced
         if (this.shouldSkipOrder(order)) {
           result.skipped++;
+          result.skippedOrders.push({
+            orderId: order.orderId,
+            reason: 'Not invoiceable (cancelled or return)',
+            customerName: order.buyerName || null,
+          });
           await this.markOrderSkipped(order._id, 'Not invoiceable');
           continue;
         }
@@ -721,6 +727,12 @@ class VcsOdooInvoicer {
         const existingInvoice = await this.findExistingInvoice(saleOrder.name);
         if (existingInvoice) {
           result.skipped++;
+          result.skippedOrders.push({
+            orderId: order.orderId,
+            reason: `Invoice already exists: ${existingInvoice.name}`,
+            customerName: order.buyerName || null,
+            odooOrderName: saleOrder.name,
+          });
           await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
           continue;
         }
