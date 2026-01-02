@@ -28,6 +28,37 @@ const {
 } = require('./SellerMarketplaceConfig');
 const { euCountryConfig } = require('../EuCountryConfig');
 const { skuResolver } = require('../SkuResolver');
+const { getAddressCleaner, LEGAL_TERMS_REGEX } = require('./AddressCleaner');
+
+/**
+ * Clean duplicate names like "elodie da cunha, DA CUNHA Elodie"
+ * Amazon sometimes concatenates recipient-name + buyer-name
+ *
+ * @param {string} name - Raw name from Amazon
+ * @returns {string} Cleaned name
+ */
+function cleanDuplicateName(name) {
+  if (!name) return name;
+
+  // Check for comma-separated duplicate (e.g., "John Smith, SMITH John")
+  const parts = name.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length === 2) {
+    const part1Words = parts[0].toLowerCase().split(/\s+/).sort();
+    const part2Words = parts[1].toLowerCase().split(/\s+/).sort();
+
+    // If both parts contain the same words (just reordered), use the first one
+    if (part1Words.join(' ') === part2Words.join(' ')) {
+      // Prefer the version that's not ALL CAPS
+      if (parts[0] === parts[0].toUpperCase() && parts[1] !== parts[1].toUpperCase()) {
+        return parts[1];
+      }
+      return parts[0];
+    }
+  }
+
+  // Remove legal terms
+  return name.replace(LEGAL_TERMS_REGEX, '').trim();
+}
 
 /**
  * Payment term ID for "21 Days" in Odoo
@@ -480,16 +511,16 @@ class SellerOrderCreator {
 
     // Build customer name
     // Priority: name > buyerName > location-based name > generic
-    let customerName = address.name;
+    let customerName = cleanDuplicateName(address.name);
 
     // Try buyer name if shipping name is empty
     if (!customerName && order.buyerName) {
-      customerName = order.buyerName;
+      customerName = cleanDuplicateName(order.buyerName);
     }
 
     // For B2B: use company name if available
     if (order.isBusinessOrder && order.buyerCompanyName) {
-      customerName = order.buyerCompanyName;
+      customerName = cleanDuplicateName(order.buyerCompanyName);
     }
 
     // If still no name, create location-based customer using city/postal code
@@ -573,7 +604,8 @@ class SellerOrderCreator {
       } else {
         // Create new shipping address as child contact
         // Use customerName as delivery contact name if address.name is missing
-        const deliveryName = address.name || customerName;
+        // Clean the name to remove duplicates like "John Smith, SMITH John"
+        const deliveryName = cleanDuplicateName(address.name) || customerName;
         shippingAddressId = await this.odoo.create('res.partner', {
           parent_id: customerId,
           type: 'delivery',
