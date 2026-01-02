@@ -172,11 +172,12 @@ async function bolRequest(endpoint, method = 'GET', body = null, retries = 3) {
  * Make a request to Bol.com Advertising API (v11)
  * Uses separate credentials (BOL_ADVERTISER_ID / BOL_ADVERTISER_SECRET)
  *
- * IMPORTANT: As of v11, the Advertising API uses:
+ * IMPORTANT: v11 API format (Updated January 2026):
  * - Base URL: https://api.bol.com/advertiser/sponsored-products/campaign-management
- * - Listing endpoints use POST with /list suffix (e.g., POST /campaigns/list)
+ * - Listing endpoints use PUT with empty array body (e.g., PUT /campaigns with {"campaigns": []})
  * - Create endpoints use POST (e.g., POST /campaigns)
- * - Update endpoints use PUT (e.g., PUT /campaigns)
+ * - Update endpoints use PUT with full object
+ * - Listing returns HTTP 207 Multi-Status
  *
  * See: https://api.bol.com/advertiser/docs/redoc/sponsored-products/v11/campaign-management.html
  */
@@ -1433,37 +1434,34 @@ router.get('/fbb/stats', async (req, res) => {
 
 /**
  * Get all advertising campaigns
- * Query params: state (ENABLED, PAUSED, ARCHIVED), page, pageSize
+ * Query params: state (ENABLED, PAUSED, ARCHIVED), campaignIds
  *
- * NOTE: In v11, listing uses POST /campaigns/list with filter body.
+ * NOTE: In v11, listing uses PUT /campaigns with body {"campaigns": []}.
+ * Returns HTTP 207 Multi-Status.
  * See: https://api.bol.com/advertiser/docs/redoc/sponsored-products/v11/campaign-management.html
  */
 router.get('/advertising/campaigns', async (req, res) => {
   try {
-    const { state, page = 1, pageSize = 50, campaignIds } = req.query;
+    const { state, campaignIds } = req.query;
 
-    // Build filter body for POST /campaigns/list request (v11 style)
-    const filterBody = {
-      page: parseInt(page, 10),
-      pageSize: Math.min(parseInt(pageSize, 10) || 50, 100) // Max 100 per page
+    // v11 API: PUT /campaigns with {"campaigns": []} for all, or {"campaigns": ["id1"]} for specific
+    // NOTE: v11 doesn't support page/pageSize in the request body - returns all matching
+    const requestBody = {
+      campaigns: campaignIds
+        ? (Array.isArray(campaignIds) ? campaignIds : [campaignIds])
+        : []
     };
 
-    // Add filter if campaign IDs or states provided
-    if (campaignIds || state) {
-      filterBody.filter = {};
-      if (campaignIds) {
-        filterBody.filter.campaignIds = Array.isArray(campaignIds) ? campaignIds : [campaignIds];
-      }
-      if (state) {
-        filterBody.filter.states = Array.isArray(state) ? state : [state];
-      }
-    }
+    // v11 uses PUT /campaigns with campaigns array body (returns 207)
+    const data = await advertiserRequest('/campaigns', 'PUT', requestBody);
 
-    // v11 uses POST /campaigns/list with filter body
-    const data = await advertiserRequest('/campaigns/list', 'POST', filterBody);
+    // v11 returns campaigns as object { campaignId: {...} }, convert to array
+    const campaignsObj = data.campaigns || {};
+    let campaigns = Array.isArray(campaignsObj)
+      ? campaignsObj
+      : Object.values(campaignsObj);
 
-    // Filter by state client-side if requested (API may not support state filter in PUT)
-    let campaigns = data.campaigns || [];
+    // Filter by state client-side if requested
     if (state) {
       campaigns = campaigns.filter(c => c.state === state);
     }
@@ -1494,20 +1492,18 @@ router.get('/advertising/campaigns', async (req, res) => {
 
 /**
  * Get single campaign details
- * NOTE: In v11, use POST /campaigns/list with campaignIds filter to get specific campaigns
+ * NOTE: In v11, use PUT /campaigns with {"campaigns": ["campaignId"]}
  */
 router.get('/advertising/campaigns/:campaignId', async (req, res) => {
   try {
-    // v11 uses POST /campaigns/list with filter to get specific campaign
-    const data = await advertiserRequest('/campaigns/list', 'POST', {
-      filter: {
-        campaignIds: [req.params.campaignId]
-      },
-      page: 1,
-      pageSize: 1
+    // v11 uses PUT /campaigns with campaign ID in array
+    const data = await advertiserRequest('/campaigns', 'PUT', {
+      campaigns: [req.params.campaignId]
     });
 
-    const campaign = data.campaigns?.[0];
+    // Response format: { campaigns: { campaignId: {...} } }
+    const campaignsObj = data.campaigns || {};
+    const campaign = campaignsObj[req.params.campaignId] || Object.values(campaignsObj)[0];
     if (!campaign) {
       return res.status(404).json({ success: false, error: 'Campaign not found' });
     }
@@ -1520,25 +1516,26 @@ router.get('/advertising/campaigns/:campaignId', async (req, res) => {
 
 /**
  * Get ad groups for a campaign
- * NOTE: In v11, use POST /ad-groups/list with filter body
+ * NOTE: In v11, use PUT /adgroups with {"adGroups": []}
  */
 router.get('/advertising/campaigns/:campaignId/ad-groups', async (req, res) => {
   try {
-    const { page = 1, pageSize = 50 } = req.query;
-
-    // v11 uses POST /ad-groups/list with filter body
-    const data = await advertiserRequest('/ad-groups/list', 'POST', {
-      filter: {
-        campaignIds: [req.params.campaignId]
-      },
-      page: parseInt(page, 10),
-      pageSize: Math.min(parseInt(pageSize, 10) || 50, 100)
+    // v11 uses PUT /adgroups with adGroups array body
+    // Note: endpoint is /adgroups not /ad-groups
+    const data = await advertiserRequest('/adgroups', 'PUT', {
+      adGroups: []  // Empty array returns all ad groups
     });
+
+    // Filter by campaignId client-side since v11 doesn't support filter in body
+    const allAdGroups = data.adGroups || {};
+    const adGroupsList = Object.values(allAdGroups).filter(
+      ag => ag.campaignId === req.params.campaignId
+    );
 
     res.json({
       success: true,
-      count: data.adGroups?.length || 0,
-      adGroups: (data.adGroups || []).map(ag => ({
+      count: adGroupsList.length,
+      adGroups: adGroupsList.map(ag => ({
         adGroupId: ag.adGroupId,
         campaignId: ag.campaignId,
         name: ag.name,
@@ -1553,25 +1550,25 @@ router.get('/advertising/campaigns/:campaignId/ad-groups', async (req, res) => {
 
 /**
  * Get keywords for an ad group
- * NOTE: In v11, use POST /keywords/list with filter body
+ * NOTE: In v11, use PUT /keywords with {"keywords": []}
  */
 router.get('/advertising/ad-groups/:adGroupId/keywords', async (req, res) => {
   try {
-    const { page = 1, pageSize = 50 } = req.query;
-
-    // v11 uses POST /keywords/list with filter body
-    const data = await advertiserRequest('/keywords/list', 'POST', {
-      filter: {
-        adGroupIds: [req.params.adGroupId]
-      },
-      page: parseInt(page, 10),
-      pageSize: Math.min(parseInt(pageSize, 10) || 50, 100)
+    // v11 uses PUT /keywords with keywords array body
+    const data = await advertiserRequest('/keywords', 'PUT', {
+      keywords: []  // Empty array returns all keywords
     });
+
+    // Filter by adGroupId client-side since v11 doesn't support filter in body
+    const allKeywords = data.keywords || {};
+    const keywordsList = Object.values(allKeywords).filter(
+      k => k.adGroupId === req.params.adGroupId
+    );
 
     res.json({
       success: true,
-      count: data.keywords?.length || 0,
-      keywords: (data.keywords || []).map(k => ({
+      count: keywordsList.length,
+      keywords: keywordsList.map(k => ({
         keywordId: k.keywordId,
         adGroupId: k.adGroupId,
         keywordText: k.keywordText,
@@ -1834,7 +1831,7 @@ router.put('/advertising/campaigns/:campaignId/budget', async (req, res) => {
 
 /**
  * Get advertising account overview
- * NOTE: In v11, uses POST /campaigns/list for listing campaigns
+ * NOTE: In v11, uses PUT /campaigns with {"campaigns": []}
  */
 router.get('/advertising/overview', async (req, res) => {
   try {
@@ -1842,14 +1839,13 @@ router.get('/advertising/overview', async (req, res) => {
     const endDate = new Date().toISOString().split('T')[0];
     const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    // Fetch campaigns using POST /campaigns/list
+    // Fetch campaigns using PUT /campaigns
     const [campaignsData, costsData] = await Promise.all([
-      // v11: Use POST /campaigns/list with filter body
-      advertiserRequest('/campaigns/list', 'POST', {
-        page: 1,
-        pageSize: 50
-      }).catch(() => ({ campaigns: [] })),
-      // v11: Use POST to request performance report (endpoint TBD)
+      // v11: Use PUT /campaigns with empty campaigns array
+      advertiserRequest('/campaigns', 'PUT', {
+        campaigns: []
+      }).catch(() => ({ campaigns: {} })),
+      // v11: Reporting endpoint - may not work yet (returns 404)
       advertiserRequest('/reports/performance', 'POST', {
         startDate,
         endDate,
@@ -1857,8 +1853,12 @@ router.get('/advertising/overview', async (req, res) => {
       }).catch(() => ({ rows: [] }))
     ]);
 
-    // Filter to only ENABLED campaigns
-    const activeCampaigns = (campaignsData.campaigns || []).filter(c => c.state === 'ENABLED');
+    // v11 returns campaigns as object { campaignId: {...} }, convert to array
+    const campaignsObj = campaignsData.campaigns || {};
+    const campaignsList = Array.isArray(campaignsObj)
+      ? campaignsObj
+      : Object.values(campaignsObj);
+    const activeCampaigns = campaignsList.filter(c => c.state === 'ENABLED');
 
     // Calculate totals from performance data
     let totalSpend = 0;
@@ -1879,7 +1879,7 @@ router.get('/advertising/overview', async (req, res) => {
       success: true,
       overview: {
         activeCampaigns: activeCampaigns.length,
-        totalCampaigns: campaignsData.campaigns?.length || 0,
+        totalCampaigns: campaignsList.length,
         last30Days: {
           spend: totalSpend.toFixed(2),
           clicks: totalClicks,
