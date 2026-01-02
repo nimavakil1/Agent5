@@ -443,9 +443,14 @@ async function bookInvoice(invoiceId) {
   }
 
   try {
-    // Download PDF and Excel from Bol.com API
-    console.log(`[BolInvoiceBooker] Downloading PDF...`);
-    const pdfBuffer = await downloadInvoicePdf(invoiceId);
+    // Download PDF (optional) and Excel from Bol.com API
+    let pdfBuffer = null;
+    try {
+      console.log(`[BolInvoiceBooker] Downloading PDF...`);
+      pdfBuffer = await downloadInvoicePdf(invoiceId);
+    } catch (pdfError) {
+      console.warn(`[BolInvoiceBooker] ⚠️ PDF download failed (will continue without it): ${pdfError.message}`);
+    }
 
     console.log(`[BolInvoiceBooker] Downloading Excel specification...`);
     const excelBuffer = await downloadInvoiceExcel(invoiceId);
