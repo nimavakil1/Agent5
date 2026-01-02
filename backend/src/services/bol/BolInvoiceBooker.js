@@ -414,6 +414,22 @@ async function createVendorBill(invoice, parsedCharges, pdfBuffer) {
       message_main_attachment_id: attachmentId
     });
     console.log(`[BolInvoiceBooker] Set PDF as main attachment for preview`);
+
+    // Link attachment to a message (required for preview to work)
+    // Find the creation message on the bill
+    const messages = await odooClient.searchRead('mail.message',
+      [['model', '=', 'account.move'], ['res_id', '=', billId]],
+      ['id'],
+      { limit: 1, order: 'id asc' }
+    );
+
+    if (messages.length > 0) {
+      // Link attachment to the message using ORM command [4, id] = add link
+      await odooClient.write('mail.message', [messages[0].id], {
+        attachment_ids: [[4, attachmentId]]
+      });
+      console.log(`[BolInvoiceBooker] Linked attachment to message ${messages[0].id}`);
+    }
   }
 
   return {
