@@ -130,25 +130,11 @@ class SellerOrderScheduler {
 
       console.log(`[SellerOrderScheduler] Poll complete: ${pollResult.ordersFound} orders found, ${pollResult.ordersUpserted} upserted`);
 
-      // Auto-create Odoo orders for new eligible orders
-      if (this.autoCreateOdoo && this.creator) {
-        try {
-          const createResult = await this.creator.createPendingOrders({
-            limit: 50,
-            autoConfirm: true
-          });
-
-          console.log(`[SellerOrderScheduler] Auto-created ${createResult.created} Odoo orders`);
-
-          pollResult.odooCreated = createResult.created;
-          pollResult.odooSkipped = createResult.skipped;
-          pollResult.odooErrors = createResult.errors;
-
-        } catch (createError) {
-          console.error('[SellerOrderScheduler] Auto-create error:', createError.message);
-          pollResult.odooCreateError = createError.message;
-        }
-      }
+      // NOTE: Auto-create Odoo orders is DISABLED
+      // Orders should be created via:
+      // 1. FBM TSV import (for FBM orders with full address)
+      // 2. VCS invoice import (creates order + invoice together)
+      // The scheduler only polls and stores orders in MongoDB for visibility
 
       // Sync FBA shipments (Amazon → Odoo pickings)
       if (this.autoSyncShipments && this.shipmentSync) {

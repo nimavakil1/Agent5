@@ -12,8 +12,9 @@
  * 4. Set payment_reference and ref to the VCS invoice number
  * 5. Include shipping from VCS data
  *
- * IMPORTANT: Requires existing Odoo sales order (created by Make.com import).
- * Will NOT create invoices for orders that don't exist in Odoo.
+ * ORDER CREATION:
+ * If no Odoo order exists, VCS import will CREATE the order from VCS data.
+ * Orders can also be pre-created via FBM TSV import (with full address data).
  */
 
 const { getDb } = require('../../db');
@@ -515,16 +516,23 @@ class VcsOdooInvoicer {
           continue;
         }
 
-        // REQUIRED: Find existing Odoo order
-        const odooOrderData = await this.findOdooOrder(order);
+        // Find existing Odoo order or create one from VCS data
+        let odooOrderData = await this.findOdooOrder(order);
         if (!odooOrderData) {
-          result.skipped++;
-          await this.markOrderSkipped(order._id, 'No matching Odoo order found');
-          result.errors.push({
-            orderId: order.orderId,
-            error: 'No matching Odoo order found - order must exist in Odoo first',
-          });
-          continue;
+          // No existing order - create one from VCS data
+          console.log(`[VcsOdooInvoicer] No Odoo order found for ${order.orderId}, creating from VCS data...`);
+          try {
+            odooOrderData = await this.createOrderFromVcs(order);
+            console.log(`[VcsOdooInvoicer] Created order ${odooOrderData.saleOrder.name} for ${order.orderId}`);
+          } catch (createError) {
+            result.skipped++;
+            await this.markOrderSkipped(order._id, `Failed to create order: ${createError.message}`);
+            result.errors.push({
+              orderId: order.orderId,
+              error: `Failed to create order: ${createError.message}`,
+            });
+            continue;
+          }
         }
 
         const { saleOrder, orderLines } = odooOrderData;
@@ -676,16 +684,23 @@ class VcsOdooInvoicer {
           continue;
         }
 
-        // REQUIRED: Find existing Odoo order
-        const odooOrderData = await this.findOdooOrder(order);
+        // Find existing Odoo order or create one from VCS data
+        let odooOrderData = await this.findOdooOrder(order);
         if (!odooOrderData) {
-          result.skipped++;
-          await this.markOrderSkipped(order._id, 'No matching Odoo order found');
-          result.errors.push({
-            orderId: order.orderId,
-            error: 'No matching Odoo order found - order must exist in Odoo first',
-          });
-          continue;
+          // No existing order - create one from VCS data
+          console.log(`[VcsOdooInvoicer] No Odoo order found for ${order.orderId}, creating from VCS data...`);
+          try {
+            odooOrderData = await this.createOrderFromVcs(order);
+            console.log(`[VcsOdooInvoicer] Created order ${odooOrderData.saleOrder.name} for ${order.orderId}`);
+          } catch (createError) {
+            result.skipped++;
+            await this.markOrderSkipped(order._id, `Failed to create order: ${createError.message}`);
+            result.errors.push({
+              orderId: order.orderId,
+              error: `Failed to create order: ${createError.message}`,
+            });
+            continue;
+          }
         }
 
         const { saleOrder, orderLines } = odooOrderData;
@@ -900,6 +915,177 @@ class VcsOdooInvoicer {
     const order = orders[0];
     const orderLines = await this.getOrderLines(order.order_line);
     return { saleOrder: order, orderLines };
+  }
+
+  /**
+   * Create a sale order in Odoo from VCS data
+   * Used when no existing order is found during invoice import
+   *
+   * @param {object} vcsOrder - VCS order data
+   * @returns {object} { saleOrder, orderLines }
+   */
+  async createOrderFromVcs(vcsOrder) {
+    const amazonOrderId = vcsOrder.orderId;
+
+    // Determine if FBA or FBM based on ship-from country
+    // FBM ships from BE (our warehouse), FBA ships from Amazon warehouses (DE, FR, etc.)
+    const shipFromCountry = vcsOrder.shipFromCountry || 'BE';
+    const isFBA = shipFromCountry !== 'BE';
+    const orderPrefix = isFBA ? 'FBA' : 'FBM';
+    const orderName = `${orderPrefix}${amazonOrderId}`;
+
+    // Determine partner from VCS data
+    const partnerId = await this.determinePartner(vcsOrder, null);
+
+    // Resolve products from VCS items
+    const orderLines = [];
+    for (const item of (vcsOrder.items || [])) {
+      const sku = item.sku;
+      const transformedSku = this.transformSku(sku);
+
+      // Find product in Odoo
+      let products = await this.odoo.searchRead('product.product',
+        [['default_code', '=', transformedSku]],
+        ['id', 'name', 'default_code']
+      );
+
+      if (products.length === 0) {
+        // Try original SKU
+        products = await this.odoo.searchRead('product.product',
+          [['default_code', '=', sku]],
+          ['id', 'name', 'default_code']
+        );
+      }
+
+      if (products.length === 0) {
+        console.warn(`[VcsOdooInvoicer] Product not found for SKU: ${sku} (transformed: ${transformedSku})`);
+        continue;
+      }
+
+      const product = products[0];
+      const quantity = parseFloat(item.quantity) || 1;
+      const priceUnit = parseFloat(item.itemPriceExclTax || item.totalExclusive || 0) / quantity;
+
+      orderLines.push([0, 0, {
+        product_id: product.id,
+        product_uom_qty: quantity,
+        price_unit: priceUnit,
+        name: product.name || transformedSku,
+      }]);
+    }
+
+    if (orderLines.length === 0) {
+      throw new Error(`No products found for order ${amazonOrderId}`);
+    }
+
+    // Determine warehouse
+    const warehouseId = await this.getWarehouseForOrder(shipFromCountry, isFBA);
+
+    // Get order date
+    const orderDate = vcsOrder.orderDate || vcsOrder.shipmentDate || new Date().toISOString();
+    const formattedDate = typeof orderDate === 'string'
+      ? orderDate.split('T')[0]
+      : orderDate.toISOString().split('T')[0];
+
+    // Create the sale order
+    const saleOrderId = await this.odoo.create('sale.order', {
+      name: orderName,
+      partner_id: partnerId,
+      partner_invoice_id: partnerId,
+      partner_shipping_id: partnerId,
+      client_order_ref: amazonOrderId,
+      date_order: formattedDate,
+      warehouse_id: warehouseId,
+      order_line: orderLines,
+      team_id: 11, // Amazon Seller team
+    });
+
+    console.log(`[VcsOdooInvoicer] Created sale order ${orderName} (ID: ${saleOrderId})`);
+
+    // Confirm the order
+    try {
+      await this.odoo.execute('sale.order', 'action_confirm', [[saleOrderId]]);
+      console.log(`[VcsOdooInvoicer] Confirmed order ${orderName}`);
+    } catch (confirmError) {
+      console.warn(`[VcsOdooInvoicer] Could not confirm order ${orderName}: ${confirmError.message}`);
+    }
+
+    // For FBA/SHIPMENT orders, set qty_delivered to match ordered qty
+    // This ensures invoicing works correctly
+    if (isFBA || vcsOrder.transactionType === 'SHIPMENT') {
+      const createdOrderLines = await this.odoo.searchRead('sale.order.line',
+        [['order_id', '=', saleOrderId]],
+        ['id', 'product_uom_qty']
+      );
+      for (const line of createdOrderLines) {
+        await this.odoo.execute('sale.order.line', 'write', [[line.id], {
+          qty_delivered: line.product_uom_qty
+        }]);
+      }
+    }
+
+    // Fetch the created order and lines
+    const saleOrder = await this.odoo.searchRead('sale.order',
+      [['id', '=', saleOrderId]],
+      ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id']
+    );
+
+    const createdOrderLines = await this.odoo.searchRead('sale.order.line',
+      [['order_id', '=', saleOrderId]],
+      ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'tax_id', 'qty_delivered', 'product_default_code']
+    );
+
+    // Add product_default_code to each line for SKU matching
+    for (const line of createdOrderLines) {
+      if (line.product_id) {
+        const product = await this.odoo.searchRead('product.product',
+          [['id', '=', line.product_id[0]]],
+          ['default_code']
+        );
+        line.product_default_code = product[0]?.default_code || '';
+      }
+    }
+
+    return {
+      saleOrder: saleOrder[0],
+      orderLines: createdOrderLines
+    };
+  }
+
+  /**
+   * Get warehouse ID for order based on ship-from country
+   * @param {string} shipFromCountry - Country code
+   * @param {boolean} isFBA - Whether this is an FBA order
+   * @returns {number} Warehouse ID
+   */
+  async getWarehouseForOrder(shipFromCountry, isFBA) {
+    // Warehouse mapping
+    const warehouseMap = {
+      'BE': 'CW',  // Central Warehouse (FBM)
+      'DE': 'de1', // FBA Germany
+      'FR': 'fr1', // FBA France
+      'IT': 'it1', // FBA Italy
+      'ES': 'es1', // FBA Spain
+      'PL': 'pl1', // FBA Poland
+      'CZ': 'cz1', // FBA Czech
+      'NL': 'nl1', // FBA Netherlands
+    };
+
+    const warehouseCode = warehouseMap[shipFromCountry] || 'CW';
+
+    // Find warehouse in Odoo
+    const warehouses = await this.odoo.searchRead('stock.warehouse',
+      [['code', '=', warehouseCode]],
+      ['id']
+    );
+
+    if (warehouses.length > 0) {
+      return warehouses[0].id;
+    }
+
+    // Fallback to first warehouse
+    const defaultWh = await this.odoo.searchRead('stock.warehouse', [], ['id'], 1);
+    return defaultWh[0]?.id || 1;
   }
 
   /**
