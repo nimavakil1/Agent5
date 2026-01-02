@@ -395,7 +395,7 @@ async function createVendorBill(invoice, parsedCharges, pdfBuffer) {
   const billNumber = bill.name || 'DRAFT';
   console.log(`[BolInvoiceBooker] Bill ID: ${billId}, Status: ${bill.state}, Total: €${bill.amount_total}`);
 
-  // Attach PDF
+  // Attach PDF and set as main attachment for preview
   if (pdfBuffer) {
     const attachmentData = {
       name: `BOL-${invoice.invoiceId}.pdf`,
@@ -408,6 +408,12 @@ async function createVendorBill(invoice, parsedCharges, pdfBuffer) {
 
     const attachmentId = await odooClient.create('ir.attachment', attachmentData);
     console.log(`[BolInvoiceBooker] Attached PDF (attachment ID: ${attachmentId})`);
+
+    // Set as main attachment so it shows in preview pane
+    await odooClient.write('account.move', [billId], {
+      message_main_attachment_id: attachmentId
+    });
+    console.log(`[BolInvoiceBooker] Set PDF as main attachment for preview`);
   }
 
   return {
