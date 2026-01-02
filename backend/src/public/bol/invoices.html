@@ -40,6 +40,8 @@
     .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: #71717a; }
     .spinner { width: 24px; height: 24px; border: 3px solid #252532; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 12px; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
     .column-filter { padding: 6px 10px; background: #12121a; border: 1px solid #252532; border-radius: 6px; color: #e4e4e7; font-size: 12px; width: 100%; margin-top: 6px; outline: none; }
     .column-filter:focus { border-color: #6366f1; }
     th.filterable { vertical-align: top; }
@@ -61,10 +63,16 @@
           <span class="material-symbols-outlined">receipt_long</span>
           Invoices
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="loadInvoices()">
-          <span class="material-symbols-outlined">refresh</span>
-          Refresh
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary btn-sm" id="book-all-btn" onclick="bookAllToOdoo()" style="display: none;">
+            <span class="material-symbols-outlined">cloud_upload</span>
+            <span id="book-all-text">Book All to Odoo</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="loadInvoices()">
+            <span class="material-symbols-outlined">refresh</span>
+            Refresh
+          </button>
+        </div>
       </div>
       <div class="card-body">
         <div class="table-container">
@@ -150,6 +158,7 @@
         filteredData = [...allData];
         offset = 0;
         applySort();
+        updateBookAllButton();
       } catch (e) {
         tbody.innerHTML = `<tr><td colspan="7" style="color: #ef4444; padding: 20px;">Error: ${e.message}</td></tr>`;
       }
@@ -244,20 +253,27 @@
         const amount = inv.totalAmountExclVat != null ? `€${Number(inv.totalAmountExclVat).toFixed(2)}` : '-';
         const odooBill = inv.odooBillNumber || '-';
 
-        return `<tr>
+        const isBooked = odooBill !== '-';
+        const bookButton = isBooked ? '' : `
+            <button class="btn btn-secondary btn-sm" id="book-btn-${inv.invoiceId}" onclick="bookToOdoo('${inv.invoiceId}')" title="Book to Odoo">
+              <span class="material-symbols-outlined">cloud_upload</span>
+            </button>`;
+
+        return `<tr id="row-${inv.invoiceId}">
           <td><span class="order-id">${inv.invoiceId}</span></td>
-          <td>${odooBill !== '-' ? `<a href="https://acropaq.odoo.com/web#id=${inv.odooBillId}&model=account.move&view_type=form" target="_blank" style="color: #60a5fa;">${odooBill}</a>` : '<span style="color: #52525b;">-</span>'}</td>
+          <td id="odoo-cell-${inv.invoiceId}">${isBooked ? `<a href="https://acropaq.odoo.com/web#id=${inv.odooBillId}&model=account.move&view_type=form" target="_blank" style="color: #60a5fa;">${odooBill}</a>` : '<span style="color: #52525b;">-</span>'}</td>
           <td>${period}</td>
           <td>${formatDate(inv.issueDate)}</td>
           <td>${amount}</td>
           <td><span class="badge shipped">Paid</span></td>
           <td style="display: flex; gap: 6px;">
-            <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')" data-tooltip="Download PDF">
+            <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')" title="Download PDF">
               <span class="material-symbols-outlined">picture_as_pdf</span>
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="downloadSpecification('${inv.invoiceId}')" data-tooltip="Download Specification (Excel)">
+            <button class="btn btn-secondary btn-sm" onclick="downloadSpecification('${inv.invoiceId}')" title="Download Specification (Excel)">
               <span class="material-symbols-outlined">table_chart</span>
             </button>
+            ${bookButton}
           </td>
         </tr>`;
       }).join('');
@@ -309,6 +325,139 @@
           alert('Failed: ' + (data.error || 'Unknown error'));
         }
       } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    // Book single invoice to Odoo
+    async function bookToOdoo(invoiceId) {
+      const btn = document.getElementById(`book-btn-${invoiceId}`);
+      if (!btn) return;
+
+      // Show loading state
+      const originalContent = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;margin:0;"></span>';
+
+      try {
+        const res = await fetch(`/api/bolcom/invoices/${invoiceId}/book`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          // Update the Odoo Bill cell with the new bill link
+          const odooCell = document.getElementById(`odoo-cell-${invoiceId}`);
+          if (odooCell) {
+            odooCell.innerHTML = `<a href="https://acropaq.odoo.com/web#id=${data.billId}&model=account.move&view_type=form" target="_blank" style="color: #60a5fa;">${data.billNumber}</a>`;
+          }
+
+          // Remove the book button
+          btn.remove();
+
+          // Update the allData array so filtering still works
+          const inv = allData.find(i => i.invoiceId === invoiceId);
+          if (inv) {
+            inv.odooBillId = data.billId;
+            inv.odooBillNumber = data.billNumber;
+          }
+
+          // Update Book All button count
+          updateBookAllButton();
+
+          showToast(`✅ Invoice booked as ${data.billNumber}`, 'success');
+        } else {
+          btn.disabled = false;
+          btn.innerHTML = originalContent;
+          showToast(`❌ Failed: ${data.error}`, 'error');
+        }
+      } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+        showToast(`❌ Error: ${e.message}`, 'error');
+      }
+    }
+
+    // Book all unbooked invoices to Odoo
+    async function bookAllToOdoo() {
+      const btn = document.getElementById('book-all-btn');
+      const textSpan = document.getElementById('book-all-text');
+      if (!btn) return;
+
+      const unbookedCount = allData.filter(i => !i.odooBillNumber).length;
+      if (unbookedCount === 0) {
+        showToast('No unbooked invoices', 'info');
+        return;
+      }
+
+      if (!confirm(`Book ${unbookedCount} invoice(s) to Odoo?\n\nThis will create vendor bills for all unbooked invoices.`)) {
+        return;
+      }
+
+      // Show loading state
+      btn.disabled = true;
+      textSpan.textContent = 'Booking...';
+
+      try {
+        const res = await fetch('/api/bolcom/invoices/book-all', {
+          method: 'POST',
+          credentials: 'include'
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showToast(`✅ Booked ${data.success} invoice(s), ${data.failed} failed`, 'success');
+          // Reload to get updated data
+          await loadInvoices();
+        } else {
+          showToast(`❌ Failed: ${data.error}`, 'error');
+        }
+      } catch (e) {
+        showToast(`❌ Error: ${e.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+        updateBookAllButton();
+      }
+    }
+
+    // Update Book All button visibility and count
+    function updateBookAllButton() {
+      const btn = document.getElementById('book-all-btn');
+      const textSpan = document.getElementById('book-all-text');
+      if (!btn || !textSpan) return;
+
+      const unbookedCount = allData.filter(i => !i.odooBillNumber).length;
+      if (unbookedCount > 0) {
+        btn.style.display = 'inline-flex';
+        textSpan.textContent = `Book ${unbookedCount} to Odoo`;
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+
+    // Toast notification
+    function showToast(message, type = 'info') {
+      // Remove existing toast
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.style.cssText = `
+        position: fixed; bottom: 24px; right: 24px; padding: 14px 20px;
+        background: ${type === 'success' ? '#166534' : type === 'error' ? '#991b1b' : '#1e40af'};
+        color: #fff; border-radius: 10px; font-size: 14px; font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 9999;
+        animation: slideIn 0.3s ease;
+      `;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
     }
 
     function formatDate(d) {
