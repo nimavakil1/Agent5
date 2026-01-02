@@ -1561,11 +1561,14 @@ class VcsOdooInvoicer {
       ['name', 'amount_total', 'amount_tax', 'state']
     );
 
-    console.log(`[VcsOdooInvoicer] Invoice ${invoice[0]?.name} updated. Total: ${invoice[0]?.amount_total}, Tax: ${invoice[0]?.amount_tax}`);
+    // Draft invoices have name "/", show ID instead for UI
+    const invoiceName = invoice[0]?.name === '/' ? `Draft #${invoiceId}` : invoice[0]?.name;
+
+    console.log(`[VcsOdooInvoicer] Invoice ${invoiceName} (ID: ${invoiceId}) updated. Total: ${invoice[0]?.amount_total}, Tax: ${invoice[0]?.amount_tax}`);
 
     return {
       id: invoiceId,
-      name: invoice[0]?.name || `INV-${invoiceId}`,
+      name: invoiceName || `Draft #${invoiceId}`,
       amountTotal: invoice[0]?.amount_total,
       amountTax: invoice[0]?.amount_tax,
       orderId: order.orderId,

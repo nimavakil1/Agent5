@@ -3280,10 +3280,11 @@ router.post('/vcs/update-invoice-urls', async (req, res) => {
     const { dryRun = false } = req.body;
 
     // Get all invoiced orders that have an invoiceUrl and an odooInvoiceId
+    // NOTE: Must use $nin instead of multiple $ne - JS objects can't have duplicate keys
     const orders = await db.collection('amazon_vcs_orders')
       .find({
         status: 'invoiced',
-        invoiceUrl: { $exists: true, $ne: null, $ne: '' },
+        invoiceUrl: { $exists: true, $nin: [null, ''] },
         odooInvoiceId: { $exists: true, $ne: null }
       })
       .toArray();

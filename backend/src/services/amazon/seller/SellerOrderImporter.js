@@ -519,12 +519,13 @@ class SellerOrderImporter {
       // Only auto-import if:
       // 1. FBA order (AFN) - Amazon handles fulfillment, generic customer OK
       // 2. FBM order (MFN) with complete address (name AND addressLine1 must exist)
+      // NOTE: Must use $nin instead of multiple $ne - JS objects can't have duplicate keys
       $or: [
         { fulfillmentChannel: 'AFN' },  // FBA orders always eligible
         {
           fulfillmentChannel: 'MFN',
-          'shippingAddress.name': { $exists: true, $ne: null, $ne: '' },
-          'shippingAddress.addressLine1': { $exists: true, $ne: null, $ne: '' }
+          'shippingAddress.name': { $exists: true, $nin: [null, ''] },
+          'shippingAddress.addressLine1': { $exists: true, $nin: [null, ''] }
         }
       ]
     })
