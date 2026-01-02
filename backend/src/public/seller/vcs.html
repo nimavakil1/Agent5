@@ -1897,8 +1897,8 @@
 
             <!-- Invoices list with details -->
             ${result.invoices && result.invoices.length > 0 ? `
-              <div>
-                ${result.invoices.slice(0, 30).map(inv => {
+              <div style="max-height: 400px; overflow-y: auto;">
+                ${result.invoices.map(inv => {
                   const data = inv.wouldCreate || inv;
                   const preview = inv.preview || {};
                   const lines = data.invoice_line_ids || [];
@@ -1970,7 +1970,23 @@
                     </div>
                   `;
                 }).join('')}
-                ${result.invoices.length > 30 ? `<div style="text-align: center; color: #52525b; font-size: 12px; padding: 8px;">... and ${result.invoices.length - 30} more</div>` : ''}
+              </div>
+            ` : ''}
+
+            <!-- Skipped Orders with reasons -->
+            ${result.skippedOrders && result.skippedOrders.length > 0 ? `
+              <div class="errors-section" style="margin-top: 16px;">
+                <h4 class="errors-title" style="color: #a1a1aa;">Skipped Orders (${result.skippedOrders.length}):</h4>
+                <div style="max-height: 200px; overflow-y: auto;">
+                  ${result.skippedOrders.map(skip => `
+                    <div class="error-item" style="background: #27272a;">
+                      <span class="order-id">${skip.orderId}</span>
+                      ${skip.customerName ? `<span style="color: #a1a1aa; font-size: 11px;">${skip.customerName}</span>` : ''}
+                      <span style="color: #71717a; font-size: 12px;">${skip.reason}</span>
+                      ${skip.odooOrderName ? `<span class="invoice-badge" style="font-size: 10px;">${skip.odooOrderName}</span>` : ''}
+                    </div>
+                  `).join('')}
+                </div>
               </div>
             ` : ''}
 

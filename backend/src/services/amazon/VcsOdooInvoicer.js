@@ -482,6 +482,7 @@ class VcsOdooInvoicer {
       skipped: 0,
       errors: [],
       invoices: [],
+      skippedOrders: [],  // Track skipped orders with reasons
     };
 
     if (orderIds.length === 0) {
@@ -512,6 +513,11 @@ class VcsOdooInvoicer {
         // Skip orders that shouldn't be invoiced
         if (this.shouldSkipOrder(order)) {
           result.skipped++;
+          result.skippedOrders.push({
+            orderId: order.orderId,
+            reason: 'Not invoiceable (cancelled or return)',
+            customerName: order.buyerName || null,
+          });
           await this.markOrderSkipped(order._id, 'Not invoiceable');
           continue;
         }
@@ -541,6 +547,12 @@ class VcsOdooInvoicer {
         const existingInvoice = await this.findExistingInvoice(saleOrder.name);
         if (existingInvoice) {
           result.skipped++;
+          result.skippedOrders.push({
+            orderId: order.orderId,
+            reason: `Invoice already exists: ${existingInvoice.name}`,
+            customerName: order.buyerName || null,
+            odooOrderName: saleOrder.name,
+          });
           await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
           console.log(`[VcsOdooInvoicer] Invoice already exists for ${order.orderId}: ${existingInvoice.name}`);
           continue;
@@ -1032,10 +1044,10 @@ class VcsOdooInvoicer {
 
     const createdOrderLines = await this.odoo.searchRead('sale.order.line',
       [['order_id', '=', saleOrderId]],
-      ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'tax_id', 'qty_delivered', 'product_default_code']
+      ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'tax_id', 'qty_delivered']
     );
 
-    // Add product_default_code to each line for SKU matching
+    // Add product_default_code to each line for SKU matching (field doesn't exist on sale.order.line)
     for (const line of createdOrderLines) {
       if (line.product_id) {
         const product = await this.odoo.searchRead('product.product',
