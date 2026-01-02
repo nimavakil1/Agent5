@@ -662,11 +662,14 @@ class SellerOrderCreator {
         const itemPrice = parseFloat(item.itemPrice?.amount || 0);
         const priceUnit = itemPrice / quantity;
 
+        // Ensure we always have a valid name (mandatory in Odoo)
+        const lineName = item.title || transformedSku || amazonSku || `Product ID ${productId}`;
+
         lines.push({
           product_id: productId,
           product_uom_qty: quantity,
           price_unit: priceUnit,
-          name: item.title || transformedSku
+          name: lineName
         });
 
       } catch (error) {
@@ -750,8 +753,8 @@ class SellerOrderCreator {
       return products[0].id;
     }
 
-    // Try stripping suffixes
-    const strippedSku = transformedSku.replace(/-[A-Z]{1,2}$/i, '');
+    // Try stripping suffixes (e.g., -DE, -NL, -FBM, -FBA, etc.)
+    const strippedSku = transformedSku.replace(/-[A-Z]{1,4}$/i, '');
     if (strippedSku !== transformedSku) {
       products = await this.odoo.searchRead('product.product',
         [['default_code', '=', strippedSku]],
