@@ -395,40 +395,36 @@ async function createVendorBill(invoice, parsedCharges, pdfBuffer) {
   const billNumber = bill.name || 'DRAFT';
   console.log(`[BolInvoiceBooker] Bill ID: ${billId}, Status: ${bill.state}, Total: €${bill.amount_total}`);
 
-  // Attach PDF and set as main attachment for preview
+  // Attach PDF using message_post (same method the UI uses)
   if (pdfBuffer) {
-    const attachmentData = {
-      name: `BOL-${invoice.invoiceId}.pdf`,
-      type: 'binary',
-      datas: pdfBuffer.toString('base64'),
-      res_model: 'account.move',
-      res_id: billId,
-      mimetype: 'application/pdf'
-    };
+    const fileName = `BOL-${invoice.invoiceId}.pdf`;
+    const attachments = [[fileName, pdfBuffer.toString('base64')]];
 
-    const attachmentId = await odooClient.create('ir.attachment', attachmentData);
-    console.log(`[BolInvoiceBooker] Attached PDF (attachment ID: ${attachmentId})`);
-
-    // Set as main attachment so it shows in preview pane
-    await odooClient.write('account.move', [billId], {
-      message_main_attachment_id: attachmentId
+    // Use message_post to attach PDF - this is what Odoo UI does
+    await odooClient.execute('account.move', 'message_post', [billId], {
+      body: '',
+      attachments: attachments,
+      message_type: 'comment',
+      subtype_xmlid: 'mail.mt_comment'
     });
-    console.log(`[BolInvoiceBooker] Set PDF as main attachment for preview`);
+    console.log(`[BolInvoiceBooker] Attached PDF via message_post`);
 
-    // Link attachment to a message (required for preview to work)
-    // Find the creation message on the bill
-    const messages = await odooClient.searchRead('mail.message',
-      [['model', '=', 'account.move'], ['res_id', '=', billId]],
+    // Get the attachment ID that was created
+    const newAtts = await odooClient.searchRead('ir.attachment',
+      [['res_model', '=', 'account.move'], ['res_id', '=', billId], ['name', '=', fileName]],
       ['id'],
-      { limit: 1, order: 'id asc' }
+      { limit: 1 }
     );
 
-    if (messages.length > 0) {
-      // Link attachment to the message using ORM command [4, id] = add link
-      await odooClient.write('mail.message', [messages[0].id], {
-        attachment_ids: [[4, attachmentId]]
+    if (newAtts.length > 0) {
+      const attachmentId = newAtts[0].id;
+
+      // Set extract_attachment_id and extract_state for proper integration
+      await odooClient.write('account.move', [billId], {
+        extract_attachment_id: attachmentId,
+        extract_state: 'done'
       });
-      console.log(`[BolInvoiceBooker] Linked attachment to message ${messages[0].id}`);
+      console.log(`[BolInvoiceBooker] Set extract fields (attachment ID: ${attachmentId})`);
     }
   }
 
