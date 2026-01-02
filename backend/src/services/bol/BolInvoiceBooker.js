@@ -121,7 +121,7 @@ async function downloadInvoicePdf(invoiceId) {
 
   const response = await fetch(`${BOL_API_BASE}/invoices/${invoiceId}`, {
     headers: {
-      'Accept': 'application/pdf',
+      'Accept': 'application/vnd.retailer.v10+pdf',
       'Authorization': `Bearer ${token}`
     }
   });
@@ -159,7 +159,7 @@ async function downloadInvoiceExcel(invoiceId) {
 
   const response = await fetch(`${BOL_API_BASE}/invoices/${invoiceId}/specification`, {
     headers: {
-      'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Accept': 'application/vnd.retailer.v10+openxmlformats-officedocument.spreadsheetml.sheet',
       'Authorization': `Bearer ${token}`
     }
   });
