@@ -121,7 +121,7 @@ router.get('/modules', async (req, res) => {
  */
 router.get('/conversations', async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?.id || req.user?._id;
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -142,7 +142,7 @@ router.get('/conversations', async (req, res) => {
  */
 router.get('/conversation/:id', async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?.id || req.user?._id;
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -180,7 +180,7 @@ router.get('/conversation/:id', async (req, res) => {
  */
 router.post('/conversation', async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?.id || req.user?._id;
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -216,7 +216,7 @@ router.post('/conversation', async (req, res) => {
  */
 router.post('/message', async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?.id || req.user?._id;
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -303,7 +303,7 @@ router.post('/message', async (req, res) => {
  */
 router.post('/upload', upload.array('files', 5), async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?.id || req.user?._id;
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -337,7 +337,7 @@ router.post('/upload', upload.array('files', 5), async (req, res) => {
  */
 router.delete('/conversation/:id', async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?.id || req.user?._id;
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
