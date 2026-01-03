@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 // Available modules in the platform
 const AVAILABLE_MODULES = [
+  'assistant',
   'ai-agents',
   'call-center',
   'amazon-seller',
