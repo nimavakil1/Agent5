@@ -144,6 +144,9 @@ You have access to multiple modules: Bol.com, Amazon Seller, Amazon Vendor, Odoo
         temperature: 0.4,
         maxTokens: 4000,
       },
+      // Use Claude Opus 4.5 for best reasoning
+      llmProvider: 'anthropic',
+      llmModel: 'opus',
       ...config,
     });
 
