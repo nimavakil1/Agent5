@@ -5,11 +5,18 @@ function readJwtFromCookies(req) {
   return token || null;
 }
 
-function verifyJwt(token) {
+function verifyJwt(token, logPath = null) {
   const secret = process.env.JWT_SECRET || 'dev-secret-change-me';
   try {
     return jwt.verify(token, secret);
-  } catch (_) {
+  } catch (err) {
+    if (logPath && logPath.includes('chat')) {
+      console.log('[SessionAuth JWT Error]', {
+        path: logPath,
+        error: err.message,
+        tokenPreview: token ? `${token.substring(0, 20)}...` : null,
+      });
+    }
     return null;
   }
 }
@@ -35,7 +42,7 @@ function requireSession(req, res, next) {
     if (isHtml) return res.redirect(302, `/login?next=${encodeURIComponent(req.originalUrl || '/')}`);
     return res.status(401).json({ message: 'Unauthorized' });
   }
-  const data = verifyJwt(token);
+  const data = verifyJwt(token, req.originalUrl);
   if (!data) {
     if (isHtml) return res.redirect(302, `/login?next=${encodeURIComponent(req.originalUrl || '/')}`);
     return res.status(401).json({ message: 'Unauthorized' });
