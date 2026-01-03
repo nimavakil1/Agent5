@@ -79,13 +79,14 @@ const SKU_TRANSFORMATIONS = [
 const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
 
 // VAT cut-off date - invoices cannot be created in closed VAT periods
-// Any shipment date before this date will use today's date instead
+// Any shipment date before this date will use the first day after the cut-off
 // Format: YYYY-MM-DD (configurable via env variable)
 const VAT_CUTOFF_DATE = process.env.VAT_CUTOFF_DATE || '2024-11-30';
 
 /**
  * Get effective invoice date, respecting VAT period closure
- * If the original date is before the VAT cut-off, use today's date instead
+ * - Uses the delivery/shipment date as invoice date
+ * - If the date is in a closed period (before/on cut-off), uses first day after cut-off
  * @param {Date|string} originalDate - The shipment/return date from VCS
  * @returns {Date} The effective date to use for the invoice
  */
@@ -99,8 +100,13 @@ function getEffectiveInvoiceDate(originalDate) {
   cutoff.setHours(23, 59, 59, 999);
 
   if (date <= cutoff) {
-    console.log(`[VcsOdooInvoicer] Date ${date.toISOString().split('T')[0]} is before VAT cut-off ${VAT_CUTOFF_DATE}, using today's date`);
-    return new Date();
+    // Calculate first day after cut-off
+    const firstOpenDay = new Date(VAT_CUTOFF_DATE);
+    firstOpenDay.setDate(firstOpenDay.getDate() + 1);
+    firstOpenDay.setHours(0, 0, 0, 0);
+
+    console.log(`[VcsOdooInvoicer] Date ${date.toISOString().split('T')[0]} is before VAT cut-off ${VAT_CUTOFF_DATE}, using first open day: ${firstOpenDay.toISOString().split('T')[0]}`);
+    return firstOpenDay;
   }
 
   return date;
