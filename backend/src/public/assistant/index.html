@@ -647,7 +647,7 @@
     // Load available modules
     async function loadModules() {
       try {
-        const res = await fetch('/api/chat/modules');
+        const res = await fetch('/api/chat/modules', { credentials: 'include' });
         const data = await res.json();
 
         state.modules = data.modules || [];
@@ -706,7 +706,7 @@
     // Load conversations
     async function loadConversations() {
       try {
-        const res = await fetch('/api/chat/conversations');
+        const res = await fetch('/api/chat/conversations', { credentials: 'include' });
         const data = await res.json();
 
         state.conversations = data.conversations || [];
@@ -747,7 +747,7 @@
     // Load a conversation
     async function loadConversation(conversationId) {
       try {
-        const res = await fetch(`/api/chat/conversation/${conversationId}`);
+        const res = await fetch(`/api/chat/conversation/${conversationId}`, { credentials: 'include' });
         const data = await res.json();
 
         if (res.ok) {
@@ -773,6 +773,7 @@
         const res = await fetch('/api/chat/conversation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ module: state.selectedModule })
         });
 
@@ -852,6 +853,7 @@
         const res = await fetch('/api/chat/message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             conversationId: state.conversationId,
             message: content,
@@ -900,6 +902,7 @@
       try {
         const res = await fetch('/api/chat/upload', {
           method: 'POST',
+          credentials: 'include',
           body: formData
         });
 
