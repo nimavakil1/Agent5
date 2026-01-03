@@ -18,6 +18,19 @@ function verifyJwt(token) {
 function requireSession(req, res, next) {
   const token = readJwtFromCookies(req);
   const isHtml = (req.headers.accept || '').includes('text/html') || /\.html($|\?)/.test(req.originalUrl || '');
+
+  // Debug logging for chat routes
+  if (req.path.includes('chat') || req.originalUrl.includes('chat')) {
+    console.log('[SessionAuth Debug]', {
+      path: req.path,
+      originalUrl: req.originalUrl,
+      hasToken: !!token,
+      hasCookies: !!req.cookies,
+      cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
+      hasAccessToken: !!(req.cookies && req.cookies['access_token']),
+    });
+  }
+
   if (!token) {
     if (isHtml) return res.redirect(302, `/login?next=${encodeURIComponent(req.originalUrl || '/')}`);
     return res.status(401).json({ message: 'Unauthorized' });
