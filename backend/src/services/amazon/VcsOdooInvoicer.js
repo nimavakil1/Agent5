@@ -79,9 +79,9 @@ const SKU_TRANSFORMATIONS = [
 const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
 
 // VAT cut-off date - invoices cannot be created in closed VAT periods
-// Any shipment date before this date will use the first day after the cut-off
-// Format: YYYY-MM-DD (configurable via env variable)
-const VAT_CUTOFF_DATE = process.env.VAT_CUTOFF_DATE || '2024-11-30';
+// This is dynamically loaded from Odoo's tax_lock_date on res.company
+// Falls back to env variable VAT_CUTOFF_DATE if not set in Odoo
+let vatCutoffDate = process.env.VAT_CUTOFF_DATE || null;
 
 /**
  * Get effective invoice date, respecting VAT period closure
@@ -94,18 +94,24 @@ function getEffectiveInvoiceDate(originalDate) {
   if (!originalDate) return new Date();
 
   const date = new Date(originalDate);
-  const cutoff = new Date(VAT_CUTOFF_DATE);
+
+  // If no cut-off date is set, use the original date
+  if (!vatCutoffDate) {
+    return date;
+  }
+
+  const cutoff = new Date(vatCutoffDate);
 
   // Set cutoff to end of day to include the cutoff date itself in the closed period
   cutoff.setHours(23, 59, 59, 999);
 
   if (date <= cutoff) {
     // Calculate first day after cut-off
-    const firstOpenDay = new Date(VAT_CUTOFF_DATE);
+    const firstOpenDay = new Date(vatCutoffDate);
     firstOpenDay.setDate(firstOpenDay.getDate() + 1);
     firstOpenDay.setHours(0, 0, 0, 0);
 
-    console.log(`[VcsOdooInvoicer] Date ${date.toISOString().split('T')[0]} is before VAT cut-off ${VAT_CUTOFF_DATE}, using first open day: ${firstOpenDay.toISOString().split('T')[0]}`);
+    console.log(`[VcsOdooInvoicer] Date ${date.toISOString().split('T')[0]} is before VAT cut-off ${vatCutoffDate}, using first open day: ${firstOpenDay.toISOString().split('T')[0]}`);
     return firstOpenDay;
   }
 
@@ -2066,9 +2072,25 @@ class VcsOdooInvoicer {
   }
 
   /**
-   * Load and cache fiscal positions, journals, and currencies from Odoo
+   * Load and cache fiscal positions, journals, currencies, and tax lock date from Odoo
    */
   async loadCache() {
+    // Load tax lock date from company settings
+    try {
+      const companies = await this.odoo.searchRead('res.company',
+        [['id', '=', 1]], // Main company
+        ['tax_lock_date']
+      );
+      if (companies.length > 0 && companies[0].tax_lock_date) {
+        vatCutoffDate = companies[0].tax_lock_date;
+        console.log(`[VcsOdooInvoicer] Tax lock date from Odoo: ${vatCutoffDate}`);
+      } else if (!vatCutoffDate) {
+        console.log('[VcsOdooInvoicer] No tax lock date set in Odoo, invoices will use delivery date');
+      }
+    } catch (err) {
+      console.warn('[VcsOdooInvoicer] Could not fetch tax lock date:', err.message);
+    }
+
     // Load fiscal positions
     const fiscalPositions = await this.odoo.searchRead('account.fiscal.position',
       [],
@@ -2115,6 +2137,7 @@ class VcsOdooInvoicer {
       fiscalPositions: Object.keys(this.fiscalPositionCache).length,
       journals: Object.keys(this.journalCache).length,
       currencies: Object.keys(this.currencyCache).length,
+      taxLockDate: vatCutoffDate || 'not set',
     });
   }
 
