@@ -78,6 +78,7 @@
       id: 'bol', name: 'Bol.com', icon: 'shopping_bag', color: '#0066ff',
       basePath: '/bol',
       pages: [
+        { id: 'dashboard', path: '/bol/dashboard.html', name: 'Dashboard', icon: 'dashboard' },
         { id: 'orders', path: '/bol/', name: 'Orders', icon: 'shopping_cart' },
         { id: 'shipments', path: '/bol/shipments.html', name: 'Shipments', icon: 'local_shipping' },
         { id: 'returns', path: '/bol/returns.html', name: 'Returns', icon: 'assignment_return' },
