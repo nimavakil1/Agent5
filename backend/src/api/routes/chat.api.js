@@ -83,7 +83,10 @@ router.get('/modules', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const permission = await ChatPermission.getForUser(userId);
+    // Check if user is superadmin - they get full access automatically
+    const isSuperAdmin = req.user?.role === 'superadmin';
+
+    const permission = isSuperAdmin ? null : await ChatPermission.getForUser(userId);
 
     const modules = [
       { id: 'bol', name: 'Bol.com', icon: 'shopping_bag', description: 'Orders, shipments, returns' },
@@ -94,10 +97,11 @@ router.get('/modules', async (req, res) => {
     ];
 
     // Mark which modules the user can access
+    // Superadmins get full access to all modules
     const available = modules.map(m => ({
       ...m,
-      canChat: permission?.modules[m.id]?.canChat === true,
-      canExecute: permission?.modules[m.id]?.canExecute === true
+      canChat: isSuperAdmin || permission?.modules[m.id]?.canChat === true,
+      canExecute: isSuperAdmin || permission?.modules[m.id]?.canExecute === true
     }));
 
     res.json({
@@ -181,9 +185,10 @@ router.post('/conversation', async (req, res) => {
     }
 
     const { module = 'general' } = req.body;
+    const isSuperAdmin = req.user?.role === 'superadmin';
 
-    // Check if user can chat with this module
-    if (module !== 'general') {
+    // Check if user can chat with this module (superadmins bypass check)
+    if (module !== 'general' && !isSuperAdmin) {
       const canChat = await ChatPermission.canUserChat(userId, module);
       if (!canChat) {
         return res.status(403).json({
@@ -230,8 +235,10 @@ router.post('/message', async (req, res) => {
       return res.status(400).json({ error: 'conversationId is required' });
     }
 
-    // Check if user can chat with this module
-    if (module !== 'general') {
+    const isSuperAdmin = req.user?.role === 'superadmin';
+
+    // Check if user can chat with this module (superadmins bypass check)
+    if (module !== 'general' && !isSuperAdmin) {
       const canChat = await ChatPermission.canUserChat(userId, module);
       if (!canChat) {
         return res.status(403).json({

@@ -3,68 +3,47 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Module Assistant</title>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <title>Assistant - ACROPAQ</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
   <style>
-    :root {
-      --primary: #2563eb;
-      --primary-dark: #1d4ed8;
-      --bg: #f8fafc;
-      --surface: #ffffff;
-      --text: #1e293b;
-      --text-secondary: #64748b;
-      --border: #e2e8f0;
-      --user-bg: #dbeafe;
-      --assistant-bg: #f1f5f9;
-      --success: #10b981;
-      --error: #ef4444;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      height: 100vh;
+    .page {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 24px;
       display: flex;
       flex-direction: column;
+      height: calc(100vh - 72px); /* Account for shell header */
     }
 
-    /* Header */
-    .header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 24px;
+    .page-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      margin-bottom: 20px;
+      flex-shrink: 0;
     }
 
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .header h1 {
-      font-size: 20px;
+    .page-title {
+      font-size: 24px;
       font-weight: 600;
+      color: #fff;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
     }
 
-    .header h1 .material-icons {
-      color: var(--primary);
+    .page-title .material-symbols-outlined {
+      font-size: 28px;
+      color: #6366f1;
     }
 
-    /* Module selector */
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    /* Module chips */
     .module-selector {
       display: flex;
       gap: 8px;
@@ -72,11 +51,12 @@
     }
 
     .module-chip {
-      padding: 6px 14px;
+      padding: 8px 16px;
       border-radius: 20px;
-      border: 1px solid var(--border);
-      background: var(--surface);
+      border: 1px solid #252532;
+      background: #18181f;
       font-size: 13px;
+      color: #a1a1aa;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -85,59 +65,48 @@
     }
 
     .module-chip:hover {
-      background: var(--bg);
+      background: #252532;
+      color: #fff;
     }
 
     .module-chip.active {
-      background: var(--primary);
+      background: #6366f1;
       color: white;
-      border-color: var(--primary);
+      border-color: #6366f1;
     }
 
-    .module-chip .material-icons {
-      font-size: 16px;
-    }
-
-    .module-chip.disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    /* New conversation button */
-    .new-chat-btn {
-      padding: 8px 16px;
-      background: var(--primary);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: background 0.2s;
-    }
-
-    .new-chat-btn:hover {
-      background: var(--primary-dark);
-    }
-
-    .new-chat-btn .material-icons {
+    .module-chip .material-symbols-outlined {
       font-size: 18px;
     }
 
-    /* Main content area */
-    .main-content {
-      flex: 1;
-      display: flex;
-      overflow: hidden;
+    .module-chip.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
 
-    /* Sidebar - conversations */
+    /* Chat container */
+    .chat-container {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+      min-height: 0;
+    }
+
+    @media (max-width: 900px) {
+      .chat-container {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        display: none;
+      }
+    }
+
+    /* Sidebar */
     .sidebar {
-      width: 280px;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 12px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -145,10 +114,35 @@
 
     .sidebar-header {
       padding: 16px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid #252532;
       font-weight: 600;
       font-size: 14px;
-      color: var(--text-secondary);
+      color: #a1a1aa;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .new-chat-btn {
+      padding: 6px 12px;
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.2s;
+    }
+
+    .new-chat-btn:hover {
+      background: #5558e3;
+    }
+
+    .new-chat-btn .material-symbols-outlined {
+      font-size: 16px;
     }
 
     .conversations-list {
@@ -166,16 +160,17 @@
     }
 
     .conversation-item:hover {
-      background: var(--bg);
+      background: #252532;
     }
 
     .conversation-item.active {
-      background: var(--user-bg);
+      background: #252532;
+      border-left: 3px solid #6366f1;
     }
 
     .conversation-item .preview {
       font-size: 13px;
-      color: var(--text);
+      color: #fff;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -184,22 +179,26 @@
 
     .conversation-item .meta {
       font-size: 11px;
-      color: var(--text-secondary);
+      color: #71717a;
       display: flex;
       justify-content: space-between;
+      align-items: center;
     }
 
     .conversation-item .module-tag {
-      background: var(--bg);
+      background: #252532;
       padding: 2px 6px;
       border-radius: 4px;
       font-size: 10px;
       text-transform: uppercase;
+      color: #a1a1aa;
     }
 
-    /* Chat area */
-    .chat-area {
-      flex: 1;
+    /* Main chat area */
+    .chat-main {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 12px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -216,30 +215,25 @@
     }
 
     .message {
-      max-width: 80%;
-      padding: 12px 16px;
+      max-width: 75%;
+      padding: 14px 18px;
       border-radius: 12px;
-      line-height: 1.5;
+      line-height: 1.6;
       font-size: 14px;
     }
 
     .message.user {
-      background: var(--user-bg);
+      background: #6366f1;
+      color: white;
       align-self: flex-end;
       border-bottom-right-radius: 4px;
     }
 
     .message.assistant {
-      background: var(--assistant-bg);
+      background: #252532;
+      color: #e4e4e7;
       align-self: flex-start;
       border-bottom-left-radius: 4px;
-    }
-
-    .message.system {
-      background: #fef3c7;
-      align-self: center;
-      font-size: 13px;
-      color: #92400e;
     }
 
     .message .content {
@@ -248,261 +242,18 @@
 
     .message .timestamp {
       font-size: 11px;
-      color: var(--text-secondary);
+      color: rgba(255,255,255,0.5);
       margin-top: 8px;
       text-align: right;
     }
 
-    /* Typing indicator */
-    .typing-indicator {
-      display: none;
-      align-self: flex-start;
-      padding: 12px 16px;
-      background: var(--assistant-bg);
-      border-radius: 12px;
-      border-bottom-left-radius: 4px;
+    .message.assistant .timestamp {
+      color: #71717a;
     }
 
-    .typing-indicator.visible {
-      display: flex;
-      gap: 4px;
-    }
-
-    .typing-indicator span {
-      width: 8px;
-      height: 8px;
-      background: var(--text-secondary);
-      border-radius: 50%;
-      animation: bounce 1.4s infinite ease-in-out;
-    }
-
-    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-
-    @keyframes bounce {
-      0%, 80%, 100% { transform: scale(0); }
-      40% { transform: scale(1); }
-    }
-
-    /* Welcome message */
-    .welcome-message {
-      text-align: center;
-      padding: 48px 24px;
-      color: var(--text-secondary);
-    }
-
-    .welcome-message .icon {
-      font-size: 64px;
-      color: var(--primary);
-      margin-bottom: 16px;
-    }
-
-    .welcome-message h2 {
-      font-size: 24px;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-
-    .welcome-message p {
-      font-size: 14px;
-      max-width: 400px;
-      margin: 0 auto;
-    }
-
-    /* Input area */
-    .input-area {
-      padding: 16px 24px;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-    }
-
-    .input-container {
-      display: flex;
-      gap: 12px;
-      align-items: flex-end;
-    }
-
-    .input-wrapper {
-      flex: 1;
-      position: relative;
-    }
-
-    .input-wrapper textarea {
-      width: 100%;
-      padding: 12px 16px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      font-size: 14px;
-      font-family: inherit;
-      resize: none;
-      max-height: 150px;
-      line-height: 1.5;
-    }
-
-    .input-wrapper textarea:focus {
-      outline: none;
-      border-color: var(--primary);
-    }
-
-    .input-wrapper textarea::placeholder {
-      color: var(--text-secondary);
-    }
-
-    /* Attachments */
-    .attachments-preview {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 8px;
-    }
-
-    .attachment-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      background: var(--bg);
-      border-radius: 6px;
-      font-size: 12px;
-    }
-
-    .attachment-item .material-icons {
-      font-size: 16px;
-      color: var(--text-secondary);
-    }
-
-    .attachment-item .remove {
-      cursor: pointer;
-      color: var(--error);
-    }
-
-    /* Action buttons */
-    .action-buttons {
-      display: flex;
-      gap: 8px;
-    }
-
-    .action-btn {
-      width: 44px;
-      height: 44px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: var(--surface);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-    }
-
-    .action-btn:hover {
-      background: var(--bg);
-    }
-
-    .action-btn .material-icons {
-      font-size: 20px;
-      color: var(--text-secondary);
-    }
-
-    .action-btn.send {
-      background: var(--primary);
-      border-color: var(--primary);
-    }
-
-    .action-btn.send .material-icons {
-      color: white;
-    }
-
-    .action-btn.send:hover {
-      background: var(--primary-dark);
-    }
-
-    .action-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    /* Hidden file input */
-    #fileInput {
-      display: none;
-    }
-
-    /* No access message */
-    .no-access {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 48px;
-      text-align: center;
-      color: var(--text-secondary);
-    }
-
-    .no-access .material-icons {
-      font-size: 64px;
-      color: var(--error);
-      margin-bottom: 16px;
-    }
-
-    .no-access h2 {
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-
-    /* Toast notifications */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%) translateY(100px);
-      padding: 12px 24px;
-      background: var(--text);
-      color: white;
-      border-radius: 8px;
-      font-size: 14px;
-      opacity: 0;
-      transition: all 0.3s;
-      z-index: 1000;
-    }
-
-    .toast.visible {
-      transform: translateX(-50%) translateY(0);
-      opacity: 1;
-    }
-
-    .toast.error {
-      background: var(--error);
-    }
-
-    .toast.success {
-      background: var(--success);
-    }
-
-    /* Mobile responsive */
-    @media (max-width: 768px) {
-      .sidebar {
-        display: none;
-      }
-
-      .header {
-        flex-wrap: wrap;
-      }
-
-      .module-selector {
-        width: 100%;
-        order: 3;
-        margin-top: 8px;
-      }
-
-      .message {
-        max-width: 90%;
-      }
-    }
-
-    /* Markdown-like formatting */
+    /* Code formatting */
     .message .content code {
-      background: rgba(0,0,0,0.1);
+      background: rgba(0,0,0,0.3);
       padding: 2px 6px;
       border-radius: 4px;
       font-family: 'Monaco', 'Menlo', monospace;
@@ -510,7 +261,7 @@
     }
 
     .message .content pre {
-      background: rgba(0,0,0,0.1);
+      background: rgba(0,0,0,0.3);
       padding: 12px;
       border-radius: 8px;
       overflow-x: auto;
@@ -530,86 +281,327 @@
     .message .content li {
       margin-bottom: 4px;
     }
+
+    /* Typing indicator */
+    .typing-indicator {
+      display: none;
+      align-self: flex-start;
+      padding: 14px 18px;
+      background: #252532;
+      border-radius: 12px;
+      border-bottom-left-radius: 4px;
+    }
+
+    .typing-indicator.visible {
+      display: flex;
+      gap: 4px;
+    }
+
+    .typing-indicator span {
+      width: 8px;
+      height: 8px;
+      background: #71717a;
+      border-radius: 50%;
+      animation: bounce 1.4s infinite ease-in-out;
+    }
+
+    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+
+    /* Welcome message */
+    .welcome-message {
+      text-align: center;
+      padding: 64px 24px;
+      color: #71717a;
+    }
+
+    .welcome-message .icon {
+      font-size: 64px;
+      color: #6366f1;
+      margin-bottom: 16px;
+    }
+
+    .welcome-message h2 {
+      font-size: 22px;
+      color: #fff;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .welcome-message p {
+      font-size: 14px;
+      max-width: 400px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* Input area */
+    .input-area {
+      padding: 16px 20px;
+      background: #12121a;
+      border-top: 1px solid #252532;
+    }
+
+    .input-container {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .input-wrapper {
+      flex: 1;
+      position: relative;
+    }
+
+    .input-wrapper textarea {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      max-height: 150px;
+      line-height: 1.5;
+      background: #18181f;
+      color: #fff;
+    }
+
+    .input-wrapper textarea:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+
+    .input-wrapper textarea::placeholder {
+      color: #71717a;
+    }
+
+    /* Action buttons */
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .action-btn {
+      width: 44px;
+      height: 44px;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      background: #18181f;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .action-btn:hover {
+      background: #252532;
+    }
+
+    .action-btn .material-symbols-outlined {
+      font-size: 20px;
+      color: #a1a1aa;
+    }
+
+    .action-btn.send {
+      background: #6366f1;
+      border-color: #6366f1;
+    }
+
+    .action-btn.send .material-symbols-outlined {
+      color: white;
+    }
+
+    .action-btn.send:hover {
+      background: #5558e3;
+    }
+
+    .action-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Attachments */
+    .attachments-preview {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .attachment-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #252532;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #e4e4e7;
+    }
+
+    .attachment-item .material-symbols-outlined {
+      font-size: 16px;
+      color: #a1a1aa;
+    }
+
+    .attachment-item .remove {
+      cursor: pointer;
+      color: #ef4444;
+    }
+
+    /* No access message */
+    .no-access {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px;
+      text-align: center;
+      color: #71717a;
+    }
+
+    .no-access .material-symbols-outlined {
+      font-size: 64px;
+      color: #ef4444;
+      margin-bottom: 16px;
+    }
+
+    .no-access h2 {
+      color: #fff;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    /* Hidden file input */
+    #fileInput {
+      display: none;
+    }
+
+    /* Empty conversations */
+    .empty-conversations {
+      padding: 24px;
+      text-align: center;
+      color: #71717a;
+      font-size: 13px;
+    }
+
+    /* Toast notifications */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      padding: 12px 24px;
+      background: #252532;
+      color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+
+    .toast.visible {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .toast.error {
+      background: #ef4444;
+    }
+
+    .toast.success {
+      background: #10b981;
+    }
   </style>
 </head>
 <body>
-  <!-- Header -->
-  <div class="header">
-    <div class="header-left">
-      <h1>
-        <span class="material-icons">smart_toy</span>
+  <div class="page">
+    <!-- Header -->
+    <div class="page-header">
+      <div class="page-title">
+        <span class="material-symbols-outlined">smart_toy</span>
         Module Assistant
-      </h1>
+      </div>
       <div class="module-selector" id="moduleSelector">
         <!-- Modules loaded dynamically -->
       </div>
     </div>
-    <button class="new-chat-btn" id="newChatBtn">
-      <span class="material-icons">add</span>
-      New Chat
-    </button>
-  </div>
 
-  <!-- Main content -->
-  <div class="main-content">
-    <!-- Sidebar - conversations -->
-    <div class="sidebar">
-      <div class="sidebar-header">Recent Conversations</div>
-      <div class="conversations-list" id="conversationsList">
-        <!-- Conversations loaded dynamically -->
-      </div>
-    </div>
-
-    <!-- Chat area -->
-    <div class="chat-area" id="chatArea">
-      <!-- Welcome message (shown when no conversation) -->
-      <div class="welcome-message" id="welcomeMessage">
-        <span class="material-icons icon">chat</span>
-        <h2>Welcome to Module Assistant</h2>
-        <p>Select a module and start a conversation. I can help you with Bol.com, Amazon Seller, Amazon Vendor, Odoo, and Purchasing operations.</p>
-      </div>
-
-      <!-- Messages container (hidden initially) -->
-      <div class="messages-container" id="messagesContainer" style="display: none;">
-        <!-- Messages loaded dynamically -->
-        <div class="typing-indicator" id="typingIndicator">
-          <span></span>
-          <span></span>
-          <span></span>
+    <!-- Chat container -->
+    <div class="chat-container" id="chatContainer">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <span>Recent Conversations</span>
+          <button class="new-chat-btn" id="newChatBtn">
+            <span class="material-symbols-outlined">add</span>
+            New
+          </button>
+        </div>
+        <div class="conversations-list" id="conversationsList">
+          <!-- Conversations loaded dynamically -->
         </div>
       </div>
 
-      <!-- Input area -->
-      <div class="input-area">
-        <div class="attachments-preview" id="attachmentsPreview"></div>
-        <div class="input-container">
-          <div class="input-wrapper">
-            <textarea
-              id="messageInput"
-              placeholder="Type your message..."
-              rows="1"
-              onkeydown="handleKeyDown(event)"
-              oninput="autoResize(this)"
-            ></textarea>
-          </div>
-          <div class="action-buttons">
-            <button class="action-btn" id="attachBtn" title="Attach files">
-              <span class="material-icons">attach_file</span>
-            </button>
-            <button class="action-btn send" id="sendBtn" title="Send message">
-              <span class="material-icons">send</span>
-            </button>
+      <!-- Main chat area -->
+      <div class="chat-main" id="chatMain">
+        <!-- Welcome message -->
+        <div class="welcome-message" id="welcomeMessage">
+          <span class="material-symbols-outlined icon">chat</span>
+          <h2>Welcome to Module Assistant</h2>
+          <p>Select a module above and start a conversation. I can help you with Bol.com, Amazon Seller, Amazon Vendor, Odoo, and Purchasing operations.</p>
+        </div>
+
+        <!-- Messages container (hidden initially) -->
+        <div class="messages-container" id="messagesContainer" style="display: none;">
+          <div class="typing-indicator" id="typingIndicator">
+            <span></span>
+            <span></span>
+            <span></span>
           </div>
         </div>
-        <input type="file" id="fileInput" multiple accept=".pdf,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.gif,.json">
-      </div>
-    </div>
 
-    <!-- No access message (shown if user has no module access) -->
-    <div class="no-access" id="noAccessMessage" style="display: none;">
-      <span class="material-icons">lock</span>
-      <h2>No Access</h2>
-      <p>You don't have permission to use the Module Assistant. Please contact your administrator.</p>
+        <!-- Input area -->
+        <div class="input-area">
+          <div class="attachments-preview" id="attachmentsPreview"></div>
+          <div class="input-container">
+            <div class="input-wrapper">
+              <textarea
+                id="messageInput"
+                placeholder="Type your message..."
+                rows="1"
+                onkeydown="handleKeyDown(event)"
+                oninput="autoResize(this)"
+              ></textarea>
+            </div>
+            <div class="action-buttons">
+              <button class="action-btn" id="attachBtn" title="Attach files">
+                <span class="material-symbols-outlined">attach_file</span>
+              </button>
+              <button class="action-btn send" id="sendBtn" title="Send message">
+                <span class="material-symbols-outlined">send</span>
+              </button>
+            </div>
+          </div>
+          <input type="file" id="fileInput" multiple accept=".pdf,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.gif,.json">
+        </div>
+      </div>
+
+      <!-- No access message -->
+      <div class="no-access" id="noAccessMessage" style="display: none;">
+        <span class="material-symbols-outlined">lock</span>
+        <h2>No Access</h2>
+        <p>You don't have permission to use the Module Assistant. Please contact your administrator.</p>
+      </div>
     </div>
   </div>
 
@@ -620,7 +612,7 @@
     // State
     let state = {
       modules: [],
-      selectedModule: 'general',
+      selectedModule: 'bol',
       conversationId: null,
       conversations: [],
       messages: [],
@@ -631,7 +623,8 @@
     // DOM elements
     const moduleSelector = document.getElementById('moduleSelector');
     const conversationsList = document.getElementById('conversationsList');
-    const chatArea = document.getElementById('chatArea');
+    const chatContainer = document.getElementById('chatContainer');
+    const chatMain = document.getElementById('chatMain');
     const welcomeMessage = document.getElementById('welcomeMessage');
     const messagesContainer = document.getElementById('messagesContainer');
     const typingIndicator = document.getElementById('typingIndicator');
@@ -660,10 +653,16 @@
         state.modules = data.modules || [];
 
         if (!data.hasAnyAccess) {
-          // User has no access to any module
-          chatArea.style.display = 'none';
+          chatMain.style.display = 'none';
+          document.querySelector('.sidebar').style.display = 'none';
           noAccessMessage.style.display = 'flex';
           return;
+        }
+
+        // Select first available module
+        const firstAvailable = state.modules.find(m => m.canChat);
+        if (firstAvailable) {
+          state.selectedModule = firstAvailable.id;
         }
 
         renderModuleSelector();
@@ -687,7 +686,7 @@
         <div class="module-chip ${m.canChat ? '' : 'disabled'} ${state.selectedModule === m.id ? 'active' : ''}"
              data-module="${m.id}"
              title="${m.description}">
-          <span class="material-icons">${icons[m.id] || 'apps'}</span>
+          <span class="material-symbols-outlined">${icons[m.id] || 'apps'}</span>
           ${m.name}
         </div>
       `).join('');
@@ -702,9 +701,6 @@
     function selectModule(moduleId) {
       state.selectedModule = moduleId;
       renderModuleSelector();
-
-      // If there's an active conversation, update its module context
-      // For now, just update the UI
     }
 
     // Load conversations
@@ -724,7 +720,7 @@
     function renderConversations() {
       if (state.conversations.length === 0) {
         conversationsList.innerHTML = `
-          <div style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 13px;">
+          <div class="empty-conversations">
             No conversations yet
           </div>
         `;
@@ -757,7 +753,7 @@
         if (res.ok) {
           state.conversationId = conversationId;
           state.messages = data.messages || [];
-          state.selectedModule = data.module || 'general';
+          state.selectedModule = data.module || 'bol';
 
           renderConversations();
           renderModuleSelector();
@@ -925,9 +921,9 @@
     function renderAttachments() {
       attachmentsPreview.innerHTML = state.attachments.map((a, i) => `
         <div class="attachment-item">
-          <span class="material-icons">attach_file</span>
+          <span class="material-symbols-outlined">attach_file</span>
           <span>${escapeHtml(a.originalName)}</span>
-          <span class="material-icons remove" onclick="removeAttachment(${i})">close</span>
+          <span class="material-symbols-outlined remove" onclick="removeAttachment(${i})">close</span>
         </div>
       `).join('');
     }
