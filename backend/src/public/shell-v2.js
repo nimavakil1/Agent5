@@ -16,8 +16,15 @@
 
   // Module registry (mirrors backend config)
   const MODULES = {
+    'assistant': {
+      id: 'assistant', name: 'Assistant', icon: 'smart_toy', color: '#6366f1',
+      basePath: '/assistant',
+      pages: [
+        { id: 'chat', path: '/assistant/', name: 'Chat', icon: 'chat' }
+      ]
+    },
     'ai-agents': {
-      id: 'ai-agents', name: 'AI Agents', icon: 'smart_toy', color: '#6366f1',
+      id: 'ai-agents', name: 'AI Agents', icon: 'psychology', color: '#8b5cf6',
       basePath: '/ai',
       pages: [
         { id: 'console', path: '/ai/', name: 'Console', icon: 'chat' },
@@ -121,6 +128,7 @@
       pages: [
         { id: 'users', path: '/settings/', name: 'Users', icon: 'group' },
         { id: 'roles', path: '/settings/roles.html', name: 'Roles', icon: 'admin_panel_settings' },
+        { id: 'chat-permissions', path: '/settings/chat-permissions.html', name: 'Chat Permissions', icon: 'chat' },
         { id: 'integrations', path: '/settings/integrations.html', name: 'Integrations', icon: 'hub' },
         { id: 'carriers', path: '/settings/carriers.html', name: 'Carriers', icon: 'local_shipping' },
         { id: 'warehouses', path: '/settings/warehouses.html', name: 'Warehouses', icon: 'warehouse' },

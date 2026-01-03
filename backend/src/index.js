@@ -53,6 +53,10 @@ const shippingRouter = require('./api/routes/shipping.api');
 const fulfillmentRouter = require('./api/routes/fulfillment.api');
 const accountingRouter = require('./api/routes/accounting.api');
 const amazonMappingsRouter = require('./api/routes/amazonMappings.api');
+const logsRouter = require('./api/routes/logs.api');
+const chatPermissionsRouter = require('./api/routes/chat-permissions.api');
+const { checkPermissionRouter: chatCheckRouter } = require('./api/routes/chat-permissions.api');
+const chatRouter = require('./api/routes/chat.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -386,6 +390,13 @@ app.use('/api/fulfillment', requireSession, fulfillmentRouter);
 // Accounting Agent module
 app.use('/api/accounting', requireSession, accountingRouter);
 app.use('/api/amazon/mappings', requireSession, amazonMappingsRouter);
+// Module logs API (SSE streaming for real-time logs)
+app.use('/api/logs', requireSession, logsRouter);
+// Chat permissions API (superadmin only for management, session for checking)
+app.use('/api/chat-permissions', requireSession, chatPermissionsRouter);
+app.use('/api/chat/my-permissions', requireSession, chatCheckRouter);
+// Module Assistant Chat API
+app.use('/api/chat', requireSession, chatRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
