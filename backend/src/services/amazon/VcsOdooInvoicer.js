@@ -1687,8 +1687,10 @@ class VcsOdooInvoicer {
       move_type: 'out_invoice',
       partner_id: invoicePartnerId,
       invoice_date: this.formatDate(invoiceDate),
-      // ref: VCS invoice number (shown in "Customer Reference" in Odoo)
-      ref: vcsInvoiceNumber || order.orderId,
+      // ref: Amazon order ID (shown in "Customer Reference" in Odoo)
+      ref: order.orderId,
+      // x_vcs_invoice_number: VCS invoice number (our custom field)
+      x_vcs_invoice_number: vcsInvoiceNumber || null,
       // payment_reference: Also set to VCS invoice number
       payment_reference: vcsInvoiceNumber || null,
       // invoice_origin: Amazon order ID (link to sale order)
@@ -1939,7 +1941,10 @@ class VcsOdooInvoicer {
     // Update invoice header
     const headerUpdate = {
       invoice_date: this.formatDate(invoiceDate),
-      ref: vcsInvoiceNumber || order.orderId,
+      // ref: Amazon order ID
+      ref: order.orderId,
+      // x_vcs_invoice_number: VCS invoice number (our custom field)
+      x_vcs_invoice_number: vcsInvoiceNumber || null,
       payment_reference: vcsInvoiceNumber || null,
     };
 
@@ -2490,7 +2495,10 @@ class VcsOdooInvoicer {
       partner_id: partnerId,
       invoice_origin: saleOrder.name,
       invoice_date: this.formatDate(returnDate),
-      ref: order.vatInvoiceNumber || `RETURN-${order.orderId}`,
+      // ref: Amazon order ID (for returns, prefix with RETURN if no VCS number)
+      ref: order.orderId,
+      // x_vcs_invoice_number: VCS invoice number (our custom field)
+      x_vcs_invoice_number: order.vatInvoiceNumber || null,
       payment_reference: order.vatInvoiceNumber || null,
       fiscal_position_id: fiscalPositionId,
       journal_id: journalId,
