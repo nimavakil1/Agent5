@@ -4042,6 +4042,111 @@ router.get('/finance/events', async (req, res) => {
   }
 });
 
+// ==================== SELLER DIAGNOSTIC ENDPOINTS ====================
+
+/**
+ * @route GET /api/amazon/seller/diagnostic
+ * @desc Run seller orders diagnostic and return results
+ */
+router.get('/seller/diagnostic', async (req, res) => {
+  try {
+    const { main } = require('../../../scripts/amazon-seller-diagnostic');
+    const results = await main();
+
+    res.json({
+      success: true,
+      summary: {
+        duplicateOrders: results.duplicateOrders.length,
+        duplicateInvoices: results.duplicateInvoices.length,
+        orphanInvoices: results.orphanInvoices.length,
+        toInvoiceOrders: results.toInvoiceAnalysis.length,
+      },
+      data: results,
+    });
+  } catch (error) {
+    console.error('[Seller Diagnostic] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/seller/diagnostic/download/:report
+ * @desc Download diagnostic report as CSV
+ * @param report - report1, report2, report3, report4
+ */
+router.get('/seller/diagnostic/download/:report', async (req, res) => {
+  try {
+    const { report } = req.params;
+    const reportsDir = path.join(__dirname, '../../../reports');
+
+    const reportFiles = {
+      report1: 'report1_duplicate_orders.csv',
+      report2: 'report2_duplicate_invoices.csv',
+      report3: 'report3_orphan_invoices.csv',
+      report4: 'report4_to_invoice_analysis.csv',
+    };
+
+    if (!reportFiles[report]) {
+      return res.status(400).json({ error: 'Invalid report name. Use: report1, report2, report3, or report4' });
+    }
+
+    const filePath = path.join(reportsDir, reportFiles[report]);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        error: 'Report not found. Run GET /api/amazon/seller/diagnostic first to generate reports.'
+      });
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${reportFiles[report]}"`);
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('[Seller Diagnostic] Download error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/seller/diagnostic/reports
+ * @desc List available diagnostic reports
+ */
+router.get('/seller/diagnostic/reports', async (req, res) => {
+  try {
+    const reportsDir = path.join(__dirname, '../../../reports');
+
+    if (!fs.existsSync(reportsDir)) {
+      return res.json({ reports: [], message: 'No reports directory. Run diagnostic first.' });
+    }
+
+    const reportFiles = [
+      'report1_duplicate_orders.csv',
+      'report2_duplicate_invoices.csv',
+      'report3_orphan_invoices.csv',
+      'report4_to_invoice_analysis.csv',
+    ];
+
+    const reports = [];
+    for (const fileName of reportFiles) {
+      const filePath = path.join(reportsDir, fileName);
+      if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        reports.push({
+          name: fileName,
+          size: stats.size,
+          modified: stats.mtime,
+          downloadUrl: `/api/amazon/seller/diagnostic/download/${fileName.split('_')[0]}`,
+        });
+      }
+    }
+
+    res.json({ reports });
+  } catch (error) {
+    console.error('[Seller Diagnostic] List reports error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Helper functions for settlement aggregation
 function aggregateSettlementFees(transactions) {
   const feesByMarketplace = {};

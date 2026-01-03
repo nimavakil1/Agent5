@@ -18,6 +18,10 @@ const { runStockSync } = require('./BolStockSync');
 const { runShipmentSync } = require('./BolShipmentSync');
 const { runCancellationCheck } = require('./BolCancellationHandler');
 const { runFulfillmentSwap } = require('./BolFulfillmentSwapper');
+const { getModuleLogger } = require('../logging/ModuleLogger');
+
+// Get Bol module logger
+const logger = getModuleLogger('bol');
 
 let nightlySyncJob = null;
 let orderPollInterval = null;
@@ -56,7 +60,7 @@ function getMillisUntil3AM() {
  */
 async function runNightlySync() {
   console.log('[BolScheduler] Starting nightly extended sync...');
-  const startTime = Date.now();
+  const timer = logger.startTimer('NIGHTLY_SYNC', 'scheduler');
 
   try {
     // Step 1: Sync data from Bol.com API (orders + invoices)
@@ -74,14 +78,15 @@ async function runNightlySync() {
     const bookingResults = await BolInvoiceBooker.bookAllUnbooked();
     console.log('[BolScheduler] Invoice booking complete:', bookingResults);
 
-    const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-    console.log(`[BolScheduler] Nightly sync complete in ${duration} minutes:`, {
-      sync: syncResults,
-      orders: orderResults,
-      booking: bookingResults
-    });
+    await timer.success(
+      `Nightly sync complete: ${syncResults.orders || 0} orders, ${orderResults.created || 0} Odoo orders, ${bookingResults.booked || 0} invoices booked`,
+      {
+        details: { sync: syncResults, orders: orderResults, booking: bookingResults }
+      }
+    );
   } catch (error) {
     console.error('[BolScheduler] Nightly sync failed:', error);
+    await timer.error('Nightly sync failed', error);
   }
 
   // Schedule next run
@@ -92,11 +97,12 @@ async function runNightlySync() {
  * Poll for new orders and create Odoo orders
  */
 async function runOrderPoll() {
+  const timer = logger.startTimer('ORDER_POLL', 'scheduler');
   try {
     console.log('[BolScheduler] Polling for new orders...');
 
     // Sync recent orders from Bol.com
-    await BolSyncService.syncOrders('RECENT');
+    const syncResult = await BolSyncService.syncOrders('RECENT');
 
     // Create Odoo orders for any pending
     const orderCreator = await getBolOrderCreator();
@@ -104,9 +110,17 @@ async function runOrderPoll() {
 
     if (results.created > 0) {
       console.log(`[BolScheduler] Created ${results.created} new Odoo orders`);
+      await timer.success(`Polled orders: ${results.created} new Odoo orders created`, {
+        details: { synced: syncResult?.synced || 0, created: results.created }
+      });
+    } else {
+      await timer.info('Order poll complete, no new orders', {
+        details: { synced: syncResult?.synced || 0, created: 0 }
+      });
     }
   } catch (error) {
     console.error('[BolScheduler] Order poll failed:', error.message);
+    await timer.error('Order poll failed', error);
   }
 }
 
@@ -114,14 +128,21 @@ async function runOrderPoll() {
  * Sync stock levels to Bol.com
  */
 async function doStockSync() {
+  const timer = logger.startTimer('STOCK_SYNC', 'scheduler');
   try {
     console.log('[BolScheduler] Syncing stock to Bol.com...');
     const results = await runStockSync();
     if (results && results.updated > 0) {
       console.log(`[BolScheduler] Updated ${results.updated} stock levels on Bol.com`);
+      await timer.success(`Stock sync: ${results.updated} products updated`, {
+        details: results
+      });
+    } else {
+      await timer.info('Stock sync complete, no changes', { details: results });
     }
   } catch (error) {
     console.error('[BolScheduler] Stock sync failed:', error.message);
+    await timer.error('Stock sync failed', error);
   }
 }
 
@@ -129,6 +150,7 @@ async function doStockSync() {
  * Check for shipments to confirm on Bol.com
  */
 async function doShipmentCheck() {
+  const timer = logger.startTimer('SHIPMENT_CHECK', 'scheduler');
   try {
     // Check shipments
     const shipResults = await runShipmentSync();
@@ -141,8 +163,21 @@ async function doShipmentCheck() {
     if (cancelResults && cancelResults.processed > 0) {
       console.log(`[BolScheduler] Processed ${cancelResults.processed} cancellations`);
     }
+
+    const confirmed = shipResults?.confirmed || 0;
+    const canceled = cancelResults?.processed || 0;
+    if (confirmed > 0 || canceled > 0) {
+      await timer.success(`Shipments: ${confirmed} confirmed, ${canceled} canceled`, {
+        details: { shipments: shipResults, cancellations: cancelResults }
+      });
+    } else {
+      await timer.info('Shipment check complete, no changes', {
+        details: { shipments: shipResults, cancellations: cancelResults }
+      });
+    }
   } catch (error) {
     console.error('[BolScheduler] Shipment/cancellation check failed:', error.message);
+    await timer.error('Shipment/cancellation check failed', error);
   }
 }
 
@@ -150,15 +185,22 @@ async function doShipmentCheck() {
  * Check and swap FBB/FBR fulfillment based on stock levels
  */
 async function doFulfillmentSwap() {
+  const timer = logger.startTimer('FULFILLMENT_SWAP', 'scheduler');
   try {
     console.log('[BolScheduler] Checking FBB/FBR fulfillment swap...');
     const results = await runFulfillmentSwap();
     const totalSwaps = (results.swappedToFbr || 0) + (results.swappedToFbb || 0);
     if (totalSwaps > 0) {
       console.log(`[BolScheduler] Swapped ${results.swappedToFbr} to FBR, ${results.swappedToFbb} to FBB`);
+      await timer.success(`Fulfillment swap: ${results.swappedToFbr} to FBR, ${results.swappedToFbb} to FBB`, {
+        details: results
+      });
+    } else {
+      await timer.info('Fulfillment swap check complete, no changes', { details: results });
     }
   } catch (error) {
     console.error('[BolScheduler] Fulfillment swap check failed:', error.message);
+    await timer.error('Fulfillment swap check failed', error);
   }
 }
 
@@ -166,14 +208,19 @@ async function doFulfillmentSwap() {
  * Sync returns from Bol.com API to MongoDB
  */
 async function doReturnsSync() {
+  const timer = logger.startTimer('RETURNS_SYNC', 'scheduler');
   try {
     console.log('[BolScheduler] Syncing returns from Bol.com...');
     const results = await BolSyncService.syncReturns('RECENT');
     if (results && results.synced > 0) {
       console.log(`[BolScheduler] Synced ${results.synced} returns from Bol.com`);
+      await timer.success(`Returns sync: ${results.synced} returns synced`, { details: results });
+    } else {
+      await timer.info('Returns sync complete, no new returns', { details: results });
     }
   } catch (error) {
     console.error('[BolScheduler] Returns sync failed:', error.message);
+    await timer.error('Returns sync failed', error);
   }
 }
 
@@ -181,14 +228,19 @@ async function doReturnsSync() {
  * Sync shipments list from Bol.com API to MongoDB
  */
 async function doShipmentsSync() {
+  const timer = logger.startTimer('SHIPMENTS_SYNC', 'scheduler');
   try {
     console.log('[BolScheduler] Syncing shipments from Bol.com...');
     const results = await BolSyncService.syncShipments('RECENT');
     if (results && results.synced > 0) {
       console.log(`[BolScheduler] Synced ${results.synced} shipments from Bol.com`);
+      await timer.success(`Shipments sync: ${results.synced} shipments synced`, { details: results });
+    } else {
+      await timer.info('Shipments sync complete, no new shipments', { details: results });
     }
   } catch (error) {
     console.error('[BolScheduler] Shipments sync failed:', error.message);
+    await timer.error('Shipments sync failed', error);
   }
 }
 
@@ -209,6 +261,22 @@ function scheduleNightlySync() {
  */
 function start() {
   console.log('[BolScheduler] Starting Bol.com sync scheduler...');
+
+  // Log scheduler start
+  logger.info('SCHEDULER_START', 'Bol scheduler started', {
+    details: {
+      jobs: ['ORDER_POLL', 'STOCK_SYNC', 'SHIPMENT_CHECK', 'FULFILLMENT_SWAP', 'RETURNS_SYNC', 'SHIPMENTS_SYNC', 'NIGHTLY_SYNC'],
+      intervals: {
+        orderPoll: '15 min',
+        stockSync: '15 min',
+        shipmentCheck: '5 min',
+        fulfillmentSwap: '1 hour',
+        returnsSync: '1 hour',
+        shipmentsSync: '1 hour',
+        nightlySync: '3:00 AM daily'
+      }
+    }
+  });
 
   // Schedule nightly sync
   scheduleNightlySync();

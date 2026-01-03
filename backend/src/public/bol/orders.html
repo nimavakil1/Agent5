@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bol.com - ACROPAQ</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-logo-container {
+      background: #fff;
+      border-radius: 10px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .page-logo {
+      height: 28px;
+      width: auto;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .stat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .stat-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stat-icon .material-symbols-outlined {
+      font-size: 22px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #71717a;
+      margin-top: 4px;
+    }
+
+    /* Status Banner */
+    .status-banner {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+
+    .status-banner.connected {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    .status-banner.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .status-banner.warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .status-banner .material-symbols-outlined {
+      font-size: 24px;
+    }
+
+    .status-banner.connected .material-symbols-outlined { color: #22c55e; }
+    .status-banner.error .material-symbols-outlined { color: #ef4444; }
+    .status-banner.warning .material-symbols-outlined { color: #f59e0b; }
+
+    .status-info {
+      flex: 1;
+    }
+
+    .status-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .status-desc {
+      font-size: 13px;
+      color: #a1a1aa;
+      margin-top: 2px;
+    }
+
+    /* Card */
+    .card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid #252532;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title .material-symbols-outlined {
+      font-size: 20px;
+      color: #0066ff;
+    }
+
+    .card-body {
+      padding: 24px;
+    }
+
+    /* Table */
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: #12121a;
+      border-bottom: 1px solid #252532;
+    }
+
+    th[data-sort] { cursor: pointer; }
+    th[data-sort]:hover { color: #818cf8; }
+    th.sorted { color: #6366f1; }
+    th .sort-icon { font-size: 11px; vertical-align: middle; margin-left: 3px; }
+
+    td {
+      padding: 14px 16px;
+      font-size: 14px;
+      color: #e4e4e7;
+      border-bottom: 1px solid #252532;
+    }
+
+    tr:hover td {
+      background: rgba(99, 102, 241, 0.05);
+    }
+
+    .order-id {
+      font-size: 14px;
+      color: #60a5fa;
+    }
+
+    .date-cell {
+      line-height: 1.4;
+    }
+
+    .date-time {
+      font-size: 12px;
+      color: #71717a;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge.open {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+    }
+
+    .badge.shipped {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+    }
+
+    .badge.returned {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: #6366f1;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #4f46e5;
+    }
+
+    .btn-secondary {
+      background: #252532;
+      color: #e4e4e7;
+      border: 1px solid #3f3f50;
+    }
+
+    .btn-secondary:hover {
+      background: #2a2a3a;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .btn .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    /* Empty State */
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+    }
+
+    .empty-state .material-symbols-outlined {
+      font-size: 48px;
+      color: #3f3f50;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e4e4e7;
+      margin-bottom: 4px;
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+      color: #71717a;
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #71717a;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #252532;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 12px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Filters */
+    .filters {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .filter-input {
+      padding: 10px 14px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #e4e4e7;
+      font-size: 14px;
+      outline: none;
+      min-width: 200px;
+    }
+
+    .filter-input:focus {
+      border-color: #6366f1;
+    }
+
+    .filter-select {
+      padding: 10px 14px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 10px;
+      color: #e4e4e7;
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Column filter inputs */
+    .column-filter {
+      padding: 6px 10px;
+      background: #12121a;
+      border: 1px solid #252532;
+      border-radius: 6px;
+      color: #e4e4e7;
+      font-size: 12px;
+      width: 100%;
+      margin-top: 6px;
+      outline: none;
+    }
+
+    .column-filter:focus {
+      border-color: #6366f1;
+    }
+
+    .column-filter::placeholder {
+      color: #52525b;
+    }
+
+    th.filterable {
+      vertical-align: top;
+    }
+
+    /* Product info */
+    .product-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .product-image {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: #252532;
+      object-fit: cover;
+    }
+
+    .product-title {
+      font-size: 14px;
+      color: #e4e4e7;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .product-ean {
+      font-size: 12px;
+      color: #71717a;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      border-top: 1px solid #252532;
+    }
+
+    .pagination-info {
+      font-size: 13px;
+      color: #71717a;
+    }
+
+    .page-size-select {
+      padding: 6px 10px;
+      background: #252532;
+      border: 1px solid #3f3f50;
+      border-radius: 6px;
+      color: #e4e4e7;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div class="page-logo-container">
+        <img src="/assets/logos/bolcom.png" alt="Bol.com" class="page-logo">
+      </div>
+      <button class="btn btn-primary" onclick="refreshData()">
+        <span class="material-symbols-outlined">refresh</span>
+        Refresh
+      </button>
+    </header>
+
+    <!-- Status Banner -->
+    <div class="status-banner warning" id="status-banner">
+      <span class="material-symbols-outlined">hourglass_empty</span>
+      <div class="status-info">
+        <div class="status-title" id="status-title">Checking connection...</div>
+        <div class="status-desc" id="status-desc">Verifying Bol.com API credentials</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid" style="display: none;">
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon" style="background: rgba(59, 130, 246, 0.15);">
+            <span class="material-symbols-outlined" style="color: #60a5fa;">shopping_cart</span>
+          </div>
+        </div>
+        <div class="stat-value" id="stat-orders">--</div>
+        <div class="stat-label">Open Orders</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon" style="background: rgba(34, 197, 94, 0.15);">
+            <span class="material-symbols-outlined" style="color: #4ade80;">local_shipping</span>
+          </div>
+        </div>
+        <div class="stat-value" id="stat-shipments">--</div>
+        <div class="stat-label">Shipments</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15);">
+            <span class="material-symbols-outlined" style="color: #fbbf24;">assignment_return</span>
+          </div>
+        </div>
+        <div class="stat-value" id="stat-returns">--</div>
+        <div class="stat-label">Open Returns</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon" style="background: rgba(139, 92, 246, 0.15);">
+            <span class="material-symbols-outlined" style="color: #a78bfa;">inventory_2</span>
+          </div>
+        </div>
+        <div class="stat-value" id="stat-offers">--</div>
+        <div class="stat-label">Unique Products</div>
+      </div>
+    </div>
+
+    <!-- Orders -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-outlined">shopping_cart</span>
+            Orders
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="syncOrdersWithOdoo()" id="sync-odoo-btn">
+            <span class="material-symbols-outlined">sync</span>
+            Sync with Odoo
+          </button>
+        </div>
+        <div class="card-body">
+          <div class="table-container">
+            <table id="orders-table-element">
+              <thead>
+                <tr>
+                  <th class="filterable" data-sort="orderId" onclick="sortTable('orders', 'orderId')">Order ID <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="0" placeholder="Filter..." onclick="event.stopPropagation()"></th>
+                  <th class="filterable" data-sort="orderPlacedDateTime" onclick="sortTable('orders', 'orderPlacedDateTime')">Date <span class="sort-icon"></span><br><input type="text" class="column-filter" data-column="1" placeholder="Filter..." onclick="event.stopPropagation()"></th>
+                  <th class="filterable">Odoo<br><input type="text" class="column-filter" data-column="2" placeholder="Filter..."></th>
+                  <th class="filterable">Fulfilment<br>
+                    <select class="column-filter" id="orders-fulfilment-filter" onchange="loadOrders()" style="padding: 4px 8px;">
+                      <option value="">All</option>
+                      <option value="FBR">FBR</option>
+                      <option value="FBB">FBB</option>
+                    </select>
+                  </th>
+                  <th data-sort="itemCount" onclick="sortTable('orders', 'itemCount')">Items <span class="sort-icon"></span></th>
+                  <th data-sort="total" onclick="sortTable('orders', 'total')">Total <span class="sort-icon"></span></th>
+                  <th class="filterable">Status<br><input type="text" class="column-filter" data-column="6" placeholder="Filter..." onclick="event.stopPropagation()"></th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="orders-table">
+                <tr>
+                  <td colspan="8">
+                    <div class="loading">
+                      <div class="spinner"></div>
+                      Loading orders...
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination" id="orders-pagination" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 13px; color: #71717a;">Show</span>
+              <select class="page-size-select" id="orders-page-size" onchange="changePageSize('orders')">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <span class="pagination-info" id="orders-pagination-info">-</span>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" id="orders-prev-btn" onclick="prevPage('orders')" disabled>Previous</button>
+              <button class="btn btn-secondary btn-sm" id="orders-next-btn" onclick="nextPage('orders')" disabled>Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+  </div>
+
+  <!-- Order Detail Modal -->
+  <div class="modal-overlay" id="order-modal" onclick="if(event.target===this)closeOrderModal()">
+    <div class="modal" style="max-width: 700px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Order Details</h2>
+        <button class="modal-close" onclick="closeOrderModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body" id="order-modal-body">
+        <div class="loading">
+          <div class="spinner"></div>
+          Loading order details...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #18181f; border: 1px solid #252532; border-radius: 16px; width: 90%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column; }
+    .modal-header { padding: 20px 24px; border-bottom: 1px solid #252532; display: flex; align-items: center; justify-content: space-between; }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; margin: 0; }
+    .modal-close { background: none; border: none; color: #71717a; cursor: pointer; padding: 4px; }
+    .modal-close:hover { color: #fff; }
+    .modal-body { padding: 24px; overflow-y: auto; }
+    .order-detail-row { display: flex; gap: 16px; margin-bottom: 12px; }
+    .order-detail-label { color: #71717a; font-size: 13px; min-width: 120px; }
+    .order-detail-value { color: #e4e4e7; font-size: 14px; }
+    .order-items-list { margin-top: 20px; }
+    .order-item { display: flex; gap: 12px; padding: 12px; background: #12121a; border-radius: 10px; margin-bottom: 8px; }
+    .order-item-image { width: 50px; height: 50px; border-radius: 8px; background: #252532; object-fit: cover; }
+    .order-item-info { flex: 1; }
+    .order-item-title { font-size: 14px; color: #e4e4e7; margin-bottom: 4px; }
+    .order-item-ean { font-size: 12px; color: #71717a; font-family: monospace; }
+    .order-item-price { font-size: 14px; color: #fff; font-weight: 600; }
+    .return-product { display: flex; align-items: center; gap: 10px; }
+    .return-thumb { width: 36px; height: 36px; border-radius: 6px; background: #252532; object-fit: cover; }
+  </style>
+
+  <script>
+    // Pagination state for orders
+    const paginationState = {
+      orders: { all: [], filtered: [], offset: 0, pageSize: 25 }
+    };
+
+    // Sort state for orders
+    const sortState = {
+      orders: { column: 'orderPlacedDateTime', direction: 'desc' }
+    };
+
+    function sortTable(type, column) {
+      const state = sortState[type];
+      if (state.column === column) {
+        state.direction = state.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.column = column;
+        state.direction = column.includes('Date') || column.includes('DateTime') ? 'desc' : 'asc';
+      }
+      applySortToTable(type);
+      updateTableSortIndicators(type);
+    }
+
+    function applySortToTable(type) {
+      const state = sortState[type];
+      const data = paginationState[type];
+
+      if (data.filtered.length > 0 && state.column) {
+        data.filtered.sort((a, b) => {
+          let valA, valB;
+
+          if (state.column === 'itemCount') {
+            valA = (a.orderItems || []).length;
+            valB = (b.orderItems || []).length;
+          } else if (state.column === 'total') {
+            valA = (a.orderItems || []).reduce((s, i) => s + (i.totalPrice || (i.unitPrice * (i.quantity || 1)) || 0), 0);
+            valB = (b.orderItems || []).reduce((s, i) => s + (i.totalPrice || (i.unitPrice * (i.quantity || 1)) || 0), 0);
+          } else {
+            valA = a[state.column];
+            valB = b[state.column];
+          }
+
+          if (valA == null) valA = '';
+          if (valB == null) valB = '';
+
+          if (typeof valA === 'string') valA = valA.toLowerCase();
+          if (typeof valB === 'string') valB = valB.toLowerCase();
+
+          if (valA < valB) return state.direction === 'asc' ? -1 : 1;
+          if (valA > valB) return state.direction === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+
+      data.offset = 0;
+      renderTable(type);
+    }
+
+    function updateTableSortIndicators(type) {
+      const tableId = `${type}-table-element`;
+      const table = document.getElementById(tableId);
+      if (!table) return;
+
+      const state = sortState[type];
+      table.querySelectorAll('th[data-sort]').forEach(th => {
+        th.classList.remove('sorted');
+        const icon = th.querySelector('.sort-icon');
+        if (icon) {
+          if (th.dataset.sort === state.column) {
+            th.classList.add('sorted');
+            icon.textContent = state.direction === 'asc' ? '▲' : '▼';
+          } else {
+            icon.textContent = '';
+          }
+        }
+      });
+    }
+
+    // Wait for shell to be ready then initialize
+    async function init() {
+      // Wait for shell authentication
+      await new Promise(resolve => {
+        const check = () => {
+          if (window.Agent5Shell && window.Agent5Shell.getCurrentUser()) {
+            resolve();
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        check();
+      });
+
+      // Now check Bol.com connection and load data
+      await checkStatus();
+    }
+
+    // Check connection status
+    async function checkStatus() {
+      const banner = document.getElementById('status-banner');
+      const title = document.getElementById('status-title');
+      const desc = document.getElementById('status-desc');
+      const statsGrid = document.getElementById('stats-grid');
+
+      try {
+        const res = await fetch('/api/bolcom/status', { credentials: 'include' });
+        const data = await res.json();
+
+        if (data.connected) {
+          banner.className = 'status-banner connected';
+          banner.querySelector('.material-symbols-outlined').textContent = 'check_circle';
+          title.textContent = 'Connected to Bol.com';
+          desc.textContent = `Client ID: ${data.clientId}`;
+          statsGrid.style.display = 'grid';
+          await loadAllData();
+        } else if (data.configured) {
+          banner.className = 'status-banner error';
+          banner.querySelector('.material-symbols-outlined').textContent = 'error';
+          title.textContent = 'Connection Failed';
+          desc.textContent = data.error || 'Could not connect to Bol.com API';
+        } else {
+          banner.className = 'status-banner warning';
+          banner.querySelector('.material-symbols-outlined').textContent = 'warning';
+          title.textContent = 'Not Configured';
+          desc.textContent = 'Add BOL_CLIENT_ID and BOL_CLIENT_SECRET to .env file';
+        }
+      } catch (e) {
+        banner.className = 'status-banner error';
+        banner.querySelector('.material-symbols-outlined').textContent = 'error';
+        title.textContent = 'Error';
+        desc.textContent = e.message;
+      }
+    }
+
+    // Load all data
+    async function loadAllData() {
+      // First quickly load stats from MongoDB (no sync wait)
+      await loadStatsQuick();
+      // Load orders
+      await loadOrders();
+      // Update stats from the loaded data
+      loadStats();
+    }
+
+    // Quick stats load from MongoDB (no sync)
+    async function loadStatsQuick() {
+      try {
+        const [ordersRes, shipmentsRes, returnsRes] = await Promise.all([
+          fetch('/api/bolcom/orders?skipSync=true', { credentials: 'include' }),
+          fetch('/api/bolcom/shipments?skipSync=true', { credentials: 'include' }),
+          fetch('/api/bolcom/returns?skipSync=true', { credentials: 'include' })
+        ]);
+
+        if (ordersRes.ok) {
+          const data = await ordersRes.json();
+          const orders = data.orders || [];
+          // Count orders where not all items are shipped
+          const openOrders = orders.filter(o => {
+            const items = o.orderItems || [];
+            const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+            const shippedQty = items.reduce((sum, i) => sum + (i.quantityShipped || 0), 0);
+            const cancelledQty = items.reduce((sum, i) => sum + (i.quantityCancelled || 0), 0);
+            return shippedQty < totalQty && cancelledQty < totalQty;
+          });
+          document.getElementById('stat-orders').textContent = openOrders.length;
+
+          // Count unique EANs across all orders
+          const uniqueEans = new Set();
+          orders.forEach(o => {
+            (o.orderItems || []).forEach(item => {
+              if (item.ean) uniqueEans.add(item.ean);
+            });
+          });
+          document.getElementById('stat-offers').textContent = uniqueEans.size;
+        }
+        if (shipmentsRes.ok) {
+          const data = await shipmentsRes.json();
+          document.getElementById('stat-shipments').textContent = data.count || 0;
+        }
+        if (returnsRes.ok) {
+          const data = await returnsRes.json();
+          const openReturns = (data.returns || []).filter(r => !r.handled);
+          document.getElementById('stat-returns').textContent = openReturns.length;
+        }
+      } catch (e) {
+        console.error('Failed to load quick stats:', e);
+      }
+    }
+
+    // Load stats - uses already loaded data from paginationState
+    function loadStats() {
+      try {
+        const orders = paginationState.orders.all || [];
+
+        // Count orders where not all items are shipped
+        const openOrders = orders.filter(o => {
+          const items = o.orderItems || [];
+          const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+          const shippedQty = items.reduce((sum, i) => sum + (i.quantityShipped || 0), 0);
+          const cancelledQty = items.reduce((sum, i) => sum + (i.quantityCancelled || 0), 0);
+          return shippedQty < totalQty && cancelledQty < totalQty;
+        });
+        document.getElementById('stat-orders').textContent = openOrders.length;
+
+        // All shipments
+        document.getElementById('stat-shipments').textContent = paginationState.shipments.all?.length || 0;
+
+        // Only unhandled returns
+        const openReturns = (paginationState.returns.all || []).filter(r => !r.handled);
+        document.getElementById('stat-returns').textContent = openReturns.length;
+
+        // Unique products (EANs) from orders
+        const uniqueEans = new Set();
+        orders.forEach(o => {
+          (o.orderItems || []).forEach(item => {
+            if (item.ean) uniqueEans.add(item.ean);
+          });
+        });
+        document.getElementById('stat-offers').textContent = uniqueEans.size;
+      } catch (e) {
+        console.error('Failed to load stats:', e);
+      }
+    }
+
+    // Load orders
+    async function loadOrders() {
+      const tbody = document.getElementById('orders-table');
+      const fulfilmentFilter = document.getElementById('orders-fulfilment-filter')?.value || '';
+
+      // Build query string with fulfilment filter
+      let queryParams = ['skipSync=true'];
+      if (fulfilmentFilter) {
+        queryParams.push(`fulfilmentMethod=${fulfilmentFilter}`);
+      }
+      const queryString = `?${queryParams.join('&')}`;
+
+      try {
+        const res = await fetch(`/api/bolcom/orders${queryString}`, { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.orders || data.orders.length === 0) {
+          paginationState.orders.all = [];
+          paginationState.orders.filtered = [];
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="8">
+                <div class="empty-state">
+                  <span class="material-symbols-outlined">inbox</span>
+                  <div class="empty-state-title">No orders</div>
+                  <div class="empty-state-text">No orders found</div>
+                </div>
+              </td>
+            </tr>
+          `;
+          document.getElementById('orders-pagination').style.display = 'none';
+          return;
+        }
+
+        paginationState.orders.all = data.orders;
+        paginationState.orders.filtered = data.orders;
+        paginationState.orders.offset = 0;
+        renderTable('orders');
+      } catch (e) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="color: #ef4444; padding: 20px;">Error loading orders: ${e.message}</td>
+          </tr>
+        `;
+      }
+    }
+
+    function renderOrdersTable(orders) {
+      const tbody = document.getElementById('orders-table');
+      tbody.innerHTML = orders.map(order => {
+        const items = order.orderItems || [];
+        const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+        const shippedQty = items.reduce((sum, i) => sum + (i.quantityShipped || 0), 0);
+        const cancelledQty = items.reduce((sum, i) => sum + (i.quantityCancelled || 0), 0);
+
+        let status = 'Open';
+        let statusClass = 'open';
+        if (shippedQty >= totalQty) {
+          status = 'Shipped';
+          statusClass = 'shipped';
+        } else if (shippedQty > 0) {
+          status = 'Partial';
+          statusClass = 'pending';
+        } else if (cancelledQty >= totalQty) {
+          status = 'Cancelled';
+          statusClass = 'returned';
+        }
+
+        // Odoo order and invoice info
+        let odooCell = '<span style="color: #52525b;">-</span>';
+        if (order.odoo?.saleOrderId) {
+          const orderUrl = `https://acropaq.odoo.com/web#id=${order.odoo.saleOrderId}&model=sale.order&view_type=form`;
+          let odooContent = `<a href="${orderUrl}" target="_blank" style="color: #60a5fa;">${order.odoo.saleOrderName}</a>`;
+
+          // Add invoice icon if invoiced
+          if (order.odoo.invoiceId) {
+            const invoiceUrl = `https://acropaq.odoo.com/web#id=${order.odoo.invoiceId}&model=account.move&view_type=form`;
+            odooContent += ` <a href="${invoiceUrl}" target="_blank" data-tooltip="${order.odoo.invoiceName}" style="color: #4ade80;"><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">receipt</span></a>`;
+          }
+          odooCell = odooContent;
+        }
+
+        return `
+          <tr>
+            <td><span class="order-id">${order.orderId}</span></td>
+            <td class="date-cell">${formatDate(order.orderPlacedDateTime)}<br><span class="date-time">${formatTime(order.orderPlacedDateTime)}</span></td>
+            <td>${odooCell}</td>
+            <td>${items[0]?.fulfilmentMethod || '-'}</td>
+            <td>${items.length}</td>
+            <td>&euro;${calculateTotal(items)}</td>
+            <td><span class="badge ${statusClass}">${status}</span></td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="viewOrder('${order.orderId}')">
+                <span class="material-symbols-outlined">visibility</span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Load shipments
+    async function loadShipments() {
+      const tbody = document.getElementById('shipments-table');
+      try {
+        const res = await fetch('/api/bolcom/shipments?skipSync=true', { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.shipments || data.shipments.length === 0) {
+          paginationState.shipments.all = [];
+          paginationState.shipments.filtered = [];
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6">
+                <div class="empty-state">
+                  <span class="material-symbols-outlined">local_shipping</span>
+                  <div class="empty-state-title">No shipments</div>
+                  <div class="empty-state-text">No shipments found</div>
+                </div>
+              </td>
+            </tr>
+          `;
+          document.getElementById('shipments-pagination').style.display = 'none';
+          return;
+        }
+
+        paginationState.shipments.all = data.shipments;
+        paginationState.shipments.filtered = data.shipments;
+        paginationState.shipments.offset = 0;
+        renderTable('shipments');
+      } catch (e) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="color: #ef4444; padding: 20px;">Error loading shipments: ${e.message}</td>
+          </tr>
+        `;
+      }
+    }
+
+    // Carrier logo mapping - maps Bol transporter codes to logo filenames
+    const CARRIER_LOGOS = {
+      'TNT': 'postnl',        // Bol uses TNT code for PostNL
+      'POSTNL': 'postnl',
+      'PNL': 'postnl',
+      'POSTNL_NL': 'postnl',
+      'DHL': 'dhl',
+      'DHL_NL': 'dhl',
+      'DHL_DE': 'dhl',
+      'DHLFORYOU': 'dhl',
+      'DHL-SD': 'dhl',
+      'DHL-GLOBAL-MAIL': 'dhl',
+      'DPD': 'dpd',
+      'DPD-NL': 'dpd',
+      'DPD-BE': 'dpd',
+      'GLS': 'gls',
+      'GLS_NL': 'gls',
+      'UPS': 'ups',
+      'FEDEX': 'fedex',
+      'FEDEX_NL': 'fedex',
+      'FEDEX_BE': 'fedex',
+      'BPOST': 'bpost',
+      'BPOST_BE': 'bpost',
+      'BPOST_BRIEF': 'bpost'
+    };
+
+    function renderShipmentsTable(shipments) {
+      const tbody = document.getElementById('shipments-table');
+      tbody.innerHTML = shipments.map(shipment => {
+        const orderId = shipment.orderId || shipment.shipmentItems?.[0]?.orderId || '-';
+        const carrier = shipment.transport?.transporterCode || '-';
+        const trackTrace = shipment.transport?.trackAndTrace || '-';
+
+        let trackUrl = '';
+        let carrierDisplay = carrier;
+        let carrierLogo = CARRIER_LOGOS[carrier.toUpperCase()] || null;
+
+        if (trackTrace && trackTrace !== '-') {
+          const carrierLower = carrier.toLowerCase();
+          if (carrierLower.includes('postnl') || carrierLower === 'pnl' || carrierLower === 'postnl_nl' || carrierLower === 'tnt') {
+            trackUrl = `https://postnl.nl/tracktrace/?B=${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'PostNL';
+            carrierLogo = 'postnl';
+          } else if (carrierLower.includes('bpost') || carrierLower === 'bpost_be') {
+            trackUrl = `https://track.bpost.cloud/btr/web/#/search?itemCode=${encodeURIComponent(trackTrace)}&lang=nl`;
+            carrierDisplay = 'bpost';
+            carrierLogo = 'bpost';
+          } else if (carrierLower.includes('gls') || carrierLower === 'gls_nl') {
+            trackUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'GLS';
+            carrierLogo = 'gls';
+          } else if (carrierLower.includes('dpd') || carrierLower === 'dpd_nl' || carrierLower === 'dpd_be' || carrierLower === 'dpd-nl' || carrierLower === 'dpd-be') {
+            trackUrl = `https://tracking.dpd.de/status/nl_NL/parcel/${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'DPD';
+            carrierLogo = 'dpd';
+          } else if (carrierLower.includes('dhl') || carrierLower === 'dhl_nl' || carrierLower === 'dhl_de' || carrierLower === 'dhlforyou') {
+            trackUrl = `https://www.dhl.com/nl-nl/home/tracking.html?tracking-id=${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'DHL';
+            carrierLogo = 'dhl';
+          } else if (carrierLower.includes('ups')) {
+            trackUrl = `https://www.ups.com/track?tracknum=${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'UPS';
+            carrierLogo = 'ups';
+          } else if (carrierLower.includes('fedex')) {
+            trackUrl = `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'FedEx';
+            carrierLogo = 'fedex';
+          } else if (carrierLower.includes('tnt')) {
+            trackUrl = `https://www.tnt.com/express/nl_nl/site/shipping-tools/tracking.html?searchType=con&cons=${encodeURIComponent(trackTrace)}`;
+            carrierDisplay = 'PostNL';  // TNT is now PostNL
+            carrierLogo = 'postnl';
+          } else {
+            trackUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(trackTrace)}`;
+          }
+        }
+
+        // Render carrier as logo or text fallback
+        let carrierCell;
+        if (carrierLogo) {
+          carrierCell = `<img src="/assets/logos/${carrierLogo}.png" alt="${carrierDisplay}" title="${carrierDisplay}" style="height: 24px; max-width: 80px; object-fit: contain;" onerror="this.style.display='none';this.nextSibling.style.display='inline'"><span style="display:none">${carrierDisplay}</span>`;
+        } else {
+          carrierCell = carrierDisplay || carrier || '-';
+        }
+
+        return `
+          <tr>
+            <td><span class="order-id">${shipment.shipmentId}</span></td>
+            <td><span class="order-id">${orderId}</span></td>
+            <td>${formatDate(shipment.shipmentDateTime)}</td>
+            <td>${carrierCell}</td>
+            <td>${trackTrace && trackTrace !== '-' ? `<a href="${trackUrl}" target="_blank" style="color: #60a5fa;">${trackTrace}</a>` : '-'}</td>
+            <td><span class="badge shipped">Shipped</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Load returns
+    async function loadReturns() {
+      const tbody = document.getElementById('returns-table');
+      const handled = document.getElementById('returns-filter').value;
+      let query = '?skipSync=true';
+      if (handled !== '') query += `&handled=${handled}`;
+
+      try {
+        const res = await fetch(`/api/bolcom/returns${query}`, { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.returns || data.returns.length === 0) {
+          paginationState.returns.all = [];
+          paginationState.returns.filtered = [];
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <span class="material-symbols-outlined">assignment_return</span>
+                  <div class="empty-state-title">No returns</div>
+                  <div class="empty-state-text">No returns found</div>
+                </div>
+              </td>
+            </tr>
+          `;
+          document.getElementById('returns-pagination').style.display = 'none';
+          return;
+        }
+
+        // Fetch product info for all returns (for SKU and thumbnail)
+        const returnsWithProducts = await Promise.all(data.returns.map(async (ret) => {
+          const firstItem = ret.returnItems?.[0] || {};
+          if (firstItem.ean) {
+            const product = await lookupProductByEan(firstItem.ean);
+            return { ...ret, productInfo: product };
+          }
+          return ret;
+        }));
+
+        paginationState.returns.all = returnsWithProducts;
+        paginationState.returns.filtered = returnsWithProducts;
+        paginationState.returns.offset = 0;
+        renderTable('returns');
+      } catch (e) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="color: #ef4444; padding: 20px;">Error loading returns: ${e.message}</td>
+          </tr>
+        `;
+      }
+    }
+
+    function renderReturnsTable(returns) {
+      const tbody = document.getElementById('returns-table');
+      tbody.innerHTML = returns.map(ret => {
+        const firstItem = ret.returnItems?.[0] || {};
+        const orderId = firstItem.orderId || '-';
+        const ean = firstItem.ean || '-';
+        const product = ret.productInfo;
+        const sku = product?.sku || '';
+        const productName = product?.name || '';
+        const imageUrl = product?.image;
+
+        let reasonDisplay = firstItem.returnReason || '-';
+        if (firstItem.returnReasonDetail) {
+          reasonDisplay += `<br><span style="font-size: 11px; color: #71717a;">${firstItem.returnReasonDetail}</span>`;
+        }
+
+        let productDisplay = '';
+        if (productName) {
+          productDisplay += `<div style="font-size: 13px; color: #e4e4e7; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${productName}</div>`;
+        }
+        if (sku) {
+          productDisplay += `<div style="font-size: 11px; color: #a1a1aa; font-family: monospace;">SKU: ${sku}</div>`;
+        }
+        productDisplay += `<div style="font-size: 11px; color: #71717a; font-family: monospace;">EAN: ${ean}</div>`;
+        if (firstItem.quantity > 1) {
+          productDisplay += `<div style="font-size: 11px; color: #71717a;">Qty: ${firstItem.quantity}</div>`;
+        }
+
+        return `
+          <tr>
+            <td><span class="order-id">${ret.returnId}</span></td>
+            <td><span class="order-id">${orderId}</span></td>
+            <td>${formatDate(ret.registrationDateTime)}</td>
+            <td>${reasonDisplay}</td>
+            <td>
+              <div class="return-product">
+                ${imageUrl ? `<img src="${imageUrl}" class="return-thumb" onerror="this.style.display='none'">` : ''}
+                <div>${productDisplay}</div>
+              </div>
+            </td>
+            <td><span class="badge ${ret.handled ? 'shipped' : 'returned'}">${ret.handled ? 'Handled' : 'Open'}</span></td>
+            <td>
+              ${!ret.handled ? `
+                <button class="btn btn-secondary btn-sm" onclick="handleReturn('${firstItem.rmaId}')">
+                  <span class="material-symbols-outlined">check</span>
+                </button>
+              ` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Load invoices
+    async function loadInvoices() {
+      const tbody = document.getElementById('invoices-table');
+      try {
+        const res = await fetch('/api/bolcom/invoices?skipSync=true', { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.invoices || data.invoices.length === 0) {
+          paginationState.invoices.all = [];
+          paginationState.invoices.filtered = [];
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <span class="material-symbols-outlined">receipt_long</span>
+                  <div class="empty-state-title">No invoices</div>
+                  <div class="empty-state-text">No invoices found</div>
+                </div>
+              </td>
+            </tr>
+          `;
+          document.getElementById('invoices-pagination').style.display = 'none';
+          return;
+        }
+
+        paginationState.invoices.all = data.invoices;
+        paginationState.invoices.filtered = data.invoices;
+        paginationState.invoices.offset = 0;
+        renderTable('invoices');
+      } catch (e) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="color: #ef4444; padding: 20px;">Error loading invoices: ${e.message}</td>
+          </tr>
+        `;
+      }
+    }
+
+    function renderInvoicesTable(invoices) {
+      const tbody = document.getElementById('invoices-table');
+      tbody.innerHTML = invoices.map(inv => {
+        const period = inv.periodStartDate && inv.periodEndDate
+          ? `${formatDate(inv.periodStartDate)} - ${formatDate(inv.periodEndDate)}`
+          : '-';
+        const amount = inv.totalAmountExclVat != null
+          ? `€${Number(inv.totalAmountExclVat).toFixed(2)}`
+          : '-';
+        const odooBill = inv.odooBillNumber || '-';
+        return `
+          <tr>
+            <td><span class="order-id">${inv.invoiceId}</span></td>
+            <td>${odooBill !== '-' ? `<a href="https://acropaq.odoo.com/web#id=${inv.odooBillId}&model=account.move&view_type=form" target="_blank" style="color: #60a5fa;">${odooBill}</a>` : '<span style="color: #52525b;">-</span>'}</td>
+            <td>${period}</td>
+            <td>${formatDate(inv.issueDate)}</td>
+            <td>${amount}</td>
+            <td><span class="badge shipped">Paid</span></td>
+            <td style="display: flex; gap: 6px;">
+              <button class="btn btn-secondary btn-sm" onclick="downloadInvoice('${inv.invoiceId}')" data-tooltip="Download PDF">
+                <span class="material-symbols-outlined">picture_as_pdf</span>
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadSpecification('${inv.invoiceId}')" data-tooltip="Download Specification (Excel)">
+                <span class="material-symbols-outlined">table_chart</span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Helper functions
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function formatTime(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function calculateTotal(items) {
+      if (!items || !items.length) return '0.00';
+      return items.reduce((sum, item) => {
+        // Use totalPrice if available, otherwise calculate from unitPrice × quantity
+        if (item.totalPrice && item.totalPrice > 0) {
+          return sum + item.totalPrice;
+        }
+        const price = parseFloat(item.unitPrice) || 0;
+        const qty = parseInt(item.quantity) || 1;
+        return sum + (price * qty);
+      }, 0).toFixed(2);
+    }
+
+    // Column filtering
+    function setupColumnFilters() {
+      document.querySelectorAll('.column-filter').forEach(input => {
+        input.addEventListener('input', function() {
+          const table = this.closest('table');
+          const tbody = table.querySelector('tbody');
+          const rows = tbody.querySelectorAll('tr');
+          const filters = {};
+
+          // Collect all filter values for this table
+          table.querySelectorAll('.column-filter').forEach(filter => {
+            const col = parseInt(filter.dataset.column);
+            if (filter.value.trim()) {
+              filters[col] = filter.value.toLowerCase();
+            }
+          });
+
+          // Filter rows
+          rows.forEach(row => {
+            if (row.querySelector('.loading') || row.querySelector('.empty-state')) {
+              return; // Skip loading/empty rows
+            }
+            const cells = row.querySelectorAll('td');
+            let visible = true;
+
+            for (const [col, searchText] of Object.entries(filters)) {
+              const cell = cells[parseInt(col)];
+              if (cell) {
+                const cellText = cell.textContent.toLowerCase();
+                if (!cellText.includes(searchText)) {
+                  visible = false;
+                  break;
+                }
+              }
+            }
+
+            row.style.display = visible ? '' : 'none';
+          });
+        });
+      });
+    }
+
+    // Cache for product info lookups (by EAN)
+    const productCache = {};
+
+    async function lookupProductByEan(ean) {
+      if (!ean) return null;
+      if (productCache[ean]) return productCache[ean];
+
+      try {
+        const res = await fetch(`/api/odoo/products?q=${encodeURIComponent(ean)}&limit=1`, { credentials: 'include' });
+        const data = await res.json();
+        if (data.success && data.products?.length > 0) {
+          productCache[ean] = data.products[0];
+          return data.products[0];
+        }
+      } catch (e) {
+        console.error('Product lookup error:', e);
+      }
+      return null;
+    }
+
+    async function viewOrder(orderId) {
+      const modal = document.getElementById('order-modal');
+      const body = document.getElementById('order-modal-body');
+
+      modal.classList.add('open');
+      body.innerHTML = '<div class="loading"><div class="spinner"></div>Loading order details...</div>';
+
+      try {
+        const res = await fetch(`/api/bolcom/orders/${orderId}`, { credentials: 'include' });
+        const data = await res.json();
+
+        if (!data.success || !data.order) {
+          body.innerHTML = '<p style="color: #ef4444;">Failed to load order details</p>';
+          return;
+        }
+
+        const order = data.order;
+        const ship = order.shipmentDetails || {};
+        const bill = order.billingDetails || {};
+
+        // Lookup product info for all items (for SKU and thumbnail)
+        const itemsWithProducts = await Promise.all((order.orderItems || []).map(async (item) => {
+          const product = await lookupProductByEan(item.ean);
+          return {
+            ...item,
+            sku: item.sku || product?.sku || '',
+            productName: product?.name || item.title || 'Unknown Product',
+            imageUrl: product?.image || null  // Odoo returns 'image' field (base64)
+          };
+        }));
+
+        body.innerHTML = `
+          <div class="order-detail-row">
+            <span class="order-detail-label">Order ID</span>
+            <span class="order-detail-value" style="font-family: monospace;">${order.orderId}</span>
+          </div>
+          <div class="order-detail-row">
+            <span class="order-detail-label">Order Date</span>
+            <span class="order-detail-value">${formatDate(order.orderPlacedDateTime)}</span>
+          </div>
+          <div class="order-detail-row">
+            <span class="order-detail-label">Shipping</span>
+            <span class="order-detail-value">${ship.salutation || ''} ${ship.firstName || ''} ${ship.surname || ''}<br>
+              ${ship.streetName || ''} ${ship.houseNumber || ''}${ship.houseNumberExtension || ''}<br>
+              ${ship.zipCode || ''} ${ship.city || ''}, ${ship.countryCode || ''}
+            </span>
+          </div>
+          <div class="order-detail-row">
+            <span class="order-detail-label">Delivery</span>
+            <span class="order-detail-value">${order.shipmentMethod || '-'}</span>
+          </div>
+
+          <div class="order-items-list">
+            <h4 style="color: #fff; margin-bottom: 12px;">Order Items (${itemsWithProducts.length})</h4>
+            ${itemsWithProducts.map(item => `
+              <div class="order-item">
+                ${item.imageUrl ? `<img src="${item.imageUrl}" class="order-item-image" onerror="this.style.display='none'">` : '<div class="order-item-image" style="display:flex;align-items:center;justify-content:center;"><span class="material-symbols-outlined" style="color:#3f3f50;">inventory_2</span></div>'}
+                <div class="order-item-info">
+                  <div class="order-item-title">${item.productName}</div>
+                  ${item.sku ? `<div style="font-size: 12px; color: #a1a1aa; font-family: monospace;">SKU: ${item.sku}</div>` : ''}
+                  <div class="order-item-ean">EAN: ${item.ean || '-'}</div>
+                  <div style="font-size: 12px; color: #71717a; margin-top: 4px;">
+                    Qty: ${item.quantity || 1} | ${item.fulfilmentMethod || '-'} | ${item.fulfilmentStatus || '-'}
+                  </div>
+                </div>
+                <div class="order-item-price">€${(parseFloat(item.unitPrice) || 0).toFixed(2)}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #252532; text-align: right;">
+            <span style="color: #71717a;">Total:</span>
+            <span style="color: #fff; font-size: 18px; font-weight: 600; margin-left: 8px;">€${calculateTotal(order.orderItems)}</span>
+          </div>
+        `;
+      } catch (e) {
+        body.innerHTML = `<p style="color: #ef4444;">Error: ${e.message}</p>`;
+      }
+    }
+
+    function closeOrderModal() {
+      document.getElementById('order-modal').classList.remove('open');
+    }
+
+    async function handleReturn(rmaId) {
+      if (!rmaId) {
+        alert('Invalid return ID');
+        return;
+      }
+      if (!confirm('Mark this return as handled (accept return)?')) return;
+
+      try {
+        const res = await fetch(`/api/bolcom/returns/${rmaId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ handlingResult: 'RETURN_RECEIVED', quantityReturned: 1 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('Return marked as handled');
+          loadReturns();
+          loadStats();
+        } else {
+          alert('Failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function downloadInvoice(invoiceId) {
+      try {
+        const res = await fetch(`/api/bolcom/invoices/${invoiceId}/download`, { credentials: 'include' });
+
+        if (res.ok) {
+          // If we get a PDF, download it
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `bol-invoice-${invoiceId}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          a.remove();
+        } else {
+          // Handle error response
+          const data = await res.json();
+          if (data.partnerPortalUrl) {
+            if (confirm(`Invoice PDF not available via API.\n\nOpen Bol.com Partner Portal to download manually?`)) {
+              window.open(data.partnerPortalUrl, '_blank');
+            }
+          } else {
+            alert('Failed to download invoice: ' + (data.error || 'Unknown error'));
+          }
+        }
+      } catch (e) {
+        alert('Error downloading invoice: ' + e.message);
+      }
+    }
+
+    async function downloadSpecification(invoiceId) {
+      try {
+        const res = await fetch(`/api/bolcom/invoices/${invoiceId}/specification`, { credentials: 'include' });
+
+        if (res.ok) {
+          // Download the Excel file
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `bol-invoice-spec-${invoiceId}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          a.remove();
+        } else {
+          const data = await res.json();
+          alert('Failed to download specification: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Error downloading specification: ' + e.message);
+      }
+    }
+
+    function refreshData() {
+      checkStatus();
+    }
+
+    async function syncOrdersWithOdoo() {
+      const btn = document.getElementById('sync-odoo-btn');
+      const originalContent = btn.innerHTML;
+      btn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px; margin: 0;"></div> Syncing...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/bolcom/sync/odoo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          alert(`Synced ${data.synced} orders with Odoo.\n${data.notFound} orders not found in Odoo.`);
+          // Reload orders to show updated Odoo info
+          await loadOrders();
+        } else {
+          alert('Sync failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Error syncing with Odoo: ' + e.message);
+      } finally {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+      }
+    }
+
+    // Pagination functions
+    function updatePagination(type) {
+      const state = paginationState[type];
+      const pagination = document.getElementById(`${type}-pagination`);
+      const info = document.getElementById(`${type}-pagination-info`);
+      const prevBtn = document.getElementById(`${type}-prev-btn`);
+      const nextBtn = document.getElementById(`${type}-next-btn`);
+
+      if (state.filtered.length === 0) {
+        pagination.style.display = 'none';
+        return;
+      }
+
+      pagination.style.display = 'flex';
+      const start = state.offset + 1;
+      const end = Math.min(state.offset + state.pageSize, state.filtered.length);
+      info.textContent = `Showing ${start}-${end} of ${state.filtered.length}`;
+
+      prevBtn.disabled = state.offset === 0;
+      nextBtn.disabled = state.offset + state.pageSize >= state.filtered.length;
+    }
+
+    function changePageSize(type) {
+      const state = paginationState[type];
+      state.pageSize = parseInt(document.getElementById(`${type}-page-size`).value);
+      state.offset = 0;
+      renderTable(type);
+    }
+
+    function prevPage(type) {
+      const state = paginationState[type];
+      state.offset = Math.max(0, state.offset - state.pageSize);
+      renderTable(type);
+    }
+
+    function nextPage(type) {
+      const state = paginationState[type];
+      if (state.offset + state.pageSize < state.filtered.length) {
+        state.offset += state.pageSize;
+        renderTable(type);
+      }
+    }
+
+    function renderTable(type) {
+      const state = paginationState[type];
+      const pageData = state.filtered.slice(state.offset, state.offset + state.pageSize);
+
+      if (type === 'orders') renderOrdersTable(pageData);
+      else if (type === 'shipments') renderShipmentsTable(pageData);
+      else if (type === 'returns') renderReturnsTable(pageData);
+      else if (type === 'invoices') renderInvoicesTable(pageData);
+
+      updatePagination(type);
+    }
+
+    // Initialize
+    init();
+    setupColumnFilters();
+  </script>
+</body>
+</html>

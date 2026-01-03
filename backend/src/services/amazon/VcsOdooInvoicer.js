@@ -371,6 +371,7 @@ class VcsOdooInvoicer {
     }
 
     // Fetch all orders in batches (Odoo can handle large 'in' queries, but let's batch for safety)
+    // Search by BOTH client_order_ref AND name to catch all variations
     const BATCH_SIZE = 500;
     const allOrders = [];
 
@@ -378,8 +379,13 @@ class VcsOdooInvoicer {
       const batchIds = allSearchIds.slice(i, i + BATCH_SIZE);
       console.log(`[VcsOdooInvoicer] Fetching batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allSearchIds.length / BATCH_SIZE)}...`);
 
+      // Search by client_order_ref OR name to catch all orders regardless of how they were created
       const orders = await this.odoo.searchRead('sale.order',
-        [['client_order_ref', 'in', batchIds]],
+        [
+          '|',
+          ['client_order_ref', 'in', batchIds],
+          ['name', 'in', batchIds]
+        ],
         ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id']
       );
       allOrders.push(...orders);
@@ -906,9 +912,16 @@ class VcsOdooInvoicer {
     // Cache miss - fall back to individual API call (for orders not in the batch)
     console.log(`[VcsOdooInvoicer] Cache miss for ${amazonOrderId}, fetching from Odoo...`);
 
-    // Search for sale.order by client_order_ref (Amazon order ID)
+    // Search for sale.order by client_order_ref OR by FBA/FBM name pattern
+    // This catches orders created by different import sources
     const orders = await this.odoo.searchRead('sale.order',
-      [['client_order_ref', '=', amazonOrderId]],
+      [
+        '|',
+        ['client_order_ref', '=', amazonOrderId],
+        '|',
+        ['name', '=', `FBA${amazonOrderId}`],
+        ['name', '=', `FBM${amazonOrderId}`]
+      ],
       ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id']
     );
 
@@ -962,6 +975,26 @@ class VcsOdooInvoicer {
    */
   async createOrderFromVcs(vcsOrder) {
     const amazonOrderId = vcsOrder.orderId;
+
+    // DUPLICATE PREVENTION: Check again right before creating
+    // This prevents race conditions where another process may have created the order
+    const existingOrders = await this.odoo.searchRead('sale.order',
+      [
+        '|',
+        ['client_order_ref', '=', amazonOrderId],
+        '|',
+        ['name', '=', `FBA${amazonOrderId}`],
+        ['name', '=', `FBM${amazonOrderId}`]
+      ],
+      ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id']
+    );
+
+    if (existingOrders.length > 0) {
+      console.log(`[VcsOdooInvoicer] Order already exists (duplicate prevention): ${existingOrders[0].name}`);
+      const order = existingOrders[0];
+      const orderLines = await this.getOrderLines(order.order_line);
+      return { saleOrder: order, orderLines };
+    }
 
     // Determine if FBA or FBM based on ship-from country
     // FBM ships from BE (our warehouse), FBA ships from Amazon warehouses (DE, FR, etc.)
