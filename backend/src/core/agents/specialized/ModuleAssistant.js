@@ -14,6 +14,7 @@
 const { LLMAgent } = require('../LLMAgent');
 const { getModuleLogger } = require('../../../services/logging/ModuleLogger');
 const ChatPermission = require('../../../models/ChatPermission');
+const { TOOL_DEFINITIONS, ModuleAssistantToolExecutor } = require('./ModuleAssistantTools');
 
 // Safety: List of FORBIDDEN operations (never allowed)
 const FORBIDDEN_OPERATIONS = [
@@ -108,13 +109,29 @@ You have access to multiple modules: Bol.com, Amazon Seller, Amazon Vendor, Odoo
 - View purchase orders
 - Analyze stock levels and trends
 
+## TOOLS AVAILABLE
+
+You have access to tools that let you query real data from the system. USE THEM when the user asks questions about orders, products, stock, or any data. Don't guess or make up data - always use the tools to get accurate information.
+
+Available tools:
+- query_odoo_orders: Query sale orders from Odoo (FBM, FBA, FBB, BOL orders)
+- query_odoo_invoices: Query invoices from Odoo
+- query_odoo_products: Search products by SKU or name
+- query_odoo_stock: Check inventory levels
+- query_odoo_deliveries: Query delivery orders
+- query_amazon_orders: Query Amazon seller orders from MongoDB
+- query_bol_orders: Query Bol.com orders from MongoDB
+- get_sync_status: Check sync status for a module
+- get_order_details: Get full details for a specific order
+
 ## WHEN ANSWERING QUESTIONS
 
-1. Be concise but thorough
-2. Use bullet points for lists
-3. Format numbers with proper thousands separators
-4. Include dates in readable format
-5. If you don't know something, say so
+1. **USE THE TOOLS** to get real data - don't guess or make things up
+2. Be concise but thorough
+3. Use bullet points for lists
+4. Format numbers with proper thousands separators (e.g., 1,234 not 1234)
+5. Include dates in readable format
+6. If a tool returns an error, explain it to the user
 
 ## WHEN EXECUTING COMMANDS
 
@@ -164,6 +181,9 @@ You have access to multiple modules: Bol.com, Amazon Seller, Amazon Vendor, Odoo
 
     // Current user context
     this.userContext = null;
+
+    // Tool executor for querying data
+    this.toolExecutor = new ModuleAssistantToolExecutor();
   }
 
   /**
@@ -340,7 +360,7 @@ You have access to multiple modules: Bol.com, Amazon Seller, Amazon Vendor, Odoo
   }
 
   /**
-   * Process a user message with safety checks
+   * Process a user message with safety checks and tool access
    */
   async processMessage(message, module = 'general', conversationHistory = []) {
     // Check if user can chat with this module
@@ -370,33 +390,31 @@ You have access to multiple modules: Bol.com, Amazon Seller, Amazon Vendor, Odoo
     }
 
     // Build context messages
-    const contextMessages = conversationHistory.map(m => ({
+    const messages = conversationHistory.map(m => ({
       role: m.role,
       content: m.content
     }));
 
-    // Add module context
-    const moduleContext = this._getModuleContext(module);
-    contextMessages.unshift({
-      role: 'system',
-      content: moduleContext
-    });
-
     // Add the new user message
-    contextMessages.push({
+    messages.push({
       role: 'user',
       content: message
     });
 
+    // Build system prompt with module context
+    const moduleContext = this._getModuleContext(module);
+    const systemPrompt = `${this.llmConfig.systemPrompt}\n\n${moduleContext}\n\nCurrent date: ${new Date().toISOString().split('T')[0]}`;
+
     try {
-      // Use LLM to generate response
-      const response = await this.llmProvider.chat(contextMessages);
+      // Use tool-calling loop
+      const result = await this._processWithTools(messages, systemPrompt);
 
       return {
         success: true,
-        response: response.content,
+        response: result.response,
         module,
-        tokensUsed: response.usage?.total_tokens
+        tokensUsed: result.tokensUsed,
+        toolsUsed: result.toolsUsed
       };
     } catch (error) {
       console.error('[ModuleAssistant] Error processing message:', error);
@@ -406,6 +424,76 @@ You have access to multiple modules: Bol.com, Amazon Seller, Amazon Vendor, Odoo
         module
       };
     }
+  }
+
+  /**
+   * Process message with tool calling loop
+   */
+  async _processWithTools(messages, systemPrompt, maxIterations = 5) {
+    let totalTokens = 0;
+    const toolsUsed = [];
+    let currentMessages = [...messages];
+
+    for (let i = 0; i < maxIterations; i++) {
+      // Call LLM with tools
+      const response = await this.llmProvider.chatWithTools(
+        [{ role: 'system', content: systemPrompt }, ...currentMessages],
+        TOOL_DEFINITIONS
+      );
+
+      totalTokens += (response.usage?.inputTokens || 0) + (response.usage?.outputTokens || 0);
+
+      // Check if the model wants to use a tool
+      if (response.toolCall) {
+        const { id: toolId, name: toolName, input: toolParams } = response.toolCall;
+
+        console.log(`[ModuleAssistant] Tool call: ${toolName}`, JSON.stringify(toolParams));
+
+        // Execute the tool
+        const toolResult = await this.toolExecutor.execute(toolName, toolParams);
+
+        console.log(`[ModuleAssistant] Tool result: ${toolName}`, JSON.stringify(toolResult).substring(0, 500));
+
+        toolsUsed.push({ tool: toolName, params: toolParams });
+
+        // Add assistant message with tool use (format expected by AnthropicProvider)
+        currentMessages.push({
+          role: 'assistant',
+          content: response.content || '',
+          toolCall: {
+            id: toolId,
+            name: toolName,
+            input: toolParams
+          }
+        });
+
+        // Add tool result (format expected by AnthropicProvider)
+        currentMessages.push({
+          role: 'user',
+          toolResult: {
+            id: toolId,
+            content: toolResult
+          }
+        });
+
+        // Continue loop to let LLM process the result
+        continue;
+      }
+
+      // No tool call - return the final response
+      return {
+        response: response.content,
+        tokensUsed: totalTokens,
+        toolsUsed
+      };
+    }
+
+    // Max iterations reached
+    return {
+      response: 'I apologize, but I was unable to complete the request within the allowed iterations. Please try a simpler question.',
+      tokensUsed: totalTokens,
+      toolsUsed
+    };
   }
 
   /**
