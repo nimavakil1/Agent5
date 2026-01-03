@@ -78,13 +78,14 @@ const upload = multer({
  */
 router.get('/modules', async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?.id || req.user?._id;
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
     // Check if user is superadmin - they get full access automatically
     const isSuperAdmin = req.user?.role === 'superadmin';
+    console.log('[Chat API] /modules - user:', req.user?.email, 'role:', req.user?.role, 'isSuperAdmin:', isSuperAdmin);
 
     const permission = isSuperAdmin ? null : await ChatPermission.getForUser(userId);
 
