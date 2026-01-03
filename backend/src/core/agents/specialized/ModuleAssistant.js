@@ -177,16 +177,24 @@ You have access to multiple modules: Bol.com, Amazon Seller, Amazon Vendor, Odoo
    * Check if user can chat with a module
    */
   async canUserChat(module) {
-    if (!this.userContext?._id) return false;
-    return ChatPermission.canUserChat(this.userContext._id, module);
+    // Superadmins have full access
+    if (this.userContext?.role === 'superadmin') return true;
+
+    const userId = this.userContext?.id || this.userContext?._id;
+    if (!userId) return false;
+    return ChatPermission.canUserChat(userId, module);
   }
 
   /**
    * Check if user can execute commands for a module
    */
   async canUserExecute(module) {
-    if (!this.userContext?._id) return false;
-    return ChatPermission.canUserExecute(this.userContext._id, module);
+    // Superadmins have full access
+    if (this.userContext?.role === 'superadmin') return true;
+
+    const userId = this.userContext?.id || this.userContext?._id;
+    if (!userId) return false;
+    return ChatPermission.canUserExecute(userId, module);
   }
 
   /**
