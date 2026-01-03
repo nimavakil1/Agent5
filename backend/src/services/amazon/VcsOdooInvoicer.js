@@ -1276,14 +1276,31 @@ class VcsOdooInvoicer {
   async findOrCreateB2BPartner(vatNumber, countryCode) {
     const cleanVat = vatNumber.trim().toUpperCase();
 
-    // Search for existing partner by VAT
-    const existing = await this.odoo.searchRead('res.partner',
-      [['vat', '=', cleanVat]],
-      ['id', 'name']
-    );
+    // Check if this is a valid EU VAT number format
+    // EU VAT: 2-letter country code + digits (varying length by country)
+    // Italian fiscal codes (codice fiscale) are 16 alphanumeric chars - NOT a VAT
+    const isValidVatFormat = this.isValidEuVatFormat(cleanVat);
 
-    if (existing.length > 0) {
-      console.log(`[VcsOdooInvoicer] Found B2B partner by VAT ${cleanVat}: ${existing[0].name} (ID: ${existing[0].id})`);
+    // Search for existing partner by VAT or name
+    let existing;
+    if (isValidVatFormat) {
+      existing = await this.odoo.searchRead('res.partner',
+        [['vat', '=', cleanVat]],
+        ['id', 'name']
+      );
+    }
+
+    // If not found by VAT, try by name (for fiscal codes stored without VAT field)
+    if (!existing || existing.length === 0) {
+      const partnerName = `Amazon B2B | ${cleanVat}`;
+      existing = await this.odoo.searchRead('res.partner',
+        [['name', '=', partnerName]],
+        ['id', 'name']
+      );
+    }
+
+    if (existing && existing.length > 0) {
+      console.log(`[VcsOdooInvoicer] Found B2B partner: ${existing[0].name} (ID: ${existing[0].id})`);
       return existing[0].id;
     }
 
@@ -1296,18 +1313,89 @@ class VcsOdooInvoicer {
 
     // Create new B2B partner
     const partnerName = `Amazon B2B | ${cleanVat}`;
-    const partnerId = await this.odoo.create('res.partner', {
+    const partnerData = {
       name: partnerName,
       company_type: 'company',
       is_company: true,
       customer_rank: 1,
-      vat: cleanVat,
       country_id: countryId,
-      comment: `Amazon B2B customer created from VCS report. VAT: ${cleanVat}`,
-    });
+      comment: `Amazon B2B customer created from VCS report. Tax ID: ${cleanVat}`,
+    };
 
-    console.log(`[VcsOdooInvoicer] Created B2B partner: ${partnerName} (ID: ${partnerId})`);
+    // Only set VAT field if it's a valid EU VAT format (Odoo validates this)
+    if (isValidVatFormat) {
+      partnerData.vat = cleanVat;
+    }
+
+    const partnerId = await this.odoo.create('res.partner', partnerData);
+
+    console.log(`[VcsOdooInvoicer] Created B2B partner: ${partnerName} (ID: ${partnerId})${!isValidVatFormat ? ' (fiscal code, not VAT)' : ''}`);
     return partnerId;
+  }
+
+  /**
+   * Check if a tax ID is a valid EU VAT number format
+   * EU VAT numbers: country code (2 letters) + digits/letters (varies by country)
+   * Italian fiscal codes (codice fiscale): exactly 16 alphanumeric chars, NOT starting with IT
+   * @param {string} taxId - The tax identifier to check
+   * @returns {boolean} True if it looks like a valid EU VAT
+   */
+  isValidEuVatFormat(taxId) {
+    if (!taxId || taxId.length < 4) return false;
+
+    // Italian fiscal code (codice fiscale): 16 chars, alphanumeric, specific pattern
+    // Pattern: 6 letters + 2 digits + 1 letter + 2 digits + 1 letter + 3 chars + 1 letter
+    const italianFiscalCodePattern = /^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/;
+    if (italianFiscalCodePattern.test(taxId)) {
+      console.log(`[VcsOdooInvoicer] Detected Italian fiscal code (not VAT): ${taxId}`);
+      return false;
+    }
+
+    // Valid EU VAT patterns by country
+    const euVatPatterns = {
+      AT: /^ATU\d{8}$/,           // Austria
+      BE: /^BE[01]\d{9}$/,        // Belgium
+      BG: /^BG\d{9,10}$/,         // Bulgaria
+      CY: /^CY\d{8}[A-Z]$/,       // Cyprus
+      CZ: /^CZ\d{8,10}$/,         // Czech Republic
+      DE: /^DE\d{9}$/,            // Germany
+      DK: /^DK\d{8}$/,            // Denmark
+      EE: /^EE\d{9}$/,            // Estonia
+      EL: /^EL\d{9}$/,            // Greece
+      ES: /^ES[A-Z0-9]\d{7}[A-Z0-9]$/, // Spain
+      FI: /^FI\d{8}$/,            // Finland
+      FR: /^FR[A-Z0-9]{2}\d{9}$/, // France
+      HR: /^HR\d{11}$/,           // Croatia
+      HU: /^HU\d{8}$/,            // Hungary
+      IE: /^IE\d{7}[A-Z]{1,2}$|^IE\d[A-Z]\d{5}[A-Z]$/, // Ireland
+      IT: /^IT\d{11}$/,           // Italy (company VAT, NOT fiscal code)
+      LT: /^LT(\d{9}|\d{12})$/,   // Lithuania
+      LU: /^LU\d{8}$/,            // Luxembourg
+      LV: /^LV\d{11}$/,           // Latvia
+      MT: /^MT\d{8}$/,            // Malta
+      NL: /^NL\d{9}B\d{2}$/,      // Netherlands
+      PL: /^PL\d{10}$/,           // Poland
+      PT: /^PT\d{9}$/,            // Portugal
+      RO: /^RO\d{2,10}$/,         // Romania
+      SE: /^SE\d{12}$/,           // Sweden
+      SI: /^SI\d{8}$/,            // Slovenia
+      SK: /^SK\d{10}$/,           // Slovakia
+      XI: /^XI\d{9}$|^XI\d{12}$|^XIGD\d{3}$/, // Northern Ireland
+    };
+
+    // Check if it matches any EU VAT pattern
+    for (const [country, pattern] of Object.entries(euVatPatterns)) {
+      if (pattern.test(taxId)) {
+        return true;
+      }
+    }
+
+    // If starts with 2 letters and has mostly digits, it might be a VAT we don't have a pattern for
+    if (/^[A-Z]{2}\d+$/.test(taxId) && taxId.length >= 8) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
