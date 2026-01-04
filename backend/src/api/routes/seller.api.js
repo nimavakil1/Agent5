@@ -509,13 +509,14 @@ router.get('/pending', async (req, res) => {
 router.get('/fbm-pending-import', async (req, res) => {
   try {
     const importer = await getImporter();
-    const count = await importer.countFbmOrdersPendingManualImport();
+    const result = await importer.countFbmOrdersPendingManualImport();
 
     res.json({
       success: true,
-      count,
-      message: count > 0
-        ? `${count} FBM order(s) need manual TSV import - Amazon PII permissions not available`
+      count: result.count,
+      orderIds: result.orderIds,
+      message: result.count > 0
+        ? `${result.count} FBM order(s) need manual TSV import - Amazon PII permissions not available`
         : 'No FBM orders pending manual import'
     });
   } catch (error) {

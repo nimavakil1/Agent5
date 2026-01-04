@@ -564,11 +564,12 @@ class SellerOrderImporter {
   /**
    * Count FBM orders pending manual import
    * Used for displaying badge/notification in UI
+   * @returns {Object} { count, orderIds } - Count and list of Amazon order IDs
    */
   async countFbmOrdersPendingManualImport() {
     await this.init();
 
-    return this.collection.countDocuments({
+    const query = {
       'odoo.saleOrderId': null,
       autoImportEligible: true,
       fulfillmentChannel: 'MFN',
@@ -580,7 +581,19 @@ class SellerOrderImporter {
         { 'shippingAddress.addressLine1': { $in: [null, ''] } },
         { 'shippingAddress.addressLine1': { $exists: false } }
       ]
-    });
+    };
+
+    // Get both count and order IDs
+    const orders = await this.collection.find(query)
+      .project({ amazonOrderId: 1 })
+      .sort({ purchaseDate: -1 })
+      .limit(50) // Limit to 50 for display
+      .toArray();
+
+    return {
+      count: orders.length,
+      orderIds: orders.map(o => o.amazonOrderId)
+    };
   }
 
   /**

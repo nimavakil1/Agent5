@@ -142,6 +142,7 @@
       <span class="material-symbols-outlined fbm-alert-icon">warning</span>
       <div class="fbm-alert-text">
         <strong id="fbm-alert-count">0</strong> FBM orders need manual import via TSV file (Amazon PII permissions not available).
+        <span id="fbm-order-ids" style="font-family: monospace; font-size: 0.85em; opacity: 0.9;"></span>
         <a href="/seller/fbm-import.html" style="color: #fb923c;">Upload TSV file &rarr;</a>
       </div>
     </div>
@@ -299,6 +300,7 @@
 
         const badge = document.getElementById('fbm-badge');
         const alert = document.getElementById('fbm-alert');
+        const orderIdsSpan = document.getElementById('fbm-order-ids');
 
         if (data.success) {
           // Always show badge with count (even if 0)
@@ -308,8 +310,16 @@
           // Only show alert banner if count > 0
           if (data.count > 0) {
             document.getElementById('fbm-alert-count').textContent = data.count;
+            // Display order IDs
+            if (data.orderIds && data.orderIds.length > 0) {
+              const displayIds = data.orderIds.slice(0, 10); // Show max 10
+              const idsText = displayIds.join(', ');
+              const moreText = data.orderIds.length > 10 ? ` (+${data.orderIds.length - 10} more)` : '';
+              orderIdsSpan.textContent = `[${idsText}${moreText}]`;
+            }
             alert.classList.add('show');
           } else {
+            orderIdsSpan.textContent = '';
             alert.classList.remove('show');
           }
         }
