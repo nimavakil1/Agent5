@@ -16,9 +16,13 @@
  * - Stock field: free_qty of Central Warehouse only
  */
 
-const BolOrder = require('../../models/BolOrder');
+const { getDb } = require('../../db');
+const { CHANNELS, SUB_CHANNELS } = require('../orders/UnifiedOrderService');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const { getAddressCleaner } = require('../amazon/seller/AddressCleaner');
+
+// Collection name for unified orders
+const COLLECTION_NAME = 'unified_orders';
 
 // Warehouse IDs in Odoo
 const CENTRAL_WAREHOUSE_ID = 1;  // CW - for FBR orders (we ship from our warehouse)
@@ -352,27 +356,35 @@ class BolOrderCreator {
     };
 
     try {
-      // Step 1: Get order from MongoDB
-      const bolOrder = await BolOrder.findOne({ orderId }).lean();
+      // Step 1: Get order from unified_orders collection
+      const db = getDb();
+      const collection = db.collection(COLLECTION_NAME);
+      const unifiedOrderId = `${CHANNELS.BOL}:${orderId}`;
+
+      const bolOrder = await collection.findOne({ unifiedOrderId });
       if (!bolOrder) {
         result.errors.push(`Order not found in database: ${orderId}`);
         return result;
       }
 
+      // Extract Bol-specific data
+      const bolData = bolOrder.bol || {};
+
       // Step 2: Determine prefix based on fulfillment method
-      // Check multiple sources for FBB detection to avoid defaulting to FBR incorrectly
-      let fulfilmentMethod = bolOrder.fulfilmentMethod || bolOrder.orderItems?.[0]?.fulfilmentMethod;
+      // Use unified schema: bolOrder.bol.fulfilmentMethod or subChannel
+      let fulfilmentMethod = bolData.fulfilmentMethod ||
+        bolOrder.subChannel ||
+        bolOrder.items?.[0]?.fulfilmentMethod;
 
       // If still not determined, check shipment method (LVB = Logistics Via Bol = FBB)
-      if (!fulfilmentMethod && bolOrder.shipmentDetails?.shipmentMethod === 'LVB') {
+      if (!fulfilmentMethod && bolData.shipmentMethod === 'LVB') {
         fulfilmentMethod = 'FBB';
       }
 
       // Check if any order item indicates FBB
-      if (!fulfilmentMethod && bolOrder.orderItems?.length > 0) {
-        const hasFBB = bolOrder.orderItems.some(item =>
-          item.fulfilmentMethod === 'FBB' ||
-          item.fulfilment?.method === 'FBB'
+      if (!fulfilmentMethod && bolOrder.items?.length > 0) {
+        const hasFBB = bolOrder.items.some(item =>
+          item.fulfilmentMethod === 'FBB'
         );
         if (hasFBB) fulfilmentMethod = 'FBB';
       }
@@ -395,15 +407,18 @@ class BolOrderCreator {
         result.odooOrderId = existingOrder.id;
         result.odooOrderName = existingOrder.name;
 
-        // Update MongoDB if not linked
-        if (!bolOrder.odoo?.saleOrderId) {
-          await BolOrder.updateOne(
-            { orderId },
+        // Update unified_orders if not linked
+        if (!bolOrder.sourceIds?.odooSaleOrderId) {
+          await collection.updateOne(
+            { unifiedOrderId },
             {
               $set: {
+                'sourceIds.odooSaleOrderId': existingOrder.id,
+                'sourceIds.odooSaleOrderName': existingOrder.name,
                 'odoo.saleOrderId': existingOrder.id,
                 'odoo.saleOrderName': existingOrder.name,
-                'odoo.linkedAt': new Date()
+                'odoo.syncedAt': new Date(),
+                updatedAt: new Date()
               }
             }
           );
@@ -413,31 +428,34 @@ class BolOrderCreator {
       }
 
       // Step 4: Find or create customer
-      const partnerId = await this.findOrCreatePartner(bolOrder.shipmentDetails);
+      // Map unified schema to shipmentDetails format expected by findOrCreatePartner
+      const shipmentDetails = this.buildShipmentDetails(bolOrder);
+      const partnerId = await this.findOrCreatePartner(shipmentDetails);
 
       // Step 5: Get tax configuration based on fulfillment and destination
-      const destCountry = bolOrder.shipmentDetails?.countryCode || 'NL';
+      const destCountry = bolOrder.shippingAddress?.countryCode || 'NL';
       const taxConfig = this.getTaxConfig(fulfilmentMethod, destCountry);
       const shipFrom = fulfilmentMethod === 'FBB' ? 'NL' : 'BE';
       console.log(`[BolOrderCreator] Tax config for ${prefix} ${shipFrom}->${destCountry}: Tax ID ${taxConfig.taxId}, Journal ${taxConfig.journalCode}`);
 
       // Step 6: Build order lines with tax-included tax
+      // Use unified schema items array
       const orderLines = [];
-      for (const item of (bolOrder.orderItems || [])) {
+      for (const item of (bolOrder.items || [])) {
         const productId = await this.findProduct(item.ean);
 
         if (!productId) {
-          result.warnings.push(`Product not found for EAN ${item.ean}: ${item.title}`);
+          result.warnings.push(`Product not found for EAN ${item.ean}: ${item.name}`);
           continue;
         }
 
-        const unitPrice = item.unitPrice || item.totalPrice / (item.quantity || 1) || 0;
+        const unitPrice = item.unitPrice || (item.lineTotal / (item.quantity || 1)) || 0;
 
         orderLines.push([0, 0, {
           product_id: productId,
           product_uom_qty: item.quantity || 1,
           price_unit: unitPrice,
-          name: item.title || `[${item.ean}]`,
+          name: item.name || `[${item.ean}]`,
           tax_id: [[6, 0, [taxConfig.taxId]]]  // Set tax-included tax
         }]);
       }
@@ -451,8 +469,9 @@ class BolOrderCreator {
       const journalId = taxConfig.journalId || await this.getJournalId(taxConfig.journalCode);
 
       // Step 8: Prepare order data
-      const orderDate = bolOrder.orderPlacedDateTime
-        ? new Date(bolOrder.orderPlacedDateTime).toISOString().split('T')[0]
+      // Use unified schema orderDate field
+      const orderDate = bolOrder.orderDate
+        ? new Date(bolOrder.orderDate).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0];
 
       // Use BOL warehouse for FBB orders, Central Warehouse for FBR orders
@@ -469,7 +488,7 @@ class BolOrderCreator {
         warehouse_id: warehouseId,
         team_id: BOL_TEAM_ID,            // Sales Team: BOL
         order_line: orderLines,
-        note: this.buildOrderNotes(bolOrder, prefix, taxConfig)
+        note: this.buildOrderNotes(bolOrder, bolData, prefix, taxConfig)
       };
 
       // Set fiscal position for correct tax mapping
@@ -505,15 +524,19 @@ class BolOrderCreator {
       result.taxConfig = { taxId: taxConfig.taxId, journal: taxConfig.journalCode, fiscalPositionId: taxConfig.fiscalPositionId };
       result.journalId = createdOrder[0]?.journal_id?.[0] || journalId;
 
-      // Step 10: Update MongoDB
-      await BolOrder.updateOne(
-        { orderId },
+      // Step 10: Update unified_orders with Odoo link
+      await collection.updateOne(
+        { unifiedOrderId },
         {
           $set: {
+            'sourceIds.odooSaleOrderId': saleOrderId,
+            'sourceIds.odooSaleOrderName': orderName,
             'odoo.saleOrderId': saleOrderId,
             'odoo.saleOrderName': orderName,
             'odoo.linkedAt': new Date(),
-            'odoo.syncError': ''
+            'odoo.syncedAt': new Date(),
+            'odoo.syncError': '',
+            updatedAt: new Date()
           }
         }
       );
@@ -537,11 +560,18 @@ class BolOrderCreator {
     } catch (error) {
       result.errors.push(error.message);
 
-      // Update MongoDB with error
-      await BolOrder.updateOne(
-        { orderId },
-        { $set: { 'odoo.syncError': error.message } }
-      );
+      // Update unified_orders with error
+      try {
+        const db = getDb();
+        const collection = db.collection(COLLECTION_NAME);
+        const unifiedOrderId = `${CHANNELS.BOL}:${orderId}`;
+        await collection.updateOne(
+          { unifiedOrderId },
+          { $set: { 'odoo.syncError': error.message, updatedAt: new Date() } }
+        );
+      } catch (dbError) {
+        console.error(`[BolOrderCreator] Failed to update error in DB:`, dbError.message);
+      }
 
       console.error(`[BolOrderCreator] Error creating order for ${orderId}:`, error);
       return result;
@@ -591,18 +621,22 @@ class BolOrderCreator {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
 
-    // Find recent orders without Odoo link
-    const pendingOrders = await BolOrder.find({
+    // Find recent orders without Odoo link from unified_orders
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+
+    const pendingOrders = await collection.find({
+      channel: CHANNELS.BOL,
       $or: [
-        { 'odoo.saleOrderId': { $exists: false } },
-        { 'odoo.saleOrderId': null }
+        { 'sourceIds.odooSaleOrderId': { $exists: false } },
+        { 'sourceIds.odooSaleOrderId': null }
       ],
-      orderPlacedDateTime: { $gte: cutoffDate }
+      orderDate: { $gte: cutoffDate }
     })
-      .sort({ orderPlacedDateTime: -1 })
+      .sort({ orderDate: -1 })
       .limit(limit)
-      .select('orderId orderPlacedDateTime')
-      .lean();
+      .project({ 'sourceIds.bolOrderId': 1, orderDate: 1 })
+      .toArray();
 
     if (pendingOrders.length === 0) {
       return {
@@ -615,7 +649,7 @@ class BolOrderCreator {
       };
     }
 
-    const orderIds = pendingOrders.map(o => o.orderId);
+    const orderIds = pendingOrders.map(o => o.sourceIds?.bolOrderId).filter(Boolean);
     console.log(`[BolOrderCreator] Processing ${orderIds.length} pending orders from last ${maxAgeDays} days...`);
     return this.createOrders(orderIds, options);
   }
@@ -626,14 +660,20 @@ class BolOrderCreator {
    * @param {string} orderId - Bol order ID
    */
   async updateInvoiceJournal(orderId) {
-    const bolOrder = await BolOrder.findOne({ orderId }).lean();
+    // Get order from unified_orders
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.BOL}:${orderId}`;
+
+    const bolOrder = await collection.findOne({ unifiedOrderId });
     if (!bolOrder?.odoo?.saleOrderId) {
       return { success: false, error: 'Order not linked to Odoo' };
     }
 
-    // Get fulfillment and destination
-    const fulfilmentMethod = bolOrder.fulfilmentMethod || 'FBR';
-    const destCountry = bolOrder.shipmentDetails?.countryCode || 'NL';
+    // Get fulfillment and destination from unified schema
+    const bolData = bolOrder.bol || {};
+    const fulfilmentMethod = bolData.fulfilmentMethod || bolOrder.subChannel || 'FBR';
+    const destCountry = bolOrder.shippingAddress?.countryCode || 'NL';
     const taxConfig = this.getTaxConfig(fulfilmentMethod, destCountry);
 
     // Get journal ID
@@ -693,14 +733,18 @@ class BolOrderCreator {
   async updateAllInvoiceJournals(options = {}) {
     const { limit = 100 } = options;
 
-    // Find Bol orders with Odoo links
-    const orders = await BolOrder.find({
-      'odoo.saleOrderId': { $exists: true, $ne: null }
+    // Find Bol orders with Odoo links from unified_orders
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+
+    const orders = await collection.find({
+      channel: CHANNELS.BOL,
+      'sourceIds.odooSaleOrderId': { $exists: true, $ne: null }
     })
-      .sort({ orderPlacedDateTime: -1 })
+      .sort({ orderDate: -1 })
       .limit(limit)
-      .select('orderId')
-      .lean();
+      .project({ 'sourceIds.bolOrderId': 1 })
+      .toArray();
 
     const results = {
       processed: 0,
@@ -710,7 +754,10 @@ class BolOrderCreator {
     };
 
     for (const order of orders) {
-      const result = await this.updateInvoiceJournal(order.orderId);
+      const orderId = order.sourceIds?.bolOrderId;
+      if (!orderId) continue;
+
+      const result = await this.updateInvoiceJournal(orderId);
       results.processed++;
 
       if (result.success && result.updated > 0) {
@@ -727,25 +774,85 @@ class BolOrderCreator {
   }
 
   /**
-   * Build order notes
+   * Build shipmentDetails object from unified order schema
+   * Converts unified shippingAddress to the format expected by findOrCreatePartner
+   * @param {object} bolOrder - Unified order document
+   * @returns {object} shipmentDetails in legacy format
    */
-  buildOrderNotes(bolOrder, prefix, taxConfig = null) {
+  buildShipmentDetails(bolOrder) {
+    const addr = bolOrder.shippingAddress || {};
+    const bolData = bolOrder.bol || {};
+
+    // Parse name into first/last if not already split
+    let firstName = '';
+    let surname = '';
+    const fullName = addr.name || '';
+
+    if (fullName.includes(' ')) {
+      const parts = fullName.split(' ');
+      firstName = parts[0];
+      surname = parts.slice(1).join(' ');
+    } else {
+      surname = fullName;
+    }
+
+    // Parse street into streetName and houseNumber
+    let streetName = addr.street || '';
+    let houseNumber = '';
+    let houseNumberExtension = '';
+
+    // Try to extract house number from street
+    const streetMatch = streetName.match(/^(.+?)\s+(\d+)\s*(.*)$/);
+    if (streetMatch) {
+      streetName = streetMatch[1];
+      houseNumber = streetMatch[2];
+      houseNumberExtension = streetMatch[3] || '';
+    }
+
+    return {
+      firstName,
+      surname,
+      streetName,
+      houseNumber,
+      houseNumberExtension,
+      extraAddressInformation: addr.street2 || '',
+      city: addr.city || '',
+      zipCode: addr.postalCode || '',
+      countryCode: addr.countryCode || 'NL',
+      email: bolData.email || bolOrder.customer?.email || '',
+      deliveryPhoneNumber: bolData.phone || ''
+    };
+  }
+
+  /**
+   * Build order notes
+   * @param {object} bolOrder - Unified order document
+   * @param {object} bolData - Bol-specific data from bolOrder.bol
+   * @param {string} prefix - FBB or FBR
+   * @param {object} taxConfig - Tax configuration
+   */
+  buildOrderNotes(bolOrder, bolData, prefix, taxConfig = null) {
     const shipFrom = prefix === 'FBB' ? 'NL' : 'BE';
-    const shipTo = bolOrder.shipmentDetails?.countryCode || 'NL';
+    const shipTo = bolOrder.shippingAddress?.countryCode || 'NL';
+
+    // Use unified orderId or source ID
+    const orderId = bolOrder.sourceIds?.bolOrderId || bolOrder.unifiedOrderId?.split(':')[1] || 'Unknown';
 
     const lines = [
-      `Bol.com Order: ${bolOrder.orderId}`,
+      `Bol.com Order: ${orderId}`,
       `Fulfillment: ${prefix === 'FBB' ? 'Fulfillment by Bol (NL)' : 'Fulfillment by Retailer (BE)'}`,
       `Route: ${shipFrom} → ${shipTo}`,
-      `Order Date: ${bolOrder.orderPlacedDateTime ? new Date(bolOrder.orderPlacedDateTime).toLocaleDateString() : 'Unknown'}`
+      `Order Date: ${bolOrder.orderDate ? new Date(bolOrder.orderDate).toLocaleDateString() : 'Unknown'}`
     ];
 
     if (taxConfig) {
       lines.push(`Tax: ID ${taxConfig.taxId} | Journal: ${taxConfig.journalCode}`);
     }
 
-    if (bolOrder.shipmentDetails?.email) {
-      lines.push(`Customer Email: ${bolOrder.shipmentDetails.email}`);
+    // Get email from bolData or unified customer
+    const email = bolData?.email || bolOrder.customer?.email;
+    if (email) {
+      lines.push(`Customer Email: ${email}`);
     }
 
     return lines.join('\n');
@@ -759,17 +866,21 @@ class BolOrderCreator {
   async linkPendingOrders(options = {}) {
     const { limit = 500, batchSize = 50 } = options;
 
-    // Find orders without Odoo link
-    const pendingOrders = await BolOrder.find({
+    // Find orders without Odoo link from unified_orders
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+
+    const pendingOrders = await collection.find({
+      channel: CHANNELS.BOL,
       $or: [
-        { 'odoo.saleOrderId': { $exists: false } },
-        { 'odoo.saleOrderId': null }
+        { 'sourceIds.odooSaleOrderId': { $exists: false } },
+        { 'sourceIds.odooSaleOrderId': null }
       ]
     })
-      .sort({ orderPlacedDateTime: -1 })
+      .sort({ orderDate: -1 })
       .limit(limit)
-      .select('orderId fulfilmentMethod')
-      .lean();
+      .project({ 'sourceIds.bolOrderId': 1, subChannel: 1, 'bol.fulfilmentMethod': 1 })
+      .toArray();
 
     if (pendingOrders.length === 0) {
       return {
@@ -796,9 +907,12 @@ class BolOrderCreator {
 
       for (const order of batch) {
         results.processed++;
-        const orderId = order.orderId;
-        const fulfilmentMethod = order.fulfilmentMethod || 'FBR';
+        const orderId = order.sourceIds?.bolOrderId;
+        if (!orderId) continue;
+
+        const fulfilmentMethod = order.bol?.fulfilmentMethod || order.subChannel || 'FBR';
         const prefix = fulfilmentMethod === 'FBB' ? 'FBB' : 'FBR';
+        const unifiedOrderId = `${CHANNELS.BOL}:${orderId}`;
 
         // Try multiple search patterns
         const searchPatterns = [
@@ -821,14 +935,18 @@ class BolOrderCreator {
         }
 
         if (foundOrder) {
-          // Link to MongoDB
-          await BolOrder.updateOne(
-            { orderId },
+          // Link to unified_orders
+          await collection.updateOne(
+            { unifiedOrderId },
             {
               $set: {
+                'sourceIds.odooSaleOrderId': foundOrder.id,
+                'sourceIds.odooSaleOrderName': foundOrder.name,
                 'odoo.saleOrderId': foundOrder.id,
                 'odoo.saleOrderName': foundOrder.name,
-                'odoo.linkedAt': new Date()
+                'odoo.linkedAt': new Date(),
+                'odoo.syncedAt': new Date(),
+                updatedAt: new Date()
               }
             }
           );

@@ -18,8 +18,12 @@ const path = require('path');
 // Local invoice files directory
 const INVOICE_FILES_DIR = path.join(__dirname, '../../..', 'uploads/bol_invoices');
 
-// MongoDB models
-const BolOrder = require('../../models/BolOrder');
+// MongoDB - using unified_orders collection
+const { getDb } = require('../../db');
+const { CHANNELS } = require('../../services/orders/UnifiedOrderService');
+const COLLECTION_NAME = 'unified_orders';
+
+// MongoDB models (kept for non-order data)
 const BolShipment = require('../../models/BolShipment');
 const BolReturn = require('../../models/BolReturn');
 const BolInvoice = require('../../models/BolInvoice');
@@ -320,33 +324,37 @@ router.get('/orders', async (req, res) => {
       }
     }
 
-    // Build query for MongoDB
+    // Build query for unified_orders collection
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+
     const query = {
-      orderPlacedDateTime: { $gte: new Date('2024-01-01') }
+      channel: CHANNELS.BOL,
+      orderDate: { $gte: new Date('2024-01-01') }
     };
 
     if (fulfilmentMethod) {
-      query.fulfilmentMethod = fulfilmentMethod;
+      query.subChannel = fulfilmentMethod;  // FBB or FBR
     }
     if (status) {
-      query.status = status.toUpperCase();
+      query['status.source'] = status.toUpperCase();
     }
 
-    // Fetch from MongoDB
-    const orders = await BolOrder.find(query)
-      .sort({ orderPlacedDateTime: -1 })
-      .lean();
+    // Fetch from MongoDB (unified_orders)
+    const orders = await collection.find(query)
+      .sort({ orderDate: -1 })
+      .toArray();
 
     res.json({
       success: true,
       count: orders.length,
       source: 'mongodb',
       orders: orders.map(o => ({
-        orderId: o.orderId,
-        orderPlacedDateTime: o.orderPlacedDateTime,
-        shipmentMethod: o.shipmentMethod,
-        pickupPoint: o.pickupPoint,
-        orderItems: o.orderItems,
+        orderId: o.sourceIds?.bolOrderId,
+        orderPlacedDateTime: o.orderDate,
+        shipmentMethod: o.bol?.shipmentMethod,
+        pickupPoint: o.bol?.pickupPoint,
+        orderItems: o.items,
         odoo: o.odoo || null
       }))
     });
@@ -360,60 +368,53 @@ router.get('/orders', async (req, res) => {
  */
 router.get('/orders/:orderId', async (req, res) => {
   try {
-    // Try to get from MongoDB first
-    let order = await BolOrder.findOne({ orderId: req.params.orderId }).lean();
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.BOL}:${req.params.orderId}`;
+
+    // Try to get from unified_orders first
+    let unifiedOrder = await collection.findOne({ unifiedOrderId });
 
     // If not in MongoDB, fetch from API and store
-    if (!order) {
+    if (!unifiedOrder) {
       const data = await bolRequest(`/orders/${req.params.orderId}`);
 
-      // Store in MongoDB for future requests
-      const items = (data.orderItems || []).map(item => ({
-        orderItemId: item.orderItemId,
-        ean: item.product?.ean || item.ean || '',
-        sku: item.offer?.reference || item.offerReference || '',
-        title: item.product?.title || '',
-        quantity: item.quantity || 1,
-        quantityShipped: item.quantityShipped || 0,
-        quantityCancelled: item.quantityCancelled || 0,
-        unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
-        totalPrice: typeof item.totalPrice === 'object' ? parseFloat(item.totalPrice?.amount || 0) : parseFloat(item.totalPrice || 0),
-        commission: item.commission,
-        fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod,
-        fulfilmentStatus: item.fulfilmentStatus || 'OPEN',
-        latestDeliveryDate: item.fulfilment?.latestDeliveryDate || item.latestDeliveryDate,
-        cancellationRequest: item.cancellationRequest || false
-      }));
+      // Transform and store in unified_orders
+      const { transformBolApiOrder } = require('../../services/orders/transformers/BolOrderTransformer');
+      unifiedOrder = transformBolApiOrder(data);
+      unifiedOrder.rawResponse = data;
+      unifiedOrder.importedAt = new Date();
+      unifiedOrder.updatedAt = new Date();
 
-      order = {
-        orderId: data.orderId,
-        orderPlacedDateTime: data.orderPlacedDateTime,
-        shipmentMethod: data.shipmentDetails?.shipmentMethod,
-        pickupPoint: data.shipmentDetails?.pickupPointName,
-        shipmentDetails: data.shipmentDetails,
-        billingDetails: data.billingDetails,
-        orderItems: items
-      };
-
-      // Save to MongoDB (fire and forget)
-      BolOrder.findOneAndUpdate(
-        { orderId: data.orderId },
-        { ...order, syncedAt: new Date(), rawResponse: data },
+      // Save to unified_orders (fire and forget)
+      collection.updateOne(
+        { unifiedOrderId: unifiedOrder.unifiedOrderId },
+        { $set: unifiedOrder, $setOnInsert: { createdAt: new Date() } },
         { upsert: true }
       ).catch(err => console.error('[BolAPI] Failed to cache order:', err.message));
     }
 
+    // Map unified schema back to legacy API response format
+    const order = {
+      orderId: unifiedOrder.sourceIds?.bolOrderId,
+      orderPlacedDateTime: unifiedOrder.orderDate,
+      shipmentMethod: unifiedOrder.bol?.shipmentMethod,
+      pickupPoint: unifiedOrder.bol?.pickupPoint,
+      billingDetails: unifiedOrder.bol?.billingDetails,
+      shipmentDetails: {
+        firstName: unifiedOrder.shippingAddress?.name?.split(' ')[0] || '',
+        surname: unifiedOrder.shippingAddress?.name?.split(' ').slice(1).join(' ') || '',
+        streetName: unifiedOrder.shippingAddress?.street || '',
+        city: unifiedOrder.shippingAddress?.city || '',
+        zipCode: unifiedOrder.shippingAddress?.postalCode || '',
+        countryCode: unifiedOrder.shippingAddress?.countryCode || ''
+      },
+      orderItems: unifiedOrder.items
+    };
+
     res.json({
       success: true,
-      order: {
-        orderId: order.orderId,
-        orderPlacedDateTime: order.orderPlacedDateTime,
-        shipmentMethod: order.shipmentMethod,
-        pickupPoint: order.pickupPoint,
-        billingDetails: order.billingDetails,
-        shipmentDetails: order.shipmentDetails,
-        orderItems: order.orderItems
-      }
+      order
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -454,15 +455,18 @@ router.get('/shipments', async (req, res) => {
       .sort({ shipmentDateTime: -1 })
       .lean();
 
-    // Get ZIP codes from orders
+    // Get ZIP codes from unified_orders
     const orderIds = [...new Set(shipments.map(s => s.orderId).filter(Boolean))];
-    const orders = await BolOrder.find(
-      { orderId: { $in: orderIds } },
-      { orderId: 1, 'shipmentDetails.zipCode': 1 }
-    ).lean();
+    const unifiedOrderIds = orderIds.map(id => `${CHANNELS.BOL}:${id}`);
+    const ordersDb = getDb();
+    const ordersCollection = ordersDb.collection(COLLECTION_NAME);
+    const orders = await ordersCollection.find(
+      { unifiedOrderId: { $in: unifiedOrderIds } },
+      { projection: { 'sourceIds.bolOrderId': 1, 'shippingAddress.postalCode': 1 } }
+    ).toArray();
     const zipMap = {};
     for (const o of orders) {
-      zipMap[o.orderId] = o.shipmentDetails?.zipCode || '';
+      zipMap[o.sourceIds?.bolOrderId] = o.shippingAddress?.postalCode || '';
     }
 
     res.json({
@@ -1002,31 +1006,39 @@ router.post('/orders/create-odoo-bulk', async (req, res) => {
 router.get('/orders/pending-odoo', async (req, res) => {
   try {
     const { limit = 50 } = req.query;
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
 
-    // Find orders without Odoo link
-    const pendingOrders = await BolOrder.find({
+    // Find orders without Odoo link (using unified schema)
+    const pendingOrders = await collection.find({
+      channel: CHANNELS.BOL,
       $or: [
-        { 'odoo.saleOrderId': { $exists: false } },
-        { 'odoo.saleOrderId': null }
+        { 'sourceIds.odooSaleOrderId': { $exists: false } },
+        { 'sourceIds.odooSaleOrderId': null }
       ]
     })
-      .sort({ orderPlacedDateTime: -1 })
+      .sort({ orderDate: -1 })
       .limit(parseInt(limit, 10))
-      .select('orderId orderPlacedDateTime fulfilmentMethod totalAmount orderItems shipmentDetails')
-      .lean();
+      .project({
+        'sourceIds.bolOrderId': 1,
+        orderDate: 1,
+        subChannel: 1,
+        'totals.total': 1,
+        items: 1,
+        shippingAddress: 1
+      })
+      .toArray();
 
     res.json({
       success: true,
       count: pendingOrders.length,
       orders: pendingOrders.map(o => ({
-        orderId: o.orderId,
-        orderPlacedDateTime: o.orderPlacedDateTime,
-        fulfilmentMethod: o.fulfilmentMethod,
-        totalAmount: o.totalAmount,
-        itemCount: o.orderItems?.length || 0,
-        customerName: o.shipmentDetails
-          ? `${o.shipmentDetails.firstName || ''} ${o.shipmentDetails.surname || ''}`.trim()
-          : 'Unknown'
+        orderId: o.sourceIds?.bolOrderId,
+        orderPlacedDateTime: o.orderDate,
+        fulfilmentMethod: o.subChannel,
+        totalAmount: o.totals?.total,
+        itemCount: o.items?.length || 0,
+        customerName: o.shippingAddress?.name || 'Unknown'
       }))
     });
   } catch (error) {
@@ -1095,14 +1107,19 @@ router.get('/orders/:orderId/tax-config', async (req, res) => {
     const { orderId } = req.params;
     const { getBolOrderCreator, TAX_CONFIG } = require('../../services/bol/BolOrderCreator');
 
-    const bolOrder = await BolOrder.findOne({ orderId }).lean();
+    // Use unified_orders collection
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.BOL}:${orderId}`;
+    const bolOrder = await collection.findOne({ unifiedOrderId });
+
     if (!bolOrder) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
     const creator = await getBolOrderCreator();
-    const fulfilmentMethod = bolOrder.fulfilmentMethod || 'FBR';
-    const destCountry = bolOrder.shipmentDetails?.countryCode || 'NL';
+    const fulfilmentMethod = bolOrder.subChannel || 'FBR';
+    const destCountry = bolOrder.shippingAddress?.countryCode || 'NL';
     const shipFrom = fulfilmentMethod === 'FBB' ? 'NL' : 'BE';
     const taxConfig = creator.getTaxConfig(fulfilmentMethod, destCountry);
 
@@ -1288,27 +1305,40 @@ router.get('/cancellations/pending', async (req, res) => {
   try {
     const { limit = 50 } = req.query;
 
-    const ordersWithCancellation = await BolOrder.find({
-      'orderItems.cancellationRequest': true,
-      status: { $nin: ['CANCELLED', 'SHIPPED'] }
+    // Use unified_orders collection
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+
+    const ordersWithCancellation = await collection.find({
+      channel: CHANNELS.BOL,
+      'items.cancellationRequest': true,
+      'status.source': { $nin: ['CANCELLED', 'SHIPPED'] }
     })
-      .sort({ orderPlacedDateTime: -1 })
+      .sort({ orderDate: -1 })
       .limit(parseInt(limit, 10))
-      .select('orderId orderPlacedDateTime fulfilmentMethod totalAmount orderItems odoo status')
-      .lean();
+      .project({
+        'sourceIds.bolOrderId': 1,
+        orderDate: 1,
+        subChannel: 1,
+        'totals.total': 1,
+        items: 1,
+        odoo: 1,
+        'status.source': 1
+      })
+      .toArray();
 
     res.json({
       success: true,
       count: ordersWithCancellation.length,
       orders: ordersWithCancellation.map(o => ({
-        orderId: o.orderId,
-        orderPlacedDateTime: o.orderPlacedDateTime,
-        fulfilmentMethod: o.fulfilmentMethod,
-        totalAmount: o.totalAmount,
+        orderId: o.sourceIds?.bolOrderId,
+        orderPlacedDateTime: o.orderDate,
+        fulfilmentMethod: o.subChannel,
+        totalAmount: o.totals?.total,
         odooOrderId: o.odoo?.saleOrderId,
         odooOrderName: o.odoo?.saleOrderName,
-        status: o.status,
-        itemsWithCancellation: o.orderItems?.filter(i => i.cancellationRequest)?.length || 0
+        status: o.status?.source,
+        itemsWithCancellation: o.items?.filter(i => i.cancellationRequest)?.length || 0
       }))
     });
   } catch (error) {
@@ -1992,18 +2022,25 @@ router.post('/sync/odoo', async (req, res) => {
     const odoo = new OdooDirectClient();
     await odoo.authenticate();
 
+    // Use unified_orders collection
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+
     // Get all Bol orders that don't have Odoo info yet (or need refresh)
     const { refresh = false, limit = 500 } = req.body;
-    const query = refresh ? {} : {
-      $or: [
-        { 'odoo.saleOrderId': { $exists: false } },
-        { 'odoo.saleOrderId': null }
-      ]
+    const query = {
+      channel: CHANNELS.BOL
     };
-    const bolOrders = await BolOrder.find(query)
-      .sort({ orderPlacedDateTime: -1 })
+    if (!refresh) {
+      query.$or = [
+        { 'sourceIds.odooSaleOrderId': { $exists: false } },
+        { 'sourceIds.odooSaleOrderId': null }
+      ];
+    }
+    const bolOrders = await collection.find(query)
+      .sort({ orderDate: -1 })
       .limit(limit)
-      .lean();
+      .toArray();
 
     if (bolOrders.length === 0) {
       return res.json({
@@ -2023,8 +2060,9 @@ router.post('/sync/odoo', async (req, res) => {
 
     for (const bolOrder of bolOrders) {
       try {
-        const orderId = bolOrder.orderId;
-        const fulfilmentMethod = bolOrder.fulfilmentMethod || 'FBR';
+        // Use unified schema fields
+        const orderId = bolOrder.sourceIds?.bolOrderId;
+        const fulfilmentMethod = bolOrder.subChannel || 'FBR';
         const prefix = fulfilmentMethod === 'FBB' ? 'FBB' : 'FBR';
 
         // Try multiple search patterns to find the order
@@ -2075,10 +2113,17 @@ router.post('/sync/odoo', async (req, res) => {
           }
         }
 
-        // Update MongoDB
-        await BolOrder.updateOne(
-          { orderId: bolOrder.orderId },
-          { $set: { odoo: odooData } }
+        // Update unified_orders collection
+        await collection.updateOne(
+          { unifiedOrderId: bolOrder.unifiedOrderId },
+          {
+            $set: {
+              odoo: odooData,
+              'sourceIds.odooSaleOrderId': saleOrder.id,
+              'sourceIds.odooSaleOrderName': saleOrder.name,
+              updatedAt: new Date()
+            }
+          }
         );
         synced++;
 
@@ -2087,7 +2132,7 @@ router.post('/sync/odoo', async (req, res) => {
         }
 
       } catch (err) {
-        errors.push({ orderId: bolOrder.orderId, error: err.message });
+        errors.push({ orderId: bolOrder.sourceIds?.bolOrderId, error: err.message });
       }
 
       // Small delay to avoid overwhelming Odoo

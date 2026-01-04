@@ -9,10 +9,21 @@
  * - HISTORICAL (from 2024-01-01): Used for initial import
  */
 
-const BolOrder = require('../../models/BolOrder');
+const { getDb } = require('../../db');
+const {
+  getUnifiedOrderService,
+  CHANNELS,
+  UNIFIED_STATUS
+} = require('../orders/UnifiedOrderService');
+const { transformBolApiOrder } = require('../orders/transformers/BolOrderTransformer');
+
+// Keep Mongoose models for non-order data (shipments, returns, invoices)
 const BolShipment = require('../../models/BolShipment');
 const BolReturn = require('../../models/BolReturn');
 const BolInvoice = require('../../models/BolInvoice');
+
+// Collection name for unified orders
+const COLLECTION_NAME = 'unified_orders';
 
 // Rate limiting configuration
 const RATE_LIMIT = {
@@ -193,65 +204,30 @@ async function syncOrders(mode = 'RECENT', onProgress = null) {
       results = await Promise.all(detailPromises);
     }
 
-    // Upsert to MongoDB
+    // Upsert to unified_orders collection
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+
     for (const { order, details, success } of results) {
       const orderData = success ? details : order;
-      const items = (orderData.orderItems || []).map(item => ({
-        orderItemId: item.orderItemId,
-        ean: item.product?.ean || item.ean || '',
-        sku: item.offer?.reference || item.offerReference || '',
-        title: item.product?.title || '',
-        quantity: item.quantity || 1,
-        quantityShipped: item.quantityShipped || 0,
-        quantityCancelled: item.quantityCancelled || 0,
-        unitPrice: typeof item.unitPrice === 'object' ? parseFloat(item.unitPrice?.amount || 0) : parseFloat(item.unitPrice || 0),
-        totalPrice: typeof item.totalPrice === 'object' ? parseFloat(item.totalPrice?.amount || 0) : parseFloat(item.totalPrice || 0),
-        commission: item.commission,
-        fulfilmentMethod: item.fulfilment?.method || item.fulfilmentMethod,
-        fulfilmentStatus: item.fulfilmentStatus || 'OPEN',
-        latestDeliveryDate: item.fulfilment?.latestDeliveryDate || item.latestDeliveryDate,
-        cancellationRequest: item.cancellationRequest || false
-      }));
-
-      // Calculate status
-      const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
-      const shippedQty = items.reduce((sum, i) => sum + i.quantityShipped, 0);
-      const cancelledQty = items.reduce((sum, i) => sum + i.quantityCancelled, 0);
-
-      let status = 'OPEN';
-      if (shippedQty >= totalQty) status = 'SHIPPED';
-      else if (shippedQty > 0) status = 'PARTIAL';
-      else if (cancelledQty >= totalQty) status = 'CANCELLED';
-
-      // Calculate total
-      const totalAmount = items.reduce((sum, i) => sum + (i.totalPrice || i.unitPrice * i.quantity || 0), 0);
-
-      // Determine fulfillment method from multiple sources
-      // Priority: item fulfilment, shipment method (LVB = FBB), default null
-      let orderFulfilmentMethod = items.find(i => i.fulfilmentMethod)?.fulfilmentMethod || null;
-      if (!orderFulfilmentMethod && orderData.shipmentDetails?.shipmentMethod === 'LVB') {
-        orderFulfilmentMethod = 'FBB';  // LVB = Logistics Via Bol = FBB
-      }
 
       try {
-        await BolOrder.findOneAndUpdate(
-          { orderId: orderData.orderId },
+        // Transform to unified format
+        const unifiedOrder = transformBolApiOrder(orderData);
+
+        // Store raw response for debugging
+        unifiedOrder.rawResponse = success ? orderData : null;
+        unifiedOrder.importedAt = new Date();
+        unifiedOrder.updatedAt = new Date();
+
+        // Upsert to unified_orders
+        await collection.updateOne(
+          { unifiedOrderId: unifiedOrder.unifiedOrderId },
           {
-            orderId: orderData.orderId,
-            orderPlacedDateTime: orderData.orderPlacedDateTime,
-            shipmentMethod: orderData.shipmentDetails?.shipmentMethod,
-            pickupPoint: orderData.shipmentDetails?.pickupPointName,
-            shipmentDetails: orderData.shipmentDetails,
-            billingDetails: orderData.billingDetails,
-            orderItems: items,
-            totalAmount,
-            itemCount: items.length,
-            fulfilmentMethod: orderFulfilmentMethod,
-            status,
-            syncedAt: new Date(),
-            rawResponse: success ? orderData : null
+            $set: unifiedOrder,
+            $setOnInsert: { createdAt: new Date() }
           },
-          { upsert: true, new: true }
+          { upsert: true }
         );
       } catch (dbError) {
         console.error(`[BolSync] DB error for order ${orderData.orderId}:`, dbError.message);
@@ -680,15 +656,22 @@ async function syncAll(mode = 'RECENT') {
  * Get sync status (last sync times)
  */
 async function getSyncStatus() {
+  const db = getDb();
+  const ordersCollection = db.collection(COLLECTION_NAME);
+
+  // Query unified_orders for Bol.com orders
   const [lastOrder, lastShipment, lastReturn, lastInvoice] = await Promise.all([
-    BolOrder.findOne().sort({ syncedAt: -1 }).select('syncedAt'),
+    ordersCollection.findOne(
+      { channel: CHANNELS.BOL },
+      { sort: { importedAt: -1 }, projection: { importedAt: 1 } }
+    ),
     BolShipment.findOne().sort({ syncedAt: -1 }).select('syncedAt'),
     BolReturn.findOne().sort({ syncedAt: -1 }).select('syncedAt'),
     BolInvoice.findOne().sort({ syncedAt: -1 }).select('syncedAt')
   ]);
 
   const [orderCount, shipmentCount, returnCount, invoiceCount] = await Promise.all([
-    BolOrder.countDocuments(),
+    ordersCollection.countDocuments({ channel: CHANNELS.BOL }),
     BolShipment.countDocuments(),
     BolReturn.countDocuments(),
     BolInvoice.countDocuments()
@@ -697,7 +680,7 @@ async function getSyncStatus() {
   return {
     orders: {
       count: orderCount,
-      lastSyncedAt: lastOrder?.syncedAt
+      lastSyncedAt: lastOrder?.importedAt
     },
     shipments: {
       count: shipmentCount,

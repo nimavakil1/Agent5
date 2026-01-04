@@ -20,6 +20,7 @@
 const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { getSellerOrderImporter, COLLECTION_NAME } = require('./SellerOrderImporter');
+const { CHANNELS } = require('../../orders/UnifiedOrderService');
 const {
   getMarketplaceConfig,
   getWarehouseId,
@@ -183,33 +184,37 @@ class SellerOrderCreator {
     };
 
     try {
-      // Get order from MongoDB
-      const order = await this.collection.findOne({ amazonOrderId });
+      // Get order from MongoDB (unified_orders collection)
+      const unifiedOrderId = `${CHANNELS.AMAZON_SELLER}:${amazonOrderId}`;
+      const order = await this.collection.findOne({ unifiedOrderId });
       if (!order) {
         result.error = 'Order not found in database';
         return result;
       }
 
       // Check if already has Odoo order
-      if (order.odoo?.saleOrderId) {
+      if (order.odoo?.saleOrderId || order.sourceIds?.odooSaleOrderId) {
         result.success = true;
         result.skipped = true;
         result.skipReason = 'Order already exists in Odoo';
-        result.odooOrderId = order.odoo.saleOrderId;
-        result.odooOrderName = order.odoo.saleOrderName;
+        result.odooOrderId = order.odoo?.saleOrderId || order.sourceIds?.odooSaleOrderId;
+        result.odooOrderName = order.odoo?.saleOrderName || order.sourceIds?.odooSaleOrderName;
         return result;
       }
 
-      // Check if items are fetched
-      if (!order.itemsFetched || !order.items || order.items.length === 0) {
+      // Check if items are fetched (unified schema uses amazonSeller.itemsFetched)
+      const itemsFetched = order.amazonSeller?.itemsFetched || order.itemsFetched;
+      if (!itemsFetched || !order.items || order.items.length === 0) {
         result.error = 'Order items not fetched yet';
         return result;
       }
 
       // Check order status - only create for processable orders
+      // Unified schema uses status.source for original Amazon status
+      const orderStatus = order.status?.source || order.orderStatus;
       const processableStatuses = ['Unshipped', 'PartiallyShipped', 'Shipped'];
-      if (!processableStatuses.includes(order.orderStatus)) {
-        result.error = `Order status "${order.orderStatus}" is not processable`;
+      if (!processableStatuses.includes(orderStatus)) {
+        result.error = `Order status "${orderStatus}" is not processable`;
         return result;
       }
 
@@ -398,16 +403,16 @@ class SellerOrderCreator {
 
     const limit = options.limit || 100;
 
-    // Get FBA orders pending Odoo creation
-    const db = getDb();
-    const pendingOrders = await db.collection('seller_orders').find({
-      'odoo.saleOrderId': null,
-      autoImportEligible: true,
-      fulfillmentChannel: 'AFN', // FBA only
-      orderStatus: { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
-      itemsFetched: true
+    // Get FBA orders pending Odoo creation (from unified_orders)
+    const pendingOrders = await this.collection.find({
+      channel: CHANNELS.AMAZON_SELLER,
+      'sourceIds.odooSaleOrderId': null,
+      'amazonSeller.autoImportEligible': true,
+      'amazonSeller.fulfillmentChannel': 'AFN', // FBA only
+      'status.source': { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
+      'amazonSeller.itemsFetched': true
     })
-      .sort({ purchaseDate: -1 })
+      .sort({ orderDate: -1 })
       .limit(limit)
       .toArray();
 
@@ -423,9 +428,10 @@ class SellerOrderCreator {
 
     for (const order of pendingOrders) {
       results.processed++;
+      const amazonOrderId = order.sourceIds?.amazonOrderId;
 
       try {
-        const result = await this.createOrder(order.amazonOrderId, {
+        const result = await this.createOrder(amazonOrderId, {
           dryRun: options.dryRun,
           autoConfirm: options.autoConfirm !== false
         });
@@ -437,13 +443,13 @@ class SellerOrderCreator {
         }
 
         results.orders.push({
-          amazonOrderId: order.amazonOrderId,
+          amazonOrderId,
           ...result
         });
 
       } catch (error) {
         results.errors.push({
-          amazonOrderId: order.amazonOrderId,
+          amazonOrderId,
           error: error.message
         });
       }
@@ -454,16 +460,22 @@ class SellerOrderCreator {
 
   /**
    * Get order configuration based on order data
+   * Handles both legacy and unified schema field names
    */
   getOrderConfig(order) {
-    const marketplaceConfig = getMarketplaceConfig(order.marketplaceId);
-    const isFBA = order.fulfillmentChannel === 'AFN';
+    // Get marketplace ID (unified: marketplace.code or amazonSeller.marketplaceId, legacy: marketplaceId)
+    const marketplaceId = order.marketplace?.code || order.amazonSeller?.marketplaceId || order.marketplaceId;
+    const marketplaceConfig = getMarketplaceConfig(marketplaceId);
+
+    // Get fulfillment channel (unified: amazonSeller.fulfillmentChannel, legacy: fulfillmentChannel)
+    const fulfillmentChannel = order.amazonSeller?.fulfillmentChannel || order.fulfillmentChannel;
+    const isFBA = fulfillmentChannel === 'AFN';
 
     // Get warehouse based on fulfillment channel
-    const warehouseId = getWarehouseId(order.marketplaceId, order.fulfillmentChannel);
+    const warehouseId = getWarehouseId(marketplaceId, fulfillmentChannel);
 
     // Get order prefix
-    const orderPrefix = getOrderPrefix(order.fulfillmentChannel);
+    const orderPrefix = getOrderPrefix(fulfillmentChannel);
 
     // Get sales team
     const salesTeamId = marketplaceConfig?.salesTeamId || AMAZON_SELLER_TEAM_ID;
@@ -496,15 +508,17 @@ class SellerOrderCreator {
    * Find or create customer and shipping address from order data
    * Creates real customer with actual shipping address when available,
    * falls back to generic customer if no address data.
+   * Handles both legacy and unified schema field names.
    *
    * @returns {Object} { customerId, shippingAddressId }
    */
   async findOrCreateCustomerAndAddress(order, config) {
     const address = order.shippingAddress;
+    const amazonOrderId = order.sourceIds?.amazonOrderId || order.amazonOrderId;
 
     // If no address data at all, use generic customer
     if (!address) {
-      console.warn(`[SellerOrderCreator] No shipping address for ${order.amazonOrderId}, using generic customer`);
+      console.warn(`[SellerOrderCreator] No shipping address for ${amazonOrderId}, using generic customer`);
       const genericCustomerId = await this.findOrCreateGenericCustomer(config.shipToCountry);
       return { customerId: genericCustomerId, shippingAddressId: genericCustomerId };
     }
@@ -513,14 +527,17 @@ class SellerOrderCreator {
     // Priority: name > buyerName > location-based name > generic
     let customerName = cleanDuplicateName(address.name);
 
-    // Try buyer name if shipping name is empty
-    if (!customerName && order.buyerName) {
-      customerName = cleanDuplicateName(order.buyerName);
+    // Try buyer name if shipping name is empty (unified: customer.name, legacy: buyerName)
+    const buyerName = order.customer?.name || order.amazonSeller?.buyerName || order.buyerName;
+    if (!customerName && buyerName) {
+      customerName = cleanDuplicateName(buyerName);
     }
 
-    // For B2B: use company name if available
-    if (order.isBusinessOrder && order.buyerCompanyName) {
-      customerName = cleanDuplicateName(order.buyerCompanyName);
+    // For B2B: use company name if available (unified: amazonSeller.isBusinessOrder)
+    const isBusinessOrder = order.amazonSeller?.isBusinessOrder || order.isBusinessOrder;
+    const buyerCompanyName = order.amazonSeller?.buyerCompanyName || order.buyerCompanyName;
+    if (isBusinessOrder && buyerCompanyName) {
+      customerName = cleanDuplicateName(buyerCompanyName);
     }
 
     // If still no name, create location-based customer using city/postal code
@@ -530,10 +547,11 @@ class SellerOrderCreator {
       const postalCode = address.postalCode || '';
       const countryCode = address.countryCode || config.shipToCountry;
       customerName = `Amazon Customer (${city}${postalCode ? ' ' + postalCode : ''}, ${countryCode})`;
-      console.log(`[SellerOrderCreator] Using location-based customer name for ${order.amazonOrderId}: ${customerName}`);
+      console.log(`[SellerOrderCreator] Using location-based customer name for ${amazonOrderId}: ${customerName}`);
     }
 
     const countryId = this.countryCache[address.countryCode] || null;
+    const buyerEmail = order.customer?.email || order.amazonSeller?.buyerEmail || order.buyerEmail;
 
     // Check cache for customer
     const customerCacheKey = `customer|${customerName}|${address.countryCode}`;
@@ -557,12 +575,12 @@ class SellerOrderCreator {
         // Create new customer
         customerId = await this.odoo.create('res.partner', {
           name: customerName,
-          company_type: order.isBusinessOrder ? 'company' : 'person',
-          is_company: order.isBusinessOrder,
+          company_type: isBusinessOrder ? 'company' : 'person',
+          is_company: isBusinessOrder,
           customer_rank: 1,
           country_id: countryId,
-          email: order.buyerEmail || null,
-          comment: `Amazon customer - created from order ${order.amazonOrderId}`
+          email: buyerEmail || null,
+          comment: `Amazon customer - created from order ${amazonOrderId}`
         });
         console.log(`[SellerOrderCreator] Created customer: ${customerName} (ID: ${customerId})`);
       }
@@ -616,8 +634,8 @@ class SellerOrderCreator {
           zip: address.postalCode || null,
           country_id: countryId,
           phone: address.phone || null,
-          email: order.buyerEmail || null,  // Email for carrier notifications (GLS, etc.)
-          comment: `Shipping address from Amazon order ${order.amazonOrderId}${!address.name ? ' (PII limited by Amazon)' : ''}`
+          email: buyerEmail || null,  // Email for carrier notifications (GLS, etc.)
+          comment: `Shipping address from Amazon order ${amazonOrderId}${!address.name ? ' (PII limited by Amazon)' : ''}`
         });
         console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (ID: ${shippingAddressId})`);
       }
@@ -871,18 +889,23 @@ class SellerOrderCreator {
    * Create the sale order in Odoo
    * NOTE: Journal is NOT set here - VcsOdooInvoicer will set the correct journal
    * based on actual ship-from country from VCS report
+   * Handles both legacy and unified schema field names.
    */
   async createOdooOrder(order, partnerId, shippingPartnerId, config, orderLines) {
+    // Get Amazon order ID (unified: sourceIds.amazonOrderId, legacy: amazonOrderId)
+    const amazonOrderId = order.sourceIds?.amazonOrderId || order.amazonOrderId;
+
     // Generate order name
-    const orderName = `${config.orderPrefix}${order.amazonOrderId}`;
+    const orderName = `${config.orderPrefix}${amazonOrderId}`;
 
     // Build order lines in Odoo format
     const odooLines = orderLines.lines.map(line => [0, 0, line]);
 
-    // Format order date
-    const orderDate = order.purchaseDate instanceof Date
-      ? order.purchaseDate.toISOString().split('T')[0]
-      : new Date(order.purchaseDate).toISOString().split('T')[0];
+    // Format order date (unified: orderDate, legacy: purchaseDate)
+    const purchaseDate = order.orderDate || order.purchaseDate;
+    const orderDate = purchaseDate instanceof Date
+      ? purchaseDate.toISOString().split('T')[0]
+      : new Date(purchaseDate).toISOString().split('T')[0];
 
     // Create order data
     // NOTE: journal_id is NOT set - VCS invoice import will set correct journal
@@ -894,7 +917,7 @@ class SellerOrderCreator {
       partner_id: partnerId,
       partner_invoice_id: shippingPartnerId,  // Use shipping address for invoice (has full address details)
       partner_shipping_id: shippingPartnerId,  // Shipping address
-      client_order_ref: order.amazonOrderId,
+      client_order_ref: amazonOrderId,
       date_order: orderDate,
       warehouse_id: config.warehouseId,
       order_line: odooLines,

@@ -3,7 +3,7 @@
  *
  * Handles:
  * - Polling orders from Amazon SP-API
- * - Storing orders in MongoDB with full item details
+ * - Storing orders in unified_orders MongoDB collection
  * - Tracking import status and Odoo sync status
  * - Historical import with safeguards
  *
@@ -20,9 +20,11 @@ const {
   FULFILLMENT_CHANNELS: _FULFILLMENT_CHANNELS,
   getAllMarketplaceIds
 } = require('./SellerMarketplaceConfig');
+const { getUnifiedOrderService, CHANNELS, SUB_CHANNELS } = require('../../orders/UnifiedOrderService');
+const { transformAmazonApiOrder, getMarketplaceCountry } = require('../../orders/transformers/SellerOrderTransformer');
 
-// Collection name for seller orders
-const COLLECTION_NAME = 'seller_orders';
+// Collection name - uses unified_orders now
+const COLLECTION_NAME = 'unified_orders';
 
 // Historical cutoff date - orders before this won't auto-import to Odoo
 const HISTORICAL_CUTOFF = new Date('2024-01-01T00:00:00Z');
@@ -33,7 +35,8 @@ const HISTORICAL_CUTOFF = new Date('2024-01-01T00:00:00Z');
 class SellerOrderImporter {
   constructor() {
     this.client = null;
-    this.collection = null;
+    this.unifiedService = null;
+    this.collection = null;  // Direct collection access for complex queries
     this.lastPollTime = null;
     this.isPolling = false;
   }
@@ -42,35 +45,18 @@ class SellerOrderImporter {
    * Initialize the importer
    */
   async init() {
-    if (this.client && this.collection) return;
+    if (this.client && this.unifiedService) return;
 
     this.client = getSellerClient();
     await this.client.init();
 
+    // Initialize unified order service
+    this.unifiedService = getUnifiedOrderService();
+    await this.unifiedService.init();
+
+    // Direct collection access for complex queries
     const db = getDb();
     this.collection = db.collection(COLLECTION_NAME);
-
-    // Ensure indexes
-    await this.ensureIndexes();
-  }
-
-  /**
-   * Create MongoDB indexes for efficient querying
-   */
-  async ensureIndexes() {
-    try {
-      await this.collection.createIndex({ amazonOrderId: 1 }, { unique: true });
-      await this.collection.createIndex({ marketplaceId: 1 });
-      await this.collection.createIndex({ purchaseDate: -1 });
-      await this.collection.createIndex({ orderStatus: 1 });
-      await this.collection.createIndex({ fulfillmentChannel: 1 });
-      await this.collection.createIndex({ 'odoo.saleOrderId': 1 });
-      await this.collection.createIndex({ autoImportEligible: 1 });
-      await this.collection.createIndex({ lastUpdateDate: -1 });
-      console.log('[SellerOrderImporter] Indexes ensured');
-    } catch (error) {
-      console.error('[SellerOrderImporter] Error creating indexes:', error.message);
-    }
   }
 
   /**
@@ -150,16 +136,17 @@ class SellerOrderImporter {
 
       // Fetch items for orders that don't have them yet
       const ordersNeedingItems = await this.collection.find({
-        itemsFetched: { $ne: true },
-        amazonOrderId: { $in: allOrders.map(o => o.AmazonOrderId) }
+        channel: CHANNELS.AMAZON_SELLER,
+        'amazonSeller.itemsFetched': { $ne: true },
+        'sourceIds.amazonOrderId': { $in: allOrders.map(o => o.AmazonOrderId) }
       }).limit(50).toArray();
 
       for (const order of ordersNeedingItems) {
         try {
-          await this.fetchOrderItems(order.amazonOrderId);
+          await this.fetchOrderItems(order.sourceIds.amazonOrderId);
           result.itemsFetched++;
         } catch (error) {
-          console.error(`[SellerOrderImporter] Error fetching items for ${order.amazonOrderId}:`, error.message);
+          console.error(`[SellerOrderImporter] Error fetching items for ${order.sourceIds.amazonOrderId}:`, error.message);
         }
       }
 
@@ -176,84 +163,33 @@ class SellerOrderImporter {
   }
 
   /**
-   * Upsert an order to MongoDB
+   * Upsert an order to MongoDB (unified_orders collection)
    * @param {Object} amazonOrder - Order from Amazon API
    */
   async upsertOrder(amazonOrder) {
-    const marketplaceConfig = getMarketplaceConfig(amazonOrder.MarketplaceId);
-    const purchaseDate = new Date(amazonOrder.PurchaseDate);
+    // Transform Amazon API order to unified format
+    const unifiedOrder = transformAmazonApiOrder(amazonOrder, []);  // Items fetched separately
 
-    // Determine if order is eligible for auto-import to Odoo
-    const autoImportEligible = purchaseDate >= HISTORICAL_CUTOFF;
+    // Preserve existing Odoo data if updating
+    const existing = await this.unifiedService.getByAmazonOrderId(amazonOrder.AmazonOrderId);
+    if (existing) {
+      // Preserve Odoo link data
+      if (existing.odoo) {
+        unifiedOrder.odoo = existing.odoo;
+        unifiedOrder.sourceIds.odooSaleOrderId = existing.sourceIds.odooSaleOrderId;
+        unifiedOrder.sourceIds.odooSaleOrderName = existing.sourceIds.odooSaleOrderName;
+      }
+      // Preserve imported items if already fetched
+      if (existing.items && existing.items.length > 0) {
+        unifiedOrder.items = existing.items;
+        unifiedOrder.amazonSeller.itemsFetched = true;
+      }
+      // Preserve original import date
+      unifiedOrder.createdAt = existing.createdAt;
+    }
 
-    const orderDoc = {
-      amazonOrderId: amazonOrder.AmazonOrderId,
-      marketplaceId: amazonOrder.MarketplaceId,
-      marketplaceCountry: marketplaceConfig?.country || getCountryFromMarketplace(amazonOrder.MarketplaceId),
-      orderStatus: amazonOrder.OrderStatus,
-      fulfillmentChannel: amazonOrder.FulfillmentChannel,
-      purchaseDate: purchaseDate,
-      lastUpdateDate: new Date(amazonOrder.LastUpdateDate),
-
-      // Buyer info
-      buyerEmail: amazonOrder.BuyerInfo?.BuyerEmail || null,
-      buyerName: amazonOrder.BuyerInfo?.BuyerName || null,
-
-      // Shipping address (if available)
-      shippingAddress: amazonOrder.ShippingAddress ? {
-        name: amazonOrder.ShippingAddress.Name,
-        addressLine1: amazonOrder.ShippingAddress.AddressLine1,
-        addressLine2: amazonOrder.ShippingAddress.AddressLine2 || null,
-        city: amazonOrder.ShippingAddress.City,
-        stateOrRegion: amazonOrder.ShippingAddress.StateOrRegion,
-        postalCode: amazonOrder.ShippingAddress.PostalCode,
-        countryCode: amazonOrder.ShippingAddress.CountryCode,
-        phone: amazonOrder.ShippingAddress.Phone || null
-      } : null,
-
-      // Financial
-      orderTotal: amazonOrder.OrderTotal ? {
-        currencyCode: amazonOrder.OrderTotal.CurrencyCode,
-        amount: amazonOrder.OrderTotal.Amount
-      } : null,
-
-      // Order metadata
-      salesChannel: amazonOrder.SalesChannel,
-      orderChannel: amazonOrder.OrderChannel,
-      shipServiceLevel: amazonOrder.ShipServiceLevel,
-      shipmentServiceLevelCategory: amazonOrder.ShipmentServiceLevelCategory,
-      isPrime: amazonOrder.IsPrime || false,
-      isBusinessOrder: amazonOrder.IsBusinessOrder || false,
-      isPremiumOrder: amazonOrder.IsPremiumOrder || false,
-      isGlobalExpressEnabled: amazonOrder.IsGlobalExpressEnabled || false,
-
-      // Tracking
-      autoImportEligible,
-      updatedAt: new Date()
-    };
-
-    // Upsert to MongoDB
-    const result = await this.collection.updateOne(
-      { amazonOrderId: amazonOrder.AmazonOrderId },
-      {
-        $set: orderDoc,
-        $setOnInsert: {
-          importedAt: new Date(),
-          itemsFetched: false,
-          odoo: {
-            partnerId: null,
-            saleOrderId: null,
-            saleOrderName: null,
-            invoiceId: null,
-            invoiceName: null,
-            pickingId: null,
-            createdAt: null,
-            syncError: null
-          }
-        }
-      },
-      { upsert: true }
-    );
+    // Upsert to unified_orders
+    const result = await this.unifiedService.upsert(unifiedOrder.unifiedOrderId, unifiedOrder);
 
     return result;
   }
@@ -265,58 +201,53 @@ class SellerOrderImporter {
   async fetchOrderItems(amazonOrderId) {
     await this.init();
 
-    const items = await this.client.getAllOrderItems(amazonOrderId);
+    const rawItems = await this.client.getAllOrderItems(amazonOrderId);
 
-    const formattedItems = items.map(item => ({
-      orderItemId: item.OrderItemId,
-      asin: item.ASIN,
-      sellerSku: item.SellerSKU,
-      title: item.Title,
-      quantityOrdered: item.QuantityOrdered,
-      quantityShipped: item.QuantityShipped || 0,
-      itemPrice: item.ItemPrice ? {
-        currencyCode: item.ItemPrice.CurrencyCode,
-        amount: item.ItemPrice.Amount
-      } : null,
-      itemTax: item.ItemTax ? {
-        currencyCode: item.ItemTax.CurrencyCode,
-        amount: item.ItemTax.Amount
-      } : null,
-      shippingPrice: item.ShippingPrice ? {
-        currencyCode: item.ShippingPrice.CurrencyCode,
-        amount: item.ShippingPrice.Amount
-      } : null,
-      shippingTax: item.ShippingTax ? {
-        currencyCode: item.ShippingTax.CurrencyCode,
-        amount: item.ShippingTax.Amount
-      } : null,
-      promotionDiscount: item.PromotionDiscount ? {
-        currencyCode: item.PromotionDiscount.CurrencyCode,
-        amount: item.PromotionDiscount.Amount
-      } : null,
-      shippingDiscount: item.ShippingDiscount ? {
-        currencyCode: item.ShippingDiscount.CurrencyCode,
-        amount: item.ShippingDiscount.Amount
-      } : null,
-      isGift: item.IsGift || false,
-      conditionNote: item.ConditionNote || null,
-      conditionId: item.ConditionId || null,
-      conditionSubtypeId: item.ConditionSubtypeId || null
-    }));
+    // Transform items to unified format
+    const items = rawItems.map(item => {
+      const itemPrice = parseFloat(item.ItemPrice?.Amount) || 0;
+      const itemTax = parseFloat(item.ItemTax?.Amount) || 0;
 
-    // Update order with items
+      return {
+        sku: item.SellerSKU,
+        asin: item.ASIN,
+        ean: null,
+        name: item.Title,
+        quantity: item.QuantityOrdered || 1,
+        quantityShipped: item.QuantityShipped || 0,
+        unitPrice: itemPrice / (item.QuantityOrdered || 1),
+        lineTotal: itemPrice,
+        tax: itemTax,
+        orderItemId: item.OrderItemId
+      };
+    });
+
+    // Calculate totals
+    let subtotal = 0;
+    let taxTotal = 0;
+    items.forEach(item => {
+      subtotal += item.lineTotal;
+      taxTotal += item.tax;
+    });
+
+    // Get the unified order ID for this amazon order
+    const unifiedOrderId = `${CHANNELS.AMAZON_SELLER}:${amazonOrderId}`;
+
+    // Update order with items in unified collection
     await this.collection.updateOne(
-      { amazonOrderId },
+      { unifiedOrderId },
       {
         $set: {
-          items: formattedItems,
-          itemsFetched: true,
-          itemsFetchedAt: new Date()
+          items,
+          'totals.subtotal': subtotal,
+          'totals.tax': taxTotal,
+          'amazonSeller.itemsFetched': true,
+          updatedAt: new Date()
         }
       }
     );
 
-    return formattedItems;
+    return items;
   }
 
   /**
@@ -394,7 +325,7 @@ class SellerOrderImporter {
   // ==================== QUERY METHODS ====================
 
   /**
-   * Get orders from MongoDB
+   * Get orders from MongoDB (unified_orders collection)
    * @param {Object} filters - Query filters
    * @param {Object} options - Query options
    */
@@ -406,7 +337,7 @@ class SellerOrderImporter {
     const skip = options.skip || 0;
 
     return this.collection.find(query)
-      .sort({ purchaseDate: -1 })
+      .sort({ orderDate: -1 })
       .skip(skip)
       .limit(limit)
       .toArray();
@@ -418,7 +349,7 @@ class SellerOrderImporter {
    */
   async getOrder(amazonOrderId) {
     await this.init();
-    return this.collection.findOne({ amazonOrderId });
+    return this.unifiedService.getByAmazonOrderId(amazonOrderId);
   }
 
   /**
@@ -432,66 +363,69 @@ class SellerOrderImporter {
   }
 
   /**
-   * Build MongoDB query from filters
+   * Build MongoDB query from filters (for unified_orders collection)
    */
   buildQuery(filters) {
-    const query = {};
+    // Always filter to Amazon Seller channel
+    const query = {
+      channel: CHANNELS.AMAZON_SELLER
+    };
 
     if (filters.orderId) {
-      query.amazonOrderId = { $regex: filters.orderId, $options: 'i' };
+      query['sourceIds.amazonOrderId'] = { $regex: filters.orderId, $options: 'i' };
     }
 
     if (filters.customer) {
       query.$or = [
         { 'shippingAddress.name': { $regex: filters.customer, $options: 'i' } },
-        { buyerName: { $regex: filters.customer, $options: 'i' } }
+        { 'customer.name': { $regex: filters.customer, $options: 'i' } }
       ];
     }
 
     if (filters.marketplace) {
-      query.marketplaceCountry = filters.marketplace;
+      query['marketplace.code'] = filters.marketplace;
     }
 
     if (filters.marketplaceId) {
-      query.marketplaceId = filters.marketplaceId;
+      query['marketplace.id'] = filters.marketplaceId;
     }
 
     if (filters.status) {
       // Support comma-separated values (e.g., "Unshipped,Shipped")
       if (filters.status.includes(',')) {
-        query.orderStatus = { $in: filters.status.split(',') };
+        query['status.source'] = { $in: filters.status.split(',') };
       }
       // Support negation with ! prefix (e.g., "!Pending" means not Pending)
       else if (filters.status.startsWith('!')) {
-        query.orderStatus = { $ne: filters.status.substring(1) };
+        query['status.source'] = { $ne: filters.status.substring(1) };
       } else {
-        query.orderStatus = filters.status;
+        query['status.source'] = filters.status;
       }
     }
 
     if (filters.fulfillmentChannel) {
-      query.fulfillmentChannel = filters.fulfillmentChannel;
+      query['amazonSeller.fulfillmentChannel'] = filters.fulfillmentChannel;
     }
 
     if (filters.hasOdooOrder !== undefined) {
       if (filters.hasOdooOrder) {
-        query['odoo.saleOrderId'] = { $ne: null };
+        query['sourceIds.odooSaleOrderId'] = { $ne: null };
       } else {
-        query['odoo.saleOrderId'] = null;
+        query['sourceIds.odooSaleOrderId'] = null;
       }
     }
 
     if (filters.autoImportEligible !== undefined) {
-      query.autoImportEligible = filters.autoImportEligible;
+      query['amazonSeller.autoImportEligible'] = filters.autoImportEligible;
     }
 
     if (filters.dateFrom || filters.dateTo) {
-      query.purchaseDate = {};
+      query.orderDate = {};
       if (filters.dateFrom) {
-        query.purchaseDate.$gte = new Date(filters.dateFrom);
+        query.orderDate.$gte = new Date(filters.dateFrom);
       }
       if (filters.dateTo) {
-        query.purchaseDate.$lte = new Date(filters.dateTo);
+        query.orderDate.$lte = new Date(filters.dateTo);
       }
     }
 
@@ -512,24 +446,24 @@ class SellerOrderImporter {
     await this.init();
 
     return this.collection.find({
-      'odoo.saleOrderId': null,
-      autoImportEligible: true,
-      orderStatus: { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
-      itemsFetched: true,
+      channel: CHANNELS.AMAZON_SELLER,
+      'sourceIds.odooSaleOrderId': null,
+      'amazonSeller.autoImportEligible': true,
+      'status.source': { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
+      'amazonSeller.itemsFetched': true,
       // Only auto-import if:
       // 1. FBA order (AFN) - Amazon handles fulfillment, generic customer OK
-      // 2. FBM order (MFN) with complete address (name AND addressLine1 must exist)
-      // NOTE: Must use $nin instead of multiple $ne - JS objects can't have duplicate keys
+      // 2. FBM order (MFN) with complete address (name AND street must exist)
       $or: [
-        { fulfillmentChannel: 'AFN' },  // FBA orders always eligible
+        { 'amazonSeller.fulfillmentChannel': 'AFN' },  // FBA orders always eligible
         {
-          fulfillmentChannel: 'MFN',
+          'amazonSeller.fulfillmentChannel': 'MFN',
           'shippingAddress.name': { $exists: true, $nin: [null, ''] },
-          'shippingAddress.addressLine1': { $exists: true, $nin: [null, ''] }
+          'shippingAddress.street': { $exists: true, $nin: [null, ''] }
         }
       ]
     })
-      .sort({ purchaseDate: -1 })
+      .sort({ orderDate: -1 })
       .limit(limit)
       .toArray();
   }
@@ -543,20 +477,21 @@ class SellerOrderImporter {
     await this.init();
 
     return this.collection.find({
-      'odoo.saleOrderId': null,
-      autoImportEligible: true,
-      fulfillmentChannel: 'MFN',
-      orderStatus: { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
-      itemsFetched: true,
-      // Missing name OR missing addressLine1
+      channel: CHANNELS.AMAZON_SELLER,
+      'sourceIds.odooSaleOrderId': null,
+      'amazonSeller.autoImportEligible': true,
+      'amazonSeller.fulfillmentChannel': 'MFN',
+      'status.source': { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
+      'amazonSeller.itemsFetched': true,
+      // Missing name OR missing street
       $or: [
         { 'shippingAddress.name': { $in: [null, ''] } },
         { 'shippingAddress.name': { $exists: false } },
-        { 'shippingAddress.addressLine1': { $in: [null, ''] } },
-        { 'shippingAddress.addressLine1': { $exists: false } }
+        { 'shippingAddress.street': { $in: [null, ''] } },
+        { 'shippingAddress.street': { $exists: false } }
       ]
     })
-      .sort({ purchaseDate: -1 })
+      .sort({ orderDate: -1 })
       .limit(limit)
       .toArray();
   }
@@ -570,29 +505,30 @@ class SellerOrderImporter {
     await this.init();
 
     const query = {
-      'odoo.saleOrderId': null,
-      autoImportEligible: true,
-      fulfillmentChannel: 'MFN',
-      orderStatus: { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
-      itemsFetched: true,
+      channel: CHANNELS.AMAZON_SELLER,
+      'sourceIds.odooSaleOrderId': null,
+      'amazonSeller.autoImportEligible': true,
+      'amazonSeller.fulfillmentChannel': 'MFN',
+      'status.source': { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
+      'amazonSeller.itemsFetched': true,
       $or: [
         { 'shippingAddress.name': { $in: [null, ''] } },
         { 'shippingAddress.name': { $exists: false } },
-        { 'shippingAddress.addressLine1': { $in: [null, ''] } },
-        { 'shippingAddress.addressLine1': { $exists: false } }
+        { 'shippingAddress.street': { $in: [null, ''] } },
+        { 'shippingAddress.street': { $exists: false } }
       ]
     };
 
     // Get both count and order IDs
     const orders = await this.collection.find(query)
-      .project({ amazonOrderId: 1 })
-      .sort({ purchaseDate: -1 })
+      .project({ 'sourceIds.amazonOrderId': 1 })
+      .sort({ orderDate: -1 })
       .limit(50) // Limit to 50 for display
       .toArray();
 
     return {
       count: orders.length,
-      orderIds: orders.map(o => o.amazonOrderId)
+      orderIds: orders.map(o => o.sourceIds.amazonOrderId)
     };
   }
 
@@ -604,26 +540,31 @@ class SellerOrderImporter {
   async updateOdooInfo(amazonOrderId, odooInfo) {
     await this.init();
 
+    const unifiedOrderId = `${CHANNELS.AMAZON_SELLER}:${amazonOrderId}`;
+
     const updateData = {
-      'odoo.partnerId': odooInfo.partnerId || null,
+      'sourceIds.odooSaleOrderId': odooInfo.saleOrderId || null,
+      'sourceIds.odooSaleOrderName': odooInfo.saleOrderName || null,
       'odoo.saleOrderId': odooInfo.saleOrderId || null,
       'odoo.saleOrderName': odooInfo.saleOrderName || null,
-      'odoo.invoiceId': odooInfo.invoiceId || null,
-      'odoo.invoiceName': odooInfo.invoiceName || null,
-      'odoo.pickingId': odooInfo.pickingId || null,
-      'odoo.createdAt': odooInfo.createdAt || new Date(),
+      'odoo.partnerId': odooInfo.partnerId || null,
+      'odoo.state': odooInfo.state || null,
+      'odoo.invoiceStatus': odooInfo.invoiceStatus || null,
+      'odoo.syncedAt': new Date(),
       'odoo.syncError': odooInfo.syncError || null,
       updatedAt: new Date()
     };
 
-    // If partner name is provided, update the display fields for the UI
+    // If partner name is provided, update the customer display fields
     if (odooInfo.partnerName) {
-      updateData.buyerName = odooInfo.partnerName;
+      updateData['customer.name'] = odooInfo.partnerName;
+      updateData['customer.odooPartnerId'] = odooInfo.partnerId;
+      updateData['customer.odooPartnerName'] = odooInfo.partnerName;
       updateData['shippingAddress.name'] = odooInfo.partnerName;
     }
 
     return this.collection.updateOne(
-      { amazonOrderId },
+      { unifiedOrderId },
       { $set: updateData }
     );
   }
@@ -634,6 +575,9 @@ class SellerOrderImporter {
   async getStats() {
     await this.init();
 
+    // All queries filtered to Amazon Seller channel
+    const baseFilter = { channel: CHANNELS.AMAZON_SELLER };
+
     const [
       total,
       pendingOdoo,
@@ -642,13 +586,27 @@ class SellerOrderImporter {
       fbm,
       byStatus
     ] = await Promise.all([
-      this.collection.countDocuments({}),
-      this.collection.countDocuments({ 'odoo.saleOrderId': null, autoImportEligible: true }),
-      this.collection.countDocuments({ 'odoo.saleOrderId': { $ne: null } }),
-      this.collection.countDocuments({ fulfillmentChannel: 'AFN' }),
-      this.collection.countDocuments({ fulfillmentChannel: 'MFN' }),
+      this.collection.countDocuments(baseFilter),
+      this.collection.countDocuments({
+        ...baseFilter,
+        'sourceIds.odooSaleOrderId': null,
+        'amazonSeller.autoImportEligible': true
+      }),
+      this.collection.countDocuments({
+        ...baseFilter,
+        'sourceIds.odooSaleOrderId': { $ne: null }
+      }),
+      this.collection.countDocuments({
+        ...baseFilter,
+        'amazonSeller.fulfillmentChannel': 'AFN'
+      }),
+      this.collection.countDocuments({
+        ...baseFilter,
+        'amazonSeller.fulfillmentChannel': 'MFN'
+      }),
       this.collection.aggregate([
-        { $group: { _id: '$orderStatus', count: { $sum: 1 } } }
+        { $match: baseFilter },
+        { $group: { _id: '$status.source', count: { $sum: 1 } } }
       ]).toArray()
     ]);
 
@@ -673,7 +631,7 @@ class SellerOrderImporter {
     return {
       isPolling: this.isPolling,
       lastPollTime: this.lastPollTime,
-      initialized: !!this.collection
+      initialized: !!this.unifiedService
     };
   }
 }

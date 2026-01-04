@@ -17,11 +17,18 @@ const { VendorClient, VENDOR_TOKEN_MAP, MARKETPLACE_IDS, PO_STATES } = require('
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { isTestMode } = require('./TestMode');
 const { getAmazonProductMapper } = require('../AmazonProductMapper');
+const {
+  getUnifiedOrderService,
+  CHANNELS,
+  SUB_CHANNELS,
+  UNIFIED_STATUS
+} = require('../../orders/UnifiedOrderService');
+const { transformAmazonVendorApiOrder } = require('../../orders/transformers/VendorOrderTransformer');
 
 /**
- * MongoDB collection name for vendor purchase orders
+ * MongoDB collection name - now using unified_orders
  */
-const COLLECTION_NAME = 'vendor_purchase_orders';
+const COLLECTION_NAME = 'unified_orders';
 
 class VendorPOImporter {
   constructor() {
@@ -64,18 +71,17 @@ class VendorPOImporter {
 
   /**
    * Ensure MongoDB indexes exist
+   * Note: Most indexes are created by UnifiedOrderService, but we add vendor-specific ones
    */
   async ensureIndexes() {
     const collection = this.db.collection(COLLECTION_NAME);
 
+    // Add vendor-specific indexes (main ones are in UnifiedOrderService)
     await collection.createIndexes([
-      { key: { purchaseOrderNumber: 1 }, unique: true },
-      { key: { marketplaceId: 1, purchaseOrderState: 1 } },
-      { key: { purchaseOrderDate: -1 } },
-      { key: { 'acknowledgment.acknowledged': 1 } },
-      { key: { 'odoo.saleOrderId': 1 } },
-      { key: { createdAt: -1 } },
-      { key: { updatedAt: -1 } }
+      { key: { 'sourceIds.amazonVendorPONumber': 1 }, sparse: true },
+      { key: { 'amazonVendor.purchaseOrderState': 1 }, sparse: true },
+      { key: { 'amazonVendor.acknowledgment.acknowledged': 1 }, sparse: true },
+      { key: { 'amazonVendor.shipmentStatus': 1 }, sparse: true }
     ]);
   }
 
@@ -176,49 +182,64 @@ class VendorPOImporter {
   }
 
   /**
-   * Upsert a purchase order to MongoDB
+   * Upsert a purchase order to MongoDB using unified schema
    * @param {Object} order - Purchase order from Amazon API
    * @param {string} marketplace - Marketplace code
    */
   async upsertPurchaseOrder(order, marketplace) {
     const collection = this.db.collection(COLLECTION_NAME);
-
     const poNumber = order.purchaseOrderNumber;
-    const existing = await collection.findOne({ purchaseOrderNumber: poNumber });
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
 
-    const document = this.transformPurchaseOrder(order, marketplace);
+    // Check if already exists
+    const existing = await collection.findOne({ unifiedOrderId });
+
+    // Transform to unified schema
+    const unified = transformAmazonVendorApiOrder(order, marketplace);
+
+    // If Amazon says it's already Acknowledged or Closed, mark our flag too
+    const isAlreadyAcknowledged = ['Acknowledged', 'Closed'].includes(order.purchaseOrderState);
 
     if (existing) {
-      // Update existing
+      // Preserve existing Odoo data and acknowledgment state
+      const preservedOdoo = existing.odoo || null;
+      const preservedAck = existing.amazonVendor?.acknowledgment || unified.amazonVendor.acknowledgment;
+
+      // Update existing - preserve Odoo links and shipment data
       await collection.updateOne(
-        { purchaseOrderNumber: poNumber },
+        { unifiedOrderId },
         {
           $set: {
-            ...document,
+            // Update core fields from Amazon
+            'status.source': order.purchaseOrderState,
+            'status.unified': unified.status.unified,
+            'amazonVendor.purchaseOrderState': order.purchaseOrderState,
+            'amazonVendor.purchaseOrderType': unified.amazonVendor.purchaseOrderType,
+            'amazonVendor.deliveryWindow': unified.amazonVendor.deliveryWindow,
+            'amazonVendor.buyingParty': unified.amazonVendor.buyingParty,
+            'amazonVendor.sellingParty': unified.amazonVendor.sellingParty,
+            'amazonVendor.shipToParty': unified.amazonVendor.shipToParty,
+            'amazonVendor.billToParty': unified.amazonVendor.billToParty,
+            'shippingAddress': unified.shippingAddress,
+            'items': unified.items,
+            'totals': unified.totals,
+            'lastUpdateDate': new Date(),
             updatedAt: new Date()
           }
         }
       );
       return { isNew: false, purchaseOrderNumber: poNumber };
     } else {
-      // Insert new
-      // If Amazon says it's already Acknowledged or Closed, mark our flag too
-      const isAlreadyAcknowledged = ['Acknowledged', 'Closed'].includes(document.purchaseOrderState);
+      // Insert new - set acknowledgment based on Amazon state
+      unified.amazonVendor.acknowledgment = {
+        acknowledged: isAlreadyAcknowledged,
+        acknowledgedAt: isAlreadyAcknowledged ? new Date() : null,
+        status: isAlreadyAcknowledged ? 'Accepted' : null
+      };
+      unified.amazonVendor.shipmentStatus = 'not_shipped';
+      unified.amazonVendor.shipments = [];
 
-      await collection.insertOne({
-        ...document,
-        shipmentStatus: 'not_shipped',
-        acknowledgment: {
-          acknowledged: isAlreadyAcknowledged,
-          acknowledgedAt: isAlreadyAcknowledged ? new Date() : null,
-          status: isAlreadyAcknowledged ? 'Accepted' : null
-        },
-        odoo: { saleOrderId: null, saleOrderName: null, invoiceId: null },
-        shipments: [],
-        invoices: [],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
+      await collection.insertOne(unified);
 
       // Enrich items with Odoo product data (async, don't wait)
       this.enrichItemsWithOdooData(poNumber).catch(err => {
@@ -235,7 +256,8 @@ class VendorPOImporter {
    */
   async enrichItemsWithOdooData(poNumber) {
     const collection = this.db.collection(COLLECTION_NAME);
-    const po = await collection.findOne({ purchaseOrderNumber: poNumber });
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
+    const po = await collection.findOne({ unifiedOrderId });
 
     if (!po || !po.items || po.items.length === 0) {
       return;
@@ -360,9 +382,9 @@ class VendorPOImporter {
         }
       }
 
-      // Update PO with enriched items
+      // Update PO with enriched items (using unified schema)
       await collection.updateOne(
-        { purchaseOrderNumber: poNumber },
+        { unifiedOrderId },
         { $set: { items: updatedItems, updatedAt: new Date() } }
       );
 
@@ -499,7 +521,8 @@ class VendorPOImporter {
    */
   async getPurchaseOrder(poNumber) {
     const collection = this.db.collection(COLLECTION_NAME);
-    const po = await collection.findOne({ purchaseOrderNumber: poNumber });
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
+    const po = await collection.findOne({ unifiedOrderId });
 
     // Auto-enrich missing products when PO is accessed
     if (po && po.items) {
@@ -508,7 +531,7 @@ class VendorPOImporter {
         console.log(`[VendorPOImporter] PO ${poNumber} has ${missingProducts.length} items missing product data, re-enriching...`);
         await this.enrichItemsWithOdooData(poNumber);
         // Return fresh data after enrichment
-        return collection.findOne({ purchaseOrderNumber: poNumber });
+        return collection.findOne({ unifiedOrderId });
       }
     }
 
@@ -546,10 +569,12 @@ class VendorPOImporter {
 
   /**
    * Build query object from filters (shared helper)
-   * IMPORTANT: Excludes test data unless test mode is enabled
+   * IMPORTANT: Uses unified schema fields and excludes test data unless test mode is enabled
    */
   _buildQuery(filters = {}) {
-    const query = {};
+    const query = {
+      channel: CHANNELS.AMAZON_VENDOR  // Only query vendor orders
+    };
 
     // CRITICAL: Only show test data when test mode is enabled
     if (!isTestMode()) {
@@ -557,54 +582,54 @@ class VendorPOImporter {
     }
 
     if (filters.marketplace) {
-      query.marketplaceId = filters.marketplace;
+      query['marketplace.code'] = filters.marketplace;
     }
 
     if (filters.state) {
-      query.purchaseOrderState = filters.state;
+      query['amazonVendor.purchaseOrderState'] = filters.state;
     }
 
     if (filters.acknowledged !== undefined) {
-      query['acknowledgment.acknowledged'] = filters.acknowledged;
+      query['amazonVendor.acknowledgment.acknowledged'] = filters.acknowledged;
     }
 
     if (filters.hasOdooOrder !== undefined) {
       if (filters.hasOdooOrder) {
-        query['odoo.saleOrderId'] = { $ne: null };
+        query['sourceIds.odooSaleOrderId'] = { $ne: null };
       } else {
-        query['odoo.saleOrderId'] = null;
+        query['sourceIds.odooSaleOrderId'] = null;
       }
     }
 
     if (filters.dateFrom) {
-      query.purchaseOrderDate = { $gte: new Date(filters.dateFrom) };
+      query.orderDate = { $gte: new Date(filters.dateFrom) };
     }
 
     if (filters.dateTo) {
-      query.purchaseOrderDate = {
-        ...query.purchaseOrderDate,
+      query.orderDate = {
+        ...query.orderDate,
         $lte: new Date(filters.dateTo)
       };
     }
 
     // Shipment status filter
     if (filters.shipmentStatus) {
-      query.shipmentStatus = filters.shipmentStatus;
+      query['amazonVendor.shipmentStatus'] = filters.shipmentStatus;
     }
 
     // Invoice pending filter (shipped but no invoice)
     if (filters.invoicePending) {
       query.$or = [
-        { invoiceStatus: null },
-        { invoiceStatus: 'not_submitted' }
+        { 'amazonVendor.invoiceStatus': null },
+        { 'amazonVendor.invoiceStatus': 'not_submitted' }
       ];
     }
 
     // Action required filter (New OR Acknowledged+not_shipped)
     if (filters.actionRequired) {
       query.$or = [
-        { purchaseOrderState: 'New' },
-        { purchaseOrderState: 'Acknowledged', shipmentStatus: 'not_shipped' }
+        { 'amazonVendor.purchaseOrderState': 'New' },
+        { 'amazonVendor.purchaseOrderState': 'Acknowledged', 'amazonVendor.shipmentStatus': 'not_shipped' }
       ];
     }
 
@@ -622,13 +647,16 @@ class VendorPOImporter {
 
   /**
    * Get statistics
-   * IMPORTANT: Excludes test data unless test mode is enabled
+   * IMPORTANT: Uses unified schema and excludes test data unless test mode is enabled
    */
   async getStats() {
     const collection = this.db.collection(COLLECTION_NAME);
 
-    // Filter out test data unless in test mode
-    const matchStage = isTestMode() ? {} : { _testData: { $ne: true } };
+    // Filter out test data unless in test mode, and only vendor orders
+    const matchStage = {
+      channel: CHANNELS.AMAZON_VENDOR,
+      ...(isTestMode() ? {} : { _testData: { $ne: true } })
+    };
 
     const stats = await collection.aggregate([
       { $match: matchStage },
@@ -636,37 +664,37 @@ class VendorPOImporter {
         $group: {
           _id: null,
           total: { $sum: 1 },
-          // Amazon PO states
-          new: { $sum: { $cond: [{ $eq: ['$purchaseOrderState', 'New'] }, 1, 0] } },
-          acknowledged: { $sum: { $cond: [{ $eq: ['$purchaseOrderState', 'Acknowledged'] }, 1, 0] } },
-          closed: { $sum: { $cond: [{ $eq: ['$purchaseOrderState', 'Closed'] }, 1, 0] } },
+          // Amazon PO states (using unified schema)
+          new: { $sum: { $cond: [{ $eq: ['$amazonVendor.purchaseOrderState', 'New'] }, 1, 0] } },
+          acknowledged: { $sum: { $cond: [{ $eq: ['$amazonVendor.purchaseOrderState', 'Acknowledged'] }, 1, 0] } },
+          closed: { $sum: { $cond: [{ $eq: ['$amazonVendor.purchaseOrderState', 'Closed'] }, 1, 0] } },
           // Our tracking flags
-          pendingAck: { $sum: { $cond: ['$acknowledgment.acknowledged', 0, 1] } },
+          pendingAck: { $sum: { $cond: ['$amazonVendor.acknowledgment.acknowledged', 0, 1] } },
           // Open Orders = Acknowledged AND not shipped (need to ship)
           openOrders: { $sum: { $cond: [
             { $and: [
-              { $eq: ['$purchaseOrderState', 'Acknowledged'] },
-              { $eq: ['$shipmentStatus', 'not_shipped'] }
+              { $eq: ['$amazonVendor.purchaseOrderState', 'Acknowledged'] },
+              { $eq: ['$amazonVendor.shipmentStatus', 'not_shipped'] }
             ]}, 1, 0
           ]}},
           // Shipment status counts
-          notShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'not_shipped'] }, 1, 0] } },
-          partiallyShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'partially_shipped'] }, 1, 0] } },
-          fullyShipped: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'fully_shipped'] }, 1, 0] } },
-          cancelled: { $sum: { $cond: [{ $eq: ['$shipmentStatus', 'cancelled'] }, 1, 0] } },
+          notShipped: { $sum: { $cond: [{ $eq: ['$amazonVendor.shipmentStatus', 'not_shipped'] }, 1, 0] } },
+          partiallyShipped: { $sum: { $cond: [{ $eq: ['$amazonVendor.shipmentStatus', 'partially_shipped'] }, 1, 0] } },
+          fullyShipped: { $sum: { $cond: [{ $eq: ['$amazonVendor.shipmentStatus', 'fully_shipped'] }, 1, 0] } },
+          cancelled: { $sum: { $cond: [{ $eq: ['$amazonVendor.shipmentStatus', 'cancelled'] }, 1, 0] } },
           // Invoice Pending = Acknowledged AND shipped AND no invoice submitted
           invoicePending: { $sum: { $cond: [
             { $and: [
-              { $eq: ['$purchaseOrderState', 'Acknowledged'] },
-              { $eq: ['$shipmentStatus', 'fully_shipped'] },
-              { $in: [{ $ifNull: ['$invoiceStatus', 'not_submitted'] }, ['not_submitted', null]] }
+              { $eq: ['$amazonVendor.purchaseOrderState', 'Acknowledged'] },
+              { $eq: ['$amazonVendor.shipmentStatus', 'fully_shipped'] },
+              { $in: [{ $ifNull: ['$amazonVendor.invoiceStatus', 'not_submitted'] }, ['not_submitted', null]] }
             ]}, 1, 0
           ]}},
-          invoiceSubmitted: { $sum: { $cond: [{ $eq: ['$invoiceStatus', 'submitted'] }, 1, 0] } },
-          invoiceAccepted: { $sum: { $cond: [{ $eq: ['$invoiceStatus', 'accepted'] }, 1, 0] } },
+          invoiceSubmitted: { $sum: { $cond: [{ $eq: ['$amazonVendor.invoiceStatus', 'submitted'] }, 1, 0] } },
+          invoiceAccepted: { $sum: { $cond: [{ $eq: ['$amazonVendor.invoiceStatus', 'accepted'] }, 1, 0] } },
           // Odoo integration
-          withOdooOrder: { $sum: { $cond: [{ $ne: ['$odoo.saleOrderId', null] }, 1, 0] } },
-          totalAmount: { $sum: '$totals.totalAmount' }
+          withOdooOrder: { $sum: { $cond: [{ $ne: ['$sourceIds.odooSaleOrderId', null] }, 1, 0] } },
+          totalAmount: { $sum: '$totals.total' }
         }
       }
     ]).toArray();
@@ -676,9 +704,9 @@ class VendorPOImporter {
       { $match: matchStage },
       {
         $group: {
-          _id: '$marketplaceId',
+          _id: '$marketplace.code',
           count: { $sum: 1 },
-          totalAmount: { $sum: '$totals.totalAmount' }
+          totalAmount: { $sum: '$totals.total' }
         }
       },
       { $sort: { count: -1 } }
@@ -686,17 +714,28 @@ class VendorPOImporter {
 
     // Recent POs (also filter out test data in production)
     const recentPOs = await collection.find(matchStage)
-      .sort({ purchaseOrderDate: -1 })
+      .sort({ orderDate: -1 })
       .limit(10)
       .project({
-        purchaseOrderNumber: 1,
-        marketplaceId: 1,
-        purchaseOrderState: 1,
-        purchaseOrderDate: 1,
-        'totals.totalAmount': 1,
-        'acknowledgment.acknowledged': 1
+        unifiedOrderId: 1,
+        'sourceIds.amazonVendorPONumber': 1,
+        'marketplace.code': 1,
+        'amazonVendor.purchaseOrderState': 1,
+        orderDate: 1,
+        'totals.total': 1,
+        'amazonVendor.acknowledgment.acknowledged': 1
       })
       .toArray();
+
+    // Map to legacy field names for backward compatibility
+    const mappedRecentPOs = recentPOs.map(po => ({
+      purchaseOrderNumber: po.sourceIds?.amazonVendorPONumber,
+      marketplaceId: po.marketplace?.code,
+      purchaseOrderState: po.amazonVendor?.purchaseOrderState,
+      purchaseOrderDate: po.orderDate,
+      totals: { totalAmount: po.totals?.total },
+      acknowledgment: { acknowledged: po.amazonVendor?.acknowledgment?.acknowledged }
+    }));
 
     return {
       summary: stats[0] || {
@@ -717,20 +756,23 @@ class VendorPOImporter {
         totalAmount: 0
       },
       byMarketplace,
-      recentPOs
+      recentPOs: mappedRecentPOs
     };
   }
 
   /**
-   * Update PO with Odoo order info
+   * Update PO with Odoo order info (using unified schema)
    */
   async linkToOdooOrder(poNumber, odooOrderId, odooOrderName) {
     const collection = this.db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
 
     return collection.updateOne(
-      { purchaseOrderNumber: poNumber },
+      { unifiedOrderId },
       {
         $set: {
+          'sourceIds.odooSaleOrderId': odooOrderId,
+          'sourceIds.odooSaleOrderName': odooOrderName,
           'odoo.saleOrderId': odooOrderId,
           'odoo.saleOrderName': odooOrderName,
           updatedAt: new Date()
@@ -740,19 +782,22 @@ class VendorPOImporter {
   }
 
   /**
-   * Mark PO as acknowledged
+   * Mark PO as acknowledged (using unified schema)
    */
   async markAcknowledged(poNumber, status = 'Accepted') {
     const collection = this.db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
 
     return collection.updateOne(
-      { purchaseOrderNumber: poNumber },
+      { unifiedOrderId },
       {
         $set: {
-          'acknowledgment.acknowledged': true,
-          'acknowledgment.acknowledgedAt': new Date(),
-          'acknowledgment.status': status,
-          purchaseOrderState: PO_STATES.ACKNOWLEDGED,
+          'amazonVendor.acknowledgment.acknowledged': true,
+          'amazonVendor.acknowledgment.acknowledgedAt': new Date(),
+          'amazonVendor.acknowledgment.status': status,
+          'amazonVendor.purchaseOrderState': PO_STATES.ACKNOWLEDGED,
+          'status.source': PO_STATES.ACKNOWLEDGED,
+          'status.unified': UNIFIED_STATUS.CONFIRMED,
           updatedAt: new Date()
         }
       }
@@ -760,26 +805,28 @@ class VendorPOImporter {
   }
 
   /**
-   * Add invoice to PO
+   * Add invoice to PO (using unified schema)
    */
   async addInvoice(poNumber, invoiceData) {
     const collection = this.db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
 
     return collection.updateOne(
-      { purchaseOrderNumber: poNumber },
+      { unifiedOrderId },
       {
         $push: {
-          invoices: {
-            invoiceNumber: invoiceData.invoiceNumber,
-            odooInvoiceId: invoiceData.odooInvoiceId,
-            odooInvoiceName: invoiceData.odooInvoiceName,
-            status: invoiceData.status || 'draft',
+          'odoo.invoices': {
+            id: invoiceData.odooInvoiceId,
+            name: invoiceData.odooInvoiceName,
+            date: invoiceData.invoiceDate || null,
+            amount: invoiceData.amount || 0,
+            state: invoiceData.status || 'draft',
+            amazonTransactionId: invoiceData.transactionId || null,
             submittedAt: invoiceData.submittedAt || null,
             createdAt: new Date()
           }
         },
         $set: {
-          'odoo.invoiceId': invoiceData.odooInvoiceId,
           updatedAt: new Date()
         }
       }
@@ -787,16 +834,17 @@ class VendorPOImporter {
   }
 
   /**
-   * Add shipment to PO
+   * Add shipment to PO (using unified schema)
    */
   async addShipment(poNumber, shipmentData) {
     const collection = this.db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
 
     return collection.updateOne(
-      { purchaseOrderNumber: poNumber },
+      { unifiedOrderId },
       {
         $push: {
-          shipments: {
+          'amazonVendor.shipments': {
             shipmentId: shipmentData.shipmentId,
             odooPickingId: shipmentData.odooPickingId,
             carrier: shipmentData.carrier,
@@ -804,6 +852,12 @@ class VendorPOImporter {
             status: shipmentData.status || 'pending',
             submittedAt: shipmentData.submittedAt || null,
             createdAt: new Date()
+          },
+          'odoo.pickings': {
+            id: shipmentData.odooPickingId,
+            name: shipmentData.odooPickingName,
+            state: shipmentData.status || 'pending',
+            trackingRef: shipmentData.trackingNumber
           }
         },
         $set: {
@@ -814,15 +868,16 @@ class VendorPOImporter {
   }
 
   /**
-   * Get POs that need acknowledgment
+   * Get POs that need acknowledgment (using unified schema)
    * Excludes test data unless test mode is enabled
    */
   async getPendingAcknowledgment(limit = 50) {
     const collection = this.db.collection(COLLECTION_NAME);
 
     const query = {
-      'acknowledgment.acknowledged': false,
-      purchaseOrderState: PO_STATES.NEW
+      channel: CHANNELS.AMAZON_VENDOR,
+      'amazonVendor.acknowledgment.acknowledged': false,
+      'amazonVendor.purchaseOrderState': PO_STATES.NEW
     };
 
     // Exclude test data in production
@@ -831,21 +886,22 @@ class VendorPOImporter {
     }
 
     return collection.find(query)
-      .sort({ purchaseOrderDate: 1 })
+      .sort({ orderDate: 1 })
       .limit(limit)
       .toArray();
   }
 
   /**
-   * Get POs that need Odoo orders created
+   * Get POs that need Odoo orders created (using unified schema)
    * Excludes test data unless test mode is enabled
    */
   async getPendingOdooOrders(limit = 50) {
     const collection = this.db.collection(COLLECTION_NAME);
 
     const query = {
-      'odoo.saleOrderId': null,
-      purchaseOrderState: { $ne: PO_STATES.CLOSED }
+      channel: CHANNELS.AMAZON_VENDOR,
+      'sourceIds.odooSaleOrderId': null,
+      'amazonVendor.purchaseOrderState': { $ne: PO_STATES.CLOSED }
     };
 
     // Exclude test data in production
@@ -854,13 +910,13 @@ class VendorPOImporter {
     }
 
     return collection.find(query)
-      .sort({ purchaseOrderDate: 1 })
+      .sort({ orderDate: 1 })
       .limit(limit)
       .toArray();
   }
 
   /**
-   * Get POs that are ready for invoicing
+   * Get POs that are ready for invoicing (using unified schema)
    * Excludes test data unless test mode is enabled
    * Criteria:
    * - Has Odoo sale order linked
@@ -871,11 +927,19 @@ class VendorPOImporter {
     const collection = this.db.collection(COLLECTION_NAME);
 
     const query = {
-      'odoo.saleOrderId': { $ne: null },
-      'odoo.invoiceId': null,
+      channel: CHANNELS.AMAZON_VENDOR,
+      'sourceIds.odooSaleOrderId': { $ne: null },
       $or: [
-        { 'acknowledgment.acknowledged': true },
-        { purchaseOrderState: 'Acknowledged' }
+        { 'odoo.invoices': { $size: 0 } },
+        { 'odoo.invoices': { $exists: false } }
+      ],
+      $and: [
+        {
+          $or: [
+            { 'amazonVendor.acknowledgment.acknowledged': true },
+            { 'amazonVendor.purchaseOrderState': 'Acknowledged' }
+          ]
+        }
       ]
     };
 
@@ -885,19 +949,20 @@ class VendorPOImporter {
     }
 
     return collection.find(query)
-      .sort({ purchaseOrderDate: 1 })
+      .sort({ orderDate: 1 })
       .limit(limit)
       .toArray();
   }
 
   /**
-   * Update line-level acknowledgment data for a PO
+   * Update line-level acknowledgment data for a PO (using unified schema)
    * @param {string} poNumber - Purchase order number
    * @param {Array} itemUpdates - Array of { itemSequenceNumber, acknowledgeQty, backorderQty, productAvailability }
    * @param {Object} scheduleData - { scheduledShipDate, scheduledDeliveryDate }
    */
   async updateLineAcknowledgments(poNumber, itemUpdates, scheduleData = {}) {
     const collection = this.db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
 
     const po = await this.getPurchaseOrder(poNumber);
     if (!po) {
@@ -930,30 +995,31 @@ class VendorPOImporter {
 
     // Add schedule data if provided
     if (scheduleData.scheduledShipDate) {
-      updateData['acknowledgment.scheduledShipDate'] = new Date(scheduleData.scheduledShipDate);
+      updateData['amazonVendor.acknowledgment.scheduledShipDate'] = new Date(scheduleData.scheduledShipDate);
     }
     if (scheduleData.scheduledDeliveryDate) {
-      updateData['acknowledgment.scheduledDeliveryDate'] = new Date(scheduleData.scheduledDeliveryDate);
+      updateData['amazonVendor.acknowledgment.scheduledDeliveryDate'] = new Date(scheduleData.scheduledDeliveryDate);
     }
 
     return collection.updateOne(
-      { purchaseOrderNumber: poNumber },
+      { unifiedOrderId },
       { $set: updateData }
     );
   }
 
   /**
-   * Update item with Odoo product info and stock level
+   * Update item with Odoo product info and stock level (using unified schema)
    * @param {string} poNumber - Purchase order number
    * @param {string} vendorProductIdentifier - SKU
    * @param {Object} productInfo - { odooProductId, odooProductName, qtyAvailable }
    */
   async updateItemProductInfo(poNumber, vendorProductIdentifier, productInfo) {
     const collection = this.db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
 
     return collection.updateOne(
       {
-        purchaseOrderNumber: poNumber,
+        unifiedOrderId,
         'items.vendorProductIdentifier': vendorProductIdentifier
       },
       {
@@ -968,12 +1034,13 @@ class VendorPOImporter {
   }
 
   /**
-   * Bulk update items with Odoo product info
+   * Bulk update items with Odoo product info (using unified schema)
    * @param {string} poNumber - Purchase order number
    * @param {Array} productInfoList - Array of { vendorProductIdentifier, odooProductId, odooProductName, qtyAvailable }
    */
   async updateItemsProductInfo(poNumber, productInfoList) {
     const collection = this.db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
 
     const po = await this.getPurchaseOrder(poNumber);
     if (!po) {
@@ -1000,7 +1067,7 @@ class VendorPOImporter {
     });
 
     return collection.updateOne(
-      { purchaseOrderNumber: poNumber },
+      { unifiedOrderId },
       {
         $set: {
           items: updatedItems,
@@ -1011,13 +1078,14 @@ class VendorPOImporter {
   }
 
   /**
-   * Auto-fill acknowledgment quantities based on available stock
+   * Auto-fill acknowledgment quantities based on available stock (using unified schema)
    * Sets acknowledgeQty = min(orderedQty, qtyAvailable)
    * Sets backorderQty = remaining if backorder allowed
    * @param {string} poNumber - Purchase order number
    */
   async autoFillAcknowledgments(poNumber) {
     const collection = this.db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
 
     const po = await this.getPurchaseOrder(poNumber);
     if (!po) {
@@ -1057,7 +1125,7 @@ class VendorPOImporter {
     });
 
     return collection.updateOne(
-      { purchaseOrderNumber: poNumber },
+      { unifiedOrderId },
       {
         $set: {
           items: updatedItems,
@@ -1068,7 +1136,7 @@ class VendorPOImporter {
   }
 
   /**
-   * Sync shipment status from Odoo pickings
+   * Sync shipment status from Odoo pickings (using unified schema)
    * Checks if orders have been delivered in Odoo and updates our shipmentStatus
    * @param {Object} options - Sync options
    * @param {boolean} options.onlyLinked - Only sync orders linked to Odoo (default: true)
@@ -1079,13 +1147,14 @@ class VendorPOImporter {
     const { onlyLinked = true, limit = 500 } = options;
     const collection = this.db.collection(COLLECTION_NAME);
 
-    // Find orders that need syncing
+    // Find orders that need syncing (using unified schema)
     const query = {
-      shipmentStatus: { $in: ['not_shipped', 'partially_shipped', null, undefined] }
+      channel: CHANNELS.AMAZON_VENDOR,
+      'amazonVendor.shipmentStatus': { $in: ['not_shipped', 'partially_shipped', null, undefined] }
     };
 
     if (onlyLinked) {
-      query['odoo.saleOrderId'] = { $ne: null };
+      query['sourceIds.odooSaleOrderId'] = { $ne: null };
     }
 
     // Exclude test data
@@ -1108,7 +1177,7 @@ class VendorPOImporter {
     const errors = [];
 
     // BATCH: Get all sale order IDs and fetch pickings in one query
-    const saleOrderIds = orders.map(o => o.odoo?.saleOrderId).filter(Boolean);
+    const saleOrderIds = orders.map(o => o.sourceIds?.odooSaleOrderId || o.odoo?.saleOrderId).filter(Boolean);
 
     // Fetch all pickings for these orders at once
     const allPickings = await odoo.searchRead('stock.picking',
@@ -1130,11 +1199,12 @@ class VendorPOImporter {
 
     for (const order of orders) {
       try {
-        const saleOrderId = order.odoo?.saleOrderId;
+        const saleOrderId = order.sourceIds?.odooSaleOrderId || order.odoo?.saleOrderId;
         if (!saleOrderId) continue;
 
         // Get pickings from our batch result
         const pickings = pickingsBySaleId.get(saleOrderId) || [];
+        const poNumber = order.sourceIds?.amazonVendorPONumber;
 
         // Determine shipment status based on pickings
         let newStatus = 'not_shipped';
@@ -1152,22 +1222,23 @@ class VendorPOImporter {
         }
 
         // Update if status changed
-        if (newStatus !== order.shipmentStatus) {
+        if (newStatus !== order.amazonVendor?.shipmentStatus) {
           await collection.updateOne(
-            { purchaseOrderNumber: order.purchaseOrderNumber },
+            { unifiedOrderId: order.unifiedOrderId },
             {
               $set: {
-                shipmentStatus: newStatus,
-                lastPickingSyncAt: new Date(),
+                'amazonVendor.shipmentStatus': newStatus,
+                'amazonVendor.lastPickingSyncAt': new Date(),
                 updatedAt: new Date()
               }
             }
           );
-          console.log(`[VendorPOImporter] ${order.purchaseOrderNumber}: ${order.shipmentStatus || 'null'} -> ${newStatus}`);
+          console.log(`[VendorPOImporter] ${poNumber}: ${order.amazonVendor?.shipmentStatus || 'null'} -> ${newStatus}`);
           updated++;
         }
       } catch (err) {
-        errors.push({ poNumber: order.purchaseOrderNumber, error: err.message });
+        const poNumber = order.sourceIds?.amazonVendorPONumber;
+        errors.push({ poNumber, error: err.message });
       }
     }
 
@@ -1176,7 +1247,7 @@ class VendorPOImporter {
   }
 
   /**
-   * Sync invoice data from Odoo to MongoDB
+   * Sync invoice data from Odoo to MongoDB (using unified schema)
    * Finds Odoo invoices linked to vendor sale orders and updates MongoDB
    * @param {Object} options - Sync options
    * @param {number} options.limit - Max orders to process (default: 500)
@@ -1226,16 +1297,19 @@ class VendorPOImporter {
       const poNumber = order.client_order_ref;
       if (!poNumber || !order.invoice_ids || order.invoice_ids.length === 0) continue;
 
+      const unifiedOrderId = `${CHANNELS.AMAZON_VENDOR}:${poNumber}`;
+
       try {
-        // Check if MongoDB has this PO and if invoice is already linked
-        const mongoPO = await collection.findOne({ purchaseOrderNumber: poNumber });
+        // Check if MongoDB has this PO and if invoice is already linked (using unified schema)
+        const mongoPO = await collection.findOne({ unifiedOrderId });
 
         if (!mongoPO) {
           // PO not in MongoDB - might be old or from different source
           continue;
         }
 
-        if (mongoPO.odoo?.invoiceId) {
+        // Check if any invoice already synced
+        if (mongoPO.odoo?.invoices && mongoPO.odoo.invoices.length > 0) {
           // Already synced
           alreadySynced++;
           continue;
@@ -1256,19 +1330,22 @@ class VendorPOImporter {
           continue;
         }
 
-        // Use the first posted invoice
-        const invoice = invoices[0];
+        // Transform invoices to unified format
+        const unifiedInvoices = invoices.map(inv => ({
+          id: inv.id,
+          name: inv.name,
+          date: inv.invoice_date,
+          amount: inv.amount_total,
+          state: 'posted'
+        }));
 
-        // Update MongoDB with invoice info
+        // Update MongoDB with invoice info (using unified schema)
         await collection.updateOne(
-          { purchaseOrderNumber: poNumber },
+          { unifiedOrderId },
           {
             $set: {
-              'odoo.invoiceId': invoice.id,
-              'odoo.invoiceName': invoice.name,
-              'odoo.invoiceDate': invoice.invoice_date,
-              'odoo.invoiceAmount': invoice.amount_total,
-              lastInvoiceSyncAt: new Date(),
+              'odoo.invoices': unifiedInvoices,
+              'odoo.lastInvoiceSyncAt': new Date(),
               updatedAt: new Date()
             }
           }
@@ -1277,12 +1354,11 @@ class VendorPOImporter {
         updates.push({
           poNumber,
           saleOrder: order.name,
-          invoiceId: invoice.id,
-          invoiceName: invoice.name,
-          amount: invoice.amount_total
+          invoiceCount: invoices.length,
+          invoices: unifiedInvoices
         });
 
-        console.log(`[VendorPOImporter] ${poNumber}: Linked invoice ${invoice.name} (€${invoice.amount_total})`);
+        console.log(`[VendorPOImporter] ${poNumber}: Linked ${invoices.length} invoice(s)`);
         updated++;
 
       } catch (err) {
