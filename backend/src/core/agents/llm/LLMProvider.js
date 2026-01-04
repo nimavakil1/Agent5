@@ -15,15 +15,15 @@ class LLMProvider {
     this.maxTokens = config.maxTokens || 4096;
   }
 
-  async chat(messages, options = {}) {
+  async chat(_messages, _options = {}) {
     throw new Error('chat() must be implemented by subclass');
   }
 
-  async chatWithTools(messages, tools, options = {}) {
+  async chatWithTools(_messages, _tools, _options = {}) {
     throw new Error('chatWithTools() must be implemented by subclass');
   }
 
-  formatToolsForProvider(tools) {
+  formatToolsForProvider(_tools) {
     throw new Error('formatToolsForProvider() must be implemented by subclass');
   }
 }

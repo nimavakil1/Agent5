@@ -1,15 +1,15 @@
 const ScheduledJob = require('../models/ScheduledJob');
 const CampaignDefinition = require('../models/CampaignDefinition');
 const { getDb } = require('../db');
-let shopifyTimer = null;
-let amazonSettlementTimer = null;
-let vendorOrdersTimer = null;
-let productSyncTimer = null;
-let stockSyncTimer = null;
-let bolOrderSyncTimer = null;
-let bolStockSyncTimer = null;
-let bolShipmentCheckTimer = null;
-let bolCancellationCheckTimer = null;
+let _shopifyTimer = null;
+let _amazonSettlementTimer = null;
+let _vendorOrdersTimer = null;
+let _productSyncTimer = null;
+let _stockSyncTimer = null;
+let _bolOrderSyncTimer = null;
+let _bolStockSyncTimer = null;
+let _bolShipmentCheckTimer = null;
+let _bolCancellationCheckTimer = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -84,7 +84,7 @@ function start() {
       const runSync = async () => {
         try { const r = await syncAllowed(); console.log(`[scheduler] Shopify sync:`, r); } catch (e) { console.error('[scheduler] Shopify sync error', e?.message || e); }
       };
-      shopifyTimer = setInterval(runSync, periodMs);
+      _shopifyTimer = setInterval(runSync, periodMs);
       // kick off once at start
       runSync();
     }
@@ -93,7 +93,7 @@ function start() {
   // Amazon Settlement Report reminder check (runs daily)
   try {
     const settlementCheckInterval = 24 * 60 * 60 * 1000; // Once per day
-    amazonSettlementTimer = setInterval(checkAmazonSettlementReminders, settlementCheckInterval);
+    _amazonSettlementTimer = setInterval(checkAmazonSettlementReminders, settlementCheckInterval);
     // Run immediately on start
     setTimeout(checkAmazonSettlementReminders, 5000); // Wait 5s for DB connection
     console.log('[scheduler] Amazon settlement reminder check initialized (daily)');
@@ -104,7 +104,7 @@ function start() {
     if (process.env.VENDOR_POLLING_ENABLED === '1') {
       const minutes = Number(process.env.VENDOR_POLLING_INTERVAL_MIN || '120');
       const periodMs = Math.max(15, minutes) * 60 * 1000;
-      vendorOrdersTimer = setInterval(pollVendorOrders, periodMs);
+      _vendorOrdersTimer = setInterval(pollVendorOrders, periodMs);
       // Run immediately on start (with delay for DB connection)
       setTimeout(pollVendorOrders, 10000);
       console.log(`[scheduler] Vendor Central PO polling initialized (every ${minutes} minutes)`);
@@ -115,7 +115,7 @@ function start() {
   try {
     const productSyncMinutes = Number(process.env.PRODUCT_SYNC_INTERVAL_MIN || '15');
     const productSyncMs = Math.max(5, productSyncMinutes) * 60 * 1000;
-    productSyncTimer = setInterval(syncProductsIncremental, productSyncMs);
+    _productSyncTimer = setInterval(syncProductsIncremental, productSyncMs);
     // Run initial sync after 30 seconds (after DB is ready)
     setTimeout(syncProductsIncremental, 30000);
     console.log(`[scheduler] Product sync initialized (every ${productSyncMinutes} minutes)`);
@@ -125,7 +125,7 @@ function start() {
   try {
     const stockSyncMinutes = Number(process.env.STOCK_SYNC_INTERVAL_MIN || '5');
     const stockSyncMs = Math.max(1, stockSyncMinutes) * 60 * 1000;
-    stockSyncTimer = setInterval(syncStockOnly, stockSyncMs);
+    _stockSyncTimer = setInterval(syncStockOnly, stockSyncMs);
     // Run initial stock sync after 2 minutes (after product sync has run)
     setTimeout(syncStockOnly, 120000);
     console.log(`[scheduler] Stock sync initialized (every ${stockSyncMinutes} minutes)`);
@@ -138,19 +138,19 @@ function start() {
       const bolSyncMs = Math.max(5, bolSyncMinutes) * 60 * 1000;
 
       // Order sync and auto-creation (every 15 minutes)
-      bolOrderSyncTimer = setInterval(syncBolOrders, bolSyncMs);
+      _bolOrderSyncTimer = setInterval(syncBolOrders, bolSyncMs);
       setTimeout(syncBolOrders, 45000); // Initial run after 45s
 
       // Stock sync to Bol.com (every 15 minutes)
-      bolStockSyncTimer = setInterval(syncBolStock, bolSyncMs);
+      _bolStockSyncTimer = setInterval(syncBolStock, bolSyncMs);
       setTimeout(syncBolStock, 90000); // Initial run after 1.5min
 
       // Shipment check (every 5 minutes)
-      bolShipmentCheckTimer = setInterval(checkBolShipments, 5 * 60 * 1000);
+      _bolShipmentCheckTimer = setInterval(checkBolShipments, 5 * 60 * 1000);
       setTimeout(checkBolShipments, 180000); // Initial run after 3min
 
       // Cancellation check (every 5 minutes)
-      bolCancellationCheckTimer = setInterval(checkBolCancellations, 5 * 60 * 1000);
+      _bolCancellationCheckTimer = setInterval(checkBolCancellations, 5 * 60 * 1000);
       setTimeout(checkBolCancellations, 240000); // Initial run after 4min
 
       console.log(`[scheduler] Bol.com sync initialized (orders/stock every ${bolSyncMinutes} min, shipments/cancellations every 5 min)`);

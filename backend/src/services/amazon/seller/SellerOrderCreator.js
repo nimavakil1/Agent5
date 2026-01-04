@@ -26,9 +26,9 @@ const {
   getOrderPrefix,
   SPECIAL_PRODUCTS
 } = require('./SellerMarketplaceConfig');
-const { euCountryConfig } = require('../EuCountryConfig');
+const { euCountryConfig: _euCountryConfig } = require('../EuCountryConfig');
 const { skuResolver } = require('../SkuResolver');
-const { getAddressCleaner, LEGAL_TERMS_REGEX } = require('./AddressCleaner');
+const { getAddressCleaner: _getAddressCleaner, LEGAL_TERMS_REGEX } = require('./AddressCleaner');
 
 /**
  * Clean duplicate names like "elodie da cunha, DA CUNHA Elodie"
@@ -670,7 +670,7 @@ class SellerOrderCreator {
   /**
    * Resolve order items to Odoo order lines
    */
-  async resolveOrderLines(order, config) {
+  async resolveOrderLines(order, _config) {
     const lines = [];
     const errors = [];
 
@@ -834,7 +834,7 @@ class SellerOrderCreator {
    * @returns {object} { journalId, journalCode, journalType }
    */
   determineJournal(config) {
-    const { shipFromCountry, shipToCountry, isFBA } = config;
+    const { shipFromCountry, shipToCountry, isFBA: _isFBA } = config;
 
     // Check if destination is outside EU (export)
     const isExport = !EU_COUNTRIES.includes(shipToCountry);

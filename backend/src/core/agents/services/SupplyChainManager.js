@@ -300,7 +300,7 @@ class SupplyChainManager {
   calculateCNYOrder(params) {
     const {
       avgDailyDemand,
-      demandStdDev = avgDailyDemand * 0.3,
+      demandStdDev: _demandStdDev = avgDailyDemand * 0.3,
       currentStock = 0,
       pendingOrders = 0,
       supplierId = null,
@@ -877,7 +877,7 @@ class SupplyChainManager {
     const {
       productId,
       desiredQuantity,
-      preferredContainer = '40ft',
+      preferredContainer: _preferredContainer = '40ft',
       maxContainers = 5,
       minFillPercent = 70, // Minimum container utilization
     } = params;

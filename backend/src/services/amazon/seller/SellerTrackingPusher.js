@@ -13,7 +13,7 @@ const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { getSellerClient } = require('./SellerClient');
 const { COLLECTION_NAME } = require('./SellerOrderImporter');
-const { getMarketplaceConfig } = require('./SellerMarketplaceConfig');
+const { getMarketplaceConfig: _getMarketplaceConfig } = require('./SellerMarketplaceConfig');
 
 /**
  * Carrier name mapping from Odoo to Amazon

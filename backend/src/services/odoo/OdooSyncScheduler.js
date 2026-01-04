@@ -44,6 +44,7 @@ class OdooSyncScheduler {
     console.log(`[OdooSyncScheduler] Full sync daily at ${this.config.fullSyncHour}:00`);
 
     this.syncService = getOdooSyncService();
+    await this.syncService.init(); // Initialize the sync service
     this.isRunning = true;
 
     // Run initial incremental sync after 30 seconds (let app start up first)
@@ -154,9 +155,9 @@ class OdooSyncScheduler {
    */
   async triggerSync(type = 'incremental') {
     if (type === 'full') {
-      return this.runFullSync();
+      return await this.runFullSync();
     } else {
-      return this.runIncrementalSync();
+      return await this.runIncrementalSync();
     }
   }
 

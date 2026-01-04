@@ -112,7 +112,7 @@ class SSCCLabelGenerator {
 
     const barcodeDataURL = await generateBarcodeDataURL(sscc);
     const size = LABEL_SIZES[labelSize] || LABEL_SIZES.CARTON_4X6;
-    const parsed = parseSSCC(sscc);
+    const _parsed = parseSSCC(sscc);
 
     // Calculate total units
     const totalUnits = items.reduce((sum, i) => sum + (i.quantity || 0), 0);

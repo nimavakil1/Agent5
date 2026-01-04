@@ -47,8 +47,8 @@ class SubstitutionAnalyzer {
       primarySalesHistory,
       substituteSalesHistory,
       primaryStockHistory = null,
-      startDate = null,
-      endDate = null,
+      startDate: _startDate = null,
+      endDate: _endDate = null,
     } = params;
 
     // Step 1: Detect stockout periods for primary product

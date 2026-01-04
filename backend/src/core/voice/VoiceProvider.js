@@ -108,7 +108,7 @@ class STTProvider extends VoiceProvider {
    * @param {object} options - Transcription options
    * @returns {Promise<{text: string, confidence: number, words?: Array}>}
    */
-  async transcribe(audioBuffer, options = {}) {
+  async transcribe(_audioBuffer, _options = {}) {
     throw new Error('transcribe() must be implemented by subclass');
   }
 
@@ -117,7 +117,7 @@ class STTProvider extends VoiceProvider {
    * @param {object} options - Stream options
    * @returns {object} Stream controller with write(), end() methods
    */
-  createStream(options = {}) {
+  createStream(_options = {}) {
     throw new Error('createStream() must be implemented by subclass');
   }
 }
@@ -147,7 +147,7 @@ class TTSProvider extends VoiceProvider {
    * @param {object} options - Synthesis options (voice, speed, etc.)
    * @returns {Promise<Buffer>} Audio buffer
    */
-  async synthesize(text, options = {}) {
+  async synthesize(_text, _options = {}) {
     throw new Error('synthesize() must be implemented by subclass');
   }
 
@@ -157,7 +157,8 @@ class TTSProvider extends VoiceProvider {
    * @param {object} options - Synthesis options
    * @returns {AsyncGenerator<Buffer>} Audio chunks
    */
-  async *synthesizeStream(text, options = {}) {
+  // eslint-disable-next-line require-yield
+  async *synthesizeStream(_text, _options = {}) {
     throw new Error('synthesizeStream() must be implemented by subclass');
   }
 }
@@ -177,7 +178,7 @@ class VoiceToVoiceProvider extends VoiceProvider {
    * @param {object} options - Session options (instructions, voice, etc.)
    * @returns {Promise<object>} Session object
    */
-  async createSession(options = {}) {
+  async createSession(_options = {}) {
     throw new Error('createSession() must be implemented by subclass');
   }
 
@@ -185,7 +186,7 @@ class VoiceToVoiceProvider extends VoiceProvider {
    * Send audio to the session
    * @param {Buffer} audioBuffer - Audio data
    */
-  sendAudio(audioBuffer) {
+  sendAudio(_audioBuffer) {
     throw new Error('sendAudio() must be implemented by subclass');
   }
 
@@ -193,7 +194,7 @@ class VoiceToVoiceProvider extends VoiceProvider {
    * Send text message to the session
    * @param {string} text - Text message
    */
-  sendText(text) {
+  sendText(_text) {
     throw new Error('sendText() must be implemented by subclass');
   }
 

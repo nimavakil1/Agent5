@@ -1,4 +1,4 @@
-const { Readable } = require('stream');
+const { Readable: _Readable } = require('stream');
 
 async function streamTextToElevenlabs({ apiKey, voiceId, text, optimize = 4, abortSignal, onChunk, debug = false, outputFormat }) {
   if (!apiKey) throw new Error('ELEVENLABS_API_KEY missing');

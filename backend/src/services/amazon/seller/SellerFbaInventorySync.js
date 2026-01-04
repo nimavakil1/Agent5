@@ -12,7 +12,7 @@
 const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { getSellerClient } = require('./SellerClient');
-const { MARKETPLACE_CONFIG, getWarehouseId } = require('./SellerMarketplaceConfig');
+const { MARKETPLACE_CONFIG, getWarehouseId: _getWarehouseId } = require('./SellerMarketplaceConfig');
 
 // FBA Inventory report type
 const FBA_INVENTORY_REPORT = 'GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA';

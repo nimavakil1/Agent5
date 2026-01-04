@@ -24,7 +24,7 @@ function toWsUrl(httpish) {
   return httpish; // assume already ws(s)
 }
 
-async function createPublisher({ host, token, roomName }) {
+async function createPublisher({ host, token, roomName: _roomName }) {
   try {
     // Minimal globals expected by livekit-client in Node
     if (typeof globalThis.navigator === 'undefined') {
@@ -104,12 +104,12 @@ async function createPublisher({ host, token, roomName }) {
     let agentTimer = null;
     let agentMuted = false;
 
-    function emptyFrame() {
+    const emptyFrame = () => {
       // Return a zeroed 10ms frame @48k mono
       return Buffer.alloc(FRAME_BYTES);
-    }
+    };
 
-    function startTimers() {
+    const startTimers = () => {
       if (!calleeTimer) {
         calleeTimer = setInterval(() => {
           try {
@@ -158,11 +158,11 @@ async function createPublisher({ host, token, roomName }) {
           }
         }, 10);
       }
-    }
+    };
 
     startTimers();
 
-    function upsampleInt16Linear(int16, factor) {
+    const upsampleInt16Linear = (int16, factor) => {
       const n = int16.length;
       const out = new Int16Array(n * factor);
       for (let i = 0; i < n; i++) {
@@ -176,7 +176,7 @@ async function createPublisher({ host, token, roomName }) {
         }
       }
       return Buffer.from(out.buffer);
-    }
+    };
 
     return {
       pushCalleeFrom8kPcm16(int16Array8k) {

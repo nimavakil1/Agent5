@@ -225,7 +225,7 @@ router.post('/message', async (req, res) => {
       conversationId,
       message,
       module = 'general',
-      attachmentIds = []
+      attachmentIds: _attachmentIds = []
     } = req.body;
 
     if (!message || !message.trim()) {
@@ -254,7 +254,7 @@ router.post('/message', async (req, res) => {
     const history = await ChatMessage.getContextMessages(conversationId, 10);
 
     // Save user message
-    const userMessage = await ChatMessage.addMessage({
+    await ChatMessage.addMessage({
       conversationId,
       userId,
       role: 'user',
@@ -342,7 +342,7 @@ router.delete('/conversation/:id', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const { id } = req.params;
+    const { id: _id } = req.params;
 
     // We don't actually delete - just add an archived flag
     // For now, we'll just return success (messages will expire via TTL anyway)

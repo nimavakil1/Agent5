@@ -45,7 +45,7 @@ class TeamsNotificationService {
    * Send a simple text notification
    */
   async sendSimple(title, text, color = 'default') {
-    const colorMap = {
+    const _colorMap = {
       default: '#0078D4',
       success: '#28A745',
       warning: '#FFC107',

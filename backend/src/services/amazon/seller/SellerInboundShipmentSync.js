@@ -182,7 +182,7 @@ class SellerInboundShipmentSync {
   /**
    * Check for recently closed shipments
    */
-  async checkClosedShipments(result) {
+  async checkClosedShipments(_result) {
     try {
       // Get shipments we're tracking that might have closed
       const trackingShipments = await this.db.collection(INBOUND_SHIPMENTS_COLLECTION).find({

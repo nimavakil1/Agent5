@@ -2,7 +2,7 @@ const AuditLog = require('../models/AuditLog');
 const CustomerRecord = require('../models/CustomerRecord');
 const Product = require('../models/Product');
 const ScheduledJob = require('../models/ScheduledJob');
-const { createPrefilledCartLink, getVariantIdBySku, adminFetch, createCheckoutWebUrl } = require('../api/services/shopifyService');
+const { createPrefilledCartLink: _createPrefilledCartLink, getVariantIdBySku, adminFetch, createCheckoutWebUrl } = require('../api/services/shopifyService');
 const { sendEmail, sendWhatsAppTemplate } = require('../api/services/brevoService');
 const { OdooDirectClient } = require('../core/agents/integrations/OdooMCP');
 

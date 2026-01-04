@@ -8,7 +8,7 @@
  */
 
 const SellingPartner = require('amazon-sp-api');
-const { getAllMarketplaceIds, getMarketplaceConfig } = require('./SellerMarketplaceConfig');
+const { getAllMarketplaceIds, getMarketplaceConfig: _getMarketplaceConfig } = require('./SellerMarketplaceConfig');
 
 /**
  * SellerClient - SP-API client for Seller Central
@@ -79,7 +79,7 @@ class SellerClient {
    * Required for buyer info, shipping address, etc.
    * @param {string[]} orderIds - Optional specific order IDs (if empty, uses path-based)
    */
-  async createRestrictedDataToken(orderIds = []) {
+  async createRestrictedDataToken(_orderIds = []) {
     const client = await this.getClient();
 
     // Define restricted resources we need access to

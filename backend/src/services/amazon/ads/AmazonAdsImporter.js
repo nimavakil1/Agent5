@@ -13,7 +13,7 @@
  * @module AmazonAdsImporter
  */
 
-const { AmazonAdsClient, SP_REPORT_TYPES } = require('./AmazonAdsClient');
+const { AmazonAdsClient, SP_REPORT_TYPES: _SP_REPORT_TYPES } = require('./AmazonAdsClient');
 const { getDb } = require('../../../db');
 
 // Collection names

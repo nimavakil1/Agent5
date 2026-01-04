@@ -141,7 +141,7 @@ class SellerShipmentSync {
     console.log(`[SellerShipmentSync] Processing picking ${picking.name} for order ${order.amazonOrderId}`);
 
     // Get tracking info from order items (if available)
-    let trackingNumber = null;
+    let _trackingNumber = null;
     if (order.items && order.items.length > 0) {
       // Amazon doesn't always provide tracking in the order, but we mark it as shipped
       // The tracking comes from Amazon's fulfillment

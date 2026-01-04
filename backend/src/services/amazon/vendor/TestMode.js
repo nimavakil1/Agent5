@@ -82,7 +82,7 @@ const MockResponses = {
   /**
    * Mock response for submitAcknowledgement
    */
-  submitAcknowledgement(payload) {
+  submitAcknowledgement(_payload) {
     return {
       transactionId: generateMockTransactionId(),
       _testMode: true,

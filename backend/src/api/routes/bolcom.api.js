@@ -588,7 +588,7 @@ router.put('/returns/:rmaId', async (req, res) => {
  */
 router.get('/offers', async (req, res) => {
   try {
-    const { page = 1 } = req.query;
+    const { page: _page = 1 } = req.query;
 
     // Note: Bol.com doesn't have a direct "list all offers" endpoint
     // You need to export offers or query by EAN

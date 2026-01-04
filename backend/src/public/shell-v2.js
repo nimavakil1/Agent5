@@ -1,3 +1,4 @@
+/* global window, document, location, sessionStorage */
 /**
  * Agent5 Shell v2 - Modern Top Bar Navigation
  *
@@ -196,7 +197,7 @@
 
   function detectCurrentModule() {
     const path = location.pathname;
-    for (const [id, module] of Object.entries(MODULES)) {
+    for (const [_id, module] of Object.entries(MODULES)) {
       if (path.startsWith(module.basePath)) {
         currentModule = module;
         // Find current page

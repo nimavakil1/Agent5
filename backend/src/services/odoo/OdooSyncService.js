@@ -349,7 +349,7 @@ class OdooSyncService {
   async ensureIndexes() {
     console.log('[OdooSync] Ensuring indexes...');
 
-    for (const [modelName, config] of Object.entries(MODEL_CONFIGS)) {
+    for (const [, config] of Object.entries(MODEL_CONFIGS)) {
       const collection = this.db.collection(config.collection);
 
       for (const indexSpec of config.indexes) {
@@ -661,46 +661,46 @@ class OdooSyncService {
    * Find orders by Amazon order ID (client_order_ref)
    */
   async findOrderByAmazonId(amazonOrderId) {
-    return this.findByField('sale.order', 'clientOrderRef', amazonOrderId, { limit: 1 })
-      .then(results => results[0] || null);
+    const results = await this.findByField('sale.order', 'clientOrderRef', amazonOrderId, { limit: 1 });
+    return results[0] || null;
   }
 
   /**
    * Find partner by VAT number
    */
   async findPartnerByVat(vat) {
-    return this.findByField('res.partner', 'vat', vat, { limit: 1 })
-      .then(results => results[0] || null);
+    const results = await this.findByField('res.partner', 'vat', vat, { limit: 1 });
+    return results[0] || null;
   }
 
   /**
    * Find product by SKU
    */
   async findProductBySku(sku) {
-    return this.findByField('product.product', 'sku', sku, { limit: 1 })
-      .then(results => results[0] || null);
+    const results = await this.findByField('product.product', 'sku', sku, { limit: 1 });
+    return results[0] || null;
   }
 
   /**
    * Find product by barcode
    */
   async findProductByBarcode(barcode) {
-    return this.findByField('product.product', 'barcode', barcode, { limit: 1 })
-      .then(results => results[0] || null);
+    const results = await this.findByField('product.product', 'barcode', barcode, { limit: 1 });
+    return results[0] || null;
   }
 
   /**
    * Find deliveries by sale order ID
    */
   async findDeliveriesBySaleId(saleOrderOdooId) {
-    return this.findByField('stock.picking', 'saleId', saleOrderOdooId);
+    return await this.findByField('stock.picking', 'saleId', saleOrderOdooId);
   }
 
   /**
    * Find invoices by origin (sale order name)
    */
   async findInvoicesByOrigin(origin) {
-    return this.findByField('account.move', 'invoiceOrigin', origin);
+    return await this.findByField('account.move', 'invoiceOrigin', origin);
   }
 
   /**

@@ -6,7 +6,7 @@
 
 const Anthropic = require('@anthropic-ai/sdk');
 const pdf = require('pdf-parse');
-const sharp = require('sharp');
+const _sharp = require('sharp');
 
 class InvoiceParser {
   constructor(config = {}) {
@@ -206,7 +206,7 @@ IMPORTANT:
         paymentTerms: data.payment_terms || null,
         bankAccount: data.bank_account || null,
       },
-      lines: (data.line_items || data.lines || []).map((line, index) => ({
+      lines: (data.line_items || data.lines || []).map((line, _index) => ({
         description: line.description || '',
         sku: line.sku || null,
         quantity: this._parseNumber(line.quantity) || 1,
@@ -235,7 +235,7 @@ IMPORTANT:
     let normalized = String(vat).replace(/\s+/g, '').toUpperCase();
 
     // Remove "BTW" prefix if present (Belgian)
-    normalized = normalized.replace(/^BTW[:\-]?/i, '');
+    normalized = normalized.replace(/^BTW[:-]?/i, '');
 
     // Ensure country prefix
     if (/^\d/.test(normalized)) {

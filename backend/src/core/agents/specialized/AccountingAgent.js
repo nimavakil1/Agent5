@@ -10,7 +10,7 @@
  */
 
 const { LLMAgent } = require('../LLMAgent');
-const { createOdooMCPConfig, OdooDirectClient } = require('../integrations/OdooMCP');
+const { createOdooMCPConfig: _createOdooMCPConfig, OdooDirectClient } = require('../integrations/OdooMCP');
 const { MicrosoftDirectClient } = require('../integrations/MicrosoftMCP');
 
 // Invoice processing states
@@ -750,7 +750,7 @@ When answering queries, always provide context with numbers (e.g., "3 unpaid inv
     }
 
     // This would use Odoo's reconciliation methods
-    const result = await this.odooClient.reconcileInvoicePayment(
+    await this.odooClient.reconcileInvoicePayment(
       params.invoice_ids,
       params.payment_id
     );
@@ -768,7 +768,7 @@ When answering queries, always provide context with numbers (e.g., "3 unpaid inv
     }
 
     const result = { invoices: [], payments: [] };
-    const today = new Date().toISOString().split('T')[0];
+    const _today = new Date().toISOString().split('T')[0];
 
     if (params.type === 'invoices' || params.type === 'all') {
       const domain = [

@@ -1076,7 +1076,7 @@ class OdooDataSync {
     // Estimate stock levels by working backwards from current stock
     // This is an approximation - actual stock moves would be more accurate
     const stockHistory = [];
-    let cumulativeSales = 0;
+    let _cumulativeSales = 0;
 
     // Aggregate sales by day
     const salesByDay = new Map();
@@ -1172,7 +1172,7 @@ class OdooDataSync {
   /**
    * Get products needing reorder (low stock)
    */
-  async getLowStockProducts(threshold = 'reorderPoint') {
+  async getLowStockProducts(_threshold = 'reorderPoint') {
     if (!this.db) return [];
 
     // Get products where available stock is below a threshold

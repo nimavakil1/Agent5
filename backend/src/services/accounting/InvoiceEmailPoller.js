@@ -8,7 +8,7 @@
 const { MicrosoftDirectClient } = require('../../core/agents/integrations/MicrosoftMCP');
 const VendorInvoice = require('../../models/VendorInvoice');
 const PaymentAdvice = require('../../models/PaymentAdvice');
-const AccountingTask = require('../../models/AccountingTask');
+const _AccountingTask = require('../../models/AccountingTask');
 const InvoiceAuditLog = require('../../models/InvoiceAuditLog');
 const InvoiceParser = require('./InvoiceParser');
 
@@ -305,9 +305,9 @@ class InvoiceEmailPoller {
     if (!subject) return null;
 
     const patterns = [
-      /(?:payment|remittance|ref|reference)[\s\-#:]*([A-Z0-9\-\/]+)/i,
-      /(?:virement|zahlung|betaling)[\s\-#:]*([A-Z0-9\-\/]+)/i,
-      /#([A-Z0-9\-\/]+)/,
+      /(?:payment|remittance|ref|reference)[\s\-#:]*([A-Z0-9\-/]+)/i,
+      /(?:virement|zahlung|betaling)[\s\-#:]*([A-Z0-9\-/]+)/i,
+      /#([A-Z0-9\-/]+)/,
     ];
 
     for (const pattern of patterns) {
@@ -381,7 +381,7 @@ class InvoiceEmailPoller {
   _isLikelyInvoice(message) {
     const subject = (message.subject || '').toLowerCase();
     const body = (message.bodyPreview || '').toLowerCase();
-    const fromAddress = message.from?.emailAddress?.address || '';
+    const _fromAddress = message.from?.emailAddress?.address || '';
 
     // Check keywords
     const hasKeyword = this.config.invoiceKeywords.some(kw =>
@@ -536,9 +536,9 @@ class InvoiceEmailPoller {
 
     // Common patterns
     const patterns = [
-      /(?:invoice|inv|facture|factuur|rechnung)[\s\-#:]*([A-Z0-9\-\/]+)/i,
-      /(?:ref|reference)[\s\-#:]*([A-Z0-9\-\/]+)/i,
-      /#([A-Z0-9\-\/]+)/,
+      /(?:invoice|inv|facture|factuur|rechnung)[\s\-#:]*([A-Z0-9\-/]+)/i,
+      /(?:ref|reference)[\s\-#:]*([A-Z0-9\-/]+)/i,
+      /#([A-Z0-9\-/]+)/,
     ];
 
     for (const pattern of patterns) {

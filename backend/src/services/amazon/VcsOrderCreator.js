@@ -828,7 +828,7 @@ class VcsOrderCreator {
    * @param {object} vcsOrder - The VCS order data for shipment date
    * @returns {object} Result with success boolean and optional error
    */
-  async confirmAndDeliver(orderId, vcsOrder) {
+  async confirmAndDeliver(orderId, _vcsOrder) {
     const result = { success: false, error: null, pickingsValidated: 0 };
 
     try {

@@ -1,3 +1,4 @@
+/* global window, document, qz, localStorage */
 /**
  * PrintService - QZ Tray Integration for Agent5
  *
@@ -292,9 +293,10 @@ window.PrintService = (function() {
   }
 
   // Show printer selection dialog
-  function showPrinterDialog() {
-    return new Promise(async (resolve) => {
-      const status = await checkStatus();
+  async function showPrinterDialog() {
+    const status = await checkStatus();
+
+    return new Promise((resolve) => {
 
       if (!status.connected) {
         resolve({

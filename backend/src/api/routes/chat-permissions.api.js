@@ -283,7 +283,7 @@ router.delete('/:userId', async (req, res) => {
  * Check if current user has chat permission for a module
  * (This endpoint does NOT require superadmin - used by chat UI)
  */
-router.get('/check/:module', async (req, res) => {
+router.get('/check/:module', async (_req, _res) => {
   // Override the superadmin middleware for this endpoint
   // by returning before it's called (we register this before router.use)
 });

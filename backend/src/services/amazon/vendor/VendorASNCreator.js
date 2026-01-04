@@ -265,7 +265,7 @@ class VendorASNCreator {
   /**
    * Generate shipment ID
    */
-  _generateShipmentId(po, picking) {
+  _generateShipmentId(po, _picking) {
     const timestamp = Date.now().toString(36).toUpperCase();
     return `ASN-${po.purchaseOrderNumber}-${timestamp}`;
   }

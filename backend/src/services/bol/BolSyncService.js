@@ -512,7 +512,7 @@ async function syncInvoices(onProgress = null) {
 
       try {
         const existing = await BolInvoice.findOne({ invoiceId: inv.invoiceId });
-        const result = await BolInvoice.findOneAndUpdate(
+        await BolInvoice.findOneAndUpdate(
           { invoiceId: inv.invoiceId },
           {
             invoiceId: inv.invoiceId,

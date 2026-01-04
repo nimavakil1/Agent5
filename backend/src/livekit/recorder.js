@@ -50,7 +50,7 @@ function finalizeWav(fd, totalBytes) {
   fs.writeSync(fd, buf, 0, 4, 40);
 }
 
-async function createRecorder({ host, token, roomName, outFileBase }) {
+async function createRecorder({ host, token, roomName: _roomName, outFileBase }) {
   if (!wrtc) {
     console.warn('[LiveKit] wrtc not installed; recorder disabled');
     return null;

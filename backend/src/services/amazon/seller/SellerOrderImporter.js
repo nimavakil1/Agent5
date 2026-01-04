@@ -15,9 +15,9 @@ const { getSellerClient } = require('./SellerClient');
 const {
   getMarketplaceConfig,
   getCountryFromMarketplace,
-  getWarehouseId,
-  getOrderPrefix,
-  FULFILLMENT_CHANNELS,
+  getWarehouseId: _getWarehouseId,
+  getOrderPrefix: _getOrderPrefix,
+  FULFILLMENT_CHANNELS: _FULFILLMENT_CHANNELS,
   getAllMarketplaceIds
 } = require('./SellerMarketplaceConfig');
 

@@ -49,7 +49,7 @@ const MARKETPLACE_TO_COUNTRY = {
 
 // Marketplace-specific receivable account IDs (for reference - used by PEPPOL processor)
 // These accounts are where both sales and Amazon fee vendor bills are booked
-const MARKETPLACE_RECEIVABLE_ACCOUNTS = {
+const _MARKETPLACE_RECEIVABLE_ACCOUNTS = {
   'DE': 820,  // 400102DE Trade debtors - Amazon Seller Germany
   'FR': 821,  // 400102FR Trade debtors - Amazon Seller France
   'NL': 822,  // 400102NL Trade debtors - Amazon Seller Netherlands
@@ -64,7 +64,7 @@ const MARKETPLACE_RECEIVABLE_ACCOUNTS = {
 };
 
 // Transaction types that are fees (not order-related revenue)
-const FEE_TRANSACTION_TYPES = [
+const _FEE_TRANSACTION_TYPES = [
   'ServiceFee',
   'FBA Inventory Fee',
   'Adjustment',
@@ -206,7 +206,7 @@ class SettlementReportParser {
     if (!value || value === '') return 0;
     // Handle EU format: 1.234,56 -> 1234.56
     let normalized = value.toString()
-      .replace(/[^0-9.,\-]/g, '')  // Remove non-numeric except . , -
+      .replace(/[^0-9.,-]/g, '')  // Remove non-numeric except . , -
       .replace(/\.(?=.*\.)/g, '')   // Remove all but last period
       .replace(',', '.');           // Replace comma with period
     return parseFloat(normalized) || 0;

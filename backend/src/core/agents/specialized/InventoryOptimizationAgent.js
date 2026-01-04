@@ -567,7 +567,7 @@ This is an automated recommendation based on ${failedCount} unsuccessful attempt
   /**
    * Analyze human input with LLM
    */
-  async _analyzeHumanInput(message, productSku, context) {
+  async _analyzeHumanInput(_message, productSku, _context) {
     // This will use the LLM to understand the question and provide recommendations
     // For now, return a placeholder - will integrate with Claude API
 

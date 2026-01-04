@@ -39,7 +39,7 @@ router.get('/status', async (req, res) => {
  * GET /api/odoo-sync/models
  * Get list of configured models
  */
-router.get('/models', async (req, res) => {
+router.get('/models', (req, res) => {
   try {
     const models = Object.entries(MODEL_CONFIGS).map(([name, config]) => ({
       name,
@@ -172,7 +172,7 @@ router.post('/scheduler/start', async (req, res) => {
  * POST /api/odoo-sync/scheduler/stop
  * Stop the sync scheduler
  */
-router.post('/scheduler/stop', async (req, res) => {
+router.post('/scheduler/stop', (req, res) => {
   try {
     const scheduler = getOdooSyncScheduler();
     scheduler.stop();

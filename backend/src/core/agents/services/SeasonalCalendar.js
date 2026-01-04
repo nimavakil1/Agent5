@@ -164,8 +164,8 @@ class SeasonalCalendar {
    */
   getActiveSeasons(date = new Date()) {
     const year = date.getFullYear();
-    const month = date.getMonth();
-    const day = date.getDate();
+    const _month = date.getMonth();
+    const _day = date.getDate();
     const easter = this.getEasterDate(year);
 
     const activeSeasons = [];
@@ -323,8 +323,6 @@ class SeasonalCalendar {
    * Always checks the NEXT upcoming CNY (always in the future relative to today)
    */
   isSupplyChainImpacted(date = new Date()) {
-    const year = date.getFullYear();
-
     // Get the next upcoming CNY (always in the future)
     const cny = this.getNextCNYClosurePeriod(date);
 
@@ -376,7 +374,6 @@ class SeasonalCalendar {
     // Check supply chain for each month
     const checkDate = new Date(startDate);
     while (checkDate <= endDate) {
-      const year = checkDate.getFullYear();
       const impact = this.isSupplyChainImpacted(checkDate);
 
       if (impact.impacted) {

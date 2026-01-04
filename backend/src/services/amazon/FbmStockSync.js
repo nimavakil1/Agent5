@@ -46,7 +46,7 @@ class FbmStockSync {
    * @returns {Array} Stock items
    */
   async getOdooStock(options = {}) {
-    const { skus, warehouseId, onlyChanged = true } = options;
+    const { skus, warehouseId: _warehouseId, onlyChanged = true } = options;
 
     try {
       // Get all SKU mappings

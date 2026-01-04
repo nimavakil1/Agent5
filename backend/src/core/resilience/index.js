@@ -24,7 +24,7 @@ class RetryPolicy {
     this.onRetry = options.onRetry || null;
   }
 
-  _defaultShouldRetry(error, attempt) {
+  _defaultShouldRetry(error, _attempt) {
     // Retry on network errors
     if (error.code === 'ECONNREFUSED' ||
         error.code === 'ECONNRESET' ||
@@ -143,7 +143,7 @@ class CircuitBreaker {
     }
   }
 
-  _onFailure(error) {
+  _onFailure(_error) {
     this.failures++;
     this.lastFailure = Date.now();
     this.successes = 0;

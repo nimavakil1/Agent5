@@ -164,7 +164,7 @@ class SlowMoverDetector {
   /**
    * Generate recommendations based on status
    */
-  _generateRecommendations(status, daysOfStock, daysSinceLastSale, product) {
+  _generateRecommendations(status, daysOfStock, daysSinceLastSale, _product) {
     const recommendations = [];
 
     if (status === 'red_flag') {

@@ -11,7 +11,7 @@
 const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { getSellerClient } = require('./SellerClient');
-const { getAllMarketplaceIds } = require('./SellerMarketplaceConfig');
+const { getAllMarketplaceIds: _getAllMarketplaceIds } = require('./SellerMarketplaceConfig');
 
 // Collections
 const FULFILLMENT_CENTERS_COLLECTION = 'seller_fulfillment_centers';

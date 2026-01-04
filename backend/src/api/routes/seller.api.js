@@ -13,7 +13,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { getDb } = require('../../db');
+const { getDb: _getDb } = require('../../db');
 
 // Configure multer for FBM TSV file uploads
 const storage = multer.memoryStorage();
@@ -535,7 +535,7 @@ router.get('/config', async (req, res) => {
   try {
     const {
       MARKETPLACE_IDS,
-      MARKETPLACE_CONFIG,
+      MARKETPLACE_CONFIG: _MARKETPLACE_CONFIG,
       getAllMarketplaces
     } = require('../../services/amazon/seller/SellerMarketplaceConfig');
 

@@ -7,7 +7,7 @@
 
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const PaymentAdvice = require('../../models/PaymentAdvice');
-const VendorInvoice = require('../../models/VendorInvoice');
+const _VendorInvoice = require('../../models/VendorInvoice');
 const InvoiceAuditLog = require('../../models/InvoiceAuditLog');
 
 // Maximum tolerance for amount matching (€0.02)
@@ -230,7 +230,7 @@ class PaymentReconciliationEngine {
   /**
    * Match a payment line to an invoice
    */
-  async _matchPaymentLine(line, openInvoices, currency) {
+  async _matchPaymentLine(line, openInvoices, _currency) {
     const candidates = [];
 
     for (const invoice of openInvoices) {

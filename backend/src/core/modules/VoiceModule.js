@@ -43,7 +43,7 @@ class VoiceModule {
   /**
    * Start the voice module
    */
-  async start(platform) {
+  async start(_platform) {
     this.logger.info('Starting Voice Module...');
 
     // Initialize the pipeline
@@ -58,7 +58,7 @@ class VoiceModule {
   /**
    * Stop the voice module
    */
-  async stop(platform) {
+  async stop(_platform) {
     this.logger.info('Stopping Voice Module...');
 
     if (this.pipeline) {

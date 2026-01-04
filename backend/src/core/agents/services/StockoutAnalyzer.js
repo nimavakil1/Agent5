@@ -80,7 +80,7 @@ class StockoutAnalyzer {
    * Estimate lost sales during stockout periods
    * Uses surrounding sales data to estimate what would have been sold
    */
-  estimateLostSales(stockoutPeriods, salesHistory, inventoryHistory) {
+  estimateLostSales(stockoutPeriods, salesHistory, _inventoryHistory) {
     if (!stockoutPeriods || stockoutPeriods.length === 0) {
       return { lostSales: [], totalLostUnits: 0, totalLostRevenue: 0 };
     }

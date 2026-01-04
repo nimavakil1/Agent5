@@ -278,7 +278,7 @@ class BolCancellationHandler {
    * Reject cancellation - ship the order
    * (The order will be shipped normally, customer can return after receiving)
    */
-  async rejectCancellation(orderId) {
+  async rejectCancellation(_orderId) {
     // No API call needed - just continue with shipment
     // Customer can return the item after receiving it
     return {

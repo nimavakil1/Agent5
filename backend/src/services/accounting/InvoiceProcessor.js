@@ -5,7 +5,7 @@
  */
 
 const VendorInvoice = require('../../models/VendorInvoice');
-const AccountingTask = require('../../models/AccountingTask');
+const _AccountingTask = require('../../models/AccountingTask');
 const InvoiceAuditLog = require('../../models/InvoiceAuditLog');
 const InvoiceParser = require('./InvoiceParser');
 const POMatchingEngine = require('./POMatchingEngine');
@@ -306,27 +306,20 @@ class InvoiceProcessor {
       actor: { type: 'system', name: 'InvoiceProcessor' },
     });
 
-    try {
-      const result = await this.booker.createVendorBill(invoice, {
-        autoPost: false, // Don't auto-post, let human review
-      });
+    const result = await this.booker.createVendorBill(invoice, {
+      autoPost: false, // Don't auto-post, let human review
+    });
 
-      if (result.alreadyExists) {
-        console.log(`[InvoiceProcessor] Invoice already exists in Odoo: ${result.odooInvoiceNumber}`);
-        invoice.status = 'booked';
-        invoice.odoo = {
-          billId: result.odooInvoiceId,
-          billNumber: result.odooInvoiceNumber,
-          createdAt: new Date(),
-        };
-      }
-
-      // Status is updated by booker
-
-    } catch (error) {
-      // Error is handled by booker
-      throw error;
+    if (result.alreadyExists) {
+      console.log(`[InvoiceProcessor] Invoice already exists in Odoo: ${result.odooInvoiceNumber}`);
+      invoice.status = 'booked';
+      invoice.odoo = {
+        billId: result.odooInvoiceId,
+        billNumber: result.odooInvoiceNumber,
+        createdAt: new Date(),
+      };
     }
+    // Status is updated by booker
   }
 
   /**

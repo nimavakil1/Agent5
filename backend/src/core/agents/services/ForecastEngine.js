@@ -382,9 +382,10 @@ class ForecastEngine {
     switch (periodType) {
       case 'day':
         return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      case 'week':
+      case 'week': {
         const weekNum = this.getWeekNumber(date);
         return `${year}-W${String(weekNum).padStart(2, '0')}`;
+      }
       case 'month':
         return `${year}-${String(month + 1).padStart(2, '0')}`;
       default:
@@ -402,11 +403,12 @@ class ForecastEngine {
     switch (periodType) {
       case 'day':
         return result;
-      case 'week':
+      case 'week': {
         const dayOfWeek = result.getDay();
         const diff = result.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
         result.setDate(diff);
         return result;
+      }
       case 'month':
         result.setDate(1);
         return result;
@@ -659,7 +661,7 @@ class ForecastEngine {
   /**
    * Calculate ensemble forecast (weighted average of methods)
    */
-  calculateEnsemble(forecasts, historicalData) {
+  calculateEnsemble(forecasts, _historicalData) {
     // Weight methods based on typical accuracy
     const weights = {
       movingAverage: 0.2,

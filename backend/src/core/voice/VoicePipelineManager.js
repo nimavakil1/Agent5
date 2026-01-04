@@ -93,7 +93,7 @@ class VoicePipelineManager extends EventEmitter {
    * Get the best provider for a request
    */
   getProvider(type, options = {}) {
-    const { language = 'en', preferredProvider, mode = 'realtime' } = options;
+    const { language = 'en', preferredProvider, mode: _mode = 'realtime' } = options;
 
     let providerName;
     let registry;

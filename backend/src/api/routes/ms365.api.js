@@ -9,7 +9,7 @@ const express = require('express');
 const router = express.Router();
 
 // Microsoft Graph client
-let graphClient = null;
+let _graphClient = null;
 let accessToken = null;
 let tokenExpiry = null;
 

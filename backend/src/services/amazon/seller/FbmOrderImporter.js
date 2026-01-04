@@ -571,7 +571,7 @@ class FbmOrderImporter {
    * @param {Object} options - Import options
    * @returns {Object} Import results
    */
-  async importFromTsv(tsvContent, options = {}) {
+  async importFromTsv(tsvContent, _options = {}) {
     await this.init();
 
     const results = {

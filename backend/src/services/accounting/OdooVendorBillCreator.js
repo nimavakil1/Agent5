@@ -221,7 +221,7 @@ class OdooVendorBillCreator {
   /**
    * Get expense account ID
    */
-  async _getExpenseAccount(invoice) {
+  async _getExpenseAccount(_invoice) {
     // Try to find a matching expense account
     const accounts = await this.odooClient.searchRead('account.account', [
       ['code', '=like', '6%'], // Expense accounts typically start with 6
@@ -318,7 +318,7 @@ class OdooVendorBillCreator {
   /**
    * Attach PDF to the bill
    */
-  async _attachPdf(billId, invoice) {
+  async _attachPdf(billId, _invoice) {
     // This would retrieve the PDF from storage and attach it
     // For now, just log the intention
     console.log(`[OdooVendorBillCreator] Would attach PDF for bill ${billId}`);

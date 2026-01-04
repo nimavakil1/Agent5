@@ -188,7 +188,7 @@ const OSS_FISCAL_POSITIONS = {
 };
 
 // OSS Amazon Partner IDs by country (from Odoo query)
-const OSS_PARTNERS = {
+const _OSS_PARTNERS = {
   'AT': 18,    // Amazon | AMZ_OSS_AT (Austria)
   'BE': 3192,  // Amazon | AMZ_OSS_BE (Belgium)
   'BG': 3169,  // Amazon | AMZ_OSS_BG (Bulgaria)
@@ -303,7 +303,7 @@ const MARKETPLACE_RECEIVABLE_ACCOUNTS = {
 };
 
 // Default Amazon Customer partner ID (for B2C sales)
-const AMAZON_CUSTOMER_PARTNER_ID = 232128;
+const _AMAZON_CUSTOMER_PARTNER_ID = 232128;
 
 // Country to fiscal position mapping (legacy, kept for reference)
 const FISCAL_POSITIONS = {
@@ -522,7 +522,7 @@ class VcsOdooInvoicer {
     await this.prefetchOrders(orders);
 
     // Get or create Amazon customer partner
-    const partnerId = await this.getOrCreateAmazonPartner();
+    const _partnerId = await this.getOrCreateAmazonPartner();
 
     for (const order of orders) {
       result.processed++;
@@ -690,7 +690,7 @@ class VcsOdooInvoicer {
     onProgress({ phase: 'prefetch', message: 'Prefetch complete', current: total, total });
 
     // Get or create Amazon customer partner
-    const partnerId = await this.getOrCreateAmazonPartner();
+    const _partnerId = await this.getOrCreateAmazonPartner();
 
     for (let i = 0; i < orders.length; i++) {
       const order = orders[i];
@@ -1147,7 +1147,7 @@ class VcsOdooInvoicer {
    * @param {boolean} isFBA - Whether this is an FBA order
    * @returns {number} Warehouse ID
    */
-  async getWarehouseForOrder(shipFromCountry, isFBA) {
+  async getWarehouseForOrder(shipFromCountry, _isFBA) {
     // Warehouse mapping
     const warehouseMap = {
       'BE': 'CW',  // Central Warehouse (FBM)
@@ -1308,7 +1308,7 @@ class VcsOdooInvoicer {
    * @param {object} saleOrder - Odoo sale.order (not used for partner, only for reference)
    * @returns {Promise<number>} Partner ID
    */
-  async determinePartner(order, saleOrder) {
+  async determinePartner(order, _saleOrder) {
     return await this.findOrCreatePartnerFromVcs(order);
   }
 
@@ -1449,7 +1449,7 @@ class VcsOdooInvoicer {
     };
 
     // Check if it matches any EU VAT pattern
-    for (const [country, pattern] of Object.entries(euVatPatterns)) {
+    for (const [_country, pattern] of Object.entries(euVatPatterns)) {
       if (pattern.test(taxId)) {
         return true;
       }
@@ -1689,7 +1689,7 @@ class VcsOdooInvoicer {
    * @param {object[]} orderLines - Odoo sale.order.line records
    * @returns {object}
    */
-  buildInvoiceData(order, partnerId, saleOrder, orderLines) {
+  buildInvoiceData(order, partnerId, saleOrder, _orderLines) {
     const invoiceDate = getEffectiveInvoiceDate(order.shipmentDate || order.orderDate);
     const fiscalPosition = this.determineFiscalPosition(order);
     const journalId = this.determineJournal(order);
@@ -1950,7 +1950,7 @@ class VcsOdooInvoicer {
    * @param {object} order - VCS order data
    * @param {object[]} orderLines - Odoo sale.order.line records (for SKU matching)
    */
-  async updateInvoiceFromVCS(invoiceId, order, orderLines) {
+  async updateInvoiceFromVCS(invoiceId, order, _orderLines) {
     // Determine VCS-based settings
     const fiscalPositionId = this.determineFiscalPosition(order);
     const journalId = this.determineJournal(order);
@@ -2446,7 +2446,7 @@ class VcsOdooInvoicer {
    * @param {object[]} orderLines - Odoo sale.order.line records
    * @returns {object}
    */
-  async createCreditNote(order, saleOrder, orderLines) {
+  async createCreditNote(order, saleOrder, _orderLines) {
     console.log(`[VcsOdooInvoicer] Creating credit note for return ${order.orderId}...`);
 
     // Get order lines with product info

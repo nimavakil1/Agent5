@@ -436,7 +436,7 @@ function createWebSocketServer(server) {
         const elevenOutFmt = String(process.env.ELEVENLABS_OUTPUT_FORMAT || 'pcm_24000');
         let wavHeaderStripped = false;
         // Simple upsample 24k -> 48k Int16
-        function upsample24kTo48kInt16(buf24k) {
+        const upsample24kTo48kInt16 = (buf24k) => {
           const n = buf24k.length >>> 1; // samples count at 16-bit
           const out = new Int16Array(n * 2);
           for (let i = 0, j = 0; i < n; i++, j += 2) {
@@ -447,7 +447,7 @@ function createWebSocketServer(server) {
           return out;
         }
 
-        async function maybeStartTts(force=false) {
+        const maybeStartTts = async (force=false) => {
           if (!useElevenTts) return;
           const apiKey = process.env.ELEVENLABS_API_KEY || '';
           const voiceId = process.env.ELEVENLABS_VOICE_ID || '';
@@ -455,7 +455,7 @@ function createWebSocketServer(server) {
           if (ttsInFlight) return;
           const text = outBuf.trim();
           if (!text) return;
-          if (!force && text.length < 60 && !/[\.!?;:]/.test(text)) return;
+          if (!force && text.length < 60 && !/[.!?;:]/.test(text)) return;
           outBuf = '';
           ttsInFlight = true;
           const { streamTextToElevenlabs } = require('../services/ttsElevenlabs');
@@ -656,13 +656,13 @@ function createWebSocketServer(server) {
         const studioToolArgs = new Map();
         let studioRuleLangSwitched = false;
         const studioTagged = new Set();
-        function guessLangFromText(txt){
+        const guessLangFromText = (txt) => {
           const s = (txt||'').toLowerCase();
           const frHits = [' le ', ' la ', ' et ', ' je ', ' vous ', ' merci ', 'bonjour','rappeler','facture'];
           const nlHits = [' de ', ' het ', ' en ', ' jij ', ' u ', ' dank u','goeden','factuur'];
           let fr=0, nl=0; for(const w of frHits) if(s.includes(w)) fr++; for(const w of nlHits) if(s.includes(w)) nl++; return fr>nl? 'fr' : (nl>fr? 'nl' : '');
-        }
-        async function studioApplyRules(){
+        };
+        const studioApplyRules = async () => {
           try {
             if (!campaignDoc || !campaignDoc.orchestrator) return;
             const orch = campaignDoc.orchestrator || {};
@@ -1206,7 +1206,7 @@ function createWebSocketServer(server) {
       const pstnToolArgs = new Map();
       let pstnRuleLangSwitched = false;
       const pstnTagged = new Set();
-      async function pstnApplyRules(){
+      const pstnApplyRules = async () => {
         try {
           let campaignDoc = null;
           if (campaignHint) { try { campaignDoc = await CampaignDefinition.findOne({ $or: [{ _id: campaignHint }, { campaign_id: campaignHint }, { name: campaignHint }, { title: campaignHint }] }).lean(); } catch(_) {} }
@@ -1214,7 +1214,7 @@ function createWebSocketServer(server) {
           const orch = campaignDoc.orchestrator || {};
           // Auto language switch
           if (orch.auto_lang_switch && !pstnRuleLangSwitched) {
-            const g = guessLangFromText(currentTranscription);
+            const g = pstnGuessLangFromText(currentTranscription);
             if (g && g !== (sessionOverrides.language||'').toLowerCase()) {
               const out = await resolveAgentAndMcp({ campaignId: (campaignDoc._id || campaignDoc.campaign_id || campaignDoc.name), detectedLanguage: g });
               if (out?.agent) {
@@ -1239,13 +1239,13 @@ function createWebSocketServer(server) {
             }
           }
         } catch (e) { console.error('PSTN rules error:', e); }
-      }
-      function guessLangFromText(txt){
+      };
+      const pstnGuessLangFromText = (txt) => {
         const s = (txt||'').toLowerCase();
         const frHits = [' le ', ' la ', ' et ', ' je ', ' vous ', ' merci ', 'bonjour','rappeler','facture'];
         const nlHits = [' de ', ' het ', ' en ', ' jij ', ' u ', ' dank u','goeden','factuur'];
         let fr=0, nl=0; for(const w of frHits) if(s.includes(w)) fr++; for(const w of nlHits) if(s.includes(w)) nl++; return fr>nl? 'fr' : (nl>fr? 'nl' : '');
-      }
+      };
       openaiWs.on('message', async (data) => {
         try {
           const str = typeof data === 'string' ? data : data.toString('utf8');

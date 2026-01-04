@@ -346,7 +346,7 @@ class VcsInvoiceImporter {
   /**
    * Find tax by country, rate, and include type
    */
-  async findTax(countryCode, vatRate, priceIncludesVat, isB2B) {
+  async findTax(countryCode, vatRate, priceIncludesVat, _isB2B) {
     const country = countryCode?.toUpperCase() || 'BE';
     const rate = Math.round(vatRate * 10) / 10; // Round to 1 decimal
     const includeStr = priceIncludesVat ? 'Included' : '';

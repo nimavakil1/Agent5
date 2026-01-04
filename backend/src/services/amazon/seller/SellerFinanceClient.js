@@ -189,7 +189,7 @@ class SellerFinanceClient {
   parseAmount(value) {
     if (!value || value === '') return 0;
     let normalized = value.toString()
-      .replace(/[^0-9.,\-]/g, '')
+      .replace(/[^0-9.,-]/g, '')
       .replace(/\.(?=.*\.)/g, '')
       .replace(',', '.');
     return parseFloat(normalized) || 0;

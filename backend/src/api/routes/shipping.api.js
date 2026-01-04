@@ -102,7 +102,7 @@ router.post('/gls/shipment', async (req, res) => {
  */
 router.get('/gls/label/:trackingNumber', async (req, res) => {
   try {
-    const { trackingNumber } = req.params;
+    const { trackingNumber: _trackingNumber } = req.params;
 
     // For now, we don't store labels - they should be retrieved at creation time
     // In the future, we can store labels in MongoDB or S3

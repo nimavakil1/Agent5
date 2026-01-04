@@ -27,7 +27,7 @@ async function getOdooClient() {
  */
 router.get('/status', async (req, res) => {
   try {
-    const client = await getOdooClient();
+    await getOdooClient(); // Verify connection
     res.json({
       connected: true,
       url: process.env.ODOO_URL,
@@ -47,7 +47,7 @@ router.get('/status', async (req, res) => {
  */
 router.get('/products', async (req, res) => {
   try {
-    const { q, limit = 100, offset = 0, in_stock, all, fields } = req.query;
+    const { q, limit = 100, offset = 0, in_stock, all, fields: _fields } = req.query;
     const client = await getOdooClient();
 
     let domain = [['sale_ok', '=', true]];

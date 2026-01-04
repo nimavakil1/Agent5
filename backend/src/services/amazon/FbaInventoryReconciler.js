@@ -158,10 +158,10 @@ class FbaInventoryReconciler {
   /**
    * Normalize inventory item fields
    * @param {object} item - Raw item
-   * @param {string} reportType
+   * @param {string} _reportType
    * @returns {object} Normalized item
    */
-  normalizeInventoryItem(item, reportType) {
+  normalizeInventoryItem(item, _reportType) {
     // Handle different report formats
     // GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA format
     // GET_FBA_INVENTORY_PLANNING_DATA format
@@ -366,9 +366,9 @@ class FbaInventoryReconciler {
    * @param {number} productId
    * @param {number} locationId
    * @param {number} newQty
-   * @param {string} reason
+   * @param {string} _reason
    */
-  async createInventoryAdjustment(productId, locationId, newQty, reason) {
+  async createInventoryAdjustment(productId, locationId, newQty, _reason) {
     try {
       // Use stock.quant model to set inventory
       // In Odoo 16+, use stock.quant with action_apply_inventory
@@ -422,7 +422,7 @@ class FbaInventoryReconciler {
   async getOdooFbaSnapshot() {
     const snapshot = {};
 
-    for (const [country, warehouseName] of Object.entries(ODOO_FBA_WAREHOUSES)) {
+    for (const [country, _warehouseName] of Object.entries(ODOO_FBA_WAREHOUSES)) {
       const warehouse = await this.getOrCreateWarehouse(country);
       if (!warehouse?.locationId) continue;
 

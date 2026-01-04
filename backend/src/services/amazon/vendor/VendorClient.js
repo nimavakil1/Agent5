@@ -686,7 +686,7 @@ class VendorClient {
 function createAllVendorClients() {
   const clients = {};
 
-  for (const [marketplace, tokenKey] of Object.entries(VENDOR_TOKEN_MAP)) {
+  for (const [marketplace, _tokenKey] of Object.entries(VENDOR_TOKEN_MAP)) {
     try {
       // Skip _FR suffix variant
       if (marketplace === 'DE_FR') continue;

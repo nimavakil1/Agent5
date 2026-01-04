@@ -347,7 +347,7 @@ class BolAdsClient {
    * Update ad bid - not directly supported in v11
    * Bids are managed at ad group or keyword level
    */
-  async updateAdBid(campaignId, adId, bid) {
+  async updateAdBid(_campaignId, _adId, _bid) {
     console.warn('updateAdBid: In v11, bids are managed at ad group or keyword level');
     return { warning: 'Bids are managed at ad group or keyword level in v11' };
   }

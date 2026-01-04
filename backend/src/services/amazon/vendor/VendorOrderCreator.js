@@ -17,7 +17,7 @@
 
 const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
-const { getVendorPOImporter, COLLECTION_NAME } = require('./VendorPOImporter');
+const { getVendorPOImporter, COLLECTION_NAME: _COLLECTION_NAME } = require('./VendorPOImporter');
 const { getVendorPartyMapping } = require('./VendorPartyMapping');
 const { skuResolver } = require('../SkuResolver');
 const { isTestMode } = require('./TestMode');

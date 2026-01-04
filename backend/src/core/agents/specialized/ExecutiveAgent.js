@@ -1147,7 +1147,7 @@ Provide analysis including:
   // ==================== COMMUNICATION ====================
 
   async _getCommunicationSummary(params = {}) {
-    const { type = 'all' } = params;
+    const { type: _type = 'all' } = params;
 
     if (!this.agents.communication) {
       return { message: 'Communication agent not available' };
