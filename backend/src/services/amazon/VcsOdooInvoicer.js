@@ -1038,6 +1038,23 @@ class VcsOdooInvoicer {
       // Ensure line name is never empty (Odoo requires it)
       const lineName = product.name || item.title || transformedSku || sku || item.asin || `Product ${product.id}`;
 
+      // DEBUG: Log line creation details
+      console.log(`[VcsOdooInvoicer] Creating order line for ${amazonOrderId}:`, {
+        productId: product.id,
+        productName: product.name,
+        itemTitle: item.title,
+        transformedSku,
+        sku,
+        asin: item.asin,
+        lineName,
+        lineNameEmpty: !lineName || lineName.trim() === ''
+      });
+
+      if (!lineName || lineName.trim() === '') {
+        console.error(`[VcsOdooInvoicer] CRITICAL: Empty line name for order ${amazonOrderId}, SKU: ${sku}`);
+        throw new Error(`Cannot create order line with empty name for SKU: ${sku}`);
+      }
+
       orderLines.push([0, 0, {
         product_id: product.id,
         product_uom_qty: quantity,
