@@ -179,15 +179,16 @@ router.get('/orders', async (req, res) => {
       count: orders.length,
       total,
       orders: orders.map(o => ({
-        purchaseOrderNumber: o.purchaseOrderNumber,
-        marketplaceId: o.marketplaceId,
-        purchaseOrderState: o.purchaseOrderState,
-        purchaseOrderType: o.purchaseOrderType,
-        purchaseOrderDate: o.purchaseOrderDate,
-        deliveryWindow: o.deliveryWindow,
-        shipmentStatus: o.shipmentStatus,
+        // Map unified schema to API response format
+        purchaseOrderNumber: o.sourceIds?.amazonVendorPONumber || o.purchaseOrderNumber,
+        marketplaceId: o.marketplace?.code || o.marketplaceId,
+        purchaseOrderState: o.amazonVendor?.purchaseOrderState || o.purchaseOrderState,
+        purchaseOrderType: o.amazonVendor?.purchaseOrderType || o.purchaseOrderType,
+        purchaseOrderDate: o.orderDate || o.purchaseOrderDate,
+        deliveryWindow: o.amazonVendor?.deliveryWindow || o.deliveryWindow,
+        shipmentStatus: o.amazonVendor?.shipmentStatus || o.shipmentStatus,
         totals: o.totals,
-        acknowledgment: o.acknowledgment,
+        acknowledgment: o.amazonVendor?.acknowledgment || o.acknowledgment,
         odoo: o.odoo,
         itemCount: o.items?.length || 0
       }))
