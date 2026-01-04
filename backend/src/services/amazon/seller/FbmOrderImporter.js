@@ -649,11 +649,14 @@ class FbmOrderImporter {
             // Calculate unit price (Amazon gives total price for quantity)
             const priceUnit = item.quantity > 0 ? item.itemPrice / item.quantity : 0;
 
+            // Ensure line name is never empty (Odoo requires it)
+            const lineName = item.productName || item.resolvedSku || item.sku || `Product ${productId}`;
+
             orderLines.push({
               product_id: productId,
               quantity: item.quantity,
               price_unit: priceUnit,
-              name: item.productName || item.resolvedSku
+              name: lineName
             });
           }
 
@@ -765,11 +768,14 @@ class FbmOrderImporter {
 
       const priceUnit = item.quantity > 0 ? item.itemPrice / item.quantity : 0;
 
+      // Ensure line name is never empty (Odoo requires it)
+      const lineName = item.productName || correctedSku || item.resolvedSku || item.sku || `Product ${productId}`;
+
       orderLines.push({
         product_id: productId,
         quantity: item.quantity,
         price_unit: priceUnit,
-        name: item.productName || correctedSku || item.resolvedSku
+        name: lineName
       });
     }
 
