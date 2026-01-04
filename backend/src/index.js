@@ -54,6 +54,7 @@ const fulfillmentRouter = require('./api/routes/fulfillment.api');
 const accountingRouter = require('./api/routes/accounting.api');
 const amazonMappingsRouter = require('./api/routes/amazonMappings.api');
 const logsRouter = require('./api/routes/logs.api');
+const odooMirrorRouter = require('./api/routes/odoo-sync.api');
 const chatPermissionsRouter = require('./api/routes/chat-permissions.api');
 const { checkPermissionRouter: chatCheckRouter } = require('./api/routes/chat-permissions.api');
 const chatRouter = require('./api/routes/chat.api');
@@ -162,6 +163,20 @@ if (process.env.NODE_ENV !== 'test') {
       console.log('CW Fulfillment sync scheduler started (every 15 min + historical at 2:00 AM)');
     } catch (e) {
       console.warn('Fulfillment scheduler initialization skipped:', e.message);
+    }
+
+    // Initialize Odoo Mirror sync scheduler
+    try {
+      const { getOdooSyncScheduler } = require('./services/odoo');
+      const odooSyncScheduler = getOdooSyncScheduler({
+        incrementalIntervalMinutes: 10,  // Sync every 10 minutes
+        fullSyncHour: 3,                 // Full sync at 3 AM
+        enabled: true
+      });
+      await odooSyncScheduler.start();
+      console.log('Odoo Mirror sync scheduler started (every 10 min + full sync at 3:00 AM)');
+    } catch (e) {
+      console.warn('Odoo Mirror scheduler initialization skipped:', e.message);
     }
   });
 }
@@ -377,6 +392,8 @@ app.use('/api/categories', requireSession, categoriesRouter);
 app.use('/api/settings', requireSession, settingsRouter);
 // Odoo sync endpoints without auth (internal use)
 app.use('/api/odoo-sync', odooSyncRouter);
+// Odoo Mirror - MongoDB cache of Odoo data
+app.use('/api/odoo-mirror', requireSession, odooMirrorRouter);
 // Purchasing endpoints require session
 app.use('/api/purchasing', requireSession, purchasingRouter);
 // Inventory optimization endpoints require session
