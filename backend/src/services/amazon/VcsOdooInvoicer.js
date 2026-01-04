@@ -1035,11 +1035,14 @@ class VcsOdooInvoicer {
       const quantity = parseFloat(item.quantity) || 1;
       const priceUnit = parseFloat(item.itemPriceExclTax || item.totalExclusive || 0) / quantity;
 
+      // Ensure line name is never empty (Odoo requires it)
+      const lineName = product.name || item.title || transformedSku || sku || item.asin || `Product ${product.id}`;
+
       orderLines.push([0, 0, {
         product_id: product.id,
         product_uom_qty: quantity,
         price_unit: priceUnit,
-        name: product.name || transformedSku,
+        name: lineName,
       }]);
     }
 
