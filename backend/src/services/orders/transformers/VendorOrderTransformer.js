@@ -291,7 +291,8 @@ function transformAmazonVendorApiOrder(amazonPO, marketplace = 'DE') {
 
     items,
 
-    odoo: null,
+    // Empty object (never null) to allow dot-notation updates
+    odoo: {},
 
     amazonSeller: null,
     amazonVendor: {

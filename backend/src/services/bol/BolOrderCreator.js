@@ -409,15 +409,20 @@ class BolOrderCreator {
 
         // Update unified_orders if not linked
         if (!bolOrder.sourceIds?.odooSaleOrderId) {
+          // Use full odoo object to avoid "Cannot create field in element {odoo: null}" error
+          const odooData = {
+            ...(bolOrder.odoo || {}),
+            saleOrderId: existingOrder.id,
+            saleOrderName: existingOrder.name,
+            syncedAt: new Date()
+          };
           await collection.updateOne(
             { unifiedOrderId },
             {
               $set: {
                 'sourceIds.odooSaleOrderId': existingOrder.id,
                 'sourceIds.odooSaleOrderName': existingOrder.name,
-                'odoo.saleOrderId': existingOrder.id,
-                'odoo.saleOrderName': existingOrder.name,
-                'odoo.syncedAt': new Date(),
+                odoo: odooData,
                 updatedAt: new Date()
               }
             }
@@ -525,17 +530,22 @@ class BolOrderCreator {
       result.journalId = createdOrder[0]?.journal_id?.[0] || journalId;
 
       // Step 10: Update unified_orders with Odoo link
+      // Use full odoo object to avoid "Cannot create field in element {odoo: null}" error
+      const odooData = {
+        ...(bolOrder.odoo || {}),
+        saleOrderId,
+        saleOrderName: orderName,
+        linkedAt: new Date(),
+        syncedAt: new Date(),
+        syncError: ''
+      };
       await collection.updateOne(
         { unifiedOrderId },
         {
           $set: {
             'sourceIds.odooSaleOrderId': saleOrderId,
             'sourceIds.odooSaleOrderName': orderName,
-            'odoo.saleOrderId': saleOrderId,
-            'odoo.saleOrderName': orderName,
-            'odoo.linkedAt': new Date(),
-            'odoo.syncedAt': new Date(),
-            'odoo.syncError': '',
+            odoo: odooData,
             updatedAt: new Date()
           }
         }
@@ -561,13 +571,20 @@ class BolOrderCreator {
       result.errors.push(error.message);
 
       // Update unified_orders with error
+      // Use full odoo object to avoid "Cannot create field in element {odoo: null}" error
       try {
         const db = getDb();
         const collection = db.collection(COLLECTION_NAME);
         const unifiedOrderId = `${CHANNELS.BOL}:${orderId}`;
+        // Fetch current order to preserve existing odoo data
+        const currentOrder = await collection.findOne({ unifiedOrderId });
+        const odooData = {
+          ...(currentOrder?.odoo || {}),
+          syncError: error.message
+        };
         await collection.updateOne(
           { unifiedOrderId },
-          { $set: { 'odoo.syncError': error.message, updatedAt: new Date() } }
+          { $set: { odoo: odooData, updatedAt: new Date() } }
         );
       } catch (dbError) {
         console.error(`[BolOrderCreator] Failed to update error in DB:`, dbError.message);
@@ -936,16 +953,21 @@ class BolOrderCreator {
 
         if (foundOrder) {
           // Link to unified_orders
+          // Use full odoo object to avoid "Cannot create field in element {odoo: null}" error
+          const odooData = {
+            ...(order.odoo || {}),
+            saleOrderId: foundOrder.id,
+            saleOrderName: foundOrder.name,
+            linkedAt: new Date(),
+            syncedAt: new Date()
+          };
           await collection.updateOne(
             { unifiedOrderId },
             {
               $set: {
                 'sourceIds.odooSaleOrderId': foundOrder.id,
                 'sourceIds.odooSaleOrderName': foundOrder.name,
-                'odoo.saleOrderId': foundOrder.id,
-                'odoo.saleOrderName': foundOrder.name,
-                'odoo.linkedAt': new Date(),
-                'odoo.syncedAt': new Date(),
+                odoo: odooData,
                 updatedAt: new Date()
               }
             }

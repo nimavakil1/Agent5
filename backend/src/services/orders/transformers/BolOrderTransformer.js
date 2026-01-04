@@ -86,7 +86,7 @@ function transformBolOrder(bolOrder) {
     name: 'Bol.com'
   };
 
-  // Embedded Odoo data
+  // Embedded Odoo data (always an object, never null, to allow dot-notation updates)
   const odoo = bolOrder.odoo ? {
     saleOrderId: bolOrder.odoo.saleOrderId || null,
     saleOrderName: bolOrder.odoo.saleOrderName || null,
@@ -105,7 +105,7 @@ function transformBolOrder(bolOrder) {
     pickings: [],
     syncedAt: bolOrder.odoo.linkedAt || null,
     syncError: bolOrder.odoo.syncError || null
-  } : null;
+  } : {};
 
   // Bol.com specific fields
   const bol = {
@@ -302,7 +302,8 @@ function transformBolApiOrder(bolApiOrder) {
 
     items: transformedItems,
 
-    odoo: null,
+    // Empty object (never null) to allow dot-notation updates
+    odoo: {},
 
     amazonSeller: null,
     amazonVendor: null,
