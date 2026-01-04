@@ -221,14 +221,19 @@ class UnifiedOrderService {
     await this.init();
 
     const now = new Date();
+
+    // Remove timestamp fields from data - we handle these separately
+    // to avoid MongoDB $set/$setOnInsert conflict
+    const { createdAt, updatedAt, ...dataWithoutTimestamps } = orderData;
+
     const update = {
       $set: {
-        ...orderData,
+        ...dataWithoutTimestamps,
         unifiedOrderId,
         updatedAt: now
       },
       $setOnInsert: {
-        createdAt: now
+        createdAt: createdAt || now  // Preserve original createdAt on insert
       }
     };
 
