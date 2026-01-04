@@ -220,12 +220,15 @@ async function syncOrders(mode = 'RECENT', onProgress = null) {
         unifiedOrder.importedAt = new Date();
         unifiedOrder.updatedAt = new Date();
 
+        // Remove createdAt from data to avoid conflict with $setOnInsert
+        const { createdAt, ...dataWithoutCreatedAt } = unifiedOrder;
+
         // Upsert to unified_orders
         await collection.updateOne(
           { unifiedOrderId: unifiedOrder.unifiedOrderId },
           {
-            $set: unifiedOrder,
-            $setOnInsert: { createdAt: new Date() }
+            $set: dataWithoutCreatedAt,
+            $setOnInsert: { createdAt: createdAt || new Date() }
           },
           { upsert: true }
         );
