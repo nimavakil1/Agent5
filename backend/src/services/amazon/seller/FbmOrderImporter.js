@@ -378,7 +378,7 @@ class FbmOrderImporter {
         ['client_order_ref', '=', amazonOrderId],
         ['state', '!=', 'cancel']
       ],
-      ['id', 'name', 'state']
+      ['id', 'name', 'state', 'partner_id']
     );
 
     return orders.length > 0 ? orders[0] : null;
@@ -596,8 +596,12 @@ class FbmOrderImporter {
           // Check if valid order already exists
           const existing = await this.findValidOrder(orderId);
           if (existing) {
-            // Update MongoDB with customer name from TSV (even for skipped orders)
-            await this.updateMongoWithTsvData(orderId, order);
+            // Update MongoDB with customer name from TSV AND Odoo info (for skipped orders)
+            await this.updateMongoWithTsvData(orderId, order, {
+              partnerId: existing.partner_id?.[0] || null,
+              saleOrderId: existing.id,
+              saleOrderName: existing.name
+            });
 
             results.skipped++;
             results.orders.push({
