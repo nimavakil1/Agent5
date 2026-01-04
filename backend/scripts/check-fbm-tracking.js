@@ -1,72 +1,57 @@
-require('dotenv').config();
 const { OdooDirectClient } = require('../src/core/agents/integrations/OdooMCP');
 
-async function checkFbmTracking() {
+async function check() {
   const odoo = new OdooDirectClient();
   await odoo.authenticate();
 
-  console.log('=== Checking FBM Orders with Tracking in Odoo ===\n');
+  console.log("Fetching FBM orders from Odoo...");
 
-  // Find sale orders with FBM prefix
-  const fbmOrders = await odoo.searchRead('sale.order',
-    [['name', 'like', 'FBM%']],
-    ['id', 'name', 'state', 'client_order_ref', 'date_order'],
-    { limit: 20, order: 'date_order desc' }
+  const fbmOrders = await odoo.searchRead("sale.order",
+    [["name", "like", "FBM%"]],
+    ["id", "name", "client_order_ref", "picking_ids", "state"],
+    { limit: 500 }
   );
 
-  console.log('Found ' + fbmOrders.length + ' FBM orders in Odoo\n');
+  console.log("Total FBM orders in Odoo:", fbmOrders.length);
 
-  for (const order of fbmOrders) {
-    // Find pickings for this order
-    const pickings = await odoo.searchRead('stock.picking',
-      [
-        ['sale_id', '=', order.id],
-        ['picking_type_code', '=', 'outgoing']
-      ],
-      ['id', 'name', 'state', 'carrier_tracking_ref', 'carrier_id', 'date_done']
-    );
-
-    console.log('Order: ' + order.name + ' (' + order.state + ')');
-    console.log('  Amazon Ref: ' + (order.client_order_ref || 'N/A'));
-    console.log('  Date: ' + order.date_order);
-
-    if (pickings.length === 0) {
-      console.log('  Pickings: None found');
-    } else {
-      for (const p of pickings) {
-        const carrier = p.carrier_id ? p.carrier_id[1] : 'No carrier';
-        const tracking = p.carrier_tracking_ref || '** NO TRACKING **';
-        console.log('  Picking: ' + p.name + ' (' + p.state + ')');
-        console.log('    Carrier: ' + carrier);
-        console.log('    Tracking: ' + tracking);
-        console.log('    Date Done: ' + (p.date_done || 'Not done'));
-      }
+  const allPickingIds = [];
+  for (const o of fbmOrders) {
+    if (o.picking_ids && o.picking_ids.length > 0) {
+      allPickingIds.push(...o.picking_ids);
     }
-    console.log('');
   }
 
-  // Summary: count pickings with/without tracking
-  const allFbmPickings = await odoo.searchRead('stock.picking',
-    [
-      ['origin', 'like', 'FBM%'],
-      ['picking_type_code', '=', 'outgoing'],
-      ['state', '=', 'done']
-    ],
-    ['id', 'name', 'carrier_tracking_ref']
+  console.log("Total deliveries to check:", allPickingIds.length);
+
+  const deliveries = await odoo.searchRead("stock.picking",
+    [["id", "in", allPickingIds]],
+    ["id", "name", "origin", "state", "carrier_tracking_ref", "carrier_id"],
+    { limit: 1000 }
   );
 
-  const withTracking = allFbmPickings.filter(p => p.carrier_tracking_ref);
-  const withoutTracking = allFbmPickings.filter(p => !p.carrier_tracking_ref);
+  const done = deliveries.filter(d => d.state === "done");
+  const doneWithTracking = done.filter(d => d.carrier_tracking_ref && d.carrier_tracking_ref.trim() !== "");
+  const doneNoTracking = done.filter(d => !d.carrier_tracking_ref || d.carrier_tracking_ref.trim() === "");
 
-  console.log('=== Summary ===');
-  console.log('Total validated FBM pickings: ' + allFbmPickings.length);
-  console.log('With tracking number: ' + withTracking.length);
-  console.log('WITHOUT tracking number: ' + withoutTracking.length);
+  console.log("\n=== FBM Delivery Statistics ===");
+  console.log("Total deliveries:", deliveries.length);
+  console.log("Done (shipped):", done.length);
+  console.log("Done WITH tracking:", doneWithTracking.length);
+  console.log("Done WITHOUT tracking:", doneNoTracking.length);
 
-  if (withoutTracking.length > 0) {
-    console.log('\nPickings missing tracking:');
-    withoutTracking.slice(0, 10).forEach(p => console.log('  - ' + p.name));
+  if (doneNoTracking.length > 0) {
+    console.log("\n=== Done deliveries WITHOUT tracking (first 15) ===");
+    for (const d of doneNoTracking.slice(0, 15)) {
+      const carrier = d.carrier_id ? d.carrier_id[1] : "(no carrier)";
+      console.log(" ", d.name, "|", d.origin, "|", carrier);
+    }
+  }
+
+  console.log("\n=== Done deliveries WITH tracking (last 10) ===");
+  for (const d of doneWithTracking.slice(-10)) {
+    const carrier = d.carrier_id ? d.carrier_id[1] : "(no carrier)";
+    console.log(" ", d.name, "|", d.origin, "| Tracking:", d.carrier_tracking_ref, "|", carrier);
   }
 }
 
-checkFbmTracking().catch(console.error);
+check().catch(console.error);
