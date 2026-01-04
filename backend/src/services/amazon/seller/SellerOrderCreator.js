@@ -41,7 +41,7 @@ const { getAddressCleaner: _getAddressCleaner, LEGAL_TERMS_REGEX } = require('./
 function cleanDuplicateName(name) {
   if (!name) return name;
 
-  // Check for comma-separated duplicate (e.g., "John Smith, SMITH John")
+  // Check for comma-separated duplicate (e.g., "John Smith, SMITH John" or "LE-ROUX, LE-ROUX Armelle")
   const parts = name.split(',').map(p => p.trim()).filter(Boolean);
   if (parts.length === 2) {
     const part1Words = parts[0].toLowerCase().split(/\s+/).sort();
@@ -53,6 +53,29 @@ function cleanDuplicateName(name) {
       if (parts[0] === parts[0].toUpperCase() && parts[1] !== parts[1].toUpperCase()) {
         return parts[1];
       }
+      return parts[0];
+    }
+
+    // Check if one part is a SUBSET of the other (e.g., "LE-ROUX, LE-ROUX Armelle")
+    // All words in part1 appear in part2 -> use part2 (more complete)
+    const part1Set = new Set(part1Words);
+    const part2Set = new Set(part2Words);
+
+    const part1InPart2 = part1Words.every(w => part2Set.has(w));
+    const part2InPart1 = part2Words.every(w => part1Set.has(w));
+
+    if (part1InPart2 && !part2InPart1) {
+      // Part1 is subset of Part2, use Part2 (more complete)
+      // Prefer mixed case over ALL CAPS
+      if (parts[1] === parts[1].toUpperCase() && parts[0] !== parts[0].toUpperCase()) {
+        // But part2 is all caps and part1 isn't - try to build a better name
+        // This shouldn't happen often, just use the longer one
+      }
+      return parts[1];
+    }
+
+    if (part2InPart1 && !part1InPart2) {
+      // Part2 is subset of Part1, use Part1 (more complete)
       return parts[0];
     }
   }
@@ -1013,5 +1036,6 @@ async function getSellerOrderCreator() {
 
 module.exports = {
   SellerOrderCreator,
-  getSellerOrderCreator
+  getSellerOrderCreator,
+  cleanDuplicateName
 };

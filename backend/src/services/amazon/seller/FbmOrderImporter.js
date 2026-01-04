@@ -13,6 +13,7 @@
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { skuResolver } = require('../SkuResolver');
 const { getDb } = require('../../../db');
+const { cleanDuplicateName } = require('./SellerOrderCreator');
 
 // Odoo constants
 const PAYMENT_TERM_21_DAYS = 2;
@@ -274,8 +275,9 @@ class FbmOrderImporter {
     }
 
     // Create/find shipping address (child contact)
+    // Clean duplicate names like "LE-ROUX, LE-ROUX Armelle" for delivery addresses only
     const shippingAddressId = await this.findOrCreateAddress(order, customerId, 'delivery', {
-      name: order.recipientName,
+      name: cleanDuplicateName(order.recipientName),
       street: order.address1,
       street2: order.address2 || order.address3 || false,
       city: order.city,
