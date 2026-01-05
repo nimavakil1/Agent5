@@ -613,9 +613,9 @@ router.get('/orders/:poNumber', async (req, res) => {
       amazonProductIdentifier: item.amazonProductIdentifier || item.asin,
       orderedQuantity: item.orderedQuantity || { amount: item.quantity || 0, unitOfMeasure: 'Each' },
       netCost: item.netCost || { amount: item.unitPrice || 0, currencyCode: o.totals?.currency || 'EUR' },
-      // Preserve any existing odoo product info
+      // Preserve any existing odoo product info (don't fallback to item.name which may be "ASIN: xxx" placeholder)
       odooSku: item.odooSku || item.sku,
-      odooProductName: item.odooProductName || item.name,
+      odooProductName: item.odooProductName || null,
       odooProductId: item.odooProductId
     }));
 
@@ -1086,7 +1086,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
         amazonProductIdentifier: item.asin || item.amazonProductIdentifier,
         orderedQty: item.orderedQuantity?.amount || item.quantity || 0,
         odooProductId: item.odooProductId,
-        odooProductName: item.odooProductName || item.name,
+        odooProductName: item.odooProductName || null,
         odooSku: item.odooSku || item.sku,
         odooBarcode: item.odooBarcode,
         qtyAvailable: item.qtyAvailable,
