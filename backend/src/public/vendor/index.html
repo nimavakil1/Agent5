@@ -174,10 +174,9 @@
               <th>Items</th>
               <th>Total</th>
               <th class="filterable">Odoo Order<br><input type="text" class="column-filter" id="col-filter-odoo" placeholder="Filter..." oninput="applyColumnFilters()"></th>
-              <th>Actions</th>
             </tr>
           </thead>
-          <tbody id="orders-table"><tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading orders...</div></div></td></tr></tbody>
+          <tbody id="orders-table"><tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">hourglass_empty</span><div class="empty-state-title">Loading orders...</div></div></td></tr></tbody>
         </table>
       </div>
       <div class="pagination">
@@ -250,10 +249,10 @@
         orders = data.orders || [];
         totalOrders = data.total || 0;
         renderOrders();
-        updatePagination();
+        // Note: applyColumnFilters() in renderOrders() handles pagination with filters
       } catch (e) {
         console.error('Error:', e);
-        document.getElementById('orders-table').innerHTML = '<tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>';
+        document.getElementById('orders-table').innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">error</span><div class="empty-state-title">Failed to load</div></div></td></tr>';
       }
     }
     function getShippingStatus(o) {
@@ -270,16 +269,16 @@
         const shippingFilter = document.getElementById('col-filter-shipping').value;
         const isDefaultFilter = stateFilter === 'New' && shippingFilter === 'Not Shipped';
         if (isDefaultFilter) {
-          tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state empty-state-success"><span class="material-symbols-outlined">check_circle</span><div class="empty-state-title">Great job! All orders are acknowledged and shipped - <span class="empty-state-link" onclick="clearFilters()">show all orders</span></div></div></td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state empty-state-success"><span class="material-symbols-outlined">check_circle</span><div class="empty-state-title">Great job! All orders are acknowledged and shipped - <span class="empty-state-link" onclick="clearFilters()">show all orders</span></div></div></td></tr>';
         } else {
-          tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span><div class="empty-state-title">No orders found</div></div></td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span><div class="empty-state-title">No orders found</div></div></td></tr>';
         }
         return;
       }
       tbody.innerHTML = orders.map(o => {
         const shipStatus = getShippingStatus(o);
         const shipClass = shipStatus === 'Shipped' ? 'badge-acknowledged' : (shipStatus === 'Partial' ? 'badge-new' : 'badge-closed');
-        return '<tr><td><a href="#" class="po-number" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\'); return false;">' + o.purchaseOrderNumber + '</a></td><td><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></td><td><span class="badge ' + shipClass + '">' + shipStatus + '</span></td><td>' + o.itemCount + ' items</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td><td>' + (o.odoo?.saleOrderName ? '<a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link">' + o.odoo.saleOrderName + '</a>' : '-') + '</td><td><button class="action-btn" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\')" data-tooltip="View Details"><span class="material-symbols-outlined">visibility</span></button></td></tr>';
+        return '<tr><td><a href="#" class="po-number" onclick="viewOrder(\'' + o.purchaseOrderNumber + '\'); return false;">' + o.purchaseOrderNumber + '</a></td><td><span class="marketplace-badge">' + getFlagImg(o.marketplaceId) + '</span></td><td>' + formatDate(o.purchaseOrderDate) + '</td><td><span class="badge badge-' + o.purchaseOrderState.toLowerCase() + '">' + o.purchaseOrderState + '</span></td><td><span class="badge ' + shipClass + '">' + shipStatus + '</span></td><td>' + o.itemCount + ' items</td><td>' + formatCurrency(o.totals?.total, o.totals?.currency) + '</td><td>' + (o.odoo?.saleOrderName ? '<a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link">' + o.odoo.saleOrderName + '</a>' : '-') + '</td></tr>';
       }).join('');
       applyColumnFilters();
     }
@@ -345,7 +344,7 @@
       }
       // Show success message when default filters result in no visible rows
       if (visibleCount === 0 && stateFilter === 'New' && shippingFilter === 'Not Shipped') {
-        tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state empty-state-success"><span class="material-symbols-outlined">check_circle</span><div class="empty-state-title">Great job! All orders are acknowledged and shipped - <span class="empty-state-link" onclick="clearFilters()">show all orders</span></div></div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state empty-state-success"><span class="material-symbols-outlined">check_circle</span><div class="empty-state-title">Great job! All orders are acknowledged and shipped - <span class="empty-state-link" onclick="clearFilters()">show all orders</span></div></div></td></tr>';
       }
     }
     async function viewOrder(po) {
@@ -425,7 +424,7 @@
         tableHtml += '<td>' + formatCurrency(orderedQty * (it.netCost?.amount || 0), it.netCost?.currencyCode) + '</td></tr>';
       });
 
-      tableHtml += '<tr class="totals-row"><td colspan="7" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.totalAmount, o.totals?.currency) + '</td></tr></tbody></table></div>';
+      tableHtml += '<tr class="totals-row"><td colspan="7" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.total, o.totals?.currency) + '</td></tr></tbody></table></div>';
 
       // Auto-fill button (only if not acknowledged)
       const autoFillHtml = !isAcknowledged ? '<div style="margin-top:16px;display:flex;gap:12px;"><button class="btn btn-secondary" onclick="autoFillFromStock()" title="Fill Accept Qty with available CW stock (min of ordered vs available)"><span class="material-symbols-outlined">auto_fix</span>Auto-fill from CW Stock</button><button class="btn btn-secondary" onclick="fillAllOrdered()" title="Accept all ordered QTYs - good when you KNOW there will be availability before shipment. This just fills the Accept Qty fields."><span class="material-symbols-outlined">select_all</span>Accept All Ordered</button></div>' : '';
