@@ -1,27 +1,98 @@
 /**
  * Marketplace Dashboard Service
  *
- * Shows order status from the MARKETPLACE perspective - not Odoo.
- * An order is "pending" if the marketplace hasn't received shipment confirmation,
- * regardless of whether it was shipped in Odoo.
+ * Shows order status directly from MARKETPLACE APIs - not MongoDB snapshots.
+ * Calls Amazon SP-API and Bol.com API to get real-time pending orders.
  *
  * @module MarketplaceDashboardService
  */
 
-const { getDb } = require('../../db');
+const { getSellerClient } = require('../amazon/seller/SellerClient');
+
+// Bol.com token cache
+let bolAccessToken = null;
+let bolTokenExpiry = null;
+
+/**
+ * Get Bol.com access token
+ */
+async function getBolAccessToken() {
+  const clientId = process.env.BOL_CLIENT_ID;
+  const clientSecret = process.env.BOL_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Bol.com credentials not configured');
+  }
+
+  // Check cached token
+  if (bolAccessToken && bolTokenExpiry && Date.now() < bolTokenExpiry - 30000) {
+    return bolAccessToken;
+  }
+
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+  const response = await fetch('https://login.bol.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'Authorization': `Basic ${credentials}`
+    },
+    body: 'grant_type=client_credentials'
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to get Bol.com access token: ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  bolAccessToken = data.access_token;
+  bolTokenExpiry = Date.now() + (data.expires_in * 1000);
+
+  return bolAccessToken;
+}
+
+/**
+ * Make request to Bol.com API
+ */
+async function bolRequest(endpoint) {
+  const token = await getBolAccessToken();
+
+  const response = await fetch(`https://api.bol.com/retailer${endpoint}`, {
+    headers: {
+      'Accept': 'application/vnd.retailer.v10+json',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (response.status === 429) {
+    const retryAfter = parseInt(response.headers.get('retry-after') || '2', 10);
+    console.log(`[MarketplaceDashboard] Bol.com rate limited, waiting ${retryAfter}s...`);
+    await new Promise(r => setTimeout(r, retryAfter * 1000));
+    return bolRequest(endpoint);
+  }
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || `Bol.com API error: ${response.status}`);
+  }
+
+  return response.json();
+}
 
 class MarketplaceDashboardService {
   constructor() {
-    this.db = null;
+    this.sellerClient = null;
   }
 
   async init() {
-    if (this.db) return;
-    this.db = getDb();
+    if (this.sellerClient) return;
+    this.sellerClient = getSellerClient();
+    await this.sellerClient.init();
   }
 
   /**
-   * Get dashboard data from marketplace perspective
+   * Get dashboard data directly from marketplace APIs
    */
   async getDashboardData() {
     await this.init();
@@ -32,8 +103,8 @@ class MarketplaceDashboardService {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     const [amazonData, bolData] = await Promise.all([
-      this.getAmazonSellerData(today, tomorrow),
-      this.getBolData(today, tomorrow)
+      this.getAmazonSellerDataLive(today, tomorrow),
+      this.getBolDataLive(today, tomorrow)
     ]);
 
     return {
@@ -52,151 +123,175 @@ class MarketplaceDashboardService {
   }
 
   /**
-   * Get Amazon Seller orders that marketplace considers "pending shipment"
+   * Get Amazon Seller pending orders directly from SP-API
    */
-  async getAmazonSellerData(today, tomorrow) {
+  async getAmazonSellerDataLive(today, tomorrow) {
     const stats = { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0, upcoming: 0, noDeadline: 0, orders: [] };
 
-    // Get orders that Amazon considers not shipped
-    const pendingOrders = await this.db.collection('seller_orders').find({
-      orderStatus: { $in: ['Unshipped', 'PartiallyShipped'] },
-      fulfillmentChannel: 'MFN' // Only FBM orders (Merchant Fulfilled)
-    }).toArray();
+    try {
+      // Call Amazon SP-API directly for Unshipped/PartiallyShipped MFN orders
+      const response = await this.sellerClient.getAllOrders({
+        orderStatuses: ['Unshipped', 'PartiallyShipped'],
+        fulfillmentChannels: ['MFN'] // Only FBM (Merchant Fulfilled)
+      });
 
-    stats.pending = pendingOrders.length;
+      const pendingOrders = response || [];
+      stats.pending = pendingOrders.length;
 
-    // Get deadlines from unified_orders
-    const amazonOrderIds = pendingOrders.map(o => o.amazonOrderId);
-    const unifiedOrders = await this.db.collection('unified_orders').find({
-      'sourceIds.amazonOrderId': { $in: amazonOrderIds }
-    }).toArray();
+      console.log(`[MarketplaceDashboard] Amazon SP-API returned ${pendingOrders.length} pending MFN orders`);
 
-    const deadlineMap = {};
-    for (const u of unifiedOrders) {
-      if (u.sourceIds?.amazonOrderId && u.shippingDeadline) {
-        deadlineMap[u.sourceIds.amazonOrderId] = new Date(u.shippingDeadline);
+      // Categorize by deadline
+      for (const order of pendingOrders) {
+        // Amazon provides LatestShipDate
+        const deadlineStr = order.LatestShipDate;
+
+        if (!deadlineStr) {
+          stats.noDeadline++;
+          continue;
+        }
+
+        const deadline = new Date(deadlineStr);
+        const dlDate = new Date(deadline);
+        dlDate.setHours(0, 0, 0, 0);
+
+        let status = 'upcoming';
+        let daysLate = 0;
+
+        if (dlDate < today) {
+          status = 'late';
+          daysLate = Math.floor((today - dlDate) / (1000 * 60 * 60 * 24));
+          stats.late++;
+        } else if (dlDate.getTime() === today.getTime()) {
+          status = 'dueToday';
+          stats.dueToday++;
+        } else if (dlDate.getTime() === tomorrow.getTime()) {
+          status = 'dueTomorrow';
+          stats.dueTomorrow++;
+        } else {
+          stats.upcoming++;
+        }
+
+        // Add to orders list if late or due today
+        if (status === 'late' || status === 'dueToday') {
+          stats.orders.push({
+            orderId: order.AmazonOrderId,
+            status: order.OrderStatus,
+            deadline: deadline,
+            daysLate,
+            marketplace: order.MarketplaceId
+          });
+        }
       }
+
+      // Sort orders by days late (most late first)
+      stats.orders.sort((a, b) => b.daysLate - a.daysLate);
+
+    } catch (error) {
+      console.error('[MarketplaceDashboard] Amazon SP-API error:', error.message);
+      stats.error = error.message;
     }
-
-    // Categorize by deadline
-    for (const order of pendingOrders) {
-      const deadline = deadlineMap[order.amazonOrderId];
-
-      if (!deadline) {
-        stats.noDeadline++;
-        continue;
-      }
-
-      const dlDate = new Date(deadline);
-      dlDate.setHours(0, 0, 0, 0);
-
-      let status = 'upcoming';
-      let daysLate = 0;
-
-      if (dlDate < today) {
-        status = 'late';
-        daysLate = Math.floor((today - dlDate) / (1000 * 60 * 60 * 24));
-        stats.late++;
-      } else if (dlDate.getTime() === today.getTime()) {
-        status = 'dueToday';
-        stats.dueToday++;
-      } else if (dlDate.getTime() === tomorrow.getTime()) {
-        status = 'dueTomorrow';
-        stats.dueTomorrow++;
-      } else {
-        stats.upcoming++;
-      }
-
-      // Add to orders list if late or due today (for details)
-      if (status === 'late' || status === 'dueToday') {
-        stats.orders.push({
-          orderId: order.amazonOrderId,
-          status: order.orderStatus,
-          deadline: deadline,
-          daysLate,
-          odooStatus: order.odoo?.saleOrderName ? 'In Odoo' : 'Not in Odoo',
-          trackingPushed: order.odoo?.trackingPushed || false
-        });
-      }
-    }
-
-    // Sort orders by days late (most late first)
-    stats.orders.sort((a, b) => b.daysLate - a.daysLate);
 
     return stats;
   }
 
   /**
-   * Get Bol.com orders that marketplace considers "pending shipment"
+   * Get Bol.com pending orders directly from Bol.com API
    */
-  async getBolData(today, tomorrow) {
+  async getBolDataLive(today, tomorrow) {
     const stats = { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0, upcoming: 0, noDeadline: 0, orders: [] };
 
-    // Get all Bol orders
-    const allOrders = await this.db.collection('bol_orders').find({}).toArray();
+    try {
+      // Call Bol.com API directly - fetch first page of orders
+      // Orders endpoint returns orders sorted by date, most recent first
+      // We only care about OPEN orders (not yet fully shipped)
+      let allOrders = [];
+      let page = 1;
+      let hasMore = true;
 
-    // Filter orders with pending items (not fully shipped to Bol.com)
-    for (const order of allOrders) {
-      // Check if any items still need shipping confirmation
-      const hasPendingItems = order.orderItems?.some(item => {
-        const shipped = item.quantityShipped || 0;
-        const ordered = item.quantity || 1;
-        return shipped < ordered;
-      });
+      // Fetch up to 5 pages (enough for dashboard)
+      while (hasMore && page <= 5) {
+        const data = await bolRequest(`/orders?page=${page}&fulfilment-method=FBR`); // FBR = Fulfilled by Retailer
+        const orders = data.orders || [];
 
-      if (!hasPendingItems) continue;
-
-      stats.pending++;
-
-      // Get deadline from first item with latestDeliveryDate
-      let deadline = null;
-      for (const item of (order.orderItems || [])) {
-        if (item.latestDeliveryDate) {
-          deadline = new Date(item.latestDeliveryDate);
+        if (orders.length === 0) {
+          hasMore = false;
           break;
+        }
+
+        allOrders = allOrders.concat(orders);
+        page++;
+
+        // Small delay between pages
+        await new Promise(r => setTimeout(r, 200));
+      }
+
+      console.log(`[MarketplaceDashboard] Bol.com API returned ${allOrders.length} FBR orders`);
+
+      // Filter orders with pending items (not fully shipped)
+      for (const order of allOrders) {
+        // Check if any items still need shipping
+        const hasPendingItems = order.orderItems?.some(item => {
+          const shipped = item.quantityShipped || 0;
+          const ordered = item.quantity || 1;
+          return shipped < ordered;
+        });
+
+        if (!hasPendingItems) continue;
+
+        stats.pending++;
+
+        // Get deadline from first item with latestDeliveryDate
+        let deadline = null;
+        for (const item of (order.orderItems || [])) {
+          if (item.latestDeliveryDate) {
+            deadline = new Date(item.latestDeliveryDate);
+            break;
+          }
+        }
+
+        if (!deadline) {
+          stats.noDeadline++;
+          continue;
+        }
+
+        const dlDate = new Date(deadline);
+        dlDate.setHours(0, 0, 0, 0);
+
+        let status = 'upcoming';
+        let daysLate = 0;
+
+        if (dlDate < today) {
+          status = 'late';
+          daysLate = Math.floor((today - dlDate) / (1000 * 60 * 60 * 24));
+          stats.late++;
+        } else if (dlDate.getTime() === today.getTime()) {
+          status = 'dueToday';
+          stats.dueToday++;
+        } else if (dlDate.getTime() === tomorrow.getTime()) {
+          status = 'dueTomorrow';
+          stats.dueTomorrow++;
+        } else {
+          stats.upcoming++;
+        }
+
+        // Add to orders list if late or due today
+        if (status === 'late' || status === 'dueToday') {
+          stats.orders.push({
+            orderId: order.orderId,
+            status: 'OPEN',
+            deadline: deadline,
+            daysLate
+          });
         }
       }
 
-      if (!deadline) {
-        stats.noDeadline++;
-        continue;
-      }
+      // Sort orders by days late
+      stats.orders.sort((a, b) => b.daysLate - a.daysLate);
 
-      const dlDate = new Date(deadline);
-      dlDate.setHours(0, 0, 0, 0);
-
-      let status = 'upcoming';
-      let daysLate = 0;
-
-      if (dlDate < today) {
-        status = 'late';
-        daysLate = Math.floor((today - dlDate) / (1000 * 60 * 60 * 24));
-        stats.late++;
-      } else if (dlDate.getTime() === today.getTime()) {
-        status = 'dueToday';
-        stats.dueToday++;
-      } else if (dlDate.getTime() === tomorrow.getTime()) {
-        status = 'dueTomorrow';
-        stats.dueTomorrow++;
-      } else {
-        stats.upcoming++;
-      }
-
-      // Add to orders list if late or due today
-      if (status === 'late' || status === 'dueToday') {
-        stats.orders.push({
-          orderId: order.orderId,
-          status: order.status,
-          deadline: deadline,
-          daysLate,
-          odooStatus: order.odoo?.saleOrderName ? 'In Odoo' : 'Not in Odoo',
-          trackingPushed: !!order.shipmentConfirmedAt
-        });
-      }
+    } catch (error) {
+      console.error('[MarketplaceDashboard] Bol.com API error:', error.message);
+      stats.error = error.message;
     }
-
-    // Sort orders by days late
-    stats.orders.sort((a, b) => b.daysLate - a.daysLate);
 
     return stats;
   }
