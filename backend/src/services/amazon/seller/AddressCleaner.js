@@ -144,19 +144,28 @@ class AddressCleaner {
     const response = await this.llm.chat([
       {
         role: 'system',
-        content: `You are an address parser for shipping labels. Parse addresses and return ONLY valid JSON.
-Your goal is to create clean, readable addresses for delivery drivers.
+        content: `You are an address parser for Odoo ERP. Parse shipping addresses and return ONLY valid JSON.
+Your goal is to correctly identify company vs personal names for B2B/B2C orders.
 
-Rules:
-1. If there's a company/business name, put it in "company" field
-2. Personal name goes in "name" field
-3. Remove legal terms: GmbH, AG, KG, e.V., Inhaber, Ltd, etc. but KEEP the business name
-4. Street address in "street", overflow in "street2"
-5. Don't repeat information that's already in another field
-6. If the same name appears as both company and person, only use it once (prefer company if it looks like a business)
-7. Keep the address as SHORT as possible while retaining essential delivery info
+CRITICAL Rules:
+1. COMPANY NAME detection - Look for business names in ALL fields (recipient, buyer, address lines):
+   - Business indicators: GmbH, AG, KG, e.V., Ltd, Inc, LLC, SARL, BV, NV, Shop, Store, Restaurant, Hotel, Praxis, Werkstatt, Service, Center, Verlag, Verein, Stiftung
+   - Trade names that don't look like person names (e.g., "Der Soltauer Hausfreund", "Blumen Müller", "Auto-Center Schmidt")
+   - If company name is in address-line-2 or address-line-3 (common in Amazon B2B), extract it to "company" field
 
-Return ONLY a JSON object with these fields: company, name, street, street2, zip, city, country`
+2. PERSONAL NAME: The actual person receiving the delivery (often the recipient-name or buyer-name)
+   - If recipient looks like a person's name (first + last name), use it as "name"
+   - If recipient is a company, look for personal name in other fields
+
+3. STREET ADDRESS: Must contain a street name and usually a house number
+   - "Hauptstraße 15" = street address
+   - "Der Soltauer Hausfreund" = NOT a street address (it's a company name!)
+
+4. Remove legal suffixes (GmbH, AG, etc.) from the company name but KEEP the actual business name
+
+5. NEVER put a company name in street2. Company names go in "company" field only.
+
+Return ONLY a JSON object: { "company": string|null, "name": string|null, "street": string, "street2": string|null, "zip": string, "city": string, "country": string }`
       },
       {
         role: 'user',
@@ -181,11 +190,19 @@ Return ONLY a JSON object with these fields: company, name, street, street2, zip
   _buildPrompt(rawAddress) {
     const lines = [];
 
+    // Add order type indicator
+    if (rawAddress.isBusinessOrder) {
+      lines.push(`order-type: B2B (Business Order - likely has a company name)`);
+    }
+
     if (rawAddress.recipientName) {
       lines.push(`recipient-name: ${rawAddress.recipientName}`);
     }
     if (rawAddress.buyerName && rawAddress.buyerName !== rawAddress.recipientName) {
       lines.push(`buyer-name: ${rawAddress.buyerName}`);
+    }
+    if (rawAddress.buyerCompanyName) {
+      lines.push(`buyer-company-name: ${rawAddress.buyerCompanyName}`);
     }
     if (rawAddress.addressLine1) {
       lines.push(`address-line-1: ${rawAddress.addressLine1}`);

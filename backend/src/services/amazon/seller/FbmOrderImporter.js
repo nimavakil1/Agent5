@@ -14,55 +14,7 @@ const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP'
 const { skuResolver } = require('../SkuResolver');
 const { getDb } = require('../../../db');
 const { cleanDuplicateName } = require('./SellerOrderCreator');
-
-/**
- * Check if a string looks like a street address (vs a company name)
- * Streets typically contain numbers or street-type words
- * @param {string} str - String to check
- * @returns {boolean} True if looks like a street address
- */
-function looksLikeStreetAddress(str) {
-  if (!str) return false;
-  const s = str.toLowerCase().trim();
-  // Contains numbers (house number)
-  if (/\d/.test(s)) return true;
-  // German street types
-  if (/str\.?$|straße|strasse|weg$|allee|platz|gasse|ring$|damm$|ufer$|steig$|pfad$/.test(s)) return true;
-  // French street types
-  if (/rue |avenue |boulevard |chemin |place |allée|impasse/.test(s)) return true;
-  // English street types
-  if (/street|road|avenue|lane|drive|court|place|way$|close$/.test(s)) return true;
-  // Dutch/Belgian street types
-  if (/straat|laan|weg$|plein|singel|kade/.test(s)) return true;
-  return false;
-}
-
-/**
- * Extract company name from address lines for B2B orders
- * Amazon often puts company name in address2 or address3
- * @param {Object} order - Order with address fields
- * @returns {string|null} Company name if found, null otherwise
- */
-function extractCompanyName(order) {
-  // Check address2 first - common place for company name
-  if (order.address2 && !looksLikeStreetAddress(order.address2)) {
-    // Make sure it's not the same as recipient name
-    if (order.address2 !== order.recipientName && order.address2 !== order.buyerName) {
-      return order.address2;
-    }
-  }
-  // Then check address3
-  if (order.address3 && !looksLikeStreetAddress(order.address3)) {
-    if (order.address3 !== order.recipientName && order.address3 !== order.buyerName) {
-      return order.address3;
-    }
-  }
-  // Finally check buyerCompanyName field if it exists
-  if (order.buyerCompanyName && order.buyerCompanyName !== order.recipientName) {
-    return order.buyerCompanyName;
-  }
-  return null;
-}
+const { getAddressCleaner } = require('./AddressCleaner');
 
 // Odoo constants
 const PAYMENT_TERM_21_DAYS = 2;
@@ -362,16 +314,31 @@ class FbmOrderImporter {
 
   /**
    * Find or create customer with separate invoice and shipping addresses
-   * For B2B orders, company name is used as parent (if found in address lines)
+   * Uses AI-powered AddressCleaner to properly parse company vs personal names
    * @returns {Object} { customerId, invoiceAddressId, shippingAddressId }
    */
   async findOrCreateCustomer(order) {
-    // For B2B orders, try to extract company name from address lines
-    // Amazon often puts company name in address2/address3
-    const companyName = order.isBusinessOrder ? extractCompanyName(order) : null;
+    // Use AddressCleaner to parse the address with Claude AI
+    // This correctly identifies company names in address2/address3
+    const addressCleaner = getAddressCleaner();
+    const cleanedAddress = await addressCleaner.cleanAddress({
+      recipientName: order.recipientName,
+      buyerName: order.buyerName,
+      buyerCompanyName: order.buyerCompanyName,
+      addressLine1: order.address1,
+      addressLine2: order.address2,
+      addressLine3: order.address3,
+      city: order.city,
+      state: order.state,
+      postalCode: order.postalCode,
+      countryCode: order.country,
+      isBusinessOrder: order.isBusinessOrder
+    });
 
-    // Use company name for B2B, otherwise buyer/recipient name
-    const customerName = companyName || order.buyerName || order.recipientName;
+    // Use company name for B2B (if detected), otherwise personal name
+    const customerName = cleanedAddress.company || cleanedAddress.name || order.buyerName || order.recipientName;
+    const isCompany = !!cleanedAddress.company;
+
     const customerCacheKey = `customer|${customerName}|${order.buyerEmail || order.postalCode}`;
 
     let customerId = this.partnerCache[customerCacheKey];
@@ -392,38 +359,31 @@ class FbmOrderImporter {
 
         customerId = await this.odoo.create('res.partner', {
           name: customerName,
-          company_type: order.isBusinessOrder ? 'company' : 'person',
-          is_company: order.isBusinessOrder,
+          company_type: isCompany ? 'company' : 'person',
+          is_company: isCompany,
           customer_rank: 1,
           country_id: countryId,
           email: order.buyerEmail || false,
           phone: order.buyerPhone || false,
           comment: `Created from Amazon FBM order ${order.orderId}`
         });
-        console.log(`[FbmOrderImporter] Created customer: ${customerName} (ID: ${customerId})`);
+        console.log(`[FbmOrderImporter] Created customer: ${customerName} (ID: ${customerId}, company: ${isCompany})`);
       }
 
       this.partnerCache[customerCacheKey] = customerId;
     }
 
-    // Build street2 - only include address lines that look like actual addresses
-    // If company name was extracted from address2/3, don't include it in street2 again
-    let street2 = false;
-    if (order.address2 && order.address2 !== companyName) {
-      street2 = order.address2;
-    } else if (order.address3 && order.address3 !== companyName) {
-      street2 = order.address3;
-    }
-
     // Create/find shipping address (child contact)
-    // Use recipient name as contact name (company name is in parent)
+    // Use the cleaned address data from AI - company name is in parent, contact name here
+    const contactName = isCompany ? (cleanedAddress.name || order.recipientName) : cleanDuplicateName(order.recipientName);
+
     const shippingAddressId = await this.findOrCreateAddress(order, customerId, 'delivery', {
-      name: cleanDuplicateName(order.recipientName),
-      street: order.address1,
-      street2,
-      city: order.city,
-      zip: order.postalCode,
-      countryCode: order.country,
+      name: cleanDuplicateName(contactName),
+      street: cleanedAddress.street || order.address1,
+      street2: cleanedAddress.street2 || false,
+      city: cleanedAddress.city || order.city,
+      zip: cleanedAddress.zip || order.postalCode,
+      countryCode: cleanedAddress.country || order.country,
       phone: order.shipPhone || order.buyerPhone || false,
       email: order.buyerEmail || false  // Email for carrier notifications (GLS, etc.)
     });
