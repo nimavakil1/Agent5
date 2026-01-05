@@ -294,23 +294,60 @@ router.get('/ship-by-overview', async (req, res) => {
       }
     }
 
-    const grandTotal = overdue.total + buckets.today.total + buckets.tomorrow.total +
-      buckets['2days'].total + buckets['3plus'].total;
+    // Build table format with channels as columns
+    const allBuckets = [
+      { key: 'overdue', label: 'Overdue', data: overdue },
+      { key: 'today', label: 'Today', data: buckets.today },
+      { key: 'tomorrow', label: 'Tomorrow', data: buckets.tomorrow },
+      { key: '2days', label: '2 Days', data: buckets['2days'] },
+      { key: '3plus', label: '3+ Days', data: buckets['3plus'] }
+    ];
+
+    // Helper to extract channel count from byChannel array
+    const getChannelCount = (byChannel, channel, subChannel = null) => {
+      const match = byChannel.find(c =>
+        c.channel === channel && (subChannel === null || c.subChannel === subChannel)
+      );
+      return match ? match.count : 0;
+    };
+
+    // Build table rows
+    const table = allBuckets.map(bucket => {
+      const seller = getChannelCount(bucket.data.byChannel, CHANNELS.AMAZON_SELLER, SUB_CHANNELS.FBM);
+      const vendor = getChannelCount(bucket.data.byChannel, CHANNELS.AMAZON_VENDOR);
+      const bol = getChannelCount(bucket.data.byChannel, CHANNELS.BOL, SUB_CHANNELS.FBR);
+
+      return {
+        bucket: bucket.key,
+        label: bucket.label,
+        seller,
+        vendor,
+        bol,
+        total: bucket.data.total
+      };
+    });
+
+    // Calculate column totals
+    const totals = {
+      bucket: 'total',
+      label: 'Total',
+      seller: table.reduce((sum, row) => sum + row.seller, 0),
+      vendor: table.reduce((sum, row) => sum + row.vendor, 0),
+      bol: table.reduce((sum, row) => sum + row.bol, 0),
+      total: table.reduce((sum, row) => sum + row.total, 0)
+    };
 
     res.json({
       success: true,
-      summary: {
-        grandTotal,
-        overdue: overdue.total,
-        today: buckets.today.total,
-        tomorrow: buckets.tomorrow.total,
-        '2days': buckets['2days'].total,
-        '3plus': buckets['3plus'].total
-      },
-      details: {
-        overdue,
-        ...buckets
-      },
+      table,
+      totals,
+      columns: [
+        { key: 'label', header: 'Bucket' },
+        { key: 'seller', header: 'Amazon Seller (FBM)' },
+        { key: 'vendor', header: 'Amazon Vendor' },
+        { key: 'bol', header: 'Bol.com (FBR)' },
+        { key: 'total', header: 'Total' }
+      ],
       sampleOrders,
       asOf: now.toISOString()
     });
