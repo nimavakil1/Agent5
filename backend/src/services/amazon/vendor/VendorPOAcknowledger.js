@@ -96,29 +96,36 @@ class VendorPOAcknowledger {
       }
 
       // Check if already acknowledged
-      if (po.acknowledgment?.acknowledged) {
+      // Handle unified schema (amazonVendor.acknowledgment) and legacy (acknowledgment)
+      const acknowledgment = po.amazonVendor?.acknowledgment || po.acknowledgment;
+      if (acknowledgment?.acknowledged) {
         result.success = true;
         result.skipped = true;
-        result.skipReason = `Already acknowledged at ${po.acknowledgment.acknowledgedAt}`;
+        result.skipReason = `Already acknowledged at ${acknowledgment.acknowledgedAt}`;
         result.warnings.push(result.skipReason);
         return result;
       }
 
-      // Check PO state
-      if (po.purchaseOrderState === 'Closed') {
+      // Check PO state - handle unified and legacy
+      const poState = po.amazonVendor?.purchaseOrderState || po.purchaseOrderState;
+      if (poState === 'Closed') {
         result.errors.push('Cannot acknowledge a closed PO');
         return result;
       }
 
-      // Get client for marketplace
-      const client = this.getClient(po.marketplaceId);
+      // Get client for marketplace - handle unified (marketplace.code) and legacy (marketplaceId)
+      const marketplaceId = po.marketplace?.code || po.marketplaceId;
+      const client = this.getClient(marketplaceId);
       // Use partyId from the PO itself (Amazon's expected value), fallback to config
-      const partyId = po.sellingParty?.partyId || VENDOR_PARTY_IDS[po.marketplaceId] || 'ACROPAQ';
+      const sellingParty = po.amazonVendor?.sellingParty || po.sellingParty;
+      const partyId = sellingParty?.partyId || VENDOR_PARTY_IDS[marketplaceId] || 'ACROPAQ';
 
       // Get schedule data from PO (set by user via update-acknowledgments endpoint)
+      // Handle unified schema (amazonVendor.deliveryWindow) and legacy (deliveryWindow)
+      const deliveryWindow = po.amazonVendor?.deliveryWindow || po.deliveryWindow;
       const scheduleData = {
-        scheduledShipDate: po.acknowledgment?.scheduledShipDate || po.deliveryWindow?.startDate,
-        scheduledDeliveryDate: po.acknowledgment?.scheduledDeliveryDate || po.deliveryWindow?.endDate
+        scheduledShipDate: acknowledgment?.scheduledShipDate || deliveryWindow?.startDate,
+        scheduledDeliveryDate: acknowledgment?.scheduledDeliveryDate || deliveryWindow?.endDate
       };
 
       // Build acknowledgment payload with line-level data
@@ -189,11 +196,17 @@ class VendorPOAcknowledger {
       new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
     return items.map(item => {
-      const orderedQty = item.orderedQuantity?.amount || 0;
+      // Handle unified schema (quantity) and legacy (orderedQuantity.amount)
+      const orderedQty = item.orderedQuantity?.amount || item.quantity || 0;
       const acknowledgeQty = item.acknowledgeQty ?? orderedQty; // Default to full order
       const backorderQty = item.backorderQty ?? 0;
       const productAvailability = item.productAvailability || 'accepted';
       const unitOfMeasure = item.orderedQuantity?.unitOfMeasure || 'Eaches';
+
+      // Handle unified schema field names
+      const amazonProductId = item.amazonProductIdentifier || item.asin;
+      const vendorProductId = item.vendorProductIdentifier || item.ean;
+      const netCost = item.netCost || (item.unitPrice ? { amount: item.unitPrice, currencyCode: 'EUR' } : null);
 
       // Calculate cancelled/rejected quantity
       const cancelledQty = Math.max(0, orderedQty - acknowledgeQty - backorderQty);
@@ -264,15 +277,15 @@ class VendorPOAcknowledger {
 
       return {
         itemSequenceNumber: parseInt(item.itemSequenceNumber) || 1,
-        amazonProductIdentifier: item.amazonProductIdentifier,
-        vendorProductIdentifier: item.vendorProductIdentifier,
+        amazonProductIdentifier: amazonProductId,
+        vendorProductIdentifier: vendorProductId,
         orderedQuantity: {
           amount: orderedQty,
           unitOfMeasure: unitOfMeasure
         },
-        netCost: item.netCost ? {
-          currencyCode: item.netCost.currencyCode,
-          amount: String(item.netCost.amount)
+        netCost: netCost ? {
+          currencyCode: netCost.currencyCode || 'EUR',
+          amount: String(netCost.amount)
         } : undefined,
         itemAcknowledgements: itemAcknowledgements
       };

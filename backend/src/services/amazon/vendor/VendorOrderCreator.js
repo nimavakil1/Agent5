@@ -216,20 +216,21 @@ class VendorOrderCreator {
         partner_invoice_id: partnerIds.invoiceId,   // Invoice address (billTo party)
         partner_shipping_id: partnerIds.shippingId, // Shipping address (shipTo party)
         client_order_ref: poNumber,  // CRITICAL: Store PO number for duplicate detection
-        date_order: this.formatDate(po.purchaseOrderDate),
+        date_order: this.formatDate(po.orderDate || po.purchaseOrderDate),
         warehouse_id: warehouseId,
         journal_id: VENDOR_INVOICE_JOURNAL_ID,      // Invoice journal (VBE - Belgian)
         order_line: orderLines.lines.map(line => [0, 0, line]),
         // Store vendor-specific info in notes
         note: this.buildOrderNotes(po),
-        // Custom fields if available
-        ...(po.deliveryWindow?.endDate && {
-          commitment_date: this.formatDate(po.deliveryWindow.endDate)
+        // Custom fields if available - handle unified and legacy schema
+        ...((po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate) && {
+          commitment_date: this.formatDate(po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate)
         })
       };
 
-      // Add sales team if configured
-      const salesTeamId = VENDOR_SALES_TEAMS[po.marketplaceId];
+      // Add sales team if configured - handle unified and legacy schema
+      const marketplaceCode = po.marketplace?.code || po.marketplaceId;
+      const salesTeamId = VENDOR_SALES_TEAMS[marketplaceCode];
       if (salesTeamId) {
         orderData.team_id = salesTeamId;
       }
@@ -366,8 +367,9 @@ class VendorOrderCreator {
 
     for (const item of items) {
       try {
-        const sku = item.vendorProductIdentifier; // Our SKU
-        const asin = item.amazonProductIdentifier;
+        // Handle unified schema (ean/asin) and legacy (vendorProductIdentifier/amazonProductIdentifier)
+        const sku = item.ean || item.vendorProductIdentifier; // Our SKU (EAN)
+        const asin = item.asin || item.amazonProductIdentifier;
 
         if (!sku && !asin) {
           errors.push(`Item ${item.itemSequenceNumber}: No SKU or ASIN`);
@@ -391,9 +393,11 @@ class VendorOrderCreator {
         }
 
         // Use acknowledgeQty (accepted quantity) if > 0, otherwise fall back to orderedQuantity
-        // Note: acknowledgeQty defaults to 0, so we must check > 0, not just nullish
-        const quantity = (item.acknowledgeQty > 0) ? item.acknowledgeQty : (item.orderedQuantity?.amount ?? 1);
-        const netCost = parseFloat(item.netCost?.amount) || 0;
+        // Handle unified schema (quantity) and legacy (orderedQuantity.amount)
+        const orderedQty = item.quantity || item.orderedQuantity?.amount || 1;
+        const quantity = (item.acknowledgeQty > 0) ? item.acknowledgeQty : orderedQty;
+        // Handle unified schema (unitPrice) and legacy (netCost.amount)
+        const netCost = parseFloat(item.unitPrice) || parseFloat(item.netCost?.amount) || 0;
         const priceUnit = netCost > 0 ? netCost : 0;
 
         lines.push({
@@ -476,10 +480,10 @@ class VendorOrderCreator {
       warnings: []
     };
 
-    // Get party IDs from PO
-    const buyingPartyId = po.buyingParty?.partyId;
-    const billToPartyId = po.billToParty?.partyId;
-    const shipToPartyId = po.shipToParty?.partyId;
+    // Get party IDs from PO - handle unified and legacy schema
+    const buyingPartyId = po.amazonVendor?.buyingParty?.partyId || po.buyingParty?.partyId;
+    const billToPartyId = po.amazonVendor?.billToParty?.partyId || po.billToParty?.partyId;
+    const shipToPartyId = po.amazonVendor?.shipToParty?.partyId || po.shipToParty?.partyId;
 
     // Buying party -> Main customer
     if (buyingPartyId) {
@@ -587,23 +591,32 @@ class VendorOrderCreator {
    * Build order notes from PO data
    */
   buildOrderNotes(po) {
+    // Handle unified and legacy schema for all fields
+    const poNumber = po.sourceIds?.amazonVendorPONumber || po.purchaseOrderNumber;
+    const marketplaceCode = po.marketplace?.code || po.marketplaceId;
+    const poType = po.amazonVendor?.purchaseOrderType || po.purchaseOrderType;
+    const poState = po.amazonVendor?.purchaseOrderState || po.purchaseOrderState;
+    const deliveryWindow = po.amazonVendor?.deliveryWindow || po.deliveryWindow;
+    const buyingPartyId = po.amazonVendor?.buyingParty?.partyId || po.buyingParty?.partyId;
+    const shipToPartyId = po.amazonVendor?.shipToParty?.partyId || po.shipToParty?.partyId;
+
     const lines = [
-      `Amazon Vendor Central PO: ${po.purchaseOrderNumber}`,
-      `Marketplace: ${po.marketplaceId}`,
-      `PO Type: ${po.purchaseOrderType}`,
-      `PO State: ${po.purchaseOrderState}`,
+      `Amazon Vendor Central PO: ${poNumber}`,
+      `Marketplace: ${marketplaceCode}`,
+      `PO Type: ${poType}`,
+      `PO State: ${poState}`,
     ];
 
-    if (po.deliveryWindow) {
-      lines.push(`Delivery Window: ${this.formatDate(po.deliveryWindow.startDate)} to ${this.formatDate(po.deliveryWindow.endDate)}`);
+    if (deliveryWindow) {
+      lines.push(`Delivery Window: ${this.formatDate(deliveryWindow.startDate)} to ${this.formatDate(deliveryWindow.endDate)}`);
     }
 
-    if (po.buyingParty?.partyId) {
-      lines.push(`Buying Party: ${po.buyingParty.partyId}`);
+    if (buyingPartyId) {
+      lines.push(`Buying Party: ${buyingPartyId}`);
     }
 
-    if (po.shipToParty?.partyId) {
-      lines.push(`Ship To: ${po.shipToParty.partyId}`);
+    if (shipToPartyId) {
+      lines.push(`Ship To: ${shipToPartyId}`);
     }
 
     return lines.join('\n');

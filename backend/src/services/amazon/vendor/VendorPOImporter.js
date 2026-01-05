@@ -970,10 +970,13 @@ class VendorPOImporter {
     }
 
     // Update each item with acknowledgment data
+    // Handle unified schema (ean) and legacy (vendorProductIdentifier)
     const updatedItems = po.items.map(item => {
+      const itemEan = item.ean || item.vendorProductIdentifier;
       const update = itemUpdates.find(u =>
         u.itemSequenceNumber === item.itemSequenceNumber ||
-        u.vendorProductIdentifier === item.vendorProductIdentifier
+        u.vendorProductIdentifier === itemEan ||
+        u.ean === itemEan
       );
 
       if (update) {
@@ -1095,7 +1098,8 @@ class VendorPOImporter {
     }
 
     const updatedItems = po.items.map(item => {
-      const orderedQty = item.orderedQuantity?.amount || 0;
+      // Handle unified schema (quantity) and legacy (orderedQuantity.amount)
+      const orderedQty = item.quantity || item.orderedQuantity?.amount || 0;
       const available = item.qtyAvailable || 0;
 
       if (available >= orderedQty) {
