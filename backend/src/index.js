@@ -953,6 +953,14 @@ if (process.env.NODE_ENV !== 'test') {
         console.error('AI Agent Platform initialization failed:', e.message);
       }
     }
+
+    // Start marketplace dashboard cache refresh
+    try {
+      const { startCacheRefresh } = require('./services/alerts/MarketplaceDashboardService');
+      startCacheRefresh();
+    } catch (e) {
+      console.error('Marketplace dashboard cache startup failed:', e.message);
+    }
   });
   try { scheduler.start(); } catch (e) { console.error('scheduler start error', e); }
 }

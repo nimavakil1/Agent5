@@ -354,7 +354,40 @@ function getMarketplaceDashboardService() {
   return instance;
 }
 
+/**
+ * Warm the cache on startup and keep it fresh
+ */
+async function startCacheRefresh() {
+  const service = getMarketplaceDashboardService();
+
+  // Initial warm-up (with delay to let other services initialize)
+  setTimeout(async () => {
+    console.log('[MarketplaceDashboard] Warming cache on startup...');
+    try {
+      await service.getDashboardData();
+      console.log('[MarketplaceDashboard] Cache warmed successfully');
+    } catch (err) {
+      console.error('[MarketplaceDashboard] Cache warm-up failed:', err.message);
+    }
+  }, 10000); // 10 second delay after startup
+
+  // Refresh cache every 14 minutes (before 15min expiry)
+  setInterval(async () => {
+    console.log('[MarketplaceDashboard] Refreshing cache...');
+    try {
+      // Force refresh by clearing cache
+      dashboardCache = null;
+      dashboardCacheExpiry = null;
+      await service.getDashboardData();
+      console.log('[MarketplaceDashboard] Cache refreshed');
+    } catch (err) {
+      console.error('[MarketplaceDashboard] Cache refresh failed:', err.message);
+    }
+  }, 14 * 60 * 1000); // Every 14 minutes
+}
+
 module.exports = {
   MarketplaceDashboardService,
-  getMarketplaceDashboardService
+  getMarketplaceDashboardService,
+  startCacheRefresh
 };
