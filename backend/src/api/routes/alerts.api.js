@@ -9,6 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const { getLateOrdersAlertService } = require('../../services/alerts/LateOrdersAlertService');
+const { getMarketplaceDashboardService } = require('../../services/alerts/MarketplaceDashboardService');
 
 /**
  * GET /api/alerts/late-orders/status
@@ -152,6 +153,22 @@ router.get('/warehouse-display', async (req, res) => {
     });
   } catch (error) {
     console.error('[Alerts API] Error getting warehouse display data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/alerts/marketplace-display
+ * Live marketplace data from Amazon SP-API and Bol.com API
+ * Shows real-time pending orders as marketplaces see them
+ */
+router.get('/marketplace-display', async (req, res) => {
+  try {
+    const service = getMarketplaceDashboardService();
+    const data = await service.getDashboardData();
+    res.json(data);
+  } catch (error) {
+    console.error('[Alerts API] Error getting marketplace display data:', error);
     res.status(500).json({ error: error.message });
   }
 });
