@@ -1048,9 +1048,11 @@ class VendorPOImporter {
     }
 
     // Update each item with product info
+    // Handle both unified schema (ean) and legacy (vendorProductIdentifier)
     const updatedItems = po.items.map(item => {
+      const itemEan = item.ean || item.vendorProductIdentifier;
       const info = productInfoList.find(p =>
-        p.vendorProductIdentifier === item.vendorProductIdentifier
+        p.vendorProductIdentifier === itemEan
       );
 
       if (info) {
