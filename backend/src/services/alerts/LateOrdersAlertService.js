@@ -72,27 +72,33 @@ class LateOrdersAlertService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Get all CW/OUT pending pickings
+    // Get all CW/OUT pending pickings (paginate to avoid Odoo's default 100 limit)
     let allPickings = [];
     let offset = 0;
+    const BATCH_SIZE = 1000;
     while (true) {
       const batch = await this.odoo.searchRead('stock.picking',
         [['name', 'like', 'CW/OUT/%'], ['state', 'in', ['assigned', 'confirmed', 'waiting']]],
         ['id', 'name', 'sale_id', 'scheduled_date', 'partner_id'],
-        1000, offset, 'id asc'
+        { limit: BATCH_SIZE, offset, order: 'id asc' }
       );
       allPickings = allPickings.concat(batch);
-      if (batch.length < 1000) break;
-      offset += 1000;
+      if (batch.length < BATCH_SIZE) break;
+      offset += BATCH_SIZE;
     }
 
-    // Get sale order details
+    // Get sale order details (paginate for large sets)
     const saleIds = [...new Set(allPickings.filter(p => p.sale_id).map(p => p.sale_id[0]))];
-    const saleOrders = await this.odoo.searchRead('sale.order',
-      [['id', 'in', saleIds]],
-      ['id', 'name', 'client_order_ref', 'team_id', 'partner_id', 'amount_total', 'date_order'],
-      5000, 0, 'id asc'
-    );
+    let saleOrders = [];
+    for (let i = 0; i < saleIds.length; i += 500) {
+      const batchIds = saleIds.slice(i, i + 500);
+      const batch = await this.odoo.searchRead('sale.order',
+        [['id', 'in', batchIds]],
+        ['id', 'name', 'client_order_ref', 'team_id', 'partner_id', 'amount_total', 'date_order'],
+        { limit: 500 }
+      );
+      saleOrders = saleOrders.concat(batch);
+    }
     const soMap = {};
     saleOrders.forEach(so => soMap[so.id] = so);
 
