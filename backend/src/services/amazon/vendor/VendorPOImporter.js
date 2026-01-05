@@ -205,6 +205,36 @@ class VendorPOImporter {
       const preservedOdoo = existing.odoo || null;
       const preservedAck = existing.amazonVendor?.acknowledgment || unified.amazonVendor.acknowledgment;
 
+      // Merge items: preserve Odoo enrichment data (odooSku, odooProductId, etc.)
+      // Create a map of existing items by vendorProductIdentifier (EAN)
+      const existingItemsMap = {};
+      (existing.items || []).forEach(item => {
+        const key = item.ean || item.vendorProductIdentifier || item.asin;
+        if (key) existingItemsMap[key] = item;
+      });
+
+      // Merge new item data with existing Odoo enrichment
+      const mergedItems = unified.items.map(newItem => {
+        const key = newItem.ean || newItem.vendorProductIdentifier || newItem.asin;
+        const existingItem = key ? existingItemsMap[key] : null;
+
+        if (existingItem) {
+          // Preserve Odoo enrichment data from existing item
+          return {
+            ...newItem,
+            odooProductId: existingItem.odooProductId || newItem.odooProductId,
+            odooProductName: existingItem.odooProductName || newItem.odooProductName,
+            odooSku: existingItem.odooSku || newItem.odooSku,
+            odooBarcode: existingItem.odooBarcode || newItem.odooBarcode,
+            qtyAvailable: existingItem.qtyAvailable // Keep cached stock
+          };
+        }
+        return newItem;
+      });
+
+      // Check if any items need enrichment (no odooProductId)
+      const needsEnrichment = mergedItems.some(item => !item.odooProductId);
+
       // Update existing - preserve Odoo links and shipment data
       await collection.updateOne(
         { unifiedOrderId },
@@ -221,13 +251,21 @@ class VendorPOImporter {
             'amazonVendor.shipToParty': unified.amazonVendor.shipToParty,
             'amazonVendor.billToParty': unified.amazonVendor.billToParty,
             'shippingAddress': unified.shippingAddress,
-            'items': unified.items,
+            'items': mergedItems,
             'totals': unified.totals,
             'lastUpdateDate': new Date(),
             updatedAt: new Date()
           }
         }
       );
+
+      // Trigger enrichment if any items are missing Odoo data
+      if (needsEnrichment) {
+        this.enrichItemsWithOdooData(poNumber).catch(err => {
+          console.error(`[VendorPOImporter] Failed to enrich items for ${poNumber}:`, err.message);
+        });
+      }
+
       return { isNew: false, purchaseOrderNumber: poNumber };
     } else {
       // Insert new - set acknowledgment based on Amazon state
@@ -375,6 +413,7 @@ class VendorPOImporter {
             odooProductId: productData.id,
             odooProductName: productData.name,
             odooSku: productData.default_code,
+            odooBarcode: productData.barcode || null,
             qtyAvailable
           });
         } else {

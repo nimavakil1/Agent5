@@ -257,31 +257,41 @@ class FbmOrderImporter {
 
   /**
    * Find product by SKU in Odoo
+   * Returns { id, listPrice } or null if not found
+   *
+   * @param {string} resolvedSku - Normalized SKU
+   * @param {string} originalSku - Original Amazon SKU
+   * @returns {Object|null} { id, listPrice } or null
    */
   async findProduct(resolvedSku, originalSku) {
     const cacheKey = `${resolvedSku}|${originalSku}`;
     if (this.productCache[cacheKey]) return this.productCache[cacheKey];
 
+    // Fields to fetch - include list_price for pricing fallback
+    const fields = ['id', 'name', 'default_code', 'list_price'];
+
     // Try resolved SKU first
     let products = await this.odoo.searchRead('product.product',
       [['default_code', '=', resolvedSku]],
-      ['id', 'name', 'default_code']
+      fields
     );
 
     if (products.length > 0) {
-      this.productCache[cacheKey] = products[0].id;
-      return products[0].id;
+      const result = { id: products[0].id, listPrice: products[0].list_price || 0 };
+      this.productCache[cacheKey] = result;
+      return result;
     }
 
     // Try original SKU
     products = await this.odoo.searchRead('product.product',
       [['default_code', '=', originalSku]],
-      ['id', 'name', 'default_code']
+      fields
     );
 
     if (products.length > 0) {
-      this.productCache[cacheKey] = products[0].id;
-      return products[0].id;
+      const result = { id: products[0].id, listPrice: products[0].list_price || 0 };
+      this.productCache[cacheKey] = result;
+      return result;
     }
 
     // Try stripping K suffix (e.g., 9030K -> 9030)
@@ -289,11 +299,12 @@ class FbmOrderImporter {
       const strippedSku = resolvedSku.slice(0, -1);
       products = await this.odoo.searchRead('product.product',
         [['default_code', '=', strippedSku]],
-        ['id', 'name', 'default_code']
+        fields
       );
       if (products.length > 0) {
-        this.productCache[cacheKey] = products[0].id;
-        return products[0].id;
+        const result = { id: products[0].id, listPrice: products[0].list_price || 0 };
+        this.productCache[cacheKey] = result;
+        return result;
       }
     }
 
@@ -719,8 +730,8 @@ class FbmOrderImporter {
           let hasError = false;
 
           for (const item of order.items) {
-            const productId = await this.findProduct(item.resolvedSku, item.sku);
-            if (!productId) {
+            const product = await this.findProduct(item.resolvedSku, item.sku);
+            if (!product) {
               results.errors.push({
                 orderId,
                 error: `Product not found: ${item.sku} -> ${item.resolvedSku}`,
@@ -741,14 +752,26 @@ class FbmOrderImporter {
               break;
             }
 
-            // Calculate unit price (Amazon gives total price for quantity)
-            const priceUnit = item.quantity > 0 ? item.itemPrice / item.quantity : 0;
+            // Calculate unit price:
+            // 1. If TSV has price data, use it (item.itemPrice / quantity)
+            // 2. Otherwise, fall back to Odoo product list_price
+            // Note: VCS invoice import will correct prices later if needed
+            let priceUnit;
+            if (item.itemPrice > 0 && item.quantity > 0) {
+              priceUnit = item.itemPrice / item.quantity;
+            } else {
+              // Use Odoo list_price as fallback
+              priceUnit = product.listPrice || 0;
+              if (priceUnit > 0) {
+                console.log(`[FbmOrderImporter] Using Odoo list_price ${priceUnit} for ${item.sku} (TSV has no price)`);
+              }
+            }
 
             // Ensure line name is never empty (Odoo requires it)
-            const lineName = item.productName || item.resolvedSku || item.sku || `Product ${productId}`;
+            const lineName = item.productName || item.resolvedSku || item.sku || `Product ${product.id}`;
 
             orderLines.push({
-              product_id: productId,
+              product_id: product.id,
               quantity: item.quantity,
               price_unit: priceUnit,
               name: lineName
@@ -831,25 +854,25 @@ class FbmOrderImporter {
       // Check if there's a corrected SKU for this item
       const correctedSku = skuMappings[item.sku];
 
-      let productId = null;
+      let product = null;
 
       if (correctedSku) {
         // Use the corrected SKU to find the product
         const products = await this.odoo.searchRead('product.product',
           [['default_code', '=', correctedSku]],
-          ['id', 'name']
+          ['id', 'name', 'list_price']
         );
         if (products.length > 0) {
-          productId = products[0].id;
+          product = { id: products[0].id, listPrice: products[0].list_price || 0 };
         }
       }
 
       // If still not found, try original resolution
-      if (!productId) {
-        productId = await this.findProduct(item.resolvedSku, item.sku);
+      if (!product) {
+        product = await this.findProduct(item.resolvedSku, item.sku);
       }
 
-      if (!productId) {
+      if (!product) {
         return {
           success: false,
           orderId,
@@ -861,13 +884,19 @@ class FbmOrderImporter {
         };
       }
 
-      const priceUnit = item.quantity > 0 ? item.itemPrice / item.quantity : 0;
+      // Calculate unit price (use TSV price if available, fallback to Odoo list_price)
+      let priceUnit;
+      if (item.itemPrice > 0 && item.quantity > 0) {
+        priceUnit = item.itemPrice / item.quantity;
+      } else {
+        priceUnit = product.listPrice || 0;
+      }
 
       // Ensure line name is never empty (Odoo requires it)
-      const lineName = item.productName || correctedSku || item.resolvedSku || item.sku || `Product ${productId}`;
+      const lineName = item.productName || correctedSku || item.resolvedSku || item.sku || `Product ${product.id}`;
 
       orderLines.push({
-        product_id: productId,
+        product_id: product.id,
         quantity: item.quantity,
         price_unit: priceUnit,
         name: lineName

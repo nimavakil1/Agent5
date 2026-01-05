@@ -486,15 +486,39 @@ class VendorOrderCreator {
     const shipToPartyId = po.amazonVendor?.shipToParty?.partyId || po.shipToParty?.partyId;
 
     // Buying party -> Main customer
-    if (buyingPartyId) {
-      const mapping = this.partyMapping.getMapping(buyingPartyId);
+    // Fallback order: buyingParty -> billToParty -> shipToParty -> default 'AMAZON_VENDOR'
+    let effectiveBuyingPartyId = buyingPartyId;
+    let mappingSource = 'buyingParty';
+
+    // If no buyingParty, try alternative party IDs as fallback
+    if (!effectiveBuyingPartyId && billToPartyId) {
+      effectiveBuyingPartyId = billToPartyId;
+      mappingSource = 'billToParty (fallback)';
+    }
+    if (!effectiveBuyingPartyId && shipToPartyId) {
+      effectiveBuyingPartyId = shipToPartyId;
+      mappingSource = 'shipToParty (fallback)';
+    }
+
+    if (effectiveBuyingPartyId) {
+      const mapping = this.partyMapping.getMapping(effectiveBuyingPartyId);
       if (mapping) {
         result.customerId = mapping.odooPartnerId;
+        if (mappingSource !== 'buyingParty') {
+          result.warnings.push(`Using ${mappingSource} ${effectiveBuyingPartyId} as customer (no buyingParty in PO)`);
+        }
       } else {
-        result.errors.push(`Unmapped buying party: ${buyingPartyId}. Please add mapping in Party Mapping settings.`);
+        result.errors.push(`Unmapped buying party: ${effectiveBuyingPartyId}. Please add mapping in Party Mapping settings.`);
       }
     } else {
-      result.errors.push('No buying party ID in PO');
+      // No party ID at all - check for default Amazon Vendor mapping
+      const defaultMapping = this.partyMapping.getMapping('AMAZON_VENDOR_DEFAULT');
+      if (defaultMapping) {
+        result.customerId = defaultMapping.odooPartnerId;
+        result.warnings.push('Using default AMAZON_VENDOR_DEFAULT mapping (no party IDs in PO)');
+      } else {
+        result.errors.push('No buying party ID in PO. This may be a legacy order or data issue. Please re-sync the PO from Amazon or add AMAZON_VENDOR_DEFAULT mapping.');
+      }
     }
 
     // BillTo party -> Invoice address
