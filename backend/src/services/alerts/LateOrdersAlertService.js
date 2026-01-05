@@ -425,8 +425,8 @@ class LateOrdersAlertService {
             },
             {
               type: 'Action.OpenUrl',
-              title: '📋 Open Agent5 Orders',
-              url: `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/app/orders.html`,
+              title: '📋 Open Fulfillment',
+              url: `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/fulfillment/`,
               style: 'default'
             }
           ]
