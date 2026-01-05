@@ -21,13 +21,70 @@ const AMAZON_SELLER_TEAM_ID = 11;
 const FBM_WAREHOUSE_ID = 1; // Belgium warehouse (CW)
 
 /**
- * Journal configuration for FBM orders
+ * Journal configuration for FBM orders by destination country
  * FBM always ships from Belgium (CW warehouse)
  */
 const FBM_JOURNALS = {
-  'BE': { code: 'VBE', id: 1 },   // Domestic Belgium
-  'OSS': { code: 'VOS', id: 12 }, // EU cross-border (OSS)
-  'EXPORT': { code: 'VEX', id: 52 }, // Non-EU export
+  // Specific country journals (for major markets)
+  'BE': 1,   // VBE - Domestic Belgium
+  'DE': 15,  // VDE - Germany
+  'FR': 14,  // VFR - France
+  'NL': 16,  // VNL - Netherlands
+  'IT': 40,  // VIT - Italy
+  'ES': 12,  // VOS - Spain (uses OSS journal)
+  // Fallbacks
+  'OSS': 12,     // VOS - EU cross-border OSS
+  'EXPORT': 52,  // VEX - Non-EU export
+  'GB': 41,      // VGB - UK (post-Brexit)
+};
+
+/**
+ * OSS Fiscal Position IDs by destination country
+ * These set the correct VAT rates for B2C sales
+ */
+const OSS_FISCAL_POSITIONS = {
+  'AT': 6,   // AT*OSS | B2C Austria
+  'BE': 35,  // BE*OSS | B2C Belgium
+  'BG': 7,   // BG*OSS | B2C Bulgaria
+  'CY': 9,   // CY*OSS | B2C Cyprus
+  'CZ': 10,  // CZ*OSS | B2C Czech Republic
+  'DE': 15,  // DE*OSS | B2C Germany
+  'DK': 11,  // DK*OSS | B2C Denmark
+  'EE': 12,  // EE*OSS | B2C Estonia
+  'ES': 30,  // ES*OSS | B2C Spain
+  'FI': 13,  // FI*OSS | B2C Finland
+  'FR': 14,  // FR*OSS | B2C France
+  'GR': 16,  // GR*OSS | B2C Greece
+  'HR': 8,   // HR*OSS | B2C Croatia
+  'HU': 17,  // HU*OSS | B2C Hungary
+  'IE': 18,  // IE*OSS | B2C Ireland
+  'IT': 19,  // IT*OSS | B2C Italy
+  'LT': 21,  // LT*OSS | B2C Lithuania
+  'LU': 22,  // LU*OSS | B2C Luxembourg
+  'LV': 20,  // LV*OSS | B2C Latvia
+  'MT': 23,  // MT*OSS | B2C Malta
+  'NL': 24,  // NL*OSS | B2C Netherlands
+  'PL': 25,  // PL*OSS | B2C Poland
+  'PT': 26,  // PT*OSS | B2C Portugal
+  'RO': 27,  // RO*OSS | B2C Romania
+  'SE': 31,  // SE*OSS | B2C Sweden
+  'SI': 29,  // SI*OSS | B2C Slovenia
+  'SK': 28,  // SK*OSS | B2C Slovakia
+};
+
+/**
+ * Intra-Community (IC) Fiscal Positions for B2B reverse charge
+ * Used when is-business-order = true (buyer has VAT number)
+ * These apply 0% VAT with reverse charge mechanism
+ */
+const IC_B2B_FISCAL_POSITIONS = {
+  'BE': 4,   // BE*VAT | Régime Intra-Communautaire
+  'DE': 52,  // DE*VAT | Régime Intra-Communautaire
+  'FR': 37,  // FR*VAT | Régime Intra-Communautaire
+  'CZ': 69,  // CZ*VAT | Régime Intra-Communautaire
+  'PL': 70,  // PL*VAT | Régime Intra-Communautaire
+  // Fallback - use BE*VAT for other EU B2B (applies reverse charge)
+  'DEFAULT': 4
 };
 
 /**
@@ -79,6 +136,11 @@ class FbmOrderImporter {
     const headers = lines[0].split('\t');
     const headerIndex = {};
     headers.forEach((h, i) => headerIndex[h.trim()] = i);
+
+    // Log headers for debugging price issues
+    const priceHeaders = headers.filter(h => h.toLowerCase().includes('price') || h.toLowerCase().includes('amount'));
+    console.log(`[FbmOrderImporter] Price-related headers found: ${JSON.stringify(priceHeaders)}`);
+    console.log(`[FbmOrderImporter] 'item-price' column index: ${headerIndex['item-price']}`);
 
     // Determine which report type based on columns
     const hasRecipientName = 'recipient-name' in headerIndex;
@@ -138,6 +200,11 @@ class FbmOrderImporter {
       // Parse price - Amazon TSV has "item-price" column
       const itemPriceStr = cols[headerIndex['item-price']]?.trim() || '0';
       const itemPrice = parseFloat(itemPriceStr.replace(/[^0-9.-]/g, '')) || 0;
+
+      // Log price parsing for first order (debug)
+      if (i === 1) {
+        console.log(`[FbmOrderImporter] Price debug - column index: ${headerIndex['item-price']}, raw: "${itemPriceStr}", parsed: ${itemPrice}`);
+      }
 
       // Parse shipping price if available
       const shippingPriceStr = cols[headerIndex['shipping-price']]?.trim() || '0';
@@ -387,43 +454,55 @@ class FbmOrderImporter {
   }
 
   /**
-   * Determine journal for FBM order based on destination country
+   * Determine journal and fiscal position for FBM order based on destination country
    * FBM always ships from Belgium (BE)
    *
+   * NOTE: This is a preliminary determination. When VCS invoice is imported later,
+   * it will correct the tax rates based on Amazon's actual VAT calculation.
+   *
    * @param {string} destCountry - Destination country code
-   * @returns {object} { journalId, journalCode, journalType }
+   * @param {boolean} isBusinessOrder - True if Amazon flagged as B2B order
+   * @returns {object} { journalId, fiscalPositionId, journalType }
    */
-  determineJournal(destCountry) {
-    // Non-EU destination = Export
-    if (!EU_COUNTRIES.includes(destCountry)) {
+  determineJournalAndFiscalPosition(destCountry, isBusinessOrder = false) {
+    const country = (destCountry || '').toUpperCase();
+
+    // Non-EU destination = Export (no fiscal position needed)
+    if (!EU_COUNTRIES.includes(country)) {
       return {
-        journalId: FBM_JOURNALS['EXPORT'].id,
-        journalCode: FBM_JOURNALS['EXPORT'].code,
+        journalId: FBM_JOURNALS['EXPORT'],
+        fiscalPositionId: null,
         journalType: 'export'
       };
     }
 
-    // Domestic Belgium
-    if (destCountry === 'BE') {
+    // Get country-specific journal, fallback to OSS journal for other EU countries
+    const journalId = FBM_JOURNALS[country] || FBM_JOURNALS['OSS'];
+
+    // B2B order (intra-EU) = Reverse charge (0% VAT)
+    // The customer handles VAT in their country
+    if (isBusinessOrder && country !== 'BE') {
+      const icFiscalPosition = IC_B2B_FISCAL_POSITIONS[country] || IC_B2B_FISCAL_POSITIONS['DEFAULT'];
       return {
-        journalId: FBM_JOURNALS['BE'].id,
-        journalCode: FBM_JOURNALS['BE'].code,
-        journalType: 'domestic'
+        journalId,
+        fiscalPositionId: icFiscalPosition,
+        journalType: 'b2b-ic'
       };
     }
 
-    // EU cross-border = OSS
+    // B2C order = OSS fiscal position for correct VAT rates
+    // Or domestic Belgium = standard VAT
+    const fiscalPositionId = OSS_FISCAL_POSITIONS[country] || null;
+
     return {
-      journalId: FBM_JOURNALS['OSS'].id,
-      journalCode: FBM_JOURNALS['OSS'].code,
-      journalType: 'oss'
+      journalId,
+      fiscalPositionId,
+      journalType: country === 'BE' ? 'domestic' : 'oss'
     };
   }
 
   /**
-   * Create sale order in Odoo
-   * NOTE: Journal is NOT set here - VcsOdooInvoicer will set the correct journal
-   * based on actual ship-from country from VCS report
+   * Create sale order in Odoo with correct fiscal position and journal
    *
    * @param {Object} order - Parsed order data
    * @param {number} customerId - Parent customer ID
@@ -432,6 +511,12 @@ class FbmOrderImporter {
    * @param {Array} orderLines - Order line items
    */
   async createOdooOrder(order, customerId, invoiceAddressId, shippingAddressId, orderLines) {
+    // Determine journal and fiscal position based on destination country AND B2B flag
+    const { journalId, fiscalPositionId, journalType } = this.determineJournalAndFiscalPosition(
+      order.country,
+      order.isBusinessOrder
+    );
+
     const odooLines = orderLines.map(line => [0, 0, {
       product_id: line.product_id,
       product_uom_qty: line.quantity,
@@ -449,8 +534,12 @@ class FbmOrderImporter {
       order_line: odooLines,
       payment_term_id: PAYMENT_TERM_21_DAYS,
       team_id: AMAZON_SELLER_TEAM_ID
-      // NOTE: journal_id NOT set - VCS invoice import will set correct journal
     };
+
+    // Set fiscal position for correct taxes (OSS rates based on destination)
+    if (fiscalPositionId) {
+      orderData.fiscal_position_id = fiscalPositionId;
+    }
 
     const orderId = await this.odoo.create('sale.order', orderData);
 
@@ -458,7 +547,7 @@ class FbmOrderImporter {
     const created = await this.odoo.searchRead('sale.order', [['id', '=', orderId]], ['name']);
     const createdName = created.length > 0 ? created[0].name : `SO-${orderId}`;
 
-    console.log(`[FbmOrderImporter] Created order ${createdName} - journal will be set by VCS import`);
+    console.log(`[FbmOrderImporter] Created order ${createdName} | ${order.country} → Journal type: ${journalType}, Fiscal Position: ${fiscalPositionId || 'none'}`);
 
     // Confirm order
     await this.odoo.execute('sale.order', 'action_confirm', [[orderId]]);
