@@ -315,6 +315,19 @@ app.get('/warehouse', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'app', 'warehouse-dashboard.html'));
 });
 
+// Public marketplace dashboard API (shows status from marketplace perspective)
+app.get('/api/alerts/marketplace-display', async (req, res) => {
+  try {
+    const { getMarketplaceDashboardService } = require('./services/alerts/MarketplaceDashboardService');
+    const service = getMarketplaceDashboardService();
+    const data = await service.getDashboardData();
+    res.json(data);
+  } catch (error) {
+    console.error('[Marketplace Dashboard] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const protectedPages = ['dashboard.html', 'call-review.html', 'admin.html', 'monitor.html'];
 protectedPages.forEach(page => {
   app.get(`/${page}`, requireSession, (req, res) => {

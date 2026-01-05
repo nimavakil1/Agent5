@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Warehouse Dashboard - Late Orders</title>
+  <title>Warehouse Dashboard - Marketplace Status</title>
   <style>
     * {
       margin: 0;
@@ -30,6 +30,12 @@
       margin-bottom: 10px;
     }
 
+    .header .subtitle {
+      font-size: 1.2rem;
+      color: #f39c12;
+      margin-bottom: 10px;
+    }
+
     .header .timestamp {
       font-size: 1.5rem;
       color: #888;
@@ -43,10 +49,16 @@
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-      gap: 25px;
-      max-width: 1800px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 30px;
+      max-width: 1600px;
       margin: 0 auto;
+    }
+
+    @media (max-width: 1200px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .channel-box {
@@ -71,28 +83,64 @@
       border-color: #27ae60;
     }
 
-    .channel-name {
-      font-size: 2rem;
-      font-weight: 600;
-      margin-bottom: 25px;
+    .channel-header {
       display: flex;
       align-items: center;
-      gap: 15px;
+      gap: 20px;
+      margin-bottom: 25px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #333;
     }
 
-    .channel-name .icon {
-      font-size: 2.5rem;
+    .channel-logo {
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+      background: white;
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .channel-name {
+      font-size: 2.2rem;
+      font-weight: 600;
+    }
+
+    .channel-name .status-badge {
+      font-size: 1rem;
+      padding: 5px 12px;
+      border-radius: 20px;
+      margin-left: 15px;
+      vertical-align: middle;
+    }
+
+    .status-badge.ok {
+      background: #27ae60;
+    }
+
+    .status-badge.warning {
+      background: #f39c12;
+    }
+
+    .status-badge.critical {
+      background: #e74c3c;
+      animation: pulse-badge 2s infinite;
+    }
+
+    @keyframes pulse-badge {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
     }
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
     }
 
     .stat {
       text-align: center;
-      padding: 20px;
+      padding: 20px 10px;
       border-radius: 15px;
       background: rgba(255, 255, 255, 0.05);
     }
@@ -104,7 +152,7 @@
     }
 
     .stat-label {
-      font-size: 1.1rem;
+      font-size: 1rem;
       color: #888;
       margin-top: 10px;
       text-transform: uppercase;
@@ -131,8 +179,8 @@
       color: #3498db;
     }
 
-    .stat.upcoming .stat-value {
-      color: #27ae60;
+    .stat.tomorrow .stat-value {
+      color: #9b59b6;
     }
 
     .totals-bar {
@@ -141,7 +189,7 @@
       border-radius: 20px;
       padding: 30px;
       border: 2px solid #333;
-      max-width: 1800px;
+      max-width: 1600px;
       margin-left: auto;
       margin-right: auto;
     }
@@ -166,7 +214,7 @@
     }
 
     .total-item .value {
-      font-size: 3.5rem;
+      font-size: 4rem;
       font-weight: 700;
     }
 
@@ -188,7 +236,7 @@
       color: white;
       padding: 20px;
       text-align: center;
-      font-size: 1.5rem;
+      font-size: 1.8rem;
       font-weight: 600;
       margin-bottom: 30px;
       border-radius: 15px;
@@ -199,9 +247,13 @@
       display: block;
     }
 
+    .alert-banner.warning {
+      background: linear-gradient(90deg, #f39c12, #e67e22);
+    }
+
     @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.8; }
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.9; transform: scale(1.01); }
     }
 
     .loading {
@@ -228,7 +280,7 @@
     }
 
     body.fullscreen .channel-name {
-      font-size: 2.5rem;
+      font-size: 2.8rem;
     }
 
     body.fullscreen .stat-value {
@@ -236,7 +288,12 @@
     }
 
     body.fullscreen .total-item .value {
-      font-size: 4.5rem;
+      font-size: 5rem;
+    }
+
+    body.fullscreen .channel-logo {
+      width: 100px;
+      height: 100px;
     }
 
     .fullscreen-btn {
@@ -256,6 +313,14 @@
     .fullscreen-btn:hover {
       background: #444;
     }
+
+    .info-note {
+      text-align: center;
+      color: #666;
+      font-size: 0.9rem;
+      margin-top: 20px;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -264,18 +329,23 @@
   </div>
 
   <div class="header">
-    <h1>Order Fulfillment Status</h1>
+    <h1>Marketplace Fulfillment Status</h1>
+    <div class="subtitle">Orders pending shipment confirmation on marketplaces</div>
     <div class="timestamp" id="timestamp">Loading...</div>
     <div class="refresh-indicator">Auto-refresh every 60 seconds</div>
   </div>
 
   <div class="grid" id="channelGrid">
-    <div class="loading">Loading dashboard...</div>
+    <div class="loading">Loading marketplace data...</div>
   </div>
 
   <div class="totals-bar" id="totalsBar" style="display: none;">
-    <h2>Total Across All Channels</h2>
+    <h2>Total Across All Marketplaces</h2>
     <div class="totals-grid" id="totalsGrid"></div>
+  </div>
+
+  <div class="info-note">
+    Data shows orders that marketplaces consider "pending shipment" - not Odoo status
   </div>
 
   <button class="fullscreen-btn" onclick="toggleFullscreen()">
@@ -283,19 +353,23 @@
   </button>
 
   <script>
+    // Channel configuration with logos
     const CHANNEL_CONFIG = {
-      'AMZ Seller': { icon: '📦', color: '#ff9900' },
-      'AMZ Vendor': { icon: '🏭', color: '#ff9900' },
-      'BOL': { icon: '🛒', color: '#0000a4' },
-      'Sales': { icon: '💼', color: '#27ae60' },
-      'Other': { icon: '📋', color: '#888' }
+      'Amazon Seller': {
+        logo: 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg',
+        color: '#ff9900'
+      },
+      'Bol.com': {
+        logo: 'https://upload.wikimedia.org/wikipedia/commons/6/6b/Bol.com_logo.png',
+        color: '#0000a4'
+      }
     };
 
-    const CHANNEL_ORDER = ['AMZ Seller', 'AMZ Vendor', 'BOL', 'Sales', 'Other'];
+    const CHANNEL_ORDER = ['Amazon Seller', 'Bol.com'];
 
     async function fetchData() {
       try {
-        const response = await fetch('/api/alerts/warehouse-display');
+        const response = await fetch('/api/alerts/marketplace-display');
         if (!response.ok) throw new Error('Failed to fetch');
         return await response.json();
       } catch (error) {
@@ -312,7 +386,7 @@
       const alertBanner = document.getElementById('alertBanner');
       const alertText = document.getElementById('alertText');
 
-      if (!data || !data.channelStats) {
+      if (!data || !data.channels) {
         grid.innerHTML = '<div class="error">Failed to load data. Retrying...</div>';
         return;
       }
@@ -328,30 +402,36 @@
         minute: '2-digit'
       });
 
-      // Calculate totals
-      const totals = { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0, upcoming: 0 };
-
       // Render channel boxes
       let html = '';
       for (const channel of CHANNEL_ORDER) {
-        const stats = data.channelStats[channel];
-        if (!stats || stats.pending === 0) continue;
+        const stats = data.channels[channel];
+        if (!stats) continue;
 
-        const config = CHANNEL_CONFIG[channel] || { icon: '📦', color: '#888' };
+        const config = CHANNEL_CONFIG[channel];
         const hasLate = stats.late > 0;
-        const boxClass = hasLate ? 'has-late' : (stats.dueToday === 0 ? 'all-good' : '');
+        const hasDueToday = stats.dueToday > 0;
+        const boxClass = hasLate ? 'has-late' : (stats.pending === 0 ? 'all-good' : '');
 
-        totals.pending += stats.pending || 0;
-        totals.late += stats.late || 0;
-        totals.dueToday += stats.dueToday || 0;
-        totals.dueTomorrow += stats.dueTomorrow || 0;
-        totals.upcoming += stats.upcoming || 0;
+        // Status badge
+        let badgeClass = 'ok';
+        let badgeText = 'OK';
+        if (hasLate) {
+          badgeClass = 'critical';
+          badgeText = `${stats.late} LATE`;
+        } else if (hasDueToday) {
+          badgeClass = 'warning';
+          badgeText = `${stats.dueToday} DUE TODAY`;
+        }
 
         html += `
           <div class="channel-box ${boxClass}">
-            <div class="channel-name">
-              <span class="icon">${config.icon}</span>
-              ${channel}
+            <div class="channel-header">
+              <img src="${config.logo}" alt="${channel}" class="channel-logo" onerror="this.style.display='none'">
+              <div class="channel-name">
+                ${channel}
+                <span class="status-badge ${badgeClass}">${badgeText}</span>
+              </div>
             </div>
             <div class="stats">
               <div class="stat pending">
@@ -366,9 +446,9 @@
                 <div class="stat-value">${stats.dueToday}</div>
                 <div class="stat-label">Due Today</div>
               </div>
-              <div class="stat upcoming">
-                <div class="stat-value">${stats.dueTomorrow + stats.upcoming}</div>
-                <div class="stat-label">Upcoming</div>
+              <div class="stat tomorrow">
+                <div class="stat-value">${stats.dueTomorrow}</div>
+                <div class="stat-label">Tomorrow</div>
               </div>
             </div>
           </div>
@@ -378,6 +458,7 @@
       grid.innerHTML = html || '<div class="loading">No pending orders</div>';
 
       // Render totals
+      const totals = data.totals || { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0 };
       totalsBar.style.display = 'block';
       totalsGrid.innerHTML = `
         <div class="total-item pending">
@@ -401,11 +482,12 @@
       // Alert banner
       if (totals.late > 0) {
         alertBanner.classList.add('visible');
-        alertText.textContent = `⚠️ ${totals.late} LATE ORDERS - ${totals.dueToday} DUE TODAY`;
+        alertBanner.classList.remove('warning');
+        alertText.textContent = `⚠️ ${totals.late} ORDERS LATE ON MARKETPLACES - ${totals.dueToday} DUE TODAY`;
       } else if (totals.dueToday > 0) {
         alertBanner.classList.add('visible');
-        alertBanner.style.background = 'linear-gradient(90deg, #f39c12, #e67e22)';
-        alertText.textContent = `⏰ ${totals.dueToday} orders due today`;
+        alertBanner.classList.add('warning');
+        alertText.textContent = `⏰ ${totals.dueToday} orders due today on marketplaces`;
       } else {
         alertBanner.classList.remove('visible');
       }
