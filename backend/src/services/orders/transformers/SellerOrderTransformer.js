@@ -111,8 +111,17 @@ function transformSellerOrder(sellerOrder) {
     buyerEmail: sellerOrder.buyerEmail,
     buyerName: sellerOrder.buyerName,
     autoImportEligible: sellerOrder.autoImportEligible,
-    itemsFetched: sellerOrder.itemsFetched || false
+    itemsFetched: sellerOrder.itemsFetched || false,
+    // Ship-by dates (FBM only)
+    earliestShipDate: sellerOrder.earliestShipDate || null,
+    latestShipDate: sellerOrder.latestShipDate || null
   };
+
+  // Unified shipping deadline (for cross-channel queries)
+  // FBM: latestShipDate, FBA: null (Amazon handles fulfillment)
+  const shippingDeadline = !isFBA && sellerOrder.latestShipDate
+    ? new Date(sellerOrder.latestShipDate)
+    : null;
 
   return {
     unifiedOrderId,
@@ -134,6 +143,7 @@ function transformSellerOrder(sellerOrder) {
     // Unified fields
     orderDate: sellerOrder.purchaseDate,
     lastUpdateDate: sellerOrder.lastUpdateDate,
+    shippingDeadline, // Unified ship-by date for cross-channel queries
 
     status: {
       unified: unifiedStatus,
@@ -232,6 +242,12 @@ function transformAmazonApiOrder(amazonOrder, orderItems = []) {
     odooPartnerName: null
   };
 
+  // Unified shipping deadline (for cross-channel queries)
+  // FBM: latestShipDate, FBA: null (Amazon handles fulfillment)
+  const shippingDeadline = !isFBA && amazonOrder.LatestShipDate
+    ? new Date(amazonOrder.LatestShipDate)
+    : null;
+
   // Determine marketplace
   const marketplaceId = amazonOrder.MarketplaceId;
   const marketplaceCountry = getMarketplaceCountry(marketplaceId);
@@ -257,6 +273,7 @@ function transformAmazonApiOrder(amazonOrder, orderItems = []) {
 
     orderDate: new Date(amazonOrder.PurchaseDate),
     lastUpdateDate: new Date(amazonOrder.LastUpdateDate),
+    shippingDeadline, // Unified ship-by date for cross-channel queries
 
     status: {
       unified: unifiedStatus,
@@ -291,7 +308,10 @@ function transformAmazonApiOrder(amazonOrder, orderItems = []) {
       buyerEmail: amazonOrder.BuyerInfo?.BuyerEmail,
       buyerName: amazonOrder.BuyerInfo?.BuyerName,
       autoImportEligible: new Date(amazonOrder.PurchaseDate) >= new Date('2024-01-01'),
-      itemsFetched: orderItems.length > 0
+      itemsFetched: orderItems.length > 0,
+      // Ship-by dates (FBM only - from Amazon SP-API)
+      earliestShipDate: amazonOrder.EarliestShipDate ? new Date(amazonOrder.EarliestShipDate) : null,
+      latestShipDate: amazonOrder.LatestShipDate ? new Date(amazonOrder.LatestShipDate) : null
     },
     amazonVendor: null,
     bol: null,

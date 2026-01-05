@@ -129,7 +129,11 @@ class UnifiedOrderService {
       // Date range queries
       { key: { orderDate: -1 } },
       { key: { createdAt: -1 } },
-      { key: { updatedAt: -1 } }
+      { key: { updatedAt: -1 } },
+
+      // Ship-by deadline queries (for ship-by overview)
+      { key: { shippingDeadline: 1 }, sparse: true },
+      { key: { channel: 1, subChannel: 1, shippingDeadline: 1 }, sparse: true }
     ];
 
     for (const index of indexes) {

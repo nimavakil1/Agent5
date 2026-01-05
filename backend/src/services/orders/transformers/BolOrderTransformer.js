@@ -107,6 +107,20 @@ function transformBolOrder(bolOrder) {
     syncError: bolOrder.odoo.syncError || null
   } : {};
 
+  // Unified shipping deadline (for cross-channel queries)
+  // FBR: Use earliest latestDeliveryDate from items
+  // FBB: null (Bol handles fulfillment)
+  let shippingDeadline = null;
+  if (!isFBB) {
+    const deadlines = items
+      .map(item => item.latestDeliveryDate)
+      .filter(Boolean)
+      .map(d => new Date(d));
+    if (deadlines.length > 0) {
+      shippingDeadline = new Date(Math.min(...deadlines));
+    }
+  }
+
   // Bol.com specific fields
   const bol = {
     fulfilmentMethod: bolOrder.fulfilmentMethod,
@@ -140,6 +154,7 @@ function transformBolOrder(bolOrder) {
     // Unified fields
     orderDate: bolOrder.orderPlacedDateTime,
     lastUpdateDate: bolOrder.syncedAt || bolOrder.updatedAt,
+    shippingDeadline, // Unified ship-by date (earliest item latestDeliveryDate)
 
     status: {
       unified: unifiedStatus,
@@ -256,6 +271,20 @@ function transformBolApiOrder(bolApiOrder) {
   const bill = bolApiOrder.billingDetails || {};
   const customerName = [bill.salutation, bill.firstName, bill.surname].filter(Boolean).join(' ');
 
+  // Unified shipping deadline (for cross-channel queries)
+  // FBR: Use earliest latestDeliveryDate from items
+  // FBB: null (Bol handles fulfillment)
+  let shippingDeadline = null;
+  if (!isFBB) {
+    const deadlines = transformedItems
+      .map(item => item.latestDeliveryDate)
+      .filter(Boolean)
+      .map(d => new Date(d));
+    if (deadlines.length > 0) {
+      shippingDeadline = new Date(Math.min(...deadlines));
+    }
+  }
+
   return {
     unifiedOrderId,
 
@@ -277,6 +306,7 @@ function transformBolApiOrder(bolApiOrder) {
 
     orderDate: new Date(bolApiOrder.orderPlacedDateTime),
     lastUpdateDate: new Date(),
+    shippingDeadline, // Unified ship-by date (earliest item latestDeliveryDate)
 
     status: {
       unified: unifiedStatus,

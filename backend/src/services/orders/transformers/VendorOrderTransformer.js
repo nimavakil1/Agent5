@@ -124,6 +124,12 @@ function transformVendorOrder(vendorPO) {
     syncError: null
   } : null;
 
+  // Unified shipping deadline (for cross-channel queries)
+  // Vendor: Use deliveryWindow.endDate
+  const shippingDeadline = vendorPO.deliveryWindow?.endDate
+    ? new Date(vendorPO.deliveryWindow.endDate)
+    : null;
+
   // Vendor specific fields
   const amazonVendor = {
     purchaseOrderState: vendorPO.purchaseOrderState,
@@ -162,6 +168,7 @@ function transformVendorOrder(vendorPO) {
     // Unified fields
     orderDate: vendorPO.purchaseOrderDate,
     lastUpdateDate: vendorPO.updatedAt,
+    shippingDeadline, // Unified ship-by date (deliveryWindow.endDate)
 
     status: {
       unified: unifiedStatus,
@@ -297,6 +304,9 @@ function transformAmazonVendorApiOrder(amazonPO, marketplace = 'DE') {
     warehouseCode: shipTo.partyId || null
   };
 
+  // Unified shipping deadline (for cross-channel queries)
+  const shippingDeadline = deliveryWindow?.endDate || null;
+
   return {
     unifiedOrderId,
 
@@ -318,6 +328,7 @@ function transformAmazonVendorApiOrder(amazonPO, marketplace = 'DE') {
 
     orderDate: details.purchaseOrderDate ? new Date(details.purchaseOrderDate) : new Date(),
     lastUpdateDate: new Date(),
+    shippingDeadline, // Unified ship-by date (deliveryWindow.endDate)
 
     status: {
       unified: unifiedStatus,

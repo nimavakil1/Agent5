@@ -123,6 +123,204 @@ router.get('/daily-stats', async (req, res) => {
 });
 
 /**
+ * GET /api/orders/ship-by-overview
+ * Get orders grouped by shipping deadline (today, tomorrow, 2 days, 3+ days)
+ *
+ * Only includes orders that WE need to ship:
+ * - Amazon Seller FBM (not FBA)
+ * - Bol.com FBR (not FBB)
+ * - Amazon Vendor (all)
+ *
+ * Excludes shipped and cancelled orders.
+ */
+router.get('/ship-by-overview', async (req, res) => {
+  try {
+    const service = getUnifiedOrderService();
+    const db = service.collection.s.db;
+    const collection = service.collection;
+
+    // Date boundaries
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    const dayAfterStart = new Date(todayStart);
+    dayAfterStart.setDate(dayAfterStart.getDate() + 2);
+    const threeDaysStart = new Date(todayStart);
+    threeDaysStart.setDate(threeDaysStart.getDate() + 3);
+
+    // Base filter: orders we need to ship (not fulfilled by marketplace)
+    const baseFilter = {
+      shippingDeadline: { $ne: null, $exists: true },
+      'status.unified': { $nin: ['shipped', 'cancelled', 'delivered'] },
+      $or: [
+        // Amazon Seller FBM (not FBA)
+        { channel: CHANNELS.AMAZON_SELLER, subChannel: SUB_CHANNELS.FBM },
+        // Bol.com FBR (not FBB)
+        { channel: CHANNELS.BOL, subChannel: SUB_CHANNELS.FBR },
+        // All Amazon Vendor orders
+        { channel: CHANNELS.AMAZON_VENDOR }
+      ]
+    };
+
+    // Optional channel filter
+    if (req.query.channel) {
+      baseFilter.channel = req.query.channel;
+    }
+
+    // Aggregation for counts by deadline bucket
+    const pipeline = [
+      { $match: baseFilter },
+      {
+        $addFields: {
+          deadlineBucket: {
+            $cond: [
+              { $lt: ['$shippingDeadline', tomorrowStart] },
+              'today',
+              {
+                $cond: [
+                  { $lt: ['$shippingDeadline', dayAfterStart] },
+                  'tomorrow',
+                  {
+                    $cond: [
+                      { $lt: ['$shippingDeadline', threeDaysStart] },
+                      '2days',
+                      '3plus'
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: { bucket: '$deadlineBucket', channel: '$channel', subChannel: '$subChannel' },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.bucket',
+          byChannel: {
+            $push: {
+              channel: '$_id.channel',
+              subChannel: '$_id.subChannel',
+              count: '$count'
+            }
+          },
+          total: { $sum: '$count' }
+        }
+      }
+    ];
+
+    const results = await collection.aggregate(pipeline).toArray();
+
+    // Format response
+    const buckets = {
+      today: { total: 0, byChannel: [] },
+      tomorrow: { total: 0, byChannel: [] },
+      '2days': { total: 0, byChannel: [] },
+      '3plus': { total: 0, byChannel: [] }
+    };
+
+    for (const result of results) {
+      const bucket = result._id;
+      if (buckets[bucket]) {
+        buckets[bucket].total = result.total;
+        buckets[bucket].byChannel = result.byChannel;
+      }
+    }
+
+    // Also get overdue (past deadlines)
+    const overduePipeline = [
+      {
+        $match: {
+          ...baseFilter,
+          shippingDeadline: { $lt: todayStart }
+        }
+      },
+      {
+        $group: {
+          _id: { channel: '$channel', subChannel: '$subChannel' },
+          count: { $sum: 1 }
+        }
+      }
+    ];
+
+    const overdueResults = await collection.aggregate(overduePipeline).toArray();
+    const overdue = {
+      total: overdueResults.reduce((sum, r) => sum + r.count, 0),
+      byChannel: overdueResults.map(r => ({
+        channel: r._id.channel,
+        subChannel: r._id.subChannel,
+        count: r.count
+      }))
+    };
+
+    // Get a few sample orders for each bucket (for quick preview)
+    const sampleOrders = {};
+    for (const bucket of ['overdue', 'today', 'tomorrow']) {
+      let dateFilter;
+      if (bucket === 'overdue') {
+        dateFilter = { shippingDeadline: { $lt: todayStart, $ne: null } };
+      } else if (bucket === 'today') {
+        dateFilter = { shippingDeadline: { $gte: todayStart, $lt: tomorrowStart } };
+      } else {
+        dateFilter = { shippingDeadline: { $gte: tomorrowStart, $lt: dayAfterStart } };
+      }
+
+      const samples = await collection.find({
+        ...baseFilter,
+        ...dateFilter
+      })
+        .project({
+          unifiedOrderId: 1,
+          channel: 1,
+          subChannel: 1,
+          shippingDeadline: 1,
+          'sourceIds.amazonOrderId': 1,
+          'sourceIds.amazonVendorPONumber': 1,
+          'sourceIds.bolOrderId': 1,
+          'customer.name': 1
+        })
+        .limit(5)
+        .sort({ shippingDeadline: 1 })
+        .toArray();
+
+      if (samples.length > 0) {
+        sampleOrders[bucket] = samples;
+      }
+    }
+
+    const grandTotal = overdue.total + buckets.today.total + buckets.tomorrow.total +
+      buckets['2days'].total + buckets['3plus'].total;
+
+    res.json({
+      success: true,
+      summary: {
+        grandTotal,
+        overdue: overdue.total,
+        today: buckets.today.total,
+        tomorrow: buckets.tomorrow.total,
+        '2days': buckets['2days'].total,
+        '3plus': buckets['3plus'].total
+      },
+      details: {
+        overdue,
+        ...buckets
+      },
+      sampleOrders,
+      asOf: now.toISOString()
+    });
+  } catch (error) {
+    console.error('[OrdersAPI] Error getting ship-by overview:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * GET /api/orders/pending-odoo
  * Get orders that haven't been imported to Odoo yet
  */
