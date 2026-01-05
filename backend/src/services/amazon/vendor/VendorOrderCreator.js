@@ -371,22 +371,30 @@ class VendorOrderCreator {
         const sku = item.ean || item.vendorProductIdentifier; // Our SKU (EAN)
         const asin = item.asin || item.amazonProductIdentifier;
 
-        if (!sku && !asin) {
-          errors.push(`Item ${item.itemSequenceNumber}: No SKU or ASIN`);
-          continue;
-        }
+        // FIRST: Use pre-resolved odooProductId if available (from enrichment)
+        // This is more reliable than re-looking up by barcode/SKU
+        let productId = item.odooProductId || null;
 
-        // Try to resolve SKU
-        let odooSku = sku;
-        if (skuResolver.loaded) {
-          const resolved = skuResolver.resolve(sku);
-          if (resolved.odooSku) {
-            odooSku = resolved.odooSku;
+        if (!productId) {
+          // Fallback: Look up product if not pre-resolved
+          if (!sku && !asin) {
+            errors.push(`Item ${item.itemSequenceNumber}: No SKU or ASIN`);
+            continue;
           }
+
+          // Try to resolve SKU
+          let odooSku = sku;
+          if (skuResolver.loaded) {
+            const resolved = skuResolver.resolve(sku);
+            if (resolved.odooSku) {
+              odooSku = resolved.odooSku;
+            }
+          }
+
+          // Find product in Odoo
+          productId = await this.findProduct(odooSku, asin);
         }
 
-        // Find product in Odoo
-        const productId = await this.findProduct(odooSku, asin);
         if (!productId) {
           errors.push(`Item ${item.itemSequenceNumber}: Product not found (SKU: ${sku}, ASIN: ${asin})`);
           continue;
