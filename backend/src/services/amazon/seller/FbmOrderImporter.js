@@ -15,6 +15,55 @@ const { skuResolver } = require('../SkuResolver');
 const { getDb } = require('../../../db');
 const { cleanDuplicateName } = require('./SellerOrderCreator');
 
+/**
+ * Check if a string looks like a street address (vs a company name)
+ * Streets typically contain numbers or street-type words
+ * @param {string} str - String to check
+ * @returns {boolean} True if looks like a street address
+ */
+function looksLikeStreetAddress(str) {
+  if (!str) return false;
+  const s = str.toLowerCase().trim();
+  // Contains numbers (house number)
+  if (/\d/.test(s)) return true;
+  // German street types
+  if (/str\.?$|straße|strasse|weg$|allee|platz|gasse|ring$|damm$|ufer$|steig$|pfad$/.test(s)) return true;
+  // French street types
+  if (/rue |avenue |boulevard |chemin |place |allée|impasse/.test(s)) return true;
+  // English street types
+  if (/street|road|avenue|lane|drive|court|place|way$|close$/.test(s)) return true;
+  // Dutch/Belgian street types
+  if (/straat|laan|weg$|plein|singel|kade/.test(s)) return true;
+  return false;
+}
+
+/**
+ * Extract company name from address lines for B2B orders
+ * Amazon often puts company name in address2 or address3
+ * @param {Object} order - Order with address fields
+ * @returns {string|null} Company name if found, null otherwise
+ */
+function extractCompanyName(order) {
+  // Check address2 first - common place for company name
+  if (order.address2 && !looksLikeStreetAddress(order.address2)) {
+    // Make sure it's not the same as recipient name
+    if (order.address2 !== order.recipientName && order.address2 !== order.buyerName) {
+      return order.address2;
+    }
+  }
+  // Then check address3
+  if (order.address3 && !looksLikeStreetAddress(order.address3)) {
+    if (order.address3 !== order.recipientName && order.address3 !== order.buyerName) {
+      return order.address3;
+    }
+  }
+  // Finally check buyerCompanyName field if it exists
+  if (order.buyerCompanyName && order.buyerCompanyName !== order.recipientName) {
+    return order.buyerCompanyName;
+  }
+  return null;
+}
+
 // Odoo constants
 const PAYMENT_TERM_21_DAYS = 2;
 const AMAZON_SELLER_TEAM_ID = 11;
@@ -313,11 +362,16 @@ class FbmOrderImporter {
 
   /**
    * Find or create customer with separate invoice and shipping addresses
+   * For B2B orders, company name is used as parent (if found in address lines)
    * @returns {Object} { customerId, invoiceAddressId, shippingAddressId }
    */
   async findOrCreateCustomer(order) {
-    // Use buyer name or recipient name for parent customer
-    const customerName = order.buyerName || order.recipientName;
+    // For B2B orders, try to extract company name from address lines
+    // Amazon often puts company name in address2/address3
+    const companyName = order.isBusinessOrder ? extractCompanyName(order) : null;
+
+    // Use company name for B2B, otherwise buyer/recipient name
+    const customerName = companyName || order.buyerName || order.recipientName;
     const customerCacheKey = `customer|${customerName}|${order.buyerEmail || order.postalCode}`;
 
     let customerId = this.partnerCache[customerCacheKey];
@@ -352,19 +406,17 @@ class FbmOrderImporter {
       this.partnerCache[customerCacheKey] = customerId;
     }
 
-    // Create/find shipping address (child contact)
-    // Clean duplicate names like "LE-ROUX, LE-ROUX Armelle" for delivery addresses only
-    // Handle company name: if buyer-company-name exists and is different from recipient, include it
-    let street2 = order.address2 || order.address3 || false;
-    const hasCompanyName = order.buyerCompanyName &&
-      order.buyerCompanyName !== order.recipientName &&
-      order.buyerCompanyName !== order.buyerName;
-
-    if (hasCompanyName) {
-      // Prepend company name to street2
-      street2 = street2 ? `${order.buyerCompanyName}, ${street2}` : order.buyerCompanyName;
+    // Build street2 - only include address lines that look like actual addresses
+    // If company name was extracted from address2/3, don't include it in street2 again
+    let street2 = false;
+    if (order.address2 && order.address2 !== companyName) {
+      street2 = order.address2;
+    } else if (order.address3 && order.address3 !== companyName) {
+      street2 = order.address3;
     }
 
+    // Create/find shipping address (child contact)
+    // Use recipient name as contact name (company name is in parent)
     const shippingAddressId = await this.findOrCreateAddress(order, customerId, 'delivery', {
       name: cleanDuplicateName(order.recipientName),
       street: order.address1,
