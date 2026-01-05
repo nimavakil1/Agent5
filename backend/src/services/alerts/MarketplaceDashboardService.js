@@ -255,13 +255,37 @@ class MarketplaceDashboardService {
           const details = await bolRequest(`/orders/${order.orderId}`);
           await new Promise(r => setTimeout(r, 250)); // Rate limit delay
 
-          // Get deadline from order items
+          // Get deadline from order items - check multiple possible field names
           let deadline = null;
           for (const item of (details.orderItems || [])) {
-            if (item.latestDeliveryDate) {
-              deadline = new Date(item.latestDeliveryDate);
-              break;
+            // Try different field names Bol.com might use
+            const dateFields = [
+              item.latestDeliveryDate,
+              item.fulfilment?.latestDeliveryDate,
+              item.fulfilment?.deliveryDateRange?.endDate,
+              item.expectedDeliveryDate
+            ];
+
+            for (const dateField of dateFields) {
+              if (dateField) {
+                deadline = new Date(dateField);
+                break;
+              }
             }
+            if (deadline) break;
+          }
+
+          // Log first order for debugging
+          if (order === ordersToFetch[0]) {
+            console.log('[MarketplaceDashboard] Bol.com first order items sample:',
+              JSON.stringify((details.orderItems || []).slice(0, 1).map(i => ({
+                orderItemId: i.orderItemId,
+                latestDeliveryDate: i.latestDeliveryDate,
+                fulfilment: i.fulfilment,
+                quantity: i.quantity,
+                quantityShipped: i.quantityShipped
+              })), null, 2)
+            );
           }
 
           if (!deadline) {
