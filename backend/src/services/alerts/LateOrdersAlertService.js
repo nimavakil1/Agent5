@@ -21,10 +21,10 @@ const { getDb } = require('../../db');
 
 // Sales Team to Channel mapping
 const TEAM_CHANNEL_MAP = {
-  11: 'Amazon Seller', 5: 'Amazon Seller', 16: 'Amazon Seller', 17: 'Amazon Seller',
-  18: 'Amazon Seller', 19: 'Amazon Seller', 20: 'Amazon Seller', 21: 'Amazon Seller',
-  22: 'Amazon Seller', 24: 'Amazon Seller', 25: 'Amazon Seller',
-  6: 'Amazon Vendor',
+  11: 'AMZ Seller', 5: 'AMZ Seller', 16: 'AMZ Seller', 17: 'AMZ Seller',
+  18: 'AMZ Seller', 19: 'AMZ Seller', 20: 'AMZ Seller', 21: 'AMZ Seller',
+  22: 'AMZ Seller', 24: 'AMZ Seller', 25: 'AMZ Seller',
+  6: 'AMZ Vendor',
   8: 'BOL', 9: 'BOL', 10: 'BOL',
   1: 'Sales', 2: 'Sales', 3: 'Sales', 4: 'Sales', 7: 'Sales'
 };
@@ -120,7 +120,7 @@ class LateOrdersAlertService {
       let deadline = null;
       let deadlineSource = 'scheduled_date';
 
-      if (channel === 'Amazon Seller') {
+      if (channel === 'AMZ Seller') {
         // Get from unified_orders.shippingDeadline
         const ref = so?.client_order_ref?.match(/\d{3}-\d{7}-\d{7}/)?.[0] ||
                    so?.name?.match(/\d{3}-\d{7}-\d{7}/)?.[0];
@@ -133,7 +133,7 @@ class LateOrdersAlertService {
             deadlineSource = 'Amazon latestShipDate';
           }
         }
-      } else if (channel === 'Amazon Vendor') {
+      } else if (channel === 'AMZ Vendor') {
         // Get from vendor_orders.requestedDeliveryDate
         if (so?.client_order_ref) {
           const vOrder = await this.db.collection('vendor_orders').findOne({
@@ -422,12 +422,6 @@ class LateOrdersAlertService {
               title: '📥 Download Excel Report',
               url: `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/api/alerts/late-orders/excel`,
               style: 'positive'
-            },
-            {
-              type: 'Action.OpenUrl',
-              title: '📋 Open Fulfillment',
-              url: `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/fulfillment/`,
-              style: 'default'
             }
           ]
         }
