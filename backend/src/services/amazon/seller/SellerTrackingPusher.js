@@ -16,6 +16,24 @@ const { COLLECTION_NAME } = require('./SellerOrderImporter');
 const { getMarketplaceConfig: _getMarketplaceConfig } = require('./SellerMarketplaceConfig');
 
 /**
+ * Amazon Seller Sales Team IDs in Odoo
+ * Orders with these team_ids should have tracking pushed to Amazon
+ */
+const AMAZON_SELLER_TEAM_IDS = [
+  11,  // Amazon Seller
+  5,   // Amazon Marketplace
+  16,  // Amazon BE (Marketplace)
+  17,  // Amazon DE (Marketplace)
+  18,  // Amazon ES (Marketplace)
+  19,  // Amazon FR (Marketplace)
+  20,  // Amazon IT (Marketplace)
+  21,  // Amazon NL (Marketplace)
+  22,  // Amazon PL (Marketplace)
+  24,  // Amazon SE (Marketplace)
+  25,  // Amazon UK (Marketplace)
+];
+
+/**
  * Carrier name mapping from Odoo to Amazon
  * Amazon requires specific carrier codes
  */
@@ -69,6 +87,7 @@ class SellerTrackingPusher {
 
   /**
    * Push tracking for all FBM orders that have been shipped in Odoo
+   * Uses Sales Team field to identify Amazon Seller orders (not order prefix)
    */
   async pushPendingTracking() {
     await this.init();
@@ -77,23 +96,85 @@ class SellerTrackingPusher {
       checked: 0,
       pushed: 0,
       skipped: 0,
+      alreadyPushed: 0,
       errors: []
     };
 
     try {
-      // Find FBM orders that have Odoo orders but tracking not pushed
-      const fbmOrders = await this.collection.find({
-        fulfillmentChannel: 'MFN', // FBM orders only
-        'odoo.saleOrderId': { $ne: null },
-        'odoo.trackingPushed': { $ne: true }
-      }).limit(100).toArray();
+      // Step 1: Find done pickings with tracking for Amazon Seller orders (by Sales Team)
+      // Query Odoo for sale orders with Amazon Seller team IDs
+      const saleOrders = await this.odoo.searchRead('sale.order',
+        [
+          ['team_id', 'in', AMAZON_SELLER_TEAM_IDS],
+          ['state', 'in', ['sale', 'done']]
+        ],
+        ['id', 'name', 'client_order_ref', 'team_id'],
+        { limit: 500 }
+      );
 
-      console.log(`[SellerTrackingPusher] Found ${fbmOrders.length} FBM orders to check`);
-      result.checked = fbmOrders.length;
+      if (saleOrders.length === 0) {
+        console.log('[SellerTrackingPusher] No Amazon Seller orders found in Odoo');
+        return result;
+      }
 
-      for (const order of fbmOrders) {
+      const saleOrderIds = saleOrders.map(so => so.id);
+      const saleOrderMap = {};
+      for (const so of saleOrders) {
+        saleOrderMap[so.id] = so;
+      }
+
+      // Step 2: Find done pickings with tracking for these orders
+      const pickings = await this.odoo.searchRead('stock.picking',
+        [
+          ['sale_id', 'in', saleOrderIds],
+          ['picking_type_code', '=', 'outgoing'],
+          ['state', '=', 'done'],
+          ['carrier_tracking_ref', '!=', false]
+        ],
+        ['id', 'name', 'sale_id', 'carrier_tracking_ref', 'carrier_id', 'date_done'],
+        { limit: 200 }
+      );
+
+      console.log(`[SellerTrackingPusher] Found ${pickings.length} done pickings with tracking for Amazon Seller orders`);
+      result.checked = pickings.length;
+
+      // Step 3: For each picking, check if tracking already pushed and push if not
+      for (const picking of pickings) {
+        const saleOrder = saleOrderMap[picking.sale_id[0]];
+        if (!saleOrder) continue;
+
+        // Extract Amazon Order ID from client_order_ref or sale order name
+        const amazonOrderId = this.extractAmazonOrderId(saleOrder);
+        if (!amazonOrderId) {
+          console.log(`[SellerTrackingPusher] Could not extract Amazon Order ID from ${saleOrder.name}`);
+          result.skipped++;
+          continue;
+        }
+
         try {
-          const pushResult = await this.pushOrderTracking(order);
+          // Check if already pushed in MongoDB
+          const existingOrder = await this.collection.findOne({
+            amazonOrderId: amazonOrderId,
+            'odoo.trackingPushed': true
+          });
+
+          if (existingOrder) {
+            result.alreadyPushed++;
+            continue;
+          }
+
+          // Get order from MongoDB for marketplace and item details
+          let mongoOrder = await this.collection.findOne({ amazonOrderId: amazonOrderId });
+
+          if (!mongoOrder) {
+            // Order not in MongoDB - try to find by partial match or skip
+            console.log(`[SellerTrackingPusher] Order ${amazonOrderId} not found in MongoDB, skipping`);
+            result.skipped++;
+            continue;
+          }
+
+          // Push tracking
+          const pushResult = await this.pushPickingTracking(mongoOrder, picking);
 
           if (pushResult.pushed) {
             result.pushed++;
@@ -102,10 +183,11 @@ class SellerTrackingPusher {
           }
         } catch (error) {
           result.errors.push({
-            amazonOrderId: order.amazonOrderId,
+            amazonOrderId: amazonOrderId,
+            picking: picking.name,
             error: error.message
           });
-          console.error(`[SellerTrackingPusher] Error pushing ${order.amazonOrderId}:`, error.message);
+          console.error(`[SellerTrackingPusher] Error pushing ${amazonOrderId}:`, error.message);
         }
       }
 
@@ -114,40 +196,45 @@ class SellerTrackingPusher {
       console.error('[SellerTrackingPusher] Push error:', error);
     }
 
-    console.log(`[SellerTrackingPusher] Push complete: ${result.pushed} pushed, ${result.skipped} skipped, ${result.errors.length} errors`);
+    console.log(`[SellerTrackingPusher] Push complete: ${result.pushed} pushed, ${result.skipped} skipped, ${result.alreadyPushed} already pushed, ${result.errors.length} errors`);
     return result;
   }
 
   /**
-   * Push tracking for a single order
+   * Extract Amazon Order ID from Odoo sale order
+   * Looks in client_order_ref first, then tries to parse from order name
    */
-  async pushOrderTracking(order) {
-    const result = { pushed: false, skipped: false };
-
-    const saleOrderId = order.odoo.saleOrderId;
-
-    // Find the delivery picking for this order
-    const pickings = await this.odoo.searchRead('stock.picking',
-      [
-        ['sale_id', '=', saleOrderId],
-        ['picking_type_code', '=', 'outgoing'],
-        ['state', '=', 'done'] // Only done pickings
-      ],
-      ['id', 'name', 'carrier_tracking_ref', 'carrier_id', 'date_done']
-    );
-
-    if (pickings.length === 0) {
-      // Not shipped yet in Odoo
-      result.skipped = true;
-      return result;
+  extractAmazonOrderId(saleOrder) {
+    // Try client_order_ref first (e.g., "303-1234567-1234567")
+    if (saleOrder.client_order_ref) {
+      const ref = saleOrder.client_order_ref.trim();
+      // Amazon order ID pattern: XXX-XXXXXXX-XXXXXXX
+      const match = ref.match(/\d{3}-\d{7}-\d{7}/);
+      if (match) return match[0];
     }
 
-    const picking = pickings[0];
-    const trackingNumber = picking.carrier_tracking_ref;
+    // Try to extract from order name (e.g., "FBM303-1234567-1234567" or "S12345")
+    const name = saleOrder.name || '';
 
+    // Check for FBM/FBA prefix pattern
+    const fbmMatch = name.match(/FB[MA](\d{3}-\d{7}-\d{7})/);
+    if (fbmMatch) return fbmMatch[1];
+
+    // Check for plain Amazon order ID in name
+    const plainMatch = name.match(/\d{3}-\d{7}-\d{7}/);
+    if (plainMatch) return plainMatch[0];
+
+    return null;
+  }
+
+  /**
+   * Push tracking for a specific picking
+   */
+  async pushPickingTracking(order, picking) {
+    const result = { pushed: false, skipped: false };
+
+    const trackingNumber = picking.carrier_tracking_ref;
     if (!trackingNumber) {
-      // No tracking number available
-      console.log(`[SellerTrackingPusher] No tracking number for order ${order.amazonOrderId}`);
       result.skipped = true;
       return result;
     }
@@ -164,7 +251,7 @@ class SellerTrackingPusher {
       }
     }
 
-    // Get ship date - Amazon requires full ISO 8601 format (e.g., 2025-12-23T12:00:00Z)
+    // Get ship date
     const shipDate = picking.date_done
       ? new Date(picking.date_done).toISOString()
       : new Date().toISOString();
@@ -177,7 +264,7 @@ class SellerTrackingPusher {
         trackingNumber,
         carrierName,
         shipDate,
-        pickingId: picking.id  // Used as packageReferenceId (must be numeric)
+        pickingId: picking.id
       });
 
       if (confirmResult.success) {
@@ -190,7 +277,8 @@ class SellerTrackingPusher {
               'odoo.trackingNumber': trackingNumber,
               'odoo.carrierName': carrierName,
               'odoo.trackingPushedAt': new Date(),
-              'odoo.pickingId': picking.id
+              'odoo.pickingId': picking.id,
+              'odoo.pickingName': picking.name
             }
           }
         );
@@ -267,34 +355,45 @@ class SellerTrackingPusher {
 
   /**
    * Get push statistics
+   * Now uses Odoo Sales Team to identify Amazon Seller orders
    */
   async getStats() {
     await this.init();
 
-    const [
-      totalFbmWithOdoo,
-      pendingPush,
-      pushed
-    ] = await Promise.all([
-      this.collection.countDocuments({
-        fulfillmentChannel: 'MFN',
-        'odoo.saleOrderId': { $ne: null }
-      }),
-      this.collection.countDocuments({
-        fulfillmentChannel: 'MFN',
-        'odoo.saleOrderId': { $ne: null },
-        'odoo.trackingPushed': { $ne: true }
-      }),
-      this.collection.countDocuments({
-        fulfillmentChannel: 'MFN',
-        'odoo.trackingPushed': true
-      })
-    ]);
+    // Get stats from Odoo (source of truth for orders)
+    const saleOrders = await this.odoo.searchRead('sale.order',
+      [
+        ['team_id', 'in', AMAZON_SELLER_TEAM_IDS],
+        ['state', 'in', ['sale', 'done']]
+      ],
+      ['id'],
+      { limit: 10000 }
+    );
+
+    const saleOrderIds = saleOrders.map(so => so.id);
+
+    // Count pickings with tracking
+    const pickingsWithTracking = await this.odoo.searchRead('stock.picking',
+      [
+        ['sale_id', 'in', saleOrderIds],
+        ['picking_type_code', '=', 'outgoing'],
+        ['state', '=', 'done'],
+        ['carrier_tracking_ref', '!=', false]
+      ],
+      ['id'],
+      { limit: 10000 }
+    );
+
+    // Count from MongoDB
+    const pushed = await this.collection.countDocuments({
+      'odoo.trackingPushed': true
+    });
 
     return {
-      totalFbmWithOdoo,
-      pendingPush,
-      pushed
+      totalAmazonSellerOrders: saleOrders.length,
+      pickingsWithTracking: pickingsWithTracking.length,
+      pushedToAmazon: pushed,
+      pendingPush: Math.max(0, pickingsWithTracking.length - pushed)
     };
   }
 }
@@ -316,5 +415,6 @@ async function getSellerTrackingPusher() {
 module.exports = {
   SellerTrackingPusher,
   getSellerTrackingPusher,
-  CARRIER_MAPPING
+  CARRIER_MAPPING,
+  AMAZON_SELLER_TEAM_IDS
 };
