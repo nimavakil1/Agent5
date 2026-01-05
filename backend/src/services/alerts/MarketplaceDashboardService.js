@@ -13,6 +13,11 @@ const { getSellerClient } = require('../amazon/seller/SellerClient');
 let bolAccessToken = null;
 let bolTokenExpiry = null;
 
+// Dashboard data cache (2 minutes)
+let dashboardCache = null;
+let dashboardCacheExpiry = null;
+const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
 /**
  * Get Bol.com access token
  */
@@ -93,8 +98,15 @@ class MarketplaceDashboardService {
 
   /**
    * Get dashboard data directly from marketplace APIs
+   * Uses 2-minute cache to avoid hammering marketplace APIs
    */
   async getDashboardData() {
+    // Return cached data if still valid
+    if (dashboardCache && dashboardCacheExpiry && Date.now() < dashboardCacheExpiry) {
+      console.log('[MarketplaceDashboard] Returning cached data');
+      return dashboardCache;
+    }
+
     await this.init();
 
     const today = new Date();
@@ -107,7 +119,7 @@ class MarketplaceDashboardService {
       this.getBolDataLive(today, tomorrow)
     ]);
 
-    return {
+    const result = {
       timestamp: new Date().toISOString(),
       channels: {
         'Amazon Seller': amazonData,
@@ -120,6 +132,12 @@ class MarketplaceDashboardService {
         dueTomorrow: amazonData.dueTomorrow + bolData.dueTomorrow
       }
     };
+
+    // Cache the result
+    dashboardCache = result;
+    dashboardCacheExpiry = Date.now() + CACHE_TTL_MS;
+
+    return result;
   }
 
   /**
