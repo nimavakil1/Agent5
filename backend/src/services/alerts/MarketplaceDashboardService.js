@@ -129,10 +129,16 @@ class MarketplaceDashboardService {
     const stats = { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0, upcoming: 0, noDeadline: 0, orders: [] };
 
     try {
+      // Amazon SP-API requires CreatedAfter or LastUpdatedAfter
+      // Use 30 days back - should cover all pending orders
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
       // Call Amazon SP-API directly for Unshipped/PartiallyShipped MFN orders
       const response = await this.sellerClient.getAllOrders({
         orderStatuses: ['Unshipped', 'PartiallyShipped'],
-        fulfillmentChannels: ['MFN'] // Only FBM (Merchant Fulfilled)
+        fulfillmentChannels: ['MFN'], // Only FBM (Merchant Fulfilled)
+        createdAfter: thirtyDaysAgo.toISOString()
       });
 
       const pendingOrders = response || [];
@@ -201,16 +207,15 @@ class MarketplaceDashboardService {
     const stats = { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0, upcoming: 0, noDeadline: 0, orders: [] };
 
     try {
-      // Call Bol.com API directly - fetch first page of orders
-      // Orders endpoint returns orders sorted by date, most recent first
-      // We only care about OPEN orders (not yet fully shipped)
+      // Call Bol.com API directly - fetch orders
+      // Only get FBR (Fulfilled by Retailer) orders that need shipping
       let allOrders = [];
       let page = 1;
       let hasMore = true;
 
-      // Fetch up to 5 pages (enough for dashboard)
-      while (hasMore && page <= 5) {
-        const data = await bolRequest(`/orders?page=${page}&fulfilment-method=FBR`); // FBR = Fulfilled by Retailer
+      // Fetch up to 3 pages (enough for dashboard)
+      while (hasMore && page <= 3) {
+        const data = await bolRequest(`/orders?page=${page}&fulfilment-method=FBR`);
         const orders = data.orders || [];
 
         if (orders.length === 0) {
@@ -222,66 +227,79 @@ class MarketplaceDashboardService {
         page++;
 
         // Small delay between pages
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 300));
       }
 
-      console.log(`[MarketplaceDashboard] Bol.com API returned ${allOrders.length} FBR orders`);
+      console.log(`[MarketplaceDashboard] Bol.com API returned ${allOrders.length} FBR orders from list`);
 
-      // Filter orders with pending items (not fully shipped)
-      for (const order of allOrders) {
-        // Check if any items still need shipping
+      // Filter orders with pending items and fetch details to get deadline
+      const pendingOrders = allOrders.filter(order => {
         const hasPendingItems = order.orderItems?.some(item => {
           const shipped = item.quantityShipped || 0;
           const ordered = item.quantity || 1;
           return shipped < ordered;
         });
+        return hasPendingItems;
+      });
 
-        if (!hasPendingItems) continue;
+      console.log(`[MarketplaceDashboard] ${pendingOrders.length} Bol.com orders have pending items`);
+      stats.pending = pendingOrders.length;
 
-        stats.pending++;
+      // Fetch details for pending orders (to get latestDeliveryDate)
+      // Limit to 20 to avoid rate limits
+      const ordersToFetch = pendingOrders.slice(0, 20);
 
-        // Get deadline from first item with latestDeliveryDate
-        let deadline = null;
-        for (const item of (order.orderItems || [])) {
-          if (item.latestDeliveryDate) {
-            deadline = new Date(item.latestDeliveryDate);
-            break;
+      for (const order of ordersToFetch) {
+        try {
+          // Get order details
+          const details = await bolRequest(`/orders/${order.orderId}`);
+          await new Promise(r => setTimeout(r, 250)); // Rate limit delay
+
+          // Get deadline from order items
+          let deadline = null;
+          for (const item of (details.orderItems || [])) {
+            if (item.latestDeliveryDate) {
+              deadline = new Date(item.latestDeliveryDate);
+              break;
+            }
           }
-        }
 
-        if (!deadline) {
-          stats.noDeadline++;
-          continue;
-        }
+          if (!deadline) {
+            stats.noDeadline++;
+            continue;
+          }
 
-        const dlDate = new Date(deadline);
-        dlDate.setHours(0, 0, 0, 0);
+          const dlDate = new Date(deadline);
+          dlDate.setHours(0, 0, 0, 0);
 
-        let status = 'upcoming';
-        let daysLate = 0;
+          let status = 'upcoming';
+          let daysLate = 0;
 
-        if (dlDate < today) {
-          status = 'late';
-          daysLate = Math.floor((today - dlDate) / (1000 * 60 * 60 * 24));
-          stats.late++;
-        } else if (dlDate.getTime() === today.getTime()) {
-          status = 'dueToday';
-          stats.dueToday++;
-        } else if (dlDate.getTime() === tomorrow.getTime()) {
-          status = 'dueTomorrow';
-          stats.dueTomorrow++;
-        } else {
-          stats.upcoming++;
-        }
+          if (dlDate < today) {
+            status = 'late';
+            daysLate = Math.floor((today - dlDate) / (1000 * 60 * 60 * 24));
+            stats.late++;
+          } else if (dlDate.getTime() === today.getTime()) {
+            status = 'dueToday';
+            stats.dueToday++;
+          } else if (dlDate.getTime() === tomorrow.getTime()) {
+            status = 'dueTomorrow';
+            stats.dueTomorrow++;
+          } else {
+            stats.upcoming++;
+          }
 
-        // Add to orders list if late or due today
-        if (status === 'late' || status === 'dueToday') {
-          stats.orders.push({
-            orderId: order.orderId,
-            status: 'OPEN',
-            deadline: deadline,
-            daysLate
-          });
+          // Add to orders list if late or due today
+          if (status === 'late' || status === 'dueToday') {
+            stats.orders.push({
+              orderId: order.orderId,
+              status: 'OPEN',
+              deadline: deadline,
+              daysLate
+            });
+          }
+        } catch (detailError) {
+          console.error(`[MarketplaceDashboard] Error fetching Bol order ${order.orderId}:`, detailError.message);
         }
       }
 
