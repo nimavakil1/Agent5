@@ -120,7 +120,8 @@ router.get('/orders', async (req, res) => {
         purchaseDate: o.orderDate || o.purchaseDate,
         // Map unified totals to legacy orderTotal format: { amount, currencyCode }
         orderTotal: o.orderTotal || (o.totals ? { amount: o.totals.total, currencyCode: o.totals.currency } : null),
-        buyerName: o.customer?.name || o.shippingAddress?.name || o.buyerName,
+        // Fallback chain: customer.name -> shippingAddress.name -> buyerName -> odoo.partnerName
+        buyerName: o.customer?.name || o.shippingAddress?.name || o.buyerName || o.odoo?.partnerName,
         shippingAddress: o.shippingAddress,
         isPrime: o.amazonSeller?.isPrime ?? o.isPrime,
         isBusinessOrder: o.amazonSeller?.isBusinessOrder ?? o.isBusinessOrder,

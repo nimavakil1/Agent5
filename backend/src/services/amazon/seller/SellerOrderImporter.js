@@ -548,6 +548,7 @@ class SellerOrderImporter {
       'odoo.saleOrderId': odooInfo.saleOrderId || null,
       'odoo.saleOrderName': odooInfo.saleOrderName || null,
       'odoo.partnerId': odooInfo.partnerId || null,
+      'odoo.partnerName': odooInfo.partnerName || null,
       'odoo.state': odooInfo.state || null,
       'odoo.invoiceStatus': odooInfo.invoiceStatus || null,
       'odoo.syncedAt': new Date(),
