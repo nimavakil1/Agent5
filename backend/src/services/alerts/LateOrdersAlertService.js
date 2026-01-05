@@ -328,7 +328,7 @@ class LateOrdersAlertService {
    * Build Teams Adaptive Card with summary table
    */
   buildTeamsCard(channelStats, today) {
-    const channels = ['Amazon Seller', 'Amazon Vendor', 'BOL', 'Sales', 'Other'];
+    const channels = ['AMZ Seller', 'AMZ Vendor', 'BOL', 'Sales', 'Other'];
     const totals = { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0, upcoming: 0 };
 
     const rows = [];
@@ -539,7 +539,7 @@ class LateOrdersAlertService {
         html += `<p><b>${totals.late} late</b> + <b>${totals.dueToday} due today</b> orders need attention.</p>`;
         html += '<table border="1" cellpadding="5"><tr><th>Channel</th><th>Pending</th><th>Late</th><th>Today</th><th>Tomorrow</th></tr>';
 
-        for (const ch of ['Amazon Seller', 'Amazon Vendor', 'BOL', 'Sales', 'Other']) {
+        for (const ch of ['AMZ Seller', 'AMZ Vendor', 'BOL', 'Sales', 'Other']) {
           const d = channelStats[ch];
           if (!d || d.pending === 0) continue;
           html += `<tr><td>${ch}</td><td>${d.pending}</td><td style="color:red">${d.late}</td><td style="color:orange">${d.dueToday}</td><td>${d.dueTomorrow}</td></tr>`;
@@ -566,6 +566,117 @@ class LateOrdersAlertService {
       fileUrl,
       summary: channelStats
     };
+  }
+
+  /**
+   * Send alert to a group chat via MS Graph API
+   * @param {string} chatId - Teams group chat ID
+   */
+  async sendToGroupChat(chatId) {
+    await this.init();
+
+    if (!this.msGraph) {
+      throw new Error('MS Graph API not configured. Required: MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET');
+    }
+
+    if (!chatId) {
+      throw new Error('Chat ID is required for group chat messages');
+    }
+
+    // Gather data
+    const { orders, channelStats, today } = await this.gatherOrderData();
+
+    // Generate Excel and upload
+    const excelBuffer = await this.generateExcel(orders);
+    const fileName = `Late_Orders_Report_${today.toISOString().split('T')[0]}.xlsx`;
+    let fileUrl = null;
+
+    try {
+      const uploadResult = await this.msGraph.uploadFile(fileName, excelBuffer, 'Agent5Reports');
+      if (uploadResult?.webUrl) {
+        fileUrl = uploadResult.webUrl;
+      }
+    } catch (uploadError) {
+      console.error('[LateOrdersAlert] Failed to upload Excel:', uploadError.message);
+    }
+
+    // Calculate totals
+    const totals = { late: 0, dueToday: 0, pending: 0, dueTomorrow: 0, upcoming: 0 };
+    Object.values(channelStats).forEach(ch => {
+      if (ch) {
+        for (const k of Object.keys(totals)) {
+          totals[k] += ch[k] || 0;
+        }
+      }
+    });
+
+    // Build HTML message for group chat
+    let html = `<h2>📦 Order Lateness Report - ${today.toLocaleDateString()}</h2>`;
+
+    if (totals.late > 0 || totals.dueToday > 0) {
+      html += `<p>⚠️ <b>${totals.late} late</b> + <b>${totals.dueToday} due today</b> = <b>${totals.late + totals.dueToday}</b> orders need immediate attention!</p>`;
+    } else {
+      html += `<p>✅ No urgent orders today.</p>`;
+    }
+
+    html += '<table border="1" cellpadding="5" style="border-collapse: collapse;">';
+    html += '<tr style="background-color: #4472C4; color: white;"><th>Channel</th><th>Pending</th><th>Late</th><th>Today</th><th>Tomorrow</th><th>Upcoming</th></tr>';
+
+    for (const ch of ['AMZ Seller', 'AMZ Vendor', 'BOL', 'Sales', 'Other']) {
+      const d = channelStats[ch];
+      if (!d || d.pending === 0) continue;
+
+      const lateStyle = d.late > 0 ? 'color: red; font-weight: bold;' : '';
+      const todayStyle = d.dueToday > 0 ? 'color: orange; font-weight: bold;' : '';
+
+      html += `<tr>
+        <td>${ch}</td>
+        <td>${d.pending}</td>
+        <td style="${lateStyle}">${d.late > 0 ? '🔴 ' : ''}${d.late}</td>
+        <td style="${todayStyle}">${d.dueToday > 0 ? '🟠 ' : ''}${d.dueToday}</td>
+        <td>${d.dueTomorrow}</td>
+        <td>${d.upcoming}</td>
+      </tr>`;
+    }
+
+    // Total row
+    html += `<tr style="background-color: #f0f0f0; font-weight: bold;">
+      <td>TOTAL</td>
+      <td>${totals.pending}</td>
+      <td style="color: red;">${totals.late > 0 ? '🔴 ' : ''}${totals.late}</td>
+      <td style="color: orange;">${totals.dueToday > 0 ? '🟠 ' : ''}${totals.dueToday}</td>
+      <td>${totals.dueTomorrow}</td>
+      <td>${totals.upcoming}</td>
+    </tr>`;
+    html += '</table>';
+
+    // Download link
+    const downloadUrl = `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/api/alerts/late-orders/excel`;
+    html += `<p><br/><a href="${downloadUrl}">📥 Download Excel Report</a></p>`;
+
+    if (fileUrl) {
+      html += `<p><a href="${fileUrl}">📊 View/Download from OneDrive</a></p>`;
+    }
+
+    try {
+      // Send message to group chat
+      await this.msGraph.sendChatMessage(chatId, html, 'html');
+
+      return {
+        success: true,
+        chatId,
+        summary: channelStats,
+        totals,
+        fileUrl
+      };
+    } catch (error) {
+      console.error('[LateOrdersAlert] Failed to send to group chat:', error.message);
+      return {
+        success: false,
+        error: error.message,
+        chatId
+      };
+    }
   }
 
   /**

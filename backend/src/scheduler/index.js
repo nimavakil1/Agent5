@@ -1,6 +1,8 @@
 const ScheduledJob = require('../models/ScheduledJob');
 const CampaignDefinition = require('../models/CampaignDefinition');
 const { getDb } = require('../db');
+const cron = require('node-cron');
+
 let _shopifyTimer = null;
 let _amazonSettlementTimer = null;
 let _vendorOrdersTimer = null;
@@ -10,6 +12,8 @@ let _bolOrderSyncTimer = null;
 let _bolStockSyncTimer = null;
 let _bolShipmentCheckTimer = null;
 let _bolCancellationCheckTimer = null;
+let _lateOrdersAlertCronMorning = null;
+let _lateOrdersAlertCronAfternoon = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -156,6 +160,23 @@ function start() {
       console.log(`[scheduler] Bol.com sync initialized (orders/stock every ${bolSyncMinutes} min, shipments/cancellations every 5 min)`);
     }
   } catch (e) { console.error('[scheduler] Bol.com sync init error', e); }
+
+  // Late Orders Alert (7:00 and 14:00 daily)
+  try {
+    if (process.env.LATE_ORDERS_ALERT_ENABLED === '1') {
+      // 7:00 AM CET/CEST
+      _lateOrdersAlertCronMorning = cron.schedule('0 7 * * *', async () => {
+        await sendLateOrdersAlert();
+      }, { timezone: 'Europe/Brussels' });
+
+      // 14:00 (2:00 PM) CET/CEST
+      _lateOrdersAlertCronAfternoon = cron.schedule('0 14 * * *', async () => {
+        await sendLateOrdersAlert();
+      }, { timezone: 'Europe/Brussels' });
+
+      console.log('[scheduler] Late Orders Alert scheduled: 7:00 and 14:00 daily (Europe/Brussels timezone)');
+    }
+  } catch (e) { console.error('[scheduler] Late Orders Alert cron init error', e); }
 }
 
 /**
@@ -387,6 +408,44 @@ async function checkBolCancellations() {
   }
 }
 
+/**
+ * Send Late Orders Alert to Teams
+ * Sends to channel webhook (configured via TEAMS_LATE_ORDERS_WEBHOOK_URL)
+ * Or to group chat via MS Graph (if MS_LATE_ORDERS_CHAT_ID is configured)
+ */
+async function sendLateOrdersAlert() {
+  try {
+    const { getLateOrdersAlertService } = require('../services/alerts/LateOrdersAlertService');
+    const service = getLateOrdersAlertService();
+
+    // Get current status first to check if there are late orders
+    const status = await service.getStatus();
+    const totalLate = status.totals?.totalPending || 0;
+
+    if (totalLate === 0) {
+      console.log('[scheduler] Late Orders Alert: No late orders, skipping alert');
+      return;
+    }
+
+    // Check if MS Graph chat ID is configured for group chat
+    const chatId = process.env.MS_LATE_ORDERS_CHAT_ID;
+
+    if (chatId && process.env.MS_TENANT_ID && process.env.MS_CLIENT_ID && process.env.MS_CLIENT_SECRET) {
+      // Send to group chat via MS Graph
+      console.log(`[scheduler] Sending Late Orders Alert to group chat: ${chatId}`);
+      const result = await service.sendToGroupChat(chatId);
+      console.log(`[scheduler] Late Orders Alert sent to group chat: ${result.success ? 'success' : 'failed'}`);
+    } else {
+      // Fall back to channel webhook
+      console.log('[scheduler] Sending Late Orders Alert to Teams channel');
+      const result = await service.sendToChannel();
+      console.log(`[scheduler] Late Orders Alert sent to channel: ${result.success ? 'success' : 'failed'}`);
+    }
+  } catch (e) {
+    console.error('[scheduler] Late Orders Alert error:', e?.message || e);
+  }
+}
+
 module.exports = {
   start,
   checkAmazonSettlementReminders,
@@ -396,5 +455,6 @@ module.exports = {
   syncBolOrders,
   syncBolStock,
   checkBolShipments,
-  checkBolCancellations
+  checkBolCancellations,
+  sendLateOrdersAlert
 };
