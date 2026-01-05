@@ -59,6 +59,7 @@ const chatPermissionsRouter = require('./api/routes/chat-permissions.api');
 const { checkPermissionRouter: chatCheckRouter } = require('./api/routes/chat-permissions.api');
 const chatRouter = require('./api/routes/chat.api');
 const ordersRouter = require('./api/routes/orders.api');
+const alertsRouter = require('./api/routes/alerts.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -417,6 +418,8 @@ app.use('/api/chat/my-permissions', requireSession, chatCheckRouter);
 app.use('/api/chat', requireSession, chatRouter);
 // Unified Orders API (all channels: Amazon Seller, Vendor, Bol.com)
 app.use('/api/orders', requireSession, ordersRouter);
+// Alerts API (Teams notifications, late orders alerts)
+app.use('/api/alerts', requireSession, alertsRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use('/ui', requireSession, express.static(uiDist));
