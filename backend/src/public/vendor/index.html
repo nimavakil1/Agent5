@@ -446,6 +446,9 @@
         });
         if (stockRes.ok && currentPO === po) {
           const stockData = await stockRes.json();
+          // Remove loading indicator from header
+          const loadingSpan = document.querySelector('.stock-loading');
+          if (loadingSpan) loadingSpan.remove();
           // Update stock cells in the current modal
           (stockData.items || []).forEach(item => {
             const cell = document.querySelector('.stock-cell[data-ean="' + item.vendorProductIdentifier + '"]');
