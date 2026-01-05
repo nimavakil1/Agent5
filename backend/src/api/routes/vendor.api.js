@@ -920,14 +920,19 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
     const errors = [];
 
     // Separate items into cached (have odooProductId) and uncached
+    // Handle both unified schema (ean, asin) and legacy schema (vendorProductIdentifier, amazonProductIdentifier)
     const cachedItems = [];
     const uncachedItems = [];
 
     for (const item of po.items || []) {
+      // Unified schema uses ean/asin, legacy uses vendorProductIdentifier/amazonProductIdentifier
+      const ean = item.ean || item.vendorProductIdentifier;
+      const asin = item.asin || item.amazonProductIdentifier;
+
       if (item.odooProductId) {
-        cachedItems.push(item);
-      } else if (item.vendorProductIdentifier || item.amazonProductIdentifier) {
-        uncachedItems.push(item);
+        cachedItems.push({ ...item, _ean: ean, _asin: asin });
+      } else if (ean || asin) {
+        uncachedItems.push({ ...item, _ean: ean, _asin: asin });
       } else {
         errors.push({ itemSequenceNumber: item.itemSequenceNumber, error: 'No EAN or ASIN' });
       }
@@ -938,7 +943,7 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
 
     // For cached items, we already have the product info
     for (const item of cachedItems) {
-      productMap.set(item.vendorProductIdentifier, {
+      productMap.set(item._ean, {
         id: item.odooProductId,
         name: item.odooProductName,
         default_code: item.odooSku,
@@ -949,8 +954,8 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
     // BATCH SEARCH: For uncached items, search by EAN/barcode in one query
     if (uncachedItems.length > 0) {
       t0 = Date.now();
-      const eans = uncachedItems.map(it => it.vendorProductIdentifier).filter(Boolean);
-      const asins = uncachedItems.map(it => it.amazonProductIdentifier).filter(Boolean);
+      const eans = uncachedItems.map(it => it._ean).filter(Boolean);
+      const asins = uncachedItems.map(it => it._asin).filter(Boolean);
       const allIdentifiers = [...new Set([...eans, ...asins])];
 
       if (allIdentifiers.length > 0) {
@@ -982,8 +987,8 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
 
         // Map each item to its product
         for (const item of uncachedItems) {
-          const ean = item.vendorProductIdentifier;
-          const asin = item.amazonProductIdentifier;
+          const ean = item._ean;
+          const asin = item._asin;
 
           let productData = barcodeIndex.get(ean) || barcodeIndex.get(asin);
 
@@ -1025,7 +1030,8 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
 
     // Build product info list
     for (const item of po.items || []) {
-      const ean = item.vendorProductIdentifier;
+      // Handle unified schema (ean) and legacy (vendorProductIdentifier)
+      const ean = item.ean || item.vendorProductIdentifier;
       if (!ean) continue;
 
       const productData = productMap.get(ean);
@@ -1075,12 +1081,13 @@ router.post('/orders/:poNumber/check-stock', async (req, res) => {
       errors: errors.length > 0 ? errors : undefined,
       items: updatedPO.items.map(item => ({
         itemSequenceNumber: item.itemSequenceNumber,
-        vendorProductIdentifier: item.vendorProductIdentifier,
-        amazonProductIdentifier: item.amazonProductIdentifier,
-        orderedQty: item.orderedQuantity?.amount || 0,
+        // Handle unified schema (ean/asin) and legacy (vendorProductIdentifier/amazonProductIdentifier)
+        vendorProductIdentifier: item.ean || item.vendorProductIdentifier,
+        amazonProductIdentifier: item.asin || item.amazonProductIdentifier,
+        orderedQty: item.orderedQuantity?.amount || item.quantity || 0,
         odooProductId: item.odooProductId,
-        odooProductName: item.odooProductName,
-        odooSku: item.odooSku,
+        odooProductName: item.odooProductName || item.name,
+        odooSku: item.odooSku || item.sku,
         odooBarcode: item.odooBarcode,
         qtyAvailable: item.qtyAvailable,
         acknowledgeQty: item.acknowledgeQty,
