@@ -86,32 +86,32 @@
     .channel-header {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 20px;
       margin-bottom: 25px;
       padding-bottom: 20px;
       border-bottom: 1px solid #333;
+      position: relative;
     }
 
     .channel-logo {
-      width: 80px;
-      height: 80px;
+      height: 70px;
+      max-width: 280px;
       object-fit: contain;
       background: white;
       border-radius: 12px;
-      padding: 10px;
+      padding: 12px 24px;
     }
 
-    .channel-name {
-      font-size: 2.2rem;
-      font-weight: 600;
-    }
-
-    .channel-name .status-badge {
+    .status-badge {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
       font-size: 1rem;
-      padding: 5px 12px;
+      padding: 8px 16px;
       border-radius: 20px;
-      margin-left: 15px;
-      vertical-align: middle;
+      font-weight: 600;
     }
 
     .status-badge.ok {
@@ -292,8 +292,8 @@
     }
 
     body.fullscreen .channel-logo {
-      width: 100px;
-      height: 100px;
+      height: 90px;
+      max-width: 350px;
     }
 
     .fullscreen-btn {
@@ -353,14 +353,14 @@
   </button>
 
   <script>
-    // Channel configuration with logos
+    // Channel configuration with local logos
     const CHANNEL_CONFIG = {
       'Amazon Seller': {
-        logo: 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg',
+        logo: '/assets/logos/amazon-seller-central.png',
         color: '#ff9900'
       },
       'Bol.com': {
-        logo: 'https://upload.wikimedia.org/wikipedia/commons/6/6b/Bol.com_logo.png',
+        logo: '/assets/logos/bolcom.png',
         color: '#0000a4'
       }
     };
@@ -428,16 +428,9 @@
           <div class="channel-box ${boxClass}">
             <div class="channel-header">
               <img src="${config.logo}" alt="${channel}" class="channel-logo" onerror="this.style.display='none'">
-              <div class="channel-name">
-                ${channel}
-                <span class="status-badge ${badgeClass}">${badgeText}</span>
-              </div>
+              <span class="status-badge ${badgeClass}">${badgeText}</span>
             </div>
             <div class="stats">
-              <div class="stat pending">
-                <div class="stat-value">${stats.pending}</div>
-                <div class="stat-label">Pending</div>
-              </div>
               <div class="stat late">
                 <div class="stat-value">${stats.late}</div>
                 <div class="stat-label">Late</div>
@@ -450,6 +443,10 @@
                 <div class="stat-value">${stats.dueTomorrow}</div>
                 <div class="stat-label">Tomorrow</div>
               </div>
+              <div class="stat pending">
+                <div class="stat-value">${stats.pending}</div>
+                <div class="stat-label">Pending</div>
+              </div>
             </div>
           </div>
         `;
@@ -461,10 +458,6 @@
       const totals = data.totals || { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0 };
       totalsBar.style.display = 'block';
       totalsGrid.innerHTML = `
-        <div class="total-item pending">
-          <div class="value">${totals.pending}</div>
-          <div class="label">Total Pending</div>
-        </div>
         <div class="total-item late">
           <div class="value">${totals.late}</div>
           <div class="label">Late</div>
@@ -476,6 +469,10 @@
         <div class="total-item tomorrow">
           <div class="value">${totals.dueTomorrow}</div>
           <div class="label">Tomorrow</div>
+        </div>
+        <div class="total-item pending">
+          <div class="value">${totals.pending}</div>
+          <div class="label">Total Pending</div>
         </div>
       `;
 
