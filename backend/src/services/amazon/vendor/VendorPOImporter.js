@@ -219,14 +219,19 @@ class VendorPOImporter {
         const existingItem = key ? existingItemsMap[key] : null;
 
         if (existingItem) {
-          // Preserve Odoo enrichment data from existing item
+          // Preserve Odoo enrichment data AND acknowledgment data from existing item
           return {
             ...newItem,
+            // Odoo enrichment data
             odooProductId: existingItem.odooProductId || newItem.odooProductId,
             odooProductName: existingItem.odooProductName || newItem.odooProductName,
             odooSku: existingItem.odooSku || newItem.odooSku,
             odooBarcode: existingItem.odooBarcode || newItem.odooBarcode,
-            qtyAvailable: existingItem.qtyAvailable // Keep cached stock
+            qtyAvailable: existingItem.qtyAvailable, // Keep cached stock
+            // CRITICAL: Preserve acknowledgment fields (user-edited data)
+            acknowledgeQty: existingItem.acknowledgeQty ?? newItem.acknowledgeQty,
+            backorderQty: existingItem.backorderQty ?? newItem.backorderQty,
+            productAvailability: existingItem.productAvailability || newItem.productAvailability
           };
         }
         return newItem;

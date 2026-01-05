@@ -31,11 +31,12 @@ function transformVendorOrder(vendorPO) {
 
   const items = (vendorPO.items || []).map(item => {
     const unitCost = parseFloat(item.netCost?.amount) || 0;
-    const qty = parseInt(item.orderedQuantity?.amount) || 0;
+    const qty = parseInt(item.orderedQuantity?.amount) || item.quantity || 0;
     const lineTotal = unitCost * qty;
     subtotal += lineTotal;
 
     return {
+      // Unified schema fields
       sku: item.odoo?.sku || item.vendorProductIdentifier || null,
       asin: item.amazonProductIdentifier,
       ean: item.vendorProductIdentifier || null,
@@ -46,7 +47,27 @@ function transformVendorOrder(vendorPO) {
       lineTotal,
       tax: 0, // Tax calculated on invoice
       backordered: item.backordered || false,
-      odooProductId: item.odoo?.productId || null
+      odooProductId: item.odoo?.productId || null,
+
+      // CRITICAL: Vendor workflow fields (preserve from legacy)
+      itemSequenceNumber: item.itemSequenceNumber,
+      vendorProductIdentifier: item.vendorProductIdentifier,
+      amazonProductIdentifier: item.amazonProductIdentifier,
+      orderedQuantity: item.orderedQuantity,
+      netCost: item.netCost,
+      listPrice: item.listPrice,
+      isBackOrderAllowed: item.isBackOrderAllowed || false,
+
+      // Acknowledgment fields (preserve from legacy or default)
+      acknowledgeQty: item.acknowledgeQty ?? 0,
+      backorderQty: item.backorderQty ?? 0,
+      productAvailability: item.productAvailability || 'accepted',
+
+      // Odoo enrichment (preserve from legacy)
+      odooProductName: item.odooProductName || null,
+      odooSku: item.odooSku || null,
+      odooBarcode: item.odooBarcode || null,
+      qtyAvailable: item.qtyAvailable || null
     };
   });
 
@@ -189,7 +210,7 @@ function transformAmazonVendorApiOrder(amazonPO, marketplace = 'DE') {
   const sourceStatus = amazonPO.purchaseOrderState;
   const unifiedStatus = STATUS_MAP[sourceStatus] || UNIFIED_STATUS.PENDING;
 
-  // Parse items
+  // Parse items - include ALL fields needed by vendor workflows
   let subtotal = 0;
   const items = (details.items || []).map(item => {
     const unitCost = parseFloat(item.netCost?.amount) || 0;
@@ -198,6 +219,7 @@ function transformAmazonVendorApiOrder(amazonPO, marketplace = 'DE') {
     subtotal += lineTotal;
 
     return {
+      // Unified schema fields
       sku: item.vendorProductIdentifier || null,
       asin: item.amazonProductIdentifier,
       ean: item.vendorProductIdentifier || null,
@@ -206,7 +228,38 @@ function transformAmazonVendorApiOrder(amazonPO, marketplace = 'DE') {
       quantityShipped: 0,
       unitPrice: unitCost,
       lineTotal,
-      tax: 0
+      tax: 0,
+
+      // CRITICAL: Vendor workflow fields (needed by VendorPOAcknowledger, VendorOrderCreator)
+      itemSequenceNumber: item.itemSequenceNumber,
+      vendorProductIdentifier: item.vendorProductIdentifier,
+      amazonProductIdentifier: item.amazonProductIdentifier,
+      orderedQuantity: item.orderedQuantity ? {
+        amount: item.orderedQuantity.amount,
+        unitOfMeasure: item.orderedQuantity.unitOfMeasure,
+        unitSize: item.orderedQuantity.unitSize
+      } : null,
+      netCost: item.netCost ? {
+        currencyCode: item.netCost.currencyCode,
+        amount: item.netCost.amount
+      } : null,
+      listPrice: item.listPrice ? {
+        currencyCode: item.listPrice.currencyCode,
+        amount: item.listPrice.amount
+      } : null,
+      isBackOrderAllowed: item.isBackOrderAllowed || false,
+
+      // Acknowledgment fields with defaults (user-editable)
+      acknowledgeQty: 0,           // Default to 0 until user sets it
+      backorderQty: 0,
+      productAvailability: 'accepted',
+
+      // Odoo product link (populated by enrichment)
+      odooProductId: null,
+      odooProductName: null,
+      odooSku: null,
+      odooBarcode: null,
+      qtyAvailable: null
     };
   });
 
