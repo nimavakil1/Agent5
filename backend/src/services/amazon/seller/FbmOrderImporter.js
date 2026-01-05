@@ -354,10 +354,21 @@ class FbmOrderImporter {
 
     // Create/find shipping address (child contact)
     // Clean duplicate names like "LE-ROUX, LE-ROUX Armelle" for delivery addresses only
+    // Handle company name: if buyer-company-name exists and is different from recipient, include it
+    let street2 = order.address2 || order.address3 || false;
+    const hasCompanyName = order.buyerCompanyName &&
+      order.buyerCompanyName !== order.recipientName &&
+      order.buyerCompanyName !== order.buyerName;
+
+    if (hasCompanyName) {
+      // Prepend company name to street2
+      street2 = street2 ? `${order.buyerCompanyName}, ${street2}` : order.buyerCompanyName;
+    }
+
     const shippingAddressId = await this.findOrCreateAddress(order, customerId, 'delivery', {
       name: cleanDuplicateName(order.recipientName),
       street: order.address1,
-      street2: order.address2 || order.address3 || false,
+      street2,
       city: order.city,
       zip: order.postalCode,
       countryCode: order.country,
