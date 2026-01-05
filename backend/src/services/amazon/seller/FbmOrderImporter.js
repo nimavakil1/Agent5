@@ -374,11 +374,19 @@ class FbmOrderImporter {
     }
 
     // Create/find shipping address (child contact)
-    // Use the cleaned address data from AI - company name is in parent, contact name here
-    const contactName = isCompany ? (cleanedAddress.name || order.recipientName) : cleanDuplicateName(order.recipientName);
+    // For B2B: Include company name FIRST, then contact name (for shipping labels)
+    // Format: "Company Name\nContact Name" so company appears on first line
+    let deliveryName;
+    if (isCompany && cleanedAddress.company) {
+      const personName = cleanedAddress.name || order.recipientName;
+      // Company first, then contact - newline ensures proper display on labels
+      deliveryName = `${cleanedAddress.company}\n${personName}`;
+    } else {
+      deliveryName = cleanDuplicateName(order.recipientName);
+    }
 
     const shippingAddressId = await this.findOrCreateAddress(order, customerId, 'delivery', {
-      name: cleanDuplicateName(contactName),
+      name: deliveryName,
       street: cleanedAddress.street || order.address1,
       street2: cleanedAddress.street2 || false,
       city: cleanedAddress.city || order.city,
