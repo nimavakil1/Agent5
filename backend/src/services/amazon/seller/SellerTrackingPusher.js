@@ -12,8 +12,10 @@
 const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { getSellerClient } = require('./SellerClient');
-const { COLLECTION_NAME } = require('./SellerOrderImporter');
 const { getMarketplaceConfig: _getMarketplaceConfig } = require('./SellerMarketplaceConfig');
+
+// Collection name for seller orders - DO NOT import from SellerOrderImporter (it uses unified_orders)
+const SELLER_ORDERS_COLLECTION = 'seller_orders';
 
 /**
  * Amazon Seller Sales Team IDs in Odoo
@@ -82,7 +84,7 @@ class SellerTrackingPusher {
     await this.client.init();
 
     const db = getDb();
-    this.collection = db.collection(COLLECTION_NAME);
+    this.collection = db.collection(SELLER_ORDERS_COLLECTION);
   }
 
   /**
