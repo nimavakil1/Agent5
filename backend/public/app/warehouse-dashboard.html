@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warehouse Dashboard - Late Orders</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1a1a2e;
+      color: white;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 3rem;
+      font-weight: 300;
+      margin-bottom: 10px;
+    }
+
+    .header .timestamp {
+      font-size: 1.5rem;
+      color: #888;
+    }
+
+    .header .refresh-indicator {
+      font-size: 1rem;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 25px;
+      max-width: 1800px;
+      margin: 0 auto;
+    }
+
+    .channel-box {
+      background: linear-gradient(145deg, #16213e, #1a1a2e);
+      border-radius: 20px;
+      padding: 30px;
+      border: 2px solid #333;
+      transition: all 0.3s ease;
+    }
+
+    .channel-box:hover {
+      transform: translateY(-5px);
+      border-color: #4a4a6a;
+    }
+
+    .channel-box.has-late {
+      border-color: #e74c3c;
+      box-shadow: 0 0 30px rgba(231, 76, 60, 0.3);
+    }
+
+    .channel-box.all-good {
+      border-color: #27ae60;
+    }
+
+    .channel-name {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 25px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .channel-name .icon {
+      font-size: 2.5rem;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .stat {
+      text-align: center;
+      padding: 20px;
+      border-radius: 15px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .stat-value {
+      font-size: 4rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 1.1rem;
+      color: #888;
+      margin-top: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .stat.late .stat-value {
+      color: #e74c3c;
+    }
+
+    .stat.late {
+      background: rgba(231, 76, 60, 0.15);
+    }
+
+    .stat.today .stat-value {
+      color: #f39c12;
+    }
+
+    .stat.today {
+      background: rgba(243, 156, 18, 0.15);
+    }
+
+    .stat.pending .stat-value {
+      color: #3498db;
+    }
+
+    .stat.upcoming .stat-value {
+      color: #27ae60;
+    }
+
+    .totals-bar {
+      margin-top: 40px;
+      background: linear-gradient(145deg, #16213e, #1a1a2e);
+      border-radius: 20px;
+      padding: 30px;
+      border: 2px solid #333;
+      max-width: 1800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .totals-bar h2 {
+      font-size: 1.8rem;
+      margin-bottom: 20px;
+      text-align: center;
+      font-weight: 400;
+    }
+
+    .totals-grid {
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .total-item {
+      text-align: center;
+      min-width: 150px;
+    }
+
+    .total-item .value {
+      font-size: 3.5rem;
+      font-weight: 700;
+    }
+
+    .total-item .label {
+      font-size: 1rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .total-item.late .value { color: #e74c3c; }
+    .total-item.today .value { color: #f39c12; }
+    .total-item.pending .value { color: #3498db; }
+    .total-item.tomorrow .value { color: #9b59b6; }
+
+    .alert-banner {
+      display: none;
+      background: linear-gradient(90deg, #e74c3c, #c0392b);
+      color: white;
+      padding: 20px;
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 30px;
+      border-radius: 15px;
+      animation: pulse 2s infinite;
+    }
+
+    .alert-banner.visible {
+      display: block;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+
+    .loading {
+      text-align: center;
+      padding: 100px;
+      font-size: 2rem;
+      color: #666;
+    }
+
+    .error {
+      text-align: center;
+      padding: 50px;
+      color: #e74c3c;
+      font-size: 1.5rem;
+    }
+
+    /* Fullscreen mode styles */
+    body.fullscreen {
+      padding: 40px;
+    }
+
+    body.fullscreen .header h1 {
+      font-size: 4rem;
+    }
+
+    body.fullscreen .channel-name {
+      font-size: 2.5rem;
+    }
+
+    body.fullscreen .stat-value {
+      font-size: 5rem;
+    }
+
+    body.fullscreen .total-item .value {
+      font-size: 4.5rem;
+    }
+
+    .fullscreen-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #333;
+      color: white;
+      border: none;
+      padding: 15px 25px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 1rem;
+      z-index: 1000;
+    }
+
+    .fullscreen-btn:hover {
+      background: #444;
+    }
+  </style>
+</head>
+<body>
+  <div class="alert-banner" id="alertBanner">
+    <span id="alertText"></span>
+  </div>
+
+  <div class="header">
+    <h1>Order Fulfillment Status</h1>
+    <div class="timestamp" id="timestamp">Loading...</div>
+    <div class="refresh-indicator">Auto-refresh every 60 seconds</div>
+  </div>
+
+  <div class="grid" id="channelGrid">
+    <div class="loading">Loading dashboard...</div>
+  </div>
+
+  <div class="totals-bar" id="totalsBar" style="display: none;">
+    <h2>Total Across All Channels</h2>
+    <div class="totals-grid" id="totalsGrid"></div>
+  </div>
+
+  <button class="fullscreen-btn" onclick="toggleFullscreen()">
+    Toggle Fullscreen
+  </button>
+
+  <script>
+    const CHANNEL_CONFIG = {
+      'AMZ Seller': { icon: '📦', color: '#ff9900' },
+      'AMZ Vendor': { icon: '🏭', color: '#ff9900' },
+      'BOL': { icon: '🛒', color: '#0000a4' },
+      'Sales': { icon: '💼', color: '#27ae60' },
+      'Other': { icon: '📋', color: '#888' }
+    };
+
+    const CHANNEL_ORDER = ['AMZ Seller', 'AMZ Vendor', 'BOL', 'Sales', 'Other'];
+
+    async function fetchData() {
+      try {
+        const response = await fetch('/api/alerts/warehouse-display');
+        if (!response.ok) throw new Error('Failed to fetch');
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        return null;
+      }
+    }
+
+    function renderDashboard(data) {
+      const grid = document.getElementById('channelGrid');
+      const totalsBar = document.getElementById('totalsBar');
+      const totalsGrid = document.getElementById('totalsGrid');
+      const timestamp = document.getElementById('timestamp');
+      const alertBanner = document.getElementById('alertBanner');
+      const alertText = document.getElementById('alertText');
+
+      if (!data || !data.channelStats) {
+        grid.innerHTML = '<div class="error">Failed to load data. Retrying...</div>';
+        return;
+      }
+
+      // Update timestamp
+      const now = new Date();
+      timestamp.textContent = now.toLocaleDateString('en-GB', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      // Calculate totals
+      const totals = { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0, upcoming: 0 };
+
+      // Render channel boxes
+      let html = '';
+      for (const channel of CHANNEL_ORDER) {
+        const stats = data.channelStats[channel];
+        if (!stats || stats.pending === 0) continue;
+
+        const config = CHANNEL_CONFIG[channel] || { icon: '📦', color: '#888' };
+        const hasLate = stats.late > 0;
+        const boxClass = hasLate ? 'has-late' : (stats.dueToday === 0 ? 'all-good' : '');
+
+        totals.pending += stats.pending || 0;
+        totals.late += stats.late || 0;
+        totals.dueToday += stats.dueToday || 0;
+        totals.dueTomorrow += stats.dueTomorrow || 0;
+        totals.upcoming += stats.upcoming || 0;
+
+        html += `
+          <div class="channel-box ${boxClass}">
+            <div class="channel-name">
+              <span class="icon">${config.icon}</span>
+              ${channel}
+            </div>
+            <div class="stats">
+              <div class="stat pending">
+                <div class="stat-value">${stats.pending}</div>
+                <div class="stat-label">Pending</div>
+              </div>
+              <div class="stat late">
+                <div class="stat-value">${stats.late}</div>
+                <div class="stat-label">Late</div>
+              </div>
+              <div class="stat today">
+                <div class="stat-value">${stats.dueToday}</div>
+                <div class="stat-label">Due Today</div>
+              </div>
+              <div class="stat upcoming">
+                <div class="stat-value">${stats.dueTomorrow + stats.upcoming}</div>
+                <div class="stat-label">Upcoming</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      grid.innerHTML = html || '<div class="loading">No pending orders</div>';
+
+      // Render totals
+      totalsBar.style.display = 'block';
+      totalsGrid.innerHTML = `
+        <div class="total-item pending">
+          <div class="value">${totals.pending}</div>
+          <div class="label">Total Pending</div>
+        </div>
+        <div class="total-item late">
+          <div class="value">${totals.late}</div>
+          <div class="label">Late</div>
+        </div>
+        <div class="total-item today">
+          <div class="value">${totals.dueToday}</div>
+          <div class="label">Due Today</div>
+        </div>
+        <div class="total-item tomorrow">
+          <div class="value">${totals.dueTomorrow}</div>
+          <div class="label">Tomorrow</div>
+        </div>
+      `;
+
+      // Alert banner
+      if (totals.late > 0) {
+        alertBanner.classList.add('visible');
+        alertText.textContent = `⚠️ ${totals.late} LATE ORDERS - ${totals.dueToday} DUE TODAY`;
+      } else if (totals.dueToday > 0) {
+        alertBanner.classList.add('visible');
+        alertBanner.style.background = 'linear-gradient(90deg, #f39c12, #e67e22)';
+        alertText.textContent = `⏰ ${totals.dueToday} orders due today`;
+      } else {
+        alertBanner.classList.remove('visible');
+      }
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+        document.body.classList.add('fullscreen');
+      } else {
+        document.exitFullscreen();
+        document.body.classList.remove('fullscreen');
+      }
+    }
+
+    async function refresh() {
+      const data = await fetchData();
+      renderDashboard(data);
+    }
+
+    // Initial load
+    refresh();
+
+    // Auto-refresh every 60 seconds
+    setInterval(refresh, 60000);
+  </script>
+</body>
+</html>

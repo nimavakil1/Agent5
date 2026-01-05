@@ -135,6 +135,28 @@ router.post('/late-orders/send', async (req, res) => {
 });
 
 /**
+ * GET /api/alerts/warehouse-display
+ * Public endpoint for warehouse dashboard (no auth required)
+ * Returns only the channel stats for display purposes
+ */
+router.get('/warehouse-display', async (req, res) => {
+  try {
+    const service = getLateOrdersAlertService();
+    const status = await service.getStatus();
+
+    // Return only what's needed for the display
+    res.json({
+      timestamp: new Date().toISOString(),
+      channelStats: status.channelStats,
+      totals: status.totals
+    });
+  } catch (error) {
+    console.error('[Alerts API] Error getting warehouse display data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /api/alerts/config
  * Get current alert configuration status
  */

@@ -418,7 +418,22 @@ app.use('/api/chat/my-permissions', requireSession, chatCheckRouter);
 app.use('/api/chat', requireSession, chatRouter);
 // Unified Orders API (all channels: Amazon Seller, Vendor, Bol.com)
 app.use('/api/orders', requireSession, ordersRouter);
-// Alerts API (Teams notifications, late orders alerts)
+// Alerts API - Public warehouse display endpoint (no auth for big screen display)
+app.get('/api/alerts/warehouse-display', async (req, res) => {
+  try {
+    const { getLateOrdersAlertService } = require('./services/alerts/LateOrdersAlertService');
+    const service = getLateOrdersAlertService();
+    const status = await service.getStatus();
+    res.json({
+      timestamp: new Date().toISOString(),
+      channelStats: status.channelStats,
+      totals: status.totals
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+// Alerts API (Teams notifications, late orders alerts) - requires auth
 app.use('/api/alerts', requireSession, alertsRouter);
 
 const uiDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
