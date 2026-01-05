@@ -630,7 +630,8 @@ class FbmOrderImporter {
   }
 
   /**
-   * Update MongoDB seller_orders with data from TSV file
+   * Update MongoDB with data from TSV file
+   * Updates both seller_orders AND unified_orders collections
    * This fills in customer names and addresses that Amazon API doesn't provide
    *
    * @param {string} amazonOrderId - Amazon Order ID
@@ -640,9 +641,10 @@ class FbmOrderImporter {
   async updateMongoWithTsvData(amazonOrderId, tsvOrder, odooInfo = null) {
     try {
       const db = getDb();
-      const collection = db.collection('seller_orders');
 
-      const updateData = {
+      // Update seller_orders collection (legacy)
+      const sellerOrdersCollection = db.collection('seller_orders');
+      const sellerOrdersUpdate = {
         // Update shipping address with TSV data
         'shippingAddress.name': tsvOrder.recipientName || null,
         'shippingAddress.addressLine1': tsvOrder.address1 || null,
@@ -660,18 +662,49 @@ class FbmOrderImporter {
 
       // Add Odoo info if provided
       if (odooInfo) {
-        updateData['odoo.partnerId'] = odooInfo.partnerId || null;
-        updateData['odoo.saleOrderId'] = odooInfo.saleOrderId || null;
-        updateData['odoo.saleOrderName'] = odooInfo.saleOrderName || null;
-        updateData['odoo.createdAt'] = new Date();
+        sellerOrdersUpdate['odoo.partnerId'] = odooInfo.partnerId || null;
+        sellerOrdersUpdate['odoo.saleOrderId'] = odooInfo.saleOrderId || null;
+        sellerOrdersUpdate['odoo.saleOrderName'] = odooInfo.saleOrderName || null;
+        sellerOrdersUpdate['odoo.createdAt'] = new Date();
       }
 
-      await collection.updateOne(
+      await sellerOrdersCollection.updateOne(
         { amazonOrderId },
-        { $set: updateData }
+        { $set: sellerOrdersUpdate }
       );
 
-      console.log(`[FbmOrderImporter] Updated MongoDB with TSV data for ${amazonOrderId}`);
+      // ALSO update unified_orders collection (used by countFbmOrdersPendingManualImport)
+      const unifiedOrdersCollection = db.collection('unified_orders');
+      const unifiedOrdersUpdate = {
+        // Update shipping address with TSV data
+        'shippingAddress.name': tsvOrder.recipientName || null,
+        'shippingAddress.addressLine1': tsvOrder.address1 || null,
+        'shippingAddress.addressLine2': tsvOrder.address2 || tsvOrder.address3 || null,
+        'shippingAddress.city': tsvOrder.city || null,
+        'shippingAddress.postalCode': tsvOrder.postalCode || null,
+        'shippingAddress.countryCode': tsvOrder.country || null,
+        'shippingAddress.phone': tsvOrder.shipPhone || tsvOrder.buyerPhone || null,
+        // Update buyer info
+        'buyerInfo.name': tsvOrder.buyerName || tsvOrder.recipientName || null,
+        'buyerInfo.email': tsvOrder.buyerEmail || null,
+        // Mark as updated from TSV
+        tsvImportedAt: new Date()
+      };
+
+      // Add Odoo info if provided - using unified schema field names
+      if (odooInfo) {
+        unifiedOrdersUpdate['sourceIds.odooPartnerId'] = odooInfo.partnerId || null;
+        unifiedOrdersUpdate['sourceIds.odooSaleOrderId'] = odooInfo.saleOrderId || null;
+        unifiedOrdersUpdate['sourceIds.odooSaleOrderName'] = odooInfo.saleOrderName || null;
+        unifiedOrdersUpdate['sourceIds.odooCreatedAt'] = new Date();
+      }
+
+      await unifiedOrdersCollection.updateOne(
+        { 'sourceIds.amazonOrderId': amazonOrderId },
+        { $set: unifiedOrdersUpdate }
+      );
+
+      console.log(`[FbmOrderImporter] Updated MongoDB (seller_orders + unified_orders) with TSV data for ${amazonOrderId}`);
     } catch (error) {
       console.error(`[FbmOrderImporter] Error updating MongoDB for ${amazonOrderId}:`, error.message);
       // Don't throw - this is a non-critical update
