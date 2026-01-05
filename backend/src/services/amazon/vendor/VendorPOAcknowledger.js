@@ -131,7 +131,7 @@ class VendorPOAcknowledger {
       // Build acknowledgment payload with line-level data
       const ackItems = items || this.buildItemAcknowledgments(po.items, status, scheduleData);
 
-      const acknowledgment = {
+      const ackPayload = {
         acknowledgements: [{
           purchaseOrderNumber: poNumber,
           sellingParty: {
@@ -142,7 +142,7 @@ class VendorPOAcknowledger {
         }]
       };
 
-      result.payload = acknowledgment;
+      result.payload = ackPayload;
 
       if (dryRun) {
         result.success = true;
@@ -153,7 +153,7 @@ class VendorPOAcknowledger {
 
       // Submit to Amazon
       console.log(`[VendorPOAcknowledger] Submitting acknowledgment for ${poNumber}...`);
-      const response = await client.submitAcknowledgement(acknowledgment);
+      const response = await client.submitAcknowledgement(ackPayload);
 
       // Check for transaction ID
       if (response.transactionId) {
