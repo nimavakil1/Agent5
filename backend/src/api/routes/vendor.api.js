@@ -597,11 +597,31 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
 router.get('/orders/:poNumber', async (req, res) => {
   try {
     const importer = await getVendorPOImporter();
-    const order = await importer.getPurchaseOrder(req.params.poNumber);
+    const o = await importer.getPurchaseOrder(req.params.poNumber);
 
-    if (!order) {
+    if (!o) {
       return res.status(404).json({ success: false, error: 'Purchase order not found' });
     }
+
+    // Map unified schema to API response format
+    const order = {
+      purchaseOrderNumber: o.sourceIds?.amazonVendorPONumber || o.purchaseOrderNumber,
+      marketplaceId: o.marketplace?.code || o.marketplaceId,
+      purchaseOrderState: o.amazonVendor?.purchaseOrderState || o.purchaseOrderState,
+      purchaseOrderType: o.amazonVendor?.purchaseOrderType || o.purchaseOrderType,
+      purchaseOrderDate: o.orderDate || o.purchaseOrderDate,
+      deliveryWindow: o.amazonVendor?.deliveryWindow || o.deliveryWindow,
+      shipmentStatus: o.amazonVendor?.shipmentStatus || o.shipmentStatus,
+      totals: o.totals,
+      acknowledgment: o.amazonVendor?.acknowledgment || o.acknowledgment,
+      odoo: o.odoo,
+      items: o.items,
+      buyingParty: o.amazonVendor?.buyingParty || o.buyingParty,
+      sellingParty: o.amazonVendor?.sellingParty || o.sellingParty,
+      shipToParty: o.amazonVendor?.shipToParty || o.shipToParty,
+      billToParty: o.amazonVendor?.billToParty || o.billToParty,
+      shipments: o.amazonVendor?.shipments || o.shipments || []
+    };
 
     res.json({
       success: true,
