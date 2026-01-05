@@ -13,10 +13,10 @@ const { getSellerClient } = require('../amazon/seller/SellerClient');
 let bolAccessToken = null;
 let bolTokenExpiry = null;
 
-// Dashboard data cache (2 minutes)
+// Dashboard data cache (15 minutes)
 let dashboardCache = null;
 let dashboardCacheExpiry = null;
-const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 /**
  * Get Bol.com access token
