@@ -604,6 +604,21 @@ router.get('/orders/:poNumber', async (req, res) => {
     }
 
     // Map unified schema to API response format
+    // Transform items to expected format (unified -> legacy field names)
+    const transformedItems = (o.items || []).map(item => ({
+      // Keep original item data for backwards compatibility
+      ...item,
+      // Map unified fields to expected legacy format
+      vendorProductIdentifier: item.vendorProductIdentifier || item.ean || item.sku,
+      amazonProductIdentifier: item.amazonProductIdentifier || item.asin,
+      orderedQuantity: item.orderedQuantity || { amount: item.quantity || 0, unitOfMeasure: 'Each' },
+      netCost: item.netCost || { amount: item.unitPrice || 0, currencyCode: o.totals?.currency || 'EUR' },
+      // Preserve any existing odoo product info
+      odooSku: item.odooSku || item.sku,
+      odooProductName: item.odooProductName || item.name,
+      odooProductId: item.odooProductId
+    }));
+
     const order = {
       purchaseOrderNumber: o.sourceIds?.amazonVendorPONumber || o.purchaseOrderNumber,
       marketplaceId: o.marketplace?.code || o.marketplaceId,
@@ -615,7 +630,7 @@ router.get('/orders/:poNumber', async (req, res) => {
       totals: o.totals,
       acknowledgment: o.amazonVendor?.acknowledgment || o.acknowledgment,
       odoo: o.odoo,
-      items: o.items,
+      items: transformedItems,
       buyingParty: o.amazonVendor?.buyingParty || o.buyingParty,
       sellingParty: o.amazonVendor?.sellingParty || o.sellingParty,
       shipToParty: o.amazonVendor?.shipToParty || o.shipToParty,
