@@ -553,7 +553,7 @@ class VendorPOImporter {
     if (options.sort) {
       cursor.sort(options.sort);
     } else {
-      cursor.sort({ purchaseOrderDate: -1 });
+      cursor.sort({ orderDate: -1 });
     }
 
     // Pagination
