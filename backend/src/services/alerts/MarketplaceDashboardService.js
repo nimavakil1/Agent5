@@ -275,19 +275,6 @@ class MarketplaceDashboardService {
             if (deadline) break;
           }
 
-          // Log first order for debugging
-          if (order === ordersToFetch[0]) {
-            console.log('[MarketplaceDashboard] Bol.com first order items sample:',
-              JSON.stringify((details.orderItems || []).slice(0, 1).map(i => ({
-                orderItemId: i.orderItemId,
-                latestDeliveryDate: i.latestDeliveryDate,
-                fulfilment: i.fulfilment,
-                quantity: i.quantity,
-                quantityShipped: i.quantityShipped
-              })), null, 2)
-            );
-          }
-
           if (!deadline) {
             stats.noDeadline++;
             continue;
