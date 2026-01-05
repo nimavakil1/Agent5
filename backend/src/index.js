@@ -310,6 +310,11 @@ app.get('/index.html', requireSession, (req, res) => {
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
+// Public warehouse dashboard (no auth required - for big screen display)
+app.get('/warehouse', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app', 'warehouse-dashboard.html'));
+});
+
 const protectedPages = ['dashboard.html', 'call-review.html', 'admin.html', 'monitor.html'];
 protectedPages.forEach(page => {
   app.get(`/${page}`, requireSession, (req, res) => {
