@@ -252,6 +252,16 @@ class LateOrdersAlertService {
         return b.daysLate - a.daysLate;
       });
 
+    // Helper for European date format dd/mm/yy
+    const formatDate = (d) => {
+      if (!d) return '';
+      const date = new Date(d);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = String(date.getFullYear()).slice(-2);
+      return `${day}/${month}/${year}`;
+    };
+
     for (const order of priorityOrders) {
       const row = lateSheet.addRow({
         pickingName: order.pickingName,
@@ -259,8 +269,8 @@ class LateOrdersAlertService {
         channel: order.channel,
         customer: order.customer,
         amount: order.amount,
-        orderDate: order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '',
-        deadline: order.deadline ? new Date(order.deadline).toLocaleDateString() : '',
+        orderDate: formatDate(order.orderDate),
+        deadline: formatDate(order.deadline),
         daysLate: order.daysLate,
         status: order.status === 'late' ? 'LATE' : 'Due Today',
         odooUrl: order.odooUrl || ''
