@@ -110,20 +110,21 @@ router.get('/orders', async (req, res) => {
       success: true,
       count: orders.length,
       total,
+      // Map unified schema to frontend-expected format (with legacy fallbacks)
       orders: orders.map(o => ({
-        amazonOrderId: o.amazonOrderId,
-        marketplaceId: o.marketplaceId,
-        marketplaceCountry: o.marketplaceCountry,
-        orderStatus: o.orderStatus,
-        fulfillmentChannel: o.fulfillmentChannel,
-        purchaseDate: o.purchaseDate,
-        orderTotal: o.orderTotal,
-        buyerName: o.buyerName,
+        amazonOrderId: o.sourceIds?.amazonOrderId || o.amazonOrderId,
+        marketplaceId: o.marketplace?.code || o.marketplaceId,
+        marketplaceCountry: o.marketplace?.name || o.marketplaceCountry,
+        orderStatus: o.status?.source || o.orderStatus,
+        fulfillmentChannel: o.amazonSeller?.fulfillmentChannel || o.subChannel || o.fulfillmentChannel,
+        purchaseDate: o.orderDate || o.purchaseDate,
+        orderTotal: o.totals || o.orderTotal,
+        buyerName: o.customer?.name || o.shippingAddress?.name || o.buyerName,
         shippingAddress: o.shippingAddress,
-        isPrime: o.isPrime,
-        isBusinessOrder: o.isBusinessOrder,
+        isPrime: o.amazonSeller?.isPrime ?? o.isPrime,
+        isBusinessOrder: o.amazonSeller?.isBusinessOrder ?? o.isBusinessOrder,
         itemCount: o.items?.length || 0,
-        itemsFetched: o.itemsFetched,
+        itemsFetched: o.itemsFetched ?? (o.items?.length > 0),
         autoImportEligible: o.autoImportEligible,
         odoo: o.odoo
       }))
@@ -486,13 +487,14 @@ router.get('/pending', async (req, res) => {
     res.json({
       success: true,
       count: orders.length,
+      // Map unified schema to frontend-expected format (with legacy fallbacks)
       orders: orders.map(o => ({
-        amazonOrderId: o.amazonOrderId,
-        marketplaceCountry: o.marketplaceCountry,
-        orderStatus: o.orderStatus,
-        fulfillmentChannel: o.fulfillmentChannel,
-        purchaseDate: o.purchaseDate,
-        orderTotal: o.orderTotal,
+        amazonOrderId: o.sourceIds?.amazonOrderId || o.amazonOrderId,
+        marketplaceCountry: o.marketplace?.name || o.marketplaceCountry,
+        orderStatus: o.status?.source || o.orderStatus,
+        fulfillmentChannel: o.amazonSeller?.fulfillmentChannel || o.subChannel || o.fulfillmentChannel,
+        purchaseDate: o.orderDate || o.purchaseDate,
+        orderTotal: o.totals || o.orderTotal,
         itemCount: o.items?.length || 0
       }))
     });
