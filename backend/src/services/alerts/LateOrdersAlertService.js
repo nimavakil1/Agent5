@@ -415,10 +415,21 @@ class LateOrdersAlertService {
           ]
         },
         {
-          type: 'TextBlock',
-          text: '_Excel report with all late orders attached._',
-          size: 'small',
-          isSubtle: true
+          type: 'ActionSet',
+          actions: [
+            {
+              type: 'Action.OpenUrl',
+              title: '📥 Download Excel Report',
+              url: `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/api/alerts/late-orders/excel`,
+              style: 'positive'
+            },
+            {
+              type: 'Action.OpenUrl',
+              title: '📋 Open Agent5 Orders',
+              url: `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/app/orders.html`,
+              style: 'default'
+            }
+          ]
         }
       ]
     };
