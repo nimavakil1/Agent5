@@ -31,21 +31,128 @@ const INVOICE_TYPES = {
 /**
  * ACROPAQ company info for remitToParty
  * Note: partyId 'C86K8' is ACROPAQ's Amazon vendor code
+ *
+ * IMPORTANT: Address and VAT must match Amazon Vendor Central records exactly.
+ * Updated 2026-01-05 per Amazon EDI testing feedback (Vasu Keesara).
  */
 const ACROPAQ_COMPANY = {
   partyId: 'C86K8',
   address: {
-    name: 'ACROPAQ BV',
-    addressLine1: 'Patronaatstraat 79',
-    city: 'Dendermonde',
-    stateOrRegion: 'Oost-Vlaanderen',
-    postalOrZipCode: '9200',
+    name: 'ACROPAQ SA',
+    addressLine1: 'RUE KONKEL 105',
+    city: 'WOLUWE-SAINT-PIERRE',
+    postalOrZipCode: '1150',
     countryCode: 'BE'
   },
   taxRegistrationDetails: [{
     taxRegistrationType: 'VAT',
-    taxRegistrationNumber: 'BE0644944497'
+    taxRegistrationNumber: 'BE0476248323'
   }]
+};
+
+/**
+ * Amazon billing entities per marketplace
+ * These are the correct billToParty values that Amazon requires
+ * Updated 2026-01-05 per Amazon EDI testing feedback.
+ */
+const AMAZON_BILLING_ENTITIES = {
+  // France - AMAZON EU SARL, SUCCURSALE FRANCAISE
+  FR: {
+    partyId: 'AMAZONFR',
+    address: {
+      name: 'AMAZON EU SARL, SUCCURSALE FRANCAISE',
+      addressLine1: '67 BOULEVARD DU GENERAL LECLERC',
+      city: 'CLICHY',
+      postalOrZipCode: '92110',
+      countryCode: 'FR'
+    },
+    taxRegistrationDetails: [{
+      taxRegistrationType: 'VAT',
+      taxRegistrationNumber: 'FR12487773327'
+    }]
+  },
+  // Germany
+  DE: {
+    partyId: 'AMAZONDE',
+    address: {
+      name: 'Amazon EU S.a.r.l.',
+      addressLine1: 'Marcel-Breuer-Str. 12',
+      city: 'Muenchen',
+      postalOrZipCode: '80807',
+      countryCode: 'DE'
+    },
+    taxRegistrationDetails: [{
+      taxRegistrationType: 'VAT',
+      taxRegistrationNumber: 'DE814584193'
+    }]
+  },
+  // Italy
+  IT: {
+    partyId: 'AMAZONIT',
+    address: {
+      name: 'Amazon EU S.a.r.l., Sede secondaria italiana',
+      addressLine1: 'Via Cilea Longo 35',
+      city: 'Milano',
+      postalOrZipCode: '20151',
+      countryCode: 'IT'
+    },
+    taxRegistrationDetails: [{
+      taxRegistrationType: 'VAT',
+      taxRegistrationNumber: 'IT09944691008'
+    }]
+  },
+  // Spain
+  ES: {
+    partyId: 'AMAZONES',
+    address: {
+      name: 'AMAZON EU S.A R.L., SUCURSAL EN ESPANA',
+      addressLine1: 'CALLE RAMIREZ DE PRADO, 5',
+      city: 'MADRID',
+      postalOrZipCode: '28045',
+      countryCode: 'ES'
+    },
+    taxRegistrationDetails: [{
+      taxRegistrationType: 'VAT',
+      taxRegistrationNumber: 'ESW0184081H'
+    }]
+  },
+  // Netherlands
+  NL: {
+    partyId: 'AMAZONNL',
+    address: {
+      name: 'Amazon EU S.a r.l., Dutch Branch',
+      addressLine1: 'Herculesplein 25',
+      city: 'Utrecht',
+      postalOrZipCode: '3584 AA',
+      countryCode: 'NL'
+    }
+  },
+  // Belgium
+  BE: {
+    partyId: 'AMAZONBE',
+    address: {
+      name: 'Amazon EU S.a.r.l., Belgian Branch',
+      addressLine1: 'Avenue des Arts 40',
+      city: 'Brussels',
+      postalOrZipCode: '1040',
+      countryCode: 'BE'
+    }
+  },
+  // UK (post-Brexit)
+  GB: {
+    partyId: 'AMAZONGB',
+    address: {
+      name: 'Amazon UK Services Ltd',
+      addressLine1: '1 Principal Place',
+      city: 'London',
+      postalOrZipCode: 'EC2A 2FA',
+      countryCode: 'GB'
+    },
+    taxRegistrationDetails: [{
+      taxRegistrationType: 'VAT',
+      taxRegistrationNumber: 'GB727255821'
+    }]
+  }
 };
 
 /**
@@ -459,6 +566,38 @@ class VendorInvoiceSubmitter {
   }
 
   /**
+   * Get default Amazon address for a country (for shipToParty fallback)
+   */
+  getDefaultAmazonAddress(countryCode) {
+    return {
+      name: 'Amazon EU Sarl',
+      addressLine1: 'Amazon Fulfillment Center',
+      city: this.getDefaultCity(countryCode),
+      countryCode: countryCode
+    };
+  }
+
+  /**
+   * Get the correct Amazon billing entity for a marketplace
+   * IMPORTANT: These must match Amazon's records exactly for EDI invoices
+   *
+   * @param {string} countryCode - Country code (DE, FR, IT, etc.)
+   * @returns {object} billToParty object for Amazon invoice
+   */
+  getAmazonBillingEntity(countryCode) {
+    // Use the predefined billing entity if available
+    const entity = AMAZON_BILLING_ENTITIES[countryCode];
+
+    if (entity) {
+      return entity;
+    }
+
+    // Fallback for unmapped countries - use France as default (Amazon EU HQ)
+    console.warn(`[VendorInvoiceSubmitter] No billing entity defined for ${countryCode}, using FR`);
+    return AMAZON_BILLING_ENTITIES.FR;
+  }
+
+  /**
    * Build Amazon invoice payload from Odoo invoice
    */
   async buildInvoicePayload(po, odooInvoice) {
@@ -499,19 +638,16 @@ class VendorInvoiceSubmitter {
       });
     }
 
-    // Clean party objects - provide minimal address with country code when null
+    // Get country code from marketplace
     const countryCode = this.getCountryFromMarketplace(po.marketplaceId);
-    const defaultAddress = {
-      name: 'Amazon EU Sarl',
-      addressLine1: 'Amazon Fulfillment Center',
-      city: this.getDefaultCity(countryCode),
-      countryCode: countryCode
-    };
+
+    // Get shipToParty from PO or use default
     const shipToParty = this.cleanPartyForPayload(po.shipToParty, countryCode) ||
-      { partyId: po.buyingParty?.partyId || 'AMAZON', address: defaultAddress };
-    const billToParty = this.cleanPartyForPayload(po.billToParty, countryCode) ||
-      this.cleanPartyForPayload(po.buyingParty, countryCode) ||
-      { partyId: 'AMAZON', address: defaultAddress };
+      { partyId: po.buyingParty?.partyId || 'AMAZON', address: this.getDefaultAmazonAddress(countryCode) };
+
+    // IMPORTANT: Use the correct Amazon billing entity for the marketplace
+    // This must match exactly what Amazon expects for EDI invoices
+    const billToParty = this.getAmazonBillingEntity(countryCode);
 
     // Use the vendor partyId from the PO (Amazon assigns different codes per marketplace)
     const vendorPartyId = po.sellingParty?.partyId || ACROPAQ_COMPANY.partyId;
