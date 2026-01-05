@@ -118,7 +118,8 @@ router.get('/orders', async (req, res) => {
         orderStatus: o.status?.source || o.orderStatus,
         fulfillmentChannel: o.amazonSeller?.fulfillmentChannel || o.subChannel || o.fulfillmentChannel,
         purchaseDate: o.orderDate || o.purchaseDate,
-        orderTotal: o.totals || o.orderTotal,
+        // Map unified totals to legacy orderTotal format: { amount, currencyCode }
+        orderTotal: o.orderTotal || (o.totals ? { amount: o.totals.total, currencyCode: o.totals.currency } : null),
         buyerName: o.customer?.name || o.shippingAddress?.name || o.buyerName,
         shippingAddress: o.shippingAddress,
         isPrime: o.amazonSeller?.isPrime ?? o.isPrime,
@@ -494,7 +495,7 @@ router.get('/pending', async (req, res) => {
         orderStatus: o.status?.source || o.orderStatus,
         fulfillmentChannel: o.amazonSeller?.fulfillmentChannel || o.subChannel || o.fulfillmentChannel,
         purchaseDate: o.orderDate || o.purchaseDate,
-        orderTotal: o.totals || o.orderTotal,
+        orderTotal: o.orderTotal || (o.totals ? { amount: o.totals.total, currencyCode: o.totals.currency } : null),
         itemCount: o.items?.length || 0
       }))
     });
