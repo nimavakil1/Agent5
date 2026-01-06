@@ -10,6 +10,7 @@ const {
   UNIFIED_STATUS,
   STATUS_MAP
 } = require('../UnifiedOrderService');
+const { getItemQuantity } = require('../../amazon/seller/SellerOrderSchema');
 
 /**
  * Transform a seller_orders document to unified format
@@ -42,8 +43,8 @@ function transformSellerOrder(sellerOrder) {
     subtotal += itemPrice;
     taxTotal += itemTax;
 
-    // Note: quantity field may be 'quantity' or 'quantityOrdered' depending on source
-    const qty = item.quantity || item.quantityOrdered || 1;
+    // @see SellerOrderSchema.js for field definitions
+    const qty = getItemQuantity(item);
     return {
       sku: item.sellerSku,
       asin: item.asin,

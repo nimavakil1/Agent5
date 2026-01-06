@@ -204,18 +204,23 @@ class SellerOrderImporter {
     const rawItems = await this.client.getAllOrderItems(amazonOrderId);
 
     // Transform items to unified format
+    // @type {import('./SellerOrderSchema').AmazonOrderItem[]}
+    // IMPORTANT: Use 'quantity' field (not 'quantityOrdered') - see SellerOrderSchema.js
     const items = rawItems.map(item => {
       const itemPrice = parseFloat(item.ItemPrice?.Amount) || 0;
       const itemTax = parseFloat(item.ItemTax?.Amount) || 0;
+      const qty = item.QuantityOrdered || 1;
 
       return {
         sku: item.SellerSKU,
+        sellerSku: item.SellerSKU, // Alias for compatibility
         asin: item.ASIN,
         ean: null,
         name: item.Title,
-        quantity: item.QuantityOrdered || 1,
+        title: item.Title, // Alias for compatibility
+        quantity: qty, // ALWAYS use 'quantity', never 'quantityOrdered'
         quantityShipped: item.QuantityShipped || 0,
-        unitPrice: itemPrice / (item.QuantityOrdered || 1),
+        unitPrice: itemPrice / qty,
         lineTotal: itemPrice,
         tax: itemTax,
         orderItemId: item.OrderItemId

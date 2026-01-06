@@ -27,6 +27,7 @@ const {
   getOrderPrefix,
   SPECIAL_PRODUCTS
 } = require('./SellerMarketplaceConfig');
+const { getItemQuantity } = require('./SellerOrderSchema');
 const { euCountryConfig: _euCountryConfig } = require('../EuCountryConfig');
 const { skuResolver } = require('../SkuResolver');
 const { getAddressCleaner: _getAddressCleaner, LEGAL_TERMS_REGEX } = require('./AddressCleaner');
@@ -731,8 +732,8 @@ class SellerOrderCreator {
         }
 
         // Calculate price (Amazon gives total, we need unit price)
-        // Note: SellerOrderImporter stores as 'quantity', not 'quantityOrdered'
-        const quantity = item.quantity || item.quantityOrdered || 1;
+        // @see SellerOrderSchema.js for field definitions
+        const quantity = getItemQuantity(item);
         const itemPrice = parseFloat(item.itemPrice?.amount || 0);
         const priceUnit = itemPrice / quantity;
 

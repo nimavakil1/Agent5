@@ -13,6 +13,7 @@ const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { getSellerClient } = require('./SellerClient');
 const { getMarketplaceConfig: _getMarketplaceConfig } = require('./SellerMarketplaceConfig');
+const { getItemQuantity } = require('./SellerOrderSchema');
 
 // Collection name for seller orders - DO NOT import from SellerOrderImporter (it uses unified_orders)
 const SELLER_ORDERS_COLLECTION = 'seller_orders';
@@ -341,11 +342,12 @@ class SellerTrackingPusher {
       carrierCode: carrierName,
       trackingNumber: trackingNumber,
       shipDate: shipDate,
+      // @see SellerOrderSchema.js for field definitions
       orderItems: orderItemIds.map(orderItemId => {
         const item = order.items.find(i => i.orderItemId === orderItemId);
         return {
           orderItemId,
-          quantity: item?.quantity || item?.quantityOrdered || 1
+          quantity: getItemQuantity(item)
         };
       })
     };
