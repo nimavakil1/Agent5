@@ -341,10 +341,13 @@ class SellerTrackingPusher {
       carrierCode: carrierName,
       trackingNumber: trackingNumber,
       shipDate: shipDate,
-      orderItems: orderItemIds.map(orderItemId => ({
-        orderItemId,
-        quantity: order.items.find(i => i.orderItemId === orderItemId)?.quantityOrdered || 1
-      }))
+      orderItems: orderItemIds.map(orderItemId => {
+        const item = order.items.find(i => i.orderItemId === orderItemId);
+        return {
+          orderItemId,
+          quantity: item?.quantity || item?.quantityOrdered || 1
+        };
+      })
     };
 
     // Use SellerClient's confirmShipment method

@@ -731,7 +731,8 @@ class SellerOrderCreator {
         }
 
         // Calculate price (Amazon gives total, we need unit price)
-        const quantity = item.quantityOrdered || 1;
+        // Note: SellerOrderImporter stores as 'quantity', not 'quantityOrdered'
+        const quantity = item.quantity || item.quantityOrdered || 1;
         const itemPrice = parseFloat(item.itemPrice?.amount || 0);
         const priceUnit = itemPrice / quantity;
 
