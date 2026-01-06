@@ -18,8 +18,23 @@ const { getAddressCleaner } = require('./AddressCleaner');
 
 // Odoo constants
 const PAYMENT_TERM_21_DAYS = 2;
-const AMAZON_SELLER_TEAM_ID = 11;
 const FBM_WAREHOUSE_ID = 1; // Belgium warehouse (CW)
+
+// Marketplace to Sales Team ID mapping
+// Based on sales-channel from Amazon TSV (e.g., "Amazon.de" → DE → 17)
+const MARKETPLACE_SALES_TEAMS = {
+  'DE': 17,  // Amazon DE (Marketplace)
+  'FR': 19,  // Amazon FR (Marketplace)
+  'IT': 20,  // Amazon IT (Marketplace)
+  'ES': 18,  // Amazon ES (Marketplace)
+  'NL': 21,  // Amazon NL (Marketplace)
+  'PL': 22,  // Amazon PL (Marketplace)
+  'BE': 16,  // Amazon BE (Marketplace)
+  'SE': 24,  // Amazon SE (Marketplace)
+  'GB': 25,  // Amazon UK (Marketplace)
+  'UK': 25,  // Alias for GB
+};
+const DEFAULT_AMAZON_SELLER_TEAM_ID = 11; // Fallback if marketplace not detected
 
 /**
  * Journal configuration for FBM orders by destination country
@@ -194,6 +209,8 @@ class FbmOrderImporter {
           isBusinessOrder: cols[headerIndex['is-business-order']]?.trim() === 'true',
           buyerCompanyName: cols[headerIndex['buyer-company-name']]?.trim() || '',
           addressType: cols[headerIndex['address-type']]?.trim() || 'Residential',
+          // Sales channel (e.g., "Amazon.de", "Amazon.fr") - for determining correct sales team
+          salesChannel: cols[headerIndex['sales-channel']]?.trim() || '',
           items: []
         };
       }
@@ -544,6 +561,26 @@ class FbmOrderImporter {
   }
 
   /**
+   * Get sales team ID based on Amazon sales channel
+   * @param {string} salesChannel - e.g., "Amazon.de", "Amazon.fr", "Non-Amazon"
+   * @returns {number} Odoo sales team ID
+   */
+  getSalesTeamId(salesChannel) {
+    if (!salesChannel) {
+      return DEFAULT_AMAZON_SELLER_TEAM_ID;
+    }
+
+    // Extract country code from sales channel (e.g., "Amazon.de" → "DE")
+    const match = salesChannel.match(/amazon\.(\w{2})/i);
+    if (match) {
+      const countryCode = match[1].toUpperCase();
+      return MARKETPLACE_SALES_TEAMS[countryCode] || DEFAULT_AMAZON_SELLER_TEAM_ID;
+    }
+
+    return DEFAULT_AMAZON_SELLER_TEAM_ID;
+  }
+
+  /**
    * Create sale order in Odoo with correct fiscal position and journal
    *
    * @param {Object} order - Parsed order data
@@ -558,6 +595,9 @@ class FbmOrderImporter {
       order.country,
       order.isBusinessOrder
     );
+
+    // Determine sales team from Amazon marketplace (e.g., Amazon.de → team 17)
+    const teamId = this.getSalesTeamId(order.salesChannel);
 
     const odooLines = orderLines.map(line => [0, 0, {
       product_id: line.product_id,
@@ -575,7 +615,7 @@ class FbmOrderImporter {
       warehouse_id: FBM_WAREHOUSE_ID,
       order_line: odooLines,
       payment_term_id: PAYMENT_TERM_21_DAYS,
-      team_id: AMAZON_SELLER_TEAM_ID
+      team_id: teamId  // Marketplace-specific team (e.g., Amazon DE = 17)
     };
 
     // Set fiscal position for correct taxes (OSS rates based on destination)
@@ -589,7 +629,7 @@ class FbmOrderImporter {
     const created = await this.odoo.searchRead('sale.order', [['id', '=', orderId]], ['name']);
     const createdName = created.length > 0 ? created[0].name : `SO-${orderId}`;
 
-    console.log(`[FbmOrderImporter] Created order ${createdName} | ${order.country} → Journal type: ${journalType}, Fiscal Position: ${fiscalPositionId || 'none'}`);
+    console.log(`[FbmOrderImporter] Created order ${createdName} | ${order.salesChannel || 'Unknown'} → Team: ${teamId}, Journal type: ${journalType}, Fiscal Position: ${fiscalPositionId || 'none'}`);
 
     // Confirm order
     await this.odoo.execute('sale.order', 'action_confirm', [[orderId]]);

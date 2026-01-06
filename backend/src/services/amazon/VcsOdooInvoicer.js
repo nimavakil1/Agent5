@@ -498,6 +498,7 @@ class VcsOdooInvoicer {
       processed: 0,
       created: 0,
       skipped: 0,
+      pricesUpdated: 0,  // Track orders where sale order line prices were updated
       errors: [],
       invoices: [],
       skippedOrders: [],  // Track skipped orders with reasons
@@ -561,7 +562,15 @@ class VcsOdooInvoicer {
 
         const { saleOrder, orderLines } = odooOrderData;
 
-        // Check if invoice already exists in Odoo for this sale order
+        // STEP 1: Update sale order line prices from VCS data if they are 0
+        // This must happen BEFORE checking for existing invoices
+        const priceUpdateResult = await this.updateSaleOrderLinePricesFromVcs(order, saleOrder, orderLines);
+        const orderPricesUpdated = priceUpdateResult.updated > 0;
+        if (orderPricesUpdated) {
+          result.pricesUpdated++;
+        }
+
+        // STEP 2: Check if invoice already exists in Odoo for this sale order
         const existingInvoice = await this.findExistingInvoice(saleOrder.name);
         if (existingInvoice) {
           result.skipped++;
@@ -570,6 +579,7 @@ class VcsOdooInvoicer {
             reason: `Invoice already exists: ${existingInvoice.name}`,
             customerName: order.buyerName || null,
             odooOrderName: saleOrder.name,
+            pricesUpdated: orderPricesUpdated,  // Track if prices were updated even though invoice was skipped
           });
           await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
           console.log(`[VcsOdooInvoicer] Invoice already exists for ${order.orderId}: ${existingInvoice.name}`);
@@ -591,6 +601,7 @@ class VcsOdooInvoicer {
             dryRun: true,
             odooOrderName: saleOrder.name,
             odooOrderId: saleOrder.id,
+            pricesUpdated: orderPricesUpdated,  // Track if sale order line prices were updated
             // Human-readable preview fields
             preview: {
               invoiceDate: invoiceData.invoice_date,
@@ -614,6 +625,7 @@ class VcsOdooInvoicer {
         // Create invoice linked to sale order
         const partnerId = await this.determinePartner(order, saleOrder);
         const invoice = await this.createInvoice(order, partnerId, saleOrder, orderLines);
+        invoice.pricesUpdated = orderPricesUpdated;  // Track if sale order line prices were updated
         result.created++;
         result.invoices.push(invoice);
 
@@ -661,6 +673,7 @@ class VcsOdooInvoicer {
       processed: 0,
       created: 0,
       skipped: 0,
+      pricesUpdated: 0,  // Track orders where sale order line prices were updated
       errors: [],
       invoices: [],
       skippedOrders: [],  // Track skipped orders with reasons
@@ -741,7 +754,15 @@ class VcsOdooInvoicer {
 
         const { saleOrder, orderLines } = odooOrderData;
 
-        // Check if invoice already exists in Odoo for this sale order
+        // STEP 1: Update sale order line prices from VCS data if they are 0
+        // This must happen BEFORE checking for existing invoices
+        const priceUpdateResult = await this.updateSaleOrderLinePricesFromVcs(order, saleOrder, orderLines);
+        const orderPricesUpdated = priceUpdateResult.updated > 0;
+        if (orderPricesUpdated) {
+          result.pricesUpdated++;
+        }
+
+        // STEP 2: Check if invoice already exists in Odoo for this sale order
         const existingInvoice = await this.findExistingInvoice(saleOrder.name);
         if (existingInvoice) {
           result.skipped++;
@@ -750,6 +771,7 @@ class VcsOdooInvoicer {
             reason: `Invoice already exists: ${existingInvoice.name}`,
             customerName: order.buyerName || null,
             odooOrderName: saleOrder.name,
+            pricesUpdated: orderPricesUpdated,  // Track if prices were updated even though invoice was skipped
           });
           await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
           continue;
@@ -768,6 +790,7 @@ class VcsOdooInvoicer {
             dryRun: true,
             odooOrderName: saleOrder.name,
             odooOrderId: saleOrder.id,
+            pricesUpdated: orderPricesUpdated,  // Track if sale order line prices were updated
             preview: {
               invoiceDate: invoiceData.invoice_date,
               journalName: journalName || `Not found (expected: ${expectedJournal})`,
@@ -791,6 +814,7 @@ class VcsOdooInvoicer {
         // Create invoice linked to sale order
         const partnerId = await this.determinePartner(order, saleOrder);
         const invoice = await this.createInvoice(order, partnerId, saleOrder, orderLines);
+        invoice.pricesUpdated = orderPricesUpdated;  // Track if sale order line prices were updated
         result.created++;
         result.invoices.push(invoice);
 
@@ -967,6 +991,82 @@ class VcsOdooInvoicer {
   }
 
   /**
+   * Update sale order line prices from VCS data if they are 0
+   * This should be called BEFORE checking for existing invoices
+   *
+   * @param {object} vcsOrder - VCS order data with items and prices
+   * @param {object} saleOrder - Odoo sale order
+   * @param {Array} orderLines - Odoo sale order lines
+   * @returns {object} { updated: number, skipped: number }
+   */
+  async updateSaleOrderLinePricesFromVcs(vcsOrder, saleOrder, orderLines) {
+    const result = { updated: 0, skipped: 0 };
+
+    if (!vcsOrder.items || vcsOrder.items.length === 0) {
+      return result;
+    }
+
+    // Map VCS items by SKU for quick lookup
+    const vcsItemsBySku = new Map();
+    for (const vcsItem of vcsOrder.items) {
+      if (vcsItem.sku) {
+        vcsItemsBySku.set(vcsItem.sku, vcsItem);
+        // Also add transformed SKU
+        const transformedSku = this.transformSku(vcsItem.sku);
+        if (transformedSku !== vcsItem.sku) {
+          vcsItemsBySku.set(transformedSku, vcsItem);
+        }
+      }
+    }
+
+    // Check each order line for 0 price
+    for (const line of orderLines) {
+      // Skip lines that already have a price
+      if (line.price_unit && line.price_unit > 0) {
+        result.skipped++;
+        continue;
+      }
+
+      // Get product SKU
+      const productSku = line.product_default_code || '';
+      if (!productSku) {
+        continue;
+      }
+
+      // Find matching VCS item
+      const vcsItem = vcsItemsBySku.get(productSku);
+      if (!vcsItem || !vcsItem.priceExclusive) {
+        continue;
+      }
+
+      // Calculate unit price from VCS
+      const qty = vcsItem.quantity || line.product_uom_qty || 1;
+      const unitPrice = vcsItem.priceExclusive / qty;
+
+      // Update the sale order line price in Odoo
+      try {
+        await this.odoo.execute('sale.order.line', 'write', [[line.id], {
+          price_unit: unitPrice
+        }]);
+
+        // Update local cache too
+        line.price_unit = unitPrice;
+
+        result.updated++;
+        console.log(`[VcsOdooInvoicer] Updated sale order line ${line.id} price: ${unitPrice} (order: ${saleOrder.name}, SKU: ${productSku})`);
+      } catch (err) {
+        console.error(`[VcsOdooInvoicer] Failed to update sale order line ${line.id} price:`, err.message);
+      }
+    }
+
+    if (result.updated > 0) {
+      console.log(`[VcsOdooInvoicer] Updated ${result.updated} sale order line prices for ${saleOrder.name} from VCS data`);
+    }
+
+    return result;
+  }
+
+  /**
    * Create a sale order in Odoo from VCS data
    * Used when no existing order is found during invoice import
    *
@@ -1076,6 +1176,12 @@ class VcsOdooInvoicer {
       ? orderDate.split('T')[0]
       : orderDate.toISOString().split('T')[0];
 
+    // Determine sales team from marketplace (DE → team 17, FR → team 19, etc.)
+    const teamId = this.determineSalesTeam(vcsOrder);
+
+    // Determine fiscal position from ship-from/ship-to countries
+    const fiscalPositionId = this.determineFiscalPosition(vcsOrder);
+
     // Create the sale order
     const saleOrderId = await this.odoo.create('sale.order', {
       name: orderName,
@@ -1086,7 +1192,8 @@ class VcsOdooInvoicer {
       date_order: formattedDate,
       warehouse_id: warehouseId,
       order_line: orderLines,
-      team_id: 11, // Amazon Seller team
+      team_id: teamId, // Marketplace-specific team (e.g., Amazon DE = 17)
+      fiscal_position_id: fiscalPositionId, // OSS/domestic/export based on VCS data
     });
 
     console.log(`[VcsOdooInvoicer] Created sale order ${orderName} (ID: ${saleOrderId})`);
