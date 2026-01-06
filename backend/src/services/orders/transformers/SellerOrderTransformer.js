@@ -42,14 +42,16 @@ function transformSellerOrder(sellerOrder) {
     subtotal += itemPrice;
     taxTotal += itemTax;
 
+    // Note: quantity field may be 'quantity' or 'quantityOrdered' depending on source
+    const qty = item.quantity || item.quantityOrdered || 1;
     return {
       sku: item.sellerSku,
       asin: item.asin,
       ean: null, // Not available from Amazon
       name: item.title,
-      quantity: item.quantityOrdered || 1,
+      quantity: qty,
       quantityShipped: item.quantityShipped || 0,
-      unitPrice: itemPrice / (item.quantityOrdered || 1),
+      unitPrice: itemPrice / qty,
       lineTotal: itemPrice,
       tax: itemTax,
       orderItemId: item.orderItemId
