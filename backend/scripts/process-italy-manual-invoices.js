@@ -313,44 +313,66 @@ async function main() {
         });
       }
 
-      // Create invoice
+      // Build invoice lines from sale order lines
+      const invoiceLines = [];
+      for (const line of orderLines) {
+        if (!line.product_id) continue;
+
+        // Get product SKU
+        const products = await odoo.searchRead('product.product',
+          [['id', '=', line.product_id[0]]],
+          ['default_code']
+        );
+        if (products.length === 0) continue;
+
+        const sku = products[0].default_code;
+        if (!sku) continue;
+
+        // Find VCS item for this SKU
+        const vcsItem = vcsItemsBySku.get(sku) || vcsItemsBySku.get(transformSku(sku));
+
+        // Use VCS price if available, otherwise use order line price
+        const qty = line.product_uom_qty || 1;
+        let unitPrice = line.price_unit;
+        if (vcsItem && (vcsItem.priceInclusive > 0 || vcsItem.priceExclusive > 0)) {
+          unitPrice = (vcsItem.priceInclusive || vcsItem.priceExclusive) / qty;
+        }
+
+        invoiceLines.push([0, 0, {
+          product_id: line.product_id[0],
+          name: line.name || line.product_id[1],
+          quantity: qty,
+          price_unit: unitPrice,
+          tax_ids: line.tax_id ? [[6, 0, line.tax_id]] : false,
+          sale_line_ids: [[4, line.id]], // Link to sale order line
+        }]);
+      }
+
+      // Create invoice directly
       let invoiceId = null;
-      if (!DRY_RUN) {
-        try {
-          // Use Odoo's action to create invoice
-          const result = await odoo.execute('sale.order', 'action_confirm', [[saleOrder.id]]);
+      if (!DRY_RUN && invoiceLines.length > 0) {
+        // Get invoice date from VCS order
+        const invoiceDate = order.shipmentDate || order.orderDate || new Date();
+        const formattedDate = new Date(invoiceDate).toISOString().split('T')[0];
 
-          // Create invoice via _create_invoices
-          const invoiceResult = await odoo.execute('sale.order', '_create_invoices', [[saleOrder.id]]);
+        invoiceId = await odoo.create('account.move', {
+          move_type: 'out_invoice',
+          partner_id: partnerId,
+          journal_id: JOURNAL_VIT,
+          invoice_date: formattedDate,
+          fiscal_position_id: fiscalPositionId,
+          ref: orderId,
+          x_vcs_invoice_number: `VCS-IT-${orderId}`,
+          invoice_origin: saleOrder.name,
+          invoice_line_ids: invoiceLines,
+        });
 
-          if (invoiceResult && invoiceResult.length > 0) {
-            invoiceId = invoiceResult[0];
-
-            // Update invoice with VCS reference and journal
-            await odoo.write('account.move', [invoiceId], {
-              journal_id: JOURNAL_VIT,
-              ref: orderId,
-              x_vcs_invoice_number: `VCS-IT-${orderId}`
-            });
-
-            // Post the invoice
+        if (invoiceId) {
+          // Post the invoice
+          try {
             await odoo.execute('account.move', 'action_post', [[invoiceId]]);
-          }
-        } catch (invoiceErr) {
-          // If order is already confirmed, try direct invoice creation
-          if (invoiceErr.message && invoiceErr.message.includes('already confirmed')) {
-            const invoiceResult = await odoo.execute('sale.order', '_create_invoices', [[saleOrder.id]]);
-            if (invoiceResult && invoiceResult.length > 0) {
-              invoiceId = invoiceResult[0];
-              await odoo.write('account.move', [invoiceId], {
-                journal_id: JOURNAL_VIT,
-                ref: orderId,
-                x_vcs_invoice_number: `VCS-IT-${orderId}`
-              });
-              await odoo.execute('account.move', 'action_post', [[invoiceId]]);
-            }
-          } else {
-            throw invoiceErr;
+          } catch (postErr) {
+            console.log(`    Warning: Could not post invoice ${invoiceId}: ${postErr.message}`);
           }
         }
       }
