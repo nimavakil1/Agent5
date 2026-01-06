@@ -181,6 +181,72 @@ class BolAdsClient {
     });
   }
 
+  /**
+   * Make authenticated GET request with query parameters
+   * Used for Reporting API which uses GET + query params (not POST + JSON body)
+   */
+  async requestGet(path, queryParams = {}, apiVersion = 'v11') {
+    await this.authenticate();
+
+    // Build query string
+    const queryParts = [];
+    for (const [key, value] of Object.entries(queryParams)) {
+      if (value !== undefined && value !== null) {
+        if (Array.isArray(value)) {
+          // Handle array params (e.g., entity-ids=1&entity-ids=2)
+          for (const v of value) {
+            queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v)}`);
+          }
+        } else {
+          queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        }
+      }
+    }
+    const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+
+    const headers = {
+      'Authorization': `Bearer ${this.accessToken}`,
+      'Accept': `application/vnd.advertiser.${apiVersion}+json`
+    };
+
+    return new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: BOL_ADS_ENDPOINTS.api,
+        port: 443,
+        path: `/advertiser${path}${queryString}`,
+        method: 'GET',
+        headers: headers
+      }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (!data || data.trim() === '') {
+              resolve({ success: true, statusCode: res.statusCode });
+              return;
+            }
+
+            const response = JSON.parse(data);
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(response);
+            } else {
+              reject(new Error(`Bol.com Ads API Error ${res.statusCode}: ${JSON.stringify(response)}`));
+            }
+          } catch (e) {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve({ raw: data, statusCode: res.statusCode });
+            } else {
+              reject(new Error(`Bol.com Ads Parse error: ${e.message}, Data: ${data}`));
+            }
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.end();
+    });
+  }
+
   // ==================== CAMPAIGNS ====================
 
   /**
@@ -454,53 +520,156 @@ class BolAdsClient {
   }
 
   // ==================== REPORTING ====================
-  // Note: Reporting API may use different path structure (/reporting/ instead of /campaign-management/)
-  // These endpoints may need adjustment based on actual Bol.com Reporting API spec
+  // Reporting API uses GET with query parameters (not POST with JSON body!)
+  // Base path: /sponsored-products/reporting
+  // @see https://api.bol.com/advertiser/docs/redoc/sponsored-products/v11/reporting.html
+
+  /**
+   * Helper to get default date range (last 7 days)
+   */
+  _getDefaultDateRange() {
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return { startDate, endDate };
+  }
+
+  /**
+   * Get advertiser-level performance report (account totals)
+   * GET /sponsored-products/reporting/performance/advertiser
+   *
+   * @param {Object} params - Optional parameters
+   * @param {string} params.startDate - Start date (YYYY-MM-DD), default: 7 days ago
+   * @param {string} params.endDate - End date (YYYY-MM-DD), default: today
+   * @returns {Object} Performance metrics (impressions, clicks, ctr, cost, sales14d, acos14d, roas14d, etc.)
+   */
+  async getAdvertiserReport(params = {}) {
+    const { startDate, endDate } = { ...this._getDefaultDateRange(), ...params };
+
+    return this.requestGet('/sponsored-products/reporting/performance/advertiser', {
+      'period-start-date': startDate,
+      'period-end-date': endDate
+    });
+  }
+
+  /**
+   * Get performance report for specific entities (campaigns, ad groups, ads, keywords)
+   * GET /sponsored-products/reporting/performance
+   *
+   * @param {string} entityType - Entity type: CAMPAIGN, AD_GROUP, AD, KEYWORD, TARGET_CATEGORY, TARGET_PRODUCT
+   * @param {string[]} entityIds - Array of entity IDs
+   * @param {Object} params - Optional parameters
+   * @param {string} params.startDate - Start date (YYYY-MM-DD)
+   * @param {string} params.endDate - End date (YYYY-MM-DD)
+   * @returns {Object} Performance metrics with total and subTotals per entity
+   */
+  async getPerformanceReport(entityType, entityIds, params = {}) {
+    const { startDate, endDate } = { ...this._getDefaultDateRange(), ...params };
+
+    return this.requestGet('/sponsored-products/reporting/performance', {
+      'entity-type': entityType,
+      'entity-ids': Array.isArray(entityIds) ? entityIds : [entityIds],
+      'period-start-date': startDate,
+      'period-end-date': endDate
+    });
+  }
 
   /**
    * Get campaign performance report
-   * v11: POST /sponsored-products/reporting/campaigns (path may vary)
+   * Convenience method wrapping getPerformanceReport for campaigns
    */
   async getCampaignReport(campaignId, params = {}) {
-    const reportBody = {
-      campaignIds: [campaignId],
-      startDate: params.startDate,
-      endDate: params.endDate,
-      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
-    };
-    return this.request('POST', '/sponsored-products/reporting/campaigns', reportBody);
+    return this.getPerformanceReport('CAMPAIGN', [campaignId], params);
+  }
+
+  /**
+   * Get multiple campaigns performance report
+   */
+  async getCampaignsReport(campaignIds, params = {}) {
+    return this.getPerformanceReport('CAMPAIGN', campaignIds, params);
+  }
+
+  /**
+   * Get ad group performance report
+   */
+  async getAdGroupReport(adGroupId, params = {}) {
+    return this.getPerformanceReport('AD_GROUP', [adGroupId], params);
   }
 
   /**
    * Get ad performance report
-   * v11: POST /sponsored-products/reporting/ads (path may vary)
    */
   async getAdReport(adIds, params = {}) {
-    const reportBody = {
-      adIds: Array.isArray(adIds) ? adIds : [adIds],
-      startDate: params.startDate,
-      endDate: params.endDate,
-      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
-    };
-    return this.request('POST', '/sponsored-products/reporting/ads', reportBody);
+    return this.getPerformanceReport('AD', Array.isArray(adIds) ? adIds : [adIds], params);
   }
 
   /**
-   * Get aggregated performance report
-   * v11: POST /sponsored-products/reporting/performance (path may vary)
+   * Get keyword performance report
+   */
+  async getKeywordReport(keywordIds, params = {}) {
+    return this.getPerformanceReport('KEYWORD', Array.isArray(keywordIds) ? keywordIds : [keywordIds], params);
+  }
+
+  /**
+   * Get target-page performance (SEARCH, CATEGORY, PDP breakdown)
+   * GET /sponsored-products/reporting/performance/target-page
+   *
+   * @param {string[]} adGroupIds - Array of ad group IDs
+   * @param {Object} params - Optional parameters
+   */
+  async getTargetPageReport(adGroupIds, params = {}) {
+    const { startDate, endDate } = { ...this._getDefaultDateRange(), ...params };
+
+    return this.requestGet('/sponsored-products/reporting/performance/target-page', {
+      'ad-group-ids': Array.isArray(adGroupIds) ? adGroupIds : [adGroupIds],
+      'period-start-date': startDate,
+      'period-end-date': endDate
+    });
+  }
+
+  /**
+   * Get search term performance report
+   * GET /sponsored-products/reporting/performance/search-term
+   *
+   * @param {string[]} adGroupIds - Array of ad group IDs
+   * @param {Object} params - Optional parameters (startDate, endDate, page, pageSize)
+   */
+  async getSearchTermReport(adGroupIds, params = {}) {
+    const { startDate, endDate } = { ...this._getDefaultDateRange(), ...params };
+
+    return this.requestGet('/sponsored-products/reporting/performance/search-term', {
+      'ad-group-ids': Array.isArray(adGroupIds) ? adGroupIds : [adGroupIds],
+      'period-start-date': startDate,
+      'period-end-date': endDate,
+      'page': params.page,
+      'page-size': params.pageSize
+    });
+  }
+
+  /**
+   * Get category performance report
+   * GET /sponsored-products/reporting/performance/category
+   *
+   * @param {string[]} adGroupIds - Array of ad group IDs
+   * @param {Object} params - Optional parameters (startDate, endDate, page, pageSize)
+   */
+  async getCategoryReport(adGroupIds, params = {}) {
+    const { startDate, endDate } = { ...this._getDefaultDateRange(), ...params };
+
+    return this.requestGet('/sponsored-products/reporting/performance/category', {
+      'ad-group-ids': Array.isArray(adGroupIds) ? adGroupIds : [adGroupIds],
+      'period-start-date': startDate,
+      'period-end-date': endDate,
+      'page': params.page,
+      'page-size': params.pageSize
+    });
+  }
+
+  /**
+   * Get aggregated performance report (alias for getAdvertiserReport)
+   * Kept for backwards compatibility
    */
   async getAggregatedReport(params = {}) {
-    const reportBody = {
-      startDate: params.startDate,
-      endDate: params.endDate,
-      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
-    };
-
-    if (params.campaignIds) {
-      reportBody.campaignIds = params.campaignIds;
-    }
-
-    return this.request('POST', '/sponsored-products/reporting/performance', reportBody);
+    return this.getAdvertiserReport(params);
   }
 
   // ==================== UTILITY / ANALYTICS ====================
@@ -544,27 +713,22 @@ class BolAdsClient {
       this.listAds(campaignId)
     ]);
 
-    const reportData = report.reportData || [];
-    const totals = reportData.reduce((acc, day) => ({
-      impressions: (acc.impressions || 0) + (day.impressions || 0),
-      clicks: (acc.clicks || 0) + (day.clicks || 0),
-      cost: (acc.cost || 0) + (day.cost || 0),
-      conversions: (acc.conversions || 0) + (day.conversions || 0),
-      revenue: (acc.revenue || 0) + (day.revenue || 0)
-    }), {});
+    // New reporting API returns totals directly (not reportData array)
+    // Structure: { total: { impressions, clicks, ctr, ... }, subTotals: [...] }
+    const totals = report.total || report || {};
 
-    const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
-    const conversionRate = totals.clicks > 0 ? (totals.conversions / totals.clicks) * 100 : 0;
-    const acos = totals.revenue > 0 ? (totals.cost / totals.revenue) * 100 : Infinity;
-    const roas = totals.cost > 0 ? totals.revenue / totals.cost : 0;
+    const ctr = (totals.ctr || 0) * 100;
+    const conversionRate = (totals.conversionRate14d || 0) * 100;
+    const acos = (totals.acos14d || 0) * 100;
+    const roas = totals.roas14d || 0;
 
     return {
       campaign: {
-        id: campaign.campaignId,
-        name: campaign.name,
-        status: campaign.status,
-        dailyBudget: campaign.dailyBudget,
-        targetingType: campaign.targetingType
+        id: campaign?.campaignId,
+        name: campaign?.name,
+        state: campaign?.state,
+        dailyBudget: campaign?.dailyBudget,
+        campaignType: campaign?.campaignType
       },
       period: {
         startDate,
@@ -572,22 +736,32 @@ class BolAdsClient {
         days: daysBack
       },
       metrics: {
-        impressions: totals.impressions,
-        clicks: totals.clicks,
-        cost: totals.cost?.toFixed(2),
-        conversions: totals.conversions,
-        revenue: totals.revenue?.toFixed(2),
+        impressions: totals.impressions || 0,
+        clicks: totals.clicks || 0,
+        cost: (totals.cost || 0).toFixed(2),
+        conversions: totals.conversions14d || 0,
+        directConversions: totals.directConversions14d || 0,
+        indirectConversions: totals.indirectConversions14d || 0,
+        sales: (totals.sales14d || 0).toFixed(2),
         ctr: ctr.toFixed(2),
         conversionRate: conversionRate.toFixed(2),
-        acos: acos === Infinity ? 'N/A' : acos.toFixed(1),
-        roas: roas.toFixed(2)
+        averageCpc: (totals.averageCpc || 0).toFixed(2),
+        acos: acos > 0 ? acos.toFixed(1) : 'N/A',
+        roas: roas.toFixed(2),
+        averageWinningBid: totals.averageWinningBid || null
       },
       ads: {
         total: (ads.ads || []).length,
-        enabled: (ads.ads || []).filter(a => a.status === AD_STATUS.ENABLED).length,
-        paused: (ads.ads || []).filter(a => a.status === AD_STATUS.PAUSED).length
+        enabled: (ads.ads || []).filter(a => a.state === AD_STATUS.ENABLED).length,
+        paused: (ads.ads || []).filter(a => a.state === AD_STATUS.PAUSED).length
       },
-      health: this._calculateHealthScore(totals, campaign)
+      health: this._calculateHealthScore({
+        impressions: totals.impressions || 0,
+        clicks: totals.clicks || 0,
+        cost: totals.cost || 0,
+        conversions: totals.conversions14d || 0,
+        revenue: totals.sales14d || 0
+      }, campaign)
     };
   }
 

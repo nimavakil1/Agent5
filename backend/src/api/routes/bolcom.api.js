@@ -31,6 +31,9 @@ const BolInvoice = require('../../models/BolInvoice');
 // Sync service
 const BolSyncService = require('../../services/bol/BolSyncService');
 
+// Advertising client (handles both Campaign Management and Reporting APIs)
+const { BolAdsClient } = require('../../core/agents/integrations/BolAds');
+
 // Track ongoing syncs to prevent duplicates
 const ongoingSyncs = {
   orders: false,
@@ -1721,30 +1724,38 @@ router.get('/advertising/summary', async (req, res) => {
 });
 
 /**
- * Get campaign performance report (costs, clicks, impressions, etc.)
- * Query params: startDate (YYYY-MM-DD), endDate (YYYY-MM-DD)
+ * Get account-level advertising performance (advertiser totals)
+ * Uses the new BolAdsClient with correct GET-based Reporting API
+ * Query params: startDate (YYYY-MM-DD), endDate (YYYY-MM-DD) - defaults to last 7 days
  */
-router.get('/advertising/reports/campaigns', async (req, res) => {
+router.get('/advertising/reports/performance', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
+    const client = new BolAdsClient();
 
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        error: 'startDate and endDate are required (format: YYYY-MM-DD)'
-      });
-    }
-
-    // Request a campaign performance report
-    const data = await advertiserRequest('/sponsored-products/reports/campaigns', 'POST', {
-      startDate,
-      endDate,
-      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
-    });
+    const data = await client.getAdvertiserReport({ startDate, endDate });
 
     res.json({
       success: true,
-      report: data
+      period: {
+        startDate: startDate || data.periodStartDate,
+        endDate: endDate || data.periodEndDate
+      },
+      totals: {
+        impressions: data.impressions || 0,
+        clicks: data.clicks || 0,
+        ctr: data.ctr ? (data.ctr * 100).toFixed(2) + '%' : '0%',
+        conversions: data.conversions14d || 0,
+        directConversions: data.directConversions14d || 0,
+        indirectConversions: data.indirectConversions14d || 0,
+        conversionRate: data.conversionRate14d ? (data.conversionRate14d * 100).toFixed(2) + '%' : '0%',
+        averageCpc: data.averageCpc?.toFixed(2) || '0.00',
+        cost: data.cost?.toFixed(2) || '0.00',
+        sales: data.sales14d?.toFixed(2) || '0.00',
+        acos: data.acos14d ? (data.acos14d * 100).toFixed(2) + '%' : 'N/A',
+        roas: data.roas14d?.toFixed(2) || 'N/A'
+      },
+      raw: data
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1752,72 +1763,80 @@ router.get('/advertising/reports/campaigns', async (req, res) => {
 });
 
 /**
- * Get daily advertising costs summary
- * Query params: startDate, endDate
- * NOTE: Reporting API likely still uses POST for requesting reports
+ * Get campaign performance report
+ * Query params: startDate (YYYY-MM-DD), endDate (YYYY-MM-DD), campaignIds (comma-separated)
+ */
+router.get('/advertising/reports/campaigns', async (req, res) => {
+  try {
+    const { startDate, endDate, campaignIds } = req.query;
+    const client = new BolAdsClient();
+
+    // Get list of campaigns first to get IDs if not provided
+    let ids = campaignIds ? campaignIds.split(',') : null;
+
+    if (!ids) {
+      // Get all campaign IDs
+      const campaigns = await client.listCampaigns();
+      ids = campaigns.campaigns?.map(c => c.campaignId) || [];
+    }
+
+    if (ids.length === 0) {
+      return res.json({
+        success: true,
+        campaigns: [],
+        message: 'No campaigns found'
+      });
+    }
+
+    const data = await client.getCampaignsReport(ids, { startDate, endDate });
+
+    res.json({
+      success: true,
+      count: data.reportData?.length || 0,
+      campaigns: (data.reportData || []).map(c => ({
+        campaignId: c.entityId,
+        impressions: c.impressions || 0,
+        clicks: c.clicks || 0,
+        ctr: c.ctr ? (c.ctr * 100).toFixed(2) + '%' : '0%',
+        conversions: c.conversions14d || 0,
+        cost: c.cost?.toFixed(2) || '0.00',
+        sales: c.sales14d?.toFixed(2) || '0.00',
+        acos: c.acos14d ? (c.acos14d * 100).toFixed(2) + '%' : 'N/A',
+        roas: c.roas14d?.toFixed(2) || 'N/A'
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get daily advertising costs summary (account-level)
+ * Query params: startDate, endDate - defaults to last 30 days
  */
 router.get('/advertising/costs', async (req, res) => {
   try {
-    const { startDate, endDate, campaignId } = req.query;
+    const { startDate, endDate } = req.query;
+    const client = new BolAdsClient();
 
     // Default to last 30 days if no dates provided
     const end = endDate || new Date().toISOString().split('T')[0];
     const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    // Build report request body
-    const reportBody = {
-      startDate: start,
-      endDate: end,
-      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
-    };
-
-    if (campaignId) {
-      reportBody.campaignIds = [campaignId];
-    }
-
-    // Request performance report via POST
-    const data = await advertiserRequest('/sponsored-products/reports/performance', 'POST', reportBody);
-
-    // Calculate totals
-    let totalSpend = 0;
-    let totalClicks = 0;
-    let totalImpressions = 0;
-    let totalOrders = 0;
-    let totalRevenue = 0;
-
-    const dailyData = (data.performance || data.dailyPerformance || data.rows || []).map(d => {
-      totalSpend += d.spend || 0;
-      totalClicks += d.clicks || 0;
-      totalImpressions += d.impressions || 0;
-      totalOrders += d.orders || 0;
-      totalRevenue += d.revenue || 0;
-
-      return {
-        date: d.date,
-        spend: d.spend,
-        clicks: d.clicks,
-        impressions: d.impressions,
-        ctr: d.ctr,
-        orders: d.orders,
-        revenue: d.revenue,
-        acos: d.acos,
-        roas: d.roas
-      };
-    });
+    const data = await client.getAdvertiserReport({ startDate: start, endDate: end });
 
     res.json({
       success: true,
       period: { startDate: start, endDate: end },
       totals: {
-        spend: totalSpend,
-        clicks: totalClicks,
-        impressions: totalImpressions,
-        orders: totalOrders,
-        revenue: totalRevenue,
-        acos: totalRevenue > 0 ? ((totalSpend / totalRevenue) * 100).toFixed(2) + '%' : 'N/A',
-        roas: totalSpend > 0 ? (totalRevenue / totalSpend).toFixed(2) : 'N/A'
-      },
-      dailyData
+        spend: data.cost?.toFixed(2) || '0.00',
+        clicks: data.clicks || 0,
+        impressions: data.impressions || 0,
+        conversions: data.conversions14d || 0,
+        revenue: data.sales14d?.toFixed(2) || '0.00',
+        acos: data.acos14d ? (data.acos14d * 100).toFixed(2) + '%' : 'N/A',
+        roas: data.roas14d?.toFixed(2) || 'N/A'
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1825,45 +1844,54 @@ router.get('/advertising/costs', async (req, res) => {
 });
 
 /**
- * Get product-level advertising performance
+ * Get ad-level performance (products/ads)
+ * Query params: startDate, endDate, adIds (comma-separated)
  */
 router.get('/advertising/reports/products', async (req, res) => {
   try {
-    const { startDate, endDate, campaignId } = req.query;
+    const { startDate, endDate, adIds } = req.query;
+    const client = new BolAdsClient();
 
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        error: 'startDate and endDate are required (format: YYYY-MM-DD)'
+    // Get ads from campaigns if no IDs provided
+    let ids = adIds ? adIds.split(',') : null;
+
+    if (!ids) {
+      // Get all ad IDs from all campaigns
+      const campaigns = await client.listCampaigns();
+      ids = [];
+      for (const campaign of (campaigns.campaigns || [])) {
+        try {
+          const ads = await client.listAds(campaign.campaignId);
+          ids.push(...(ads.ads || []).map(a => a.adId));
+        } catch (e) {
+          // Skip campaigns without ads
+        }
+      }
+    }
+
+    if (ids.length === 0) {
+      return res.json({
+        success: true,
+        products: [],
+        message: 'No ads found'
       });
     }
 
-    const body = {
-      startDate,
-      endDate,
-      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
-    };
-
-    if (campaignId) {
-      body.campaignId = campaignId;
-    }
-
-    const data = await advertiserRequest('/sponsored-products/reports/products', 'POST', body);
+    const data = await client.getAdReport(ids, { startDate, endDate });
 
     res.json({
       success: true,
-      count: data.products?.length || 0,
-      products: (data.products || []).map(p => ({
-        ean: p.ean,
-        productTitle: p.productTitle,
-        impressions: p.impressions,
-        clicks: p.clicks,
-        ctr: p.ctr,
-        spend: p.spend,
-        orders: p.orders,
-        revenue: p.revenue,
-        acos: p.acos,
-        roas: p.roas
+      count: data.reportData?.length || 0,
+      products: (data.reportData || []).map(a => ({
+        adId: a.entityId,
+        impressions: a.impressions || 0,
+        clicks: a.clicks || 0,
+        ctr: a.ctr ? (a.ctr * 100).toFixed(2) + '%' : '0%',
+        conversions: a.conversions14d || 0,
+        cost: a.cost?.toFixed(2) || '0.00',
+        sales: a.sales14d?.toFixed(2) || '0.00',
+        acos: a.acos14d ? (a.acos14d * 100).toFixed(2) + '%' : 'N/A',
+        roas: a.roas14d?.toFixed(2) || 'N/A'
       }))
     });
   } catch (error) {
@@ -1873,43 +1901,191 @@ router.get('/advertising/reports/products', async (req, res) => {
 
 /**
  * Get keyword-level advertising performance
+ * Query params: startDate, endDate, keywordIds (comma-separated)
  */
 router.get('/advertising/reports/keywords', async (req, res) => {
   try {
-    const { startDate, endDate, campaignId, adGroupId } = req.query;
+    const { startDate, endDate, keywordIds } = req.query;
+    const client = new BolAdsClient();
 
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        error: 'startDate and endDate are required (format: YYYY-MM-DD)'
+    // Get keywords from campaigns if no IDs provided
+    let ids = keywordIds ? keywordIds.split(',') : null;
+
+    if (!ids) {
+      // Get all keyword IDs from all campaigns
+      const campaigns = await client.listCampaigns();
+      ids = [];
+      for (const campaign of (campaigns.campaigns || [])) {
+        try {
+          const keywords = await client.listKeywords(campaign.campaignId);
+          ids.push(...(keywords.keywords || []).map(k => k.keywordId));
+        } catch (e) {
+          // Skip campaigns without keywords
+        }
+      }
+    }
+
+    if (ids.length === 0) {
+      return res.json({
+        success: true,
+        keywords: [],
+        message: 'No keywords found'
       });
     }
 
-    const body = {
-      startDate,
-      endDate,
-      metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
-    };
-
-    if (campaignId) body.campaignId = campaignId;
-    if (adGroupId) body.adGroupId = adGroupId;
-
-    const data = await advertiserRequest('/sponsored-products/reports/keywords', 'POST', body);
+    const data = await client.getKeywordReport(ids, { startDate, endDate });
 
     res.json({
       success: true,
-      count: data.keywords?.length || 0,
-      keywords: (data.keywords || []).map(k => ({
-        keywordText: k.keywordText,
-        matchType: k.matchType,
-        impressions: k.impressions,
-        clicks: k.clicks,
-        ctr: k.ctr,
-        spend: k.spend,
-        orders: k.orders,
-        revenue: k.revenue,
-        acos: k.acos,
-        roas: k.roas
+      count: data.reportData?.length || 0,
+      keywords: (data.reportData || []).map(k => ({
+        keywordId: k.entityId,
+        impressions: k.impressions || 0,
+        clicks: k.clicks || 0,
+        ctr: k.ctr ? (k.ctr * 100).toFixed(2) + '%' : '0%',
+        conversions: k.conversions14d || 0,
+        cost: k.cost?.toFixed(2) || '0.00',
+        sales: k.sales14d?.toFixed(2) || '0.00',
+        acos: k.acos14d ? (k.acos14d * 100).toFixed(2) + '%' : 'N/A',
+        roas: k.roas14d?.toFixed(2) || 'N/A'
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get target page performance (SEARCH_PAGE, CATEGORY_PAGE, PDP)
+ * Query params: startDate, endDate, adGroupIds (comma-separated, required)
+ */
+router.get('/advertising/reports/target-pages', async (req, res) => {
+  try {
+    const { startDate, endDate, adGroupIds } = req.query;
+    const client = new BolAdsClient();
+
+    if (!adGroupIds) {
+      return res.status(400).json({
+        success: false,
+        error: 'adGroupIds is required (comma-separated ad group IDs)'
+      });
+    }
+
+    const ids = adGroupIds.split(',');
+    const data = await client.getTargetPageReport(ids, { startDate, endDate });
+
+    res.json({
+      success: true,
+      count: data.reportData?.length || 0,
+      targetPages: (data.reportData || []).map(t => ({
+        targetPage: t.targetPage,
+        impressions: t.impressions || 0,
+        clicks: t.clicks || 0,
+        ctr: t.ctr ? (t.ctr * 100).toFixed(2) + '%' : '0%',
+        conversions: t.conversions14d || 0,
+        cost: t.cost?.toFixed(2) || '0.00',
+        sales: t.sales14d?.toFixed(2) || '0.00',
+        acos: t.acos14d ? (t.acos14d * 100).toFixed(2) + '%' : 'N/A',
+        roas: t.roas14d?.toFixed(2) || 'N/A'
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get search term performance (what customers searched for)
+ * Query params: startDate, endDate, adGroupIds (comma-separated, required), page, pageSize
+ */
+router.get('/advertising/reports/search-terms', async (req, res) => {
+  try {
+    const { startDate, endDate, adGroupIds, page = 1, pageSize = 50 } = req.query;
+    const client = new BolAdsClient();
+
+    if (!adGroupIds) {
+      return res.status(400).json({
+        success: false,
+        error: 'adGroupIds is required (comma-separated ad group IDs)'
+      });
+    }
+
+    const ids = adGroupIds.split(',');
+    const data = await client.getSearchTermReport(ids, {
+      startDate,
+      endDate,
+      page: parseInt(page),
+      pageSize: parseInt(pageSize)
+    });
+
+    res.json({
+      success: true,
+      count: data.reportData?.length || 0,
+      pagination: {
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        hasMore: (data.reportData?.length || 0) >= parseInt(pageSize)
+      },
+      searchTerms: (data.reportData || []).map(s => ({
+        searchTerm: s.searchTerm,
+        impressions: s.impressions || 0,
+        clicks: s.clicks || 0,
+        ctr: s.ctr ? (s.ctr * 100).toFixed(2) + '%' : '0%',
+        conversions: s.conversions14d || 0,
+        cost: s.cost?.toFixed(2) || '0.00',
+        sales: s.sales14d?.toFixed(2) || '0.00',
+        acos: s.acos14d ? (s.acos14d * 100).toFixed(2) + '%' : 'N/A',
+        roas: s.roas14d?.toFixed(2) || 'N/A'
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get category performance
+ * Query params: startDate, endDate, adGroupIds (comma-separated, required), page, pageSize
+ */
+router.get('/advertising/reports/categories', async (req, res) => {
+  try {
+    const { startDate, endDate, adGroupIds, page = 1, pageSize = 50 } = req.query;
+    const client = new BolAdsClient();
+
+    if (!adGroupIds) {
+      return res.status(400).json({
+        success: false,
+        error: 'adGroupIds is required (comma-separated ad group IDs)'
+      });
+    }
+
+    const ids = adGroupIds.split(',');
+    const data = await client.getCategoryReport(ids, {
+      startDate,
+      endDate,
+      page: parseInt(page),
+      pageSize: parseInt(pageSize)
+    });
+
+    res.json({
+      success: true,
+      count: data.reportData?.length || 0,
+      pagination: {
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        hasMore: (data.reportData?.length || 0) >= parseInt(pageSize)
+      },
+      categories: (data.reportData || []).map(c => ({
+        categoryId: c.categoryId,
+        categoryName: c.categoryName,
+        impressions: c.impressions || 0,
+        clicks: c.clicks || 0,
+        ctr: c.ctr ? (c.ctr * 100).toFixed(2) + '%' : '0%',
+        conversions: c.conversions14d || 0,
+        cost: c.cost?.toFixed(2) || '0.00',
+        sales: c.sales14d?.toFixed(2) || '0.00',
+        acos: c.acos14d ? (c.acos14d * 100).toFixed(2) + '%' : 'N/A',
+        roas: c.roas14d?.toFixed(2) || 'N/A'
       }))
     });
   } catch (error) {
