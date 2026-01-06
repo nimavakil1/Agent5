@@ -150,21 +150,30 @@ class BolFBBDeliverySync {
     try {
       const order = await this.bolRequest(`/orders/${bolOrderId}`);
 
-      // Check if any order items are shipped
-      const hasShippedItems = order.orderItems?.some(item =>
-        item.fulfilmentStatus === 'SHIPPED' ||
-        item.fulfilment?.latestDeliveryDate
-      );
+      // Check if any order items are shipped by looking at quantityShipped > 0
+      // The API doesn't have a 'fulfilmentStatus' field - we check quantityShipped instead
+      let totalQuantity = 0;
+      let totalShipped = 0;
 
-      if (hasShippedItems) {
+      for (const item of order.orderItems || []) {
+        totalQuantity += item.quantity || 0;
+        totalShipped += item.quantityShipped || 0;
+      }
+
+      if (totalShipped > 0) {
+        // At least some items have shipped
+        const fullyShipped = totalShipped >= totalQuantity;
         return {
           shipped: true,
+          fullyShipped,
+          totalQuantity,
+          totalShipped,
           shipmentDateTime: new Date(),
           source: 'api'
         };
       }
 
-      return { shipped: false };
+      return { shipped: false, totalQuantity, totalShipped };
     } catch (err) {
       // Order might not be found (404) - check shipments API
       console.log(`[BolFBBDeliverySync] Order API failed for ${bolOrderId}:`, err.message);
@@ -281,7 +290,11 @@ class BolFBBDeliverySync {
 
       if (!shipmentStatus.shipped) {
         result.skipped = true;
-        result.skipReason = shipmentStatus.error || 'Not yet shipped on Bol.com';
+        if (shipmentStatus.error) {
+          result.skipReason = shipmentStatus.error;
+        } else {
+          result.skipReason = `Not yet shipped (${shipmentStatus.totalShipped || 0}/${shipmentStatus.totalQuantity || '?'} items shipped)`;
+        }
         return result;
       }
 
