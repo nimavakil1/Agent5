@@ -4,10 +4,12 @@
  * Manages Bol.com Sponsored Products campaigns.
  * Uses the new Advertising API V11 (launched April 2024).
  *
- * IMPORTANT v11 CHANGES:
- * - Base URL changed from /retailer/ to /advertiser/
- * - GET endpoints replaced with PUT filter endpoints for listing data
- * - Endpoint paths changed from /advertising/campaigns to /sponsored-products/campaigns
+ * IMPORTANT v11 ENDPOINT STRUCTURE:
+ * - Base URL: /advertiser/sponsored-products/campaign-management
+ * - List endpoints use POST with /list suffix (e.g., POST /campaigns/list)
+ * - Create endpoints use POST (e.g., POST /campaigns)
+ * - Update endpoints use PUT (e.g., PUT /campaigns)
+ * - Requires separate advertiser credentials (BOL_ADVERTISER_ID, BOL_ADVERTISER_SECRET)
  *
  * Features:
  * - Campaign management (create, update, pause)
@@ -67,14 +69,16 @@ const AD_STATUS = {
  */
 class BolAdsClient {
   constructor(config = {}) {
-    this.clientId = config.clientId || process.env.BOL_CLIENT_ID;
-    this.clientSecret = config.clientSecret || process.env.BOL_CLIENT_SECRET;
+    // Advertising API requires advertiser-specific credentials
+    // Fall back to retailer credentials for backwards compatibility
+    this.clientId = config.clientId || process.env.BOL_ADVERTISER_ID || process.env.BOL_CLIENT_ID;
+    this.clientSecret = config.clientSecret || process.env.BOL_ADVERTISER_SECRET || process.env.BOL_CLIENT_SECRET;
 
     this.accessToken = null;
     this.tokenExpiry = null;
 
     if (!this.clientId || !this.clientSecret) {
-      console.warn('Bol.com credentials not configured. Set BOL_CLIENT_ID and BOL_CLIENT_SECRET.');
+      console.warn('Bol.com Advertiser credentials not configured. Set BOL_ADVERTISER_ID and BOL_ADVERTISER_SECRET.');
     }
   }
 
@@ -181,20 +185,19 @@ class BolAdsClient {
 
   /**
    * List all campaigns
-   * NOTE: v11 uses PUT with filter body instead of GET
+   * v11: POST /sponsored-products/campaign-management/campaigns/list
    */
   async listCampaigns(params = {}) {
-    // v11: Use PUT with filter body to list campaigns
     const filterBody = {
       page: params.page || 1,
-      pageSize: params.pageSize || 50
+      size: params.pageSize || params.size || 50  // v11 uses 'size' not 'pageSize'
     };
 
     if (params.campaignIds) {
       filterBody.campaignIds = Array.isArray(params.campaignIds) ? params.campaignIds : [params.campaignIds];
     }
 
-    const result = await this.request('PUT', '/sponsored-products/campaigns', filterBody);
+    const result = await this.request('POST', '/sponsored-products/campaign-management/campaigns/list', filterBody);
 
     // Filter by state client-side if requested
     if (params.status && result.campaigns) {
@@ -206,23 +209,23 @@ class BolAdsClient {
 
   /**
    * Get campaign by ID
-   * NOTE: v11 uses PUT with campaignIds filter
+   * v11: POST /sponsored-products/campaign-management/campaigns/list with campaignIds filter
    */
   async getCampaign(campaignId) {
-    const result = await this.request('PUT', '/sponsored-products/campaigns', {
+    const result = await this.request('POST', '/sponsored-products/campaign-management/campaigns/list', {
       campaignIds: [campaignId],
       page: 1,
-      pageSize: 1
+      size: 1
     });
     return result.campaigns?.[0] || null;
   }
 
   /**
    * Create campaign
-   * NOTE: v11 uses POST /sponsored-products/campaigns
+   * v11: POST /sponsored-products/campaign-management/campaigns
    */
   async createCampaign(campaign) {
-    return this.request('POST', '/sponsored-products/campaigns', [{
+    return this.request('POST', '/sponsored-products/campaign-management/campaigns', [{
       name: campaign.name,
       dailyBudget: campaign.dailyBudget,
       totalBudget: campaign.totalBudget,
@@ -238,10 +241,10 @@ class BolAdsClient {
 
   /**
    * Update campaign
-   * NOTE: v11 uses PUT /sponsored-products/campaigns with full campaign object
+   * v11: PUT /sponsored-products/campaign-management/campaigns
    */
   async updateCampaign(campaignId, updates) {
-    return this.request('PUT', '/sponsored-products/campaigns', [{
+    return this.request('PUT', '/sponsored-products/campaign-management/campaigns', [{
       campaignId,
       ...updates
     }]);
@@ -274,16 +277,16 @@ class BolAdsClient {
 
   /**
    * List ads in campaign
-   * NOTE: v11 uses PUT /ads with filter body
+   * v11: POST /sponsored-products/campaign-management/ads/list
    */
   async listAds(campaignId, params = {}) {
     const filterBody = {
       campaignIds: [campaignId],
       page: params.page || 1,
-      pageSize: params.pageSize || 50
+      size: params.pageSize || params.size || 50  // v11 uses 'size' not 'pageSize'
     };
 
-    const result = await this.request('PUT', '/sponsored-products/ads', filterBody);
+    const result = await this.request('POST', '/sponsored-products/campaign-management/ads/list', filterBody);
 
     // Filter by state if requested
     if (params.status && result.ads) {
@@ -295,23 +298,23 @@ class BolAdsClient {
 
   /**
    * Get ad by ID
-   * NOTE: v11 uses PUT /ads with adIds filter
+   * v11: POST /sponsored-products/campaign-management/ads/list with adIds filter
    */
   async getAd(campaignId, adId) {
-    const result = await this.request('PUT', '/sponsored-products/ads', {
+    const result = await this.request('POST', '/sponsored-products/campaign-management/ads/list', {
       adIds: [adId],
       page: 1,
-      pageSize: 1
+      size: 1
     });
     return result.ads?.[0] || null;
   }
 
   /**
    * Create ad (add product to campaign)
-   * NOTE: v11 uses POST /ads with array of ads
+   * v11: POST /sponsored-products/campaign-management/ads
    */
   async createAd(campaignId, ad) {
-    return this.request('POST', '/sponsored-products/ads', [{
+    return this.request('POST', '/sponsored-products/campaign-management/ads', [{
       adGroupId: ad.adGroupId,
       ean: ad.ean,
       state: ad.state || AD_STATUS.ENABLED
@@ -320,10 +323,10 @@ class BolAdsClient {
 
   /**
    * Create multiple ads (bulk)
-   * NOTE: v11 supports up to 100 ads per request
+   * v11: POST /sponsored-products/campaign-management/ads (supports up to 100 ads per request)
    */
   async createAdsBulk(campaignId, ads) {
-    return this.request('POST', '/sponsored-products/ads',
+    return this.request('POST', '/sponsored-products/campaign-management/ads',
       ads.map(ad => ({
         adGroupId: ad.adGroupId,
         ean: ad.ean,
@@ -334,10 +337,10 @@ class BolAdsClient {
 
   /**
    * Update ad
-   * NOTE: v11 uses PUT /ads with array
+   * v11: PUT /sponsored-products/campaign-management/ads
    */
   async updateAd(campaignId, adId, updates) {
-    return this.request('PUT', '/sponsored-products/ads', [{
+    return this.request('PUT', '/sponsored-products/campaign-management/ads', [{
       adId,
       ...updates
     }]);
@@ -380,23 +383,23 @@ class BolAdsClient {
 
   /**
    * List targeting keywords
-   * NOTE: v11 uses PUT /keywords with filter body
+   * v11: POST /sponsored-products/campaign-management/keywords/list
    */
   async listTargetingKeywords(adGroupId, params = {}) {
     const filterBody = {
       adGroupIds: [adGroupId],
       page: params.page || 1,
-      pageSize: params.pageSize || 50
+      size: params.pageSize || params.size || 50  // v11 uses 'size' not 'pageSize'
     };
-    return this.request('PUT', '/sponsored-products/keywords', filterBody);
+    return this.request('POST', '/sponsored-products/campaign-management/keywords/list', filterBody);
   }
 
   /**
    * Add targeting keyword
-   * NOTE: v11 uses POST /keywords with array
+   * v11: POST /sponsored-products/campaign-management/keywords
    */
   async addTargetingKeyword(adGroupId, keyword) {
-    return this.request('POST', '/sponsored-products/keywords', [{
+    return this.request('POST', '/sponsored-products/campaign-management/keywords', [{
       adGroupId,
       keywordText: keyword.text,
       matchType: keyword.matchType || 'BROAD', // BROAD, PHRASE, EXACT
@@ -407,10 +410,10 @@ class BolAdsClient {
 
   /**
    * Update targeting keyword bid
-   * NOTE: v11 uses PUT /keywords with array
+   * v11: PUT /sponsored-products/campaign-management/keywords
    */
   async updateTargetingKeywordBid(keywordId, bid) {
-    return this.request('PUT', '/sponsored-products/keywords', [{
+    return this.request('PUT', '/sponsored-products/campaign-management/keywords', [{
       keywordId,
       bid
     }]);
@@ -418,9 +421,10 @@ class BolAdsClient {
 
   /**
    * Delete targeting keyword - use archived state
+   * v11: PUT /sponsored-products/campaign-management/keywords
    */
   async deleteTargetingKeyword(keywordId) {
-    return this.request('PUT', '/sponsored-products/keywords', [{
+    return this.request('PUT', '/sponsored-products/campaign-management/keywords', [{
       keywordId,
       state: 'ARCHIVED'
     }]);
@@ -428,32 +432,34 @@ class BolAdsClient {
 
   /**
    * List negative keywords
-   * NOTE: v11 uses PUT /negative-keywords with filter body
+   * v11: POST /sponsored-products/campaign-management/negative-keywords/list
    */
   async listNegativeKeywords(adGroupId) {
-    return this.request('PUT', '/sponsored-products/negative-keywords', {
+    return this.request('POST', '/sponsored-products/campaign-management/negative-keywords/list', {
       adGroupIds: [adGroupId],
       page: 1,
-      pageSize: 100
+      size: 100
     });
   }
 
   /**
    * Add negative keyword
-   * NOTE: v11 uses POST /negative-keywords
+   * v11: POST /sponsored-products/campaign-management/negative-keywords
    */
   async addNegativeKeyword(adGroupId, keyword) {
-    return this.request('POST', '/sponsored-products/negative-keywords', [{
+    return this.request('POST', '/sponsored-products/campaign-management/negative-keywords', [{
       adGroupId,
       keywordText: keyword
     }]);
   }
 
   // ==================== REPORTING ====================
+  // Note: Reporting API may use different path structure (/reporting/ instead of /campaign-management/)
+  // These endpoints may need adjustment based on actual Bol.com Reporting API spec
 
   /**
    * Get campaign performance report
-   * NOTE: v11 uses POST /reports with request body
+   * v11: POST /sponsored-products/reporting/campaigns (path may vary)
    */
   async getCampaignReport(campaignId, params = {}) {
     const reportBody = {
@@ -462,12 +468,12 @@ class BolAdsClient {
       endDate: params.endDate,
       metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
     };
-    return this.request('POST', '/sponsored-products/reports/campaigns', reportBody);
+    return this.request('POST', '/sponsored-products/reporting/campaigns', reportBody);
   }
 
   /**
    * Get ad performance report
-   * NOTE: v11 uses POST /reports with request body
+   * v11: POST /sponsored-products/reporting/ads (path may vary)
    */
   async getAdReport(adIds, params = {}) {
     const reportBody = {
@@ -476,12 +482,12 @@ class BolAdsClient {
       endDate: params.endDate,
       metrics: ['impressions', 'clicks', 'ctr', 'spend', 'orders', 'revenue', 'acos', 'roas']
     };
-    return this.request('POST', '/sponsored-products/reports/ads', reportBody);
+    return this.request('POST', '/sponsored-products/reporting/ads', reportBody);
   }
 
   /**
    * Get aggregated performance report
-   * NOTE: v11 uses POST /reports/performance
+   * v11: POST /sponsored-products/reporting/performance (path may vary)
    */
   async getAggregatedReport(params = {}) {
     const reportBody = {
@@ -494,7 +500,7 @@ class BolAdsClient {
       reportBody.campaignIds = params.campaignIds;
     }
 
-    return this.request('POST', '/sponsored-products/reports/performance', reportBody);
+    return this.request('POST', '/sponsored-products/reporting/performance', reportBody);
   }
 
   // ==================== UTILITY / ANALYTICS ====================
