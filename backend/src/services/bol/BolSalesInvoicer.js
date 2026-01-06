@@ -9,6 +9,12 @@
  * 3. Create invoices from sale orders using Odoo's native method
  * 4. Post the invoices automatically
  *
+ * Tax Logic:
+ * - FBR orders (from BE warehouse): OSS for cross-border EU, BE domestic for Belgium
+ * - FBB orders (from Bol.com NL warehouse):
+ *   - **SPECIAL EXCEPTION**: FBB to Belgium → BE domestic regime (legally agreed with tax authorities)
+ *   - FBB to other EU countries → OSS for that country
+ *
  * This runs as a scheduled nightly job via BolScheduler.js
  */
 
@@ -16,6 +22,54 @@ const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const { getModuleLogger } = require('../logging/ModuleLogger');
 
 const logger = getModuleLogger('bol');
+
+// OSS fiscal positions by destination country (for cross-border B2C)
+const OSS_FISCAL_POSITIONS = {
+  'AT': 6,   // AT*OSS
+  'BG': 7,   // BG*OSS
+  'HR': 8,   // HR*OSS
+  'CY': 9,   // CY*OSS
+  'CZ': 10,  // CZ*OSS
+  'DK': 11,  // DK*OSS
+  'EE': 12,  // EE*OSS
+  'FI': 13,  // FI*OSS
+  'FR': 14,  // FR*OSS
+  'DE': 15,  // DE*OSS
+  'GR': 16,  // GR*OSS
+  'HU': 17,  // HU*OSS
+  'IE': 18,  // IE*OSS
+  'IT': 19,  // IT*OSS
+  'LV': 20,  // LV*OSS
+  'LT': 21,  // LT*OSS
+  'LU': 22,  // LU*OSS
+  'MT': 23,  // MT*OSS
+  'NL': 24,  // NL*OSS
+  'PL': 25,  // PL*OSS
+  'PT': 26,  // PT*OSS
+  'RO': 27,  // RO*OSS
+  'SK': 28,  // SK*OSS
+  'SI': 29,  // SI*OSS
+  'ES': 30,  // ES*OSS
+  'SE': 31,  // SE*OSS
+  'BE': 35,  // BE*OSS (only used for non-FBB cross-border TO Belgium)
+};
+
+// Domestic fiscal positions (for same-country sales)
+const DOMESTIC_FISCAL_POSITIONS = {
+  'BE': 1,   // BE*VAT | Régime National
+  'DE': 32,  // DE*VAT | Germany Domestic
+  'FR': 33,  // FR*VAT | France Domestic
+  'NL': 34,  // NL*VAT | Netherlands Domestic
+};
+
+// Journal codes by country (for Bol.com invoices we use VBE or VNL)
+const COUNTRY_JOURNALS = {
+  'BE': 1,   // VBE journal (INV*BE/ Invoices)
+  'NL': 16,  // VNL journal (INV*NL/ Invoices)
+};
+
+// Bol.com warehouse ID in Odoo (FBB orders ship from here)
+const BOL_WAREHOUSE_ID = 3;  // Bol.com warehouse (NL)
 
 class BolSalesInvoicer {
   constructor(odooClient = null) {
@@ -30,6 +84,105 @@ class BolSalesInvoicer {
       this.odoo = new OdooDirectClient();
       await this.odoo.authenticate();
     }
+  }
+
+  /**
+   * Determine the fiscal position for a Bol order
+   *
+   * Logic:
+   * - FBR (shipped from BE): OSS for cross-border, BE domestic for Belgium
+   * - FBB (shipped from NL via Bol.com warehouse):
+   *   - **SPECIAL EXCEPTION**: FBB to Belgium → BE domestic (legally agreed with tax authorities)
+   *   - FBB to other EU countries → OSS for that country
+   *
+   * @param {object} order - Sale order with warehouse_id
+   * @param {string} shipToCountry - Destination country code (e.g., 'BE', 'NL')
+   * @returns {number|null} Fiscal position ID or null
+   */
+  determineFiscalPosition(order, shipToCountry) {
+    const isFBB = order.warehouse_id && order.warehouse_id[0] === BOL_WAREHOUSE_ID;
+    const shipFromCountry = isFBB ? 'NL' : 'BE';
+
+    console.log(`[BolSalesInvoicer] Tax logic: ${order.name} | FBB=${isFBB} | From=${shipFromCountry} → To=${shipToCountry}`);
+
+    // SPECIAL EXCEPTION: FBB orders to Belgium → BE domestic regime
+    // This is legally agreed with tax authorities - treat NL→BE as BE→BE
+    if (isFBB && shipToCountry === 'BE') {
+      console.log(`[BolSalesInvoicer] SPECIAL: FBB→BE treated as BE domestic (fiscal_position: 1)`);
+      return DOMESTIC_FISCAL_POSITIONS['BE']; // BE*VAT | Régime National
+    }
+
+    // Same-country sales → domestic regime
+    if (shipFromCountry === shipToCountry) {
+      const domesticFp = DOMESTIC_FISCAL_POSITIONS[shipToCountry];
+      if (domesticFp) {
+        console.log(`[BolSalesInvoicer] Domestic: ${shipFromCountry}→${shipToCountry} (fiscal_position: ${domesticFp})`);
+        return domesticFp;
+      }
+    }
+
+    // Cross-border EU sales → OSS for destination country
+    const ossFp = OSS_FISCAL_POSITIONS[shipToCountry];
+    if (ossFp) {
+      console.log(`[BolSalesInvoicer] OSS: ${shipFromCountry}→${shipToCountry} (fiscal_position: ${ossFp})`);
+      return ossFp;
+    }
+
+    // Fallback: no specific fiscal position
+    console.log(`[BolSalesInvoicer] No fiscal position mapped for ${shipToCountry}`);
+    return null;
+  }
+
+  /**
+   * Determine the journal for a Bol order invoice
+   *
+   * @param {string} shipToCountry - Destination country code
+   * @returns {number|null} Journal ID or null
+   */
+  determineJournal(shipToCountry) {
+    // Use destination country's journal (VBE for Belgium, VNL for Netherlands)
+    const journalId = COUNTRY_JOURNALS[shipToCountry];
+    if (journalId) {
+      return journalId;
+    }
+    // For other countries, fall back to VBE (Belgium journal for OSS)
+    return COUNTRY_JOURNALS['BE'];
+  }
+
+  /**
+   * Get the shipping destination country for an order
+   *
+   * @param {number} orderId - Sale order ID
+   * @returns {Promise<string|null>} Country code (e.g., 'BE', 'NL') or null
+   */
+  async getShipToCountry(orderId) {
+    // Get order with partner_shipping_id
+    const [order] = await this.odoo.searchRead('sale.order',
+      [['id', '=', orderId]],
+      ['partner_shipping_id']
+    );
+
+    if (!order || !order.partner_shipping_id) {
+      return null;
+    }
+
+    // Get partner's country
+    const [partner] = await this.odoo.searchRead('res.partner',
+      [['id', '=', order.partner_shipping_id[0]]],
+      ['country_id']
+    );
+
+    if (!partner || !partner.country_id) {
+      return null;
+    }
+
+    // Get country code
+    const [country] = await this.odoo.searchRead('res.country',
+      [['id', '=', partner.country_id[0]]],
+      ['code']
+    );
+
+    return country ? country.code : null;
   }
 
   /**
@@ -133,10 +286,10 @@ class BolSalesInvoicer {
   async createInvoiceFromOrder(orderId) {
     await this.init();
 
-    // Get order details
+    // Get order details including warehouse_id for tax logic
     const [order] = await this.odoo.searchRead('sale.order',
       [['id', '=', orderId]],
-      ['name', 'partner_id', 'order_line']
+      ['name', 'partner_id', 'order_line', 'warehouse_id']
     );
 
     if (!order) {
@@ -144,6 +297,16 @@ class BolSalesInvoicer {
     }
 
     console.log(`[BolSalesInvoicer] Creating invoice for order ${order.name}...`);
+
+    // Get shipping destination country for tax logic
+    const shipToCountry = await this.getShipToCountry(orderId);
+    if (!shipToCountry) {
+      console.log(`[BolSalesInvoicer] Warning: Could not determine ship-to country for ${order.name}`);
+    }
+
+    // Determine fiscal position and journal based on tax logic
+    const fiscalPositionId = shipToCountry ? this.determineFiscalPosition(order, shipToCountry) : null;
+    const journalId = shipToCountry ? this.determineJournal(shipToCountry) : null;
 
     // Get order lines with product info
     const orderLines = await this.odoo.searchRead('sale.order.line',
@@ -173,13 +336,28 @@ class BolSalesInvoicer {
       throw new Error(`No lines to invoice for order ${order.name}`);
     }
 
-    // Create the invoice
-    const invoiceId = await this.odoo.create('account.move', {
+    // Build invoice data with tax-aware fields
+    const invoiceData = {
       move_type: 'out_invoice',
       partner_id: order.partner_id[0],
       invoice_origin: order.name,
       invoice_line_ids: invoiceLines,
-    });
+    };
+
+    // Add fiscal position if determined
+    if (fiscalPositionId) {
+      invoiceData.fiscal_position_id = fiscalPositionId;
+      console.log(`[BolSalesInvoicer] Setting fiscal_position_id: ${fiscalPositionId}`);
+    }
+
+    // Add journal if determined
+    if (journalId) {
+      invoiceData.journal_id = journalId;
+      console.log(`[BolSalesInvoicer] Setting journal_id: ${journalId}`);
+    }
+
+    // Create the invoice
+    const invoiceId = await this.odoo.create('account.move', invoiceData);
 
     if (!invoiceId) {
       throw new Error(`Failed to create invoice for order ${order.name}`);
@@ -190,7 +368,7 @@ class BolSalesInvoicer {
     // Get invoice details
     const [invoice] = await this.odoo.searchRead('account.move',
       [['id', '=', invoiceId]],
-      ['name', 'amount_total', 'amount_tax', 'state']
+      ['name', 'amount_total', 'amount_tax', 'state', 'fiscal_position_id', 'journal_id']
     );
 
     return {
@@ -199,8 +377,11 @@ class BolSalesInvoicer {
       amountTotal: invoice?.amount_total || 0,
       amountTax: invoice?.amount_tax || 0,
       state: invoice?.state || 'draft',
+      fiscalPosition: invoice?.fiscal_position_id ? invoice.fiscal_position_id[1] : null,
+      journal: invoice?.journal_id ? invoice.journal_id[1] : null,
       orderId: orderId,
       orderName: order.name,
+      shipToCountry,
     };
   }
 

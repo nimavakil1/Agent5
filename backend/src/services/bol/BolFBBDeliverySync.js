@@ -21,12 +21,16 @@ const logger = getModuleLogger('bol');
 let accessToken = null;
 let tokenExpiry = null;
 
+// Stale order threshold: orders older than this that return 404 are marked and skipped
+const STALE_ORDER_DAYS = 30;
+
 class BolFBBDeliverySync {
   constructor() {
     this.odoo = null;
     this.isRunning = false;
     this.lastSync = null;
     this.lastResult = null;
+    this.staleOrders = []; // Track orders marked as stale during this run
   }
 
   /**
@@ -37,7 +41,62 @@ class BolFBBDeliverySync {
       this.odoo = new OdooDirectClient();
       await this.odoo.authenticate();
     }
+    // Ensure the stale marker field exists
+    await this.ensureStaleFieldExists();
     return this;
+  }
+
+  /**
+   * Ensure x_fbb_stale_404 field exists on sale.order
+   */
+  async ensureStaleFieldExists() {
+    try {
+      // Check if field exists
+      const fields = await this.odoo.execute('ir.model.fields', 'search_read',
+        [[['model', '=', 'sale.order'], ['name', '=', 'x_fbb_stale_404']]],
+        { fields: ['id'] }
+      );
+
+      if (fields.length === 0) {
+        // Create the field
+        await this.odoo.execute('ir.model.fields', 'create', [{
+          name: 'x_fbb_stale_404',
+          field_description: 'FBB Stale 404 (Order not found on Bol)',
+          model_id: (await this.odoo.execute('ir.model', 'search', [[['model', '=', 'sale.order']]]))[0],
+          ttype: 'boolean',
+          store: true
+        }]);
+        console.log('[BolFBBDeliverySync] Created x_fbb_stale_404 field on sale.order');
+      }
+    } catch (err) {
+      // Field might already exist or we don't have permission - continue anyway
+      console.log('[BolFBBDeliverySync] Note: Could not verify x_fbb_stale_404 field:', err.message);
+    }
+  }
+
+  /**
+   * Mark an order as stale 404 (order not found on Bol, older than 30 days)
+   */
+  async markOrderAsStale404(orderId, orderName, orderDate) {
+    try {
+      await this.odoo.write('sale.order', [orderId], { x_fbb_stale_404: true });
+      console.log(`[BolFBBDeliverySync] Marked ${orderName} as stale 404 (order date: ${orderDate})`);
+      this.staleOrders.push({ orderId, orderName, orderDate });
+      return true;
+    } catch (err) {
+      console.log(`[BolFBBDeliverySync] Could not mark ${orderName} as stale:`, err.message);
+      return false;
+    }
+  }
+
+  /**
+   * Check if an order is older than the stale threshold
+   */
+  isOrderStale(orderDate) {
+    const orderDateObj = new Date(orderDate);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - STALE_ORDER_DAYS);
+    return orderDateObj < cutoffDate;
   }
 
   /**
@@ -292,6 +351,13 @@ class BolFBBDeliverySync {
         result.skipped = true;
         if (shipmentStatus.error) {
           result.skipReason = shipmentStatus.error;
+
+          // If order is older than 30 days AND returned 404/error, mark it as stale
+          // so we don't keep checking it again and again
+          if (shipmentStatus.error.includes('not found') && order.date_order && this.isOrderStale(order.date_order)) {
+            await this.markOrderAsStale404(order.id, order.name, order.date_order);
+            result.markedStale = true;
+          }
         } else {
           result.skipReason = `Not yet shipped (${shipmentStatus.totalShipped || 0}/${shipmentStatus.totalQuantity || '?'} items shipped)`;
         }
@@ -332,6 +398,7 @@ class BolFBBDeliverySync {
     }
 
     this.isRunning = true;
+    this.staleOrders = []; // Reset stale orders list for this run
     const startTime = Date.now();
     const timer = logger.startTimer('FBB_DELIVERY_SYNC', 'scheduler');
 
@@ -341,14 +408,17 @@ class BolFBBDeliverySync {
       console.log('[BolFBBDeliverySync] Finding FBB orders with pending delivery...');
 
       // Find FBB orders with invoice_status = 'no' (means qty_delivered = 0)
+      // Sort by date_order DESC to process newest orders first (old orders often return 404)
+      // Exclude orders already marked as stale 404
       const orders = await this.odoo.searchRead('sale.order',
         [
           ['name', 'like', 'FBBA%'],  // FBB orders have FBBA prefix
           ['state', 'in', ['sale', 'done']],
-          ['invoice_status', '=', 'no']  // Not yet deliverable for invoicing
+          ['invoice_status', '=', 'no'],  // Not yet deliverable for invoicing
+          '|', ['x_fbb_stale_404', '=', false], ['x_fbb_stale_404', '=', null]  // Exclude stale 404 orders
         ],
-        ['id', 'name', 'state'],
-        { limit, order: 'id asc' }
+        ['id', 'name', 'state', 'date_order'],
+        { limit, order: 'date_order desc' }
       );
 
       console.log(`[BolFBBDeliverySync] Found ${orders.length} FBB orders with pending delivery`);
@@ -384,16 +454,33 @@ class BolFBBDeliverySync {
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
       this.lastSync = new Date();
-      this.lastResult = { processed, delivered, skipped, failed, duration, errors: errors.slice(0, 10) };
+      this.lastResult = {
+        processed,
+        delivered,
+        skipped,
+        failed,
+        duration,
+        errors: errors.slice(0, 10),
+        staleOrders: this.staleOrders
+      };
 
-      const summary = `FBB delivery sync: ${delivered} marked delivered, ${skipped} skipped, ${failed} failed`;
+      const staleCount = this.staleOrders.length;
+      const summary = `FBB delivery sync: ${delivered} marked delivered, ${skipped} skipped, ${failed} failed, ${staleCount} marked stale`;
       if (delivered > 0) {
         await timer.success(summary, { details: this.lastResult });
       } else {
         await timer.info(summary, { details: this.lastResult });
       }
 
-      console.log(`[BolFBBDeliverySync] Sync complete in ${duration}s: ${delivered} delivered, ${skipped} skipped, ${failed} failed`);
+      console.log(`[BolFBBDeliverySync] Sync complete in ${duration}s: ${delivered} delivered, ${skipped} skipped, ${failed} failed, ${staleCount} marked stale`);
+
+      // Log stale orders if any
+      if (this.staleOrders.length > 0) {
+        console.log(`[BolFBBDeliverySync] Stale 404 orders (older than ${STALE_ORDER_DAYS} days, not found on Bol):`);
+        for (const staleOrder of this.staleOrders) {
+          console.log(`  - ${staleOrder.orderName} (date: ${staleOrder.orderDate})`);
+        }
+      }
 
       return {
         success: true,
@@ -402,7 +489,8 @@ class BolFBBDeliverySync {
         skipped,
         failed,
         duration: `${duration}s`,
-        errors: errors.slice(0, 10)
+        errors: errors.slice(0, 10),
+        staleOrders: this.staleOrders
       };
 
     } catch (error) {
