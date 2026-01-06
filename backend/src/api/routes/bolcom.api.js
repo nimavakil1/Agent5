@@ -1464,32 +1464,30 @@ router.get('/fbb/stats', async (req, res) => {
 
 /**
  * Get all advertising campaigns
- * Query params: state (ENABLED, PAUSED, ARCHIVED), campaignIds
+ * Query params: state (ENABLED, PAUSED, ARCHIVED), campaignIds, page, size
  *
- * NOTE: In v11, listing uses PUT /campaigns with body {"campaigns": []}.
- * Returns HTTP 207 Multi-Status.
+ * v11 API: POST /campaigns/list with body {"page": 1, "size": 50, "campaignIds": [...]}
  * See: https://api.bol.com/advertiser/docs/redoc/sponsored-products/v11/campaign-management.html
  */
 router.get('/advertising/campaigns', async (req, res) => {
   try {
-    const { state, campaignIds } = req.query;
+    const { state, campaignIds, page, size } = req.query;
 
-    // v11 API: PUT /campaigns with {"campaigns": []} for all, or {"campaigns": ["id1"]} for specific
-    // NOTE: v11 doesn't support page/pageSize in the request body - returns all matching
+    // v11 API: POST /campaigns/list with filter body
     const requestBody = {
-      campaigns: campaignIds
-        ? (Array.isArray(campaignIds) ? campaignIds : [campaignIds])
-        : []
+      page: parseInt(page) || 1,
+      size: parseInt(size) || 50
     };
 
-    // v11 uses PUT /campaigns with campaigns array body (returns 207)
-    const data = await advertiserRequest('/campaigns', 'PUT', requestBody);
+    if (campaignIds) {
+      requestBody.campaignIds = Array.isArray(campaignIds) ? campaignIds : [campaignIds];
+    }
 
-    // v11 returns campaigns as object { campaignId: {...} }, convert to array
-    const campaignsObj = data.campaigns || {};
-    let campaigns = Array.isArray(campaignsObj)
-      ? campaignsObj
-      : Object.values(campaignsObj);
+    // v11 uses POST /campaigns/list
+    const data = await advertiserRequest('/campaigns/list', 'POST', requestBody);
+
+    // v11 returns campaigns as array directly
+    let campaigns = data.campaigns || [];
 
     // Filter by state client-side if requested
     if (state) {
@@ -1522,18 +1520,20 @@ router.get('/advertising/campaigns', async (req, res) => {
 
 /**
  * Get single campaign details
- * NOTE: In v11, use PUT /campaigns with {"campaigns": ["campaignId"]}
+ * NOTE: In v11, use POST /campaigns/list with {"campaignIds": ["campaignId"]}
  */
 router.get('/advertising/campaigns/:campaignId', async (req, res) => {
   try {
-    // v11 uses PUT /campaigns with campaign ID in array
-    const data = await advertiserRequest('/campaigns', 'PUT', {
-      campaigns: [req.params.campaignId]
+    // v11 uses POST /campaigns/list with campaignIds filter
+    const data = await advertiserRequest('/campaigns/list', 'POST', {
+      campaignIds: [req.params.campaignId],
+      page: 1,
+      size: 1
     });
 
-    // Response format: { campaigns: { campaignId: {...} } }
-    const campaignsObj = data.campaigns || {};
-    const campaign = campaignsObj[req.params.campaignId] || Object.values(campaignsObj)[0];
+    // Response format: { campaigns: [...] }
+    const campaigns = data.campaigns || [];
+    const campaign = campaigns[0];
     if (!campaign) {
       return res.status(404).json({ success: false, error: 'Campaign not found' });
     }
@@ -1545,32 +1545,31 @@ router.get('/advertising/campaigns/:campaignId', async (req, res) => {
 });
 
 /**
- * Get ad groups for a campaign
- * NOTE: In v11, use PUT /adgroups with {"adGroups": []}
+ * Get ads for a campaign
+ * NOTE: In v11, use POST /ads/list with {"campaignIds": [...]}
  */
-router.get('/advertising/campaigns/:campaignId/ad-groups', async (req, res) => {
+router.get('/advertising/campaigns/:campaignId/ads', async (req, res) => {
   try {
-    // v11 uses PUT /adgroups with adGroups array body
-    // Note: endpoint is /adgroups not /ad-groups
-    const data = await advertiserRequest('/adgroups', 'PUT', {
-      adGroups: []  // Empty array returns all ad groups
+    const { page, size } = req.query;
+
+    // v11 uses POST /ads/list with campaignIds filter
+    const data = await advertiserRequest('/ads/list', 'POST', {
+      campaignIds: [req.params.campaignId],
+      page: parseInt(page) || 1,
+      size: parseInt(size) || 50
     });
 
-    // Filter by campaignId client-side since v11 doesn't support filter in body
-    const allAdGroups = data.adGroups || {};
-    const adGroupsList = Object.values(allAdGroups).filter(
-      ag => ag.campaignId === req.params.campaignId
-    );
+    const ads = data.ads || [];
 
     res.json({
       success: true,
-      count: adGroupsList.length,
-      adGroups: adGroupsList.map(ag => ({
-        adGroupId: ag.adGroupId,
-        campaignId: ag.campaignId,
-        name: ag.name,
-        state: ag.state,
-        defaultBid: ag.defaultBid
+      count: ads.length,
+      ads: ads.map(ad => ({
+        adId: ad.adId,
+        campaignId: ad.campaignId,
+        ean: ad.ean,
+        state: ad.state,
+        bid: ad.bid
       }))
     });
   } catch (error) {
@@ -1579,28 +1578,37 @@ router.get('/advertising/campaigns/:campaignId/ad-groups', async (req, res) => {
 });
 
 /**
- * Get keywords for an ad group
- * NOTE: In v11, use PUT /keywords with {"keywords": []}
+ * Legacy route - redirect to /ads
+ * @deprecated Use /advertising/campaigns/:campaignId/ads instead
  */
-router.get('/advertising/ad-groups/:adGroupId/keywords', async (req, res) => {
+router.get('/advertising/campaigns/:campaignId/ad-groups', async (req, res) => {
+  // Redirect to new endpoint
+  res.redirect(`/api/bolcom/advertising/campaigns/${req.params.campaignId}/ads`);
+});
+
+/**
+ * Get keywords for a campaign
+ * NOTE: In v11, use POST /keywords/list with {"campaignIds": [...]}
+ */
+router.get('/advertising/campaigns/:campaignId/keywords', async (req, res) => {
   try {
-    // v11 uses PUT /keywords with keywords array body
-    const data = await advertiserRequest('/keywords', 'PUT', {
-      keywords: []  // Empty array returns all keywords
+    const { page, size } = req.query;
+
+    // v11 uses POST /keywords/list with campaignIds filter
+    const data = await advertiserRequest('/keywords/list', 'POST', {
+      campaignIds: [req.params.campaignId],
+      page: parseInt(page) || 1,
+      size: parseInt(size) || 50
     });
 
-    // Filter by adGroupId client-side since v11 doesn't support filter in body
-    const allKeywords = data.keywords || {};
-    const keywordsList = Object.values(allKeywords).filter(
-      k => k.adGroupId === req.params.adGroupId
-    );
+    const keywords = data.keywords || [];
 
     res.json({
       success: true,
-      count: keywordsList.length,
-      keywords: keywordsList.map(k => ({
+      count: keywords.length,
+      keywords: keywords.map(k => ({
         keywordId: k.keywordId,
-        adGroupId: k.adGroupId,
+        campaignId: k.campaignId,
         keywordText: k.keywordText,
         matchType: k.matchType,
         state: k.state,
@@ -1610,6 +1618,17 @@ router.get('/advertising/ad-groups/:adGroupId/keywords', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+/**
+ * Legacy route - keywords by adGroupId (no longer supported in v11)
+ * @deprecated Use /advertising/campaigns/:campaignId/keywords instead
+ */
+router.get('/advertising/ad-groups/:adGroupId/keywords', async (req, res) => {
+  res.status(410).json({
+    success: false,
+    error: 'This endpoint is deprecated. Use /advertising/campaigns/:campaignId/keywords instead'
+  });
 });
 
 /**
