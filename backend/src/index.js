@@ -315,6 +315,11 @@ app.get('/warehouse', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'app', 'warehouse-dashboard.html'));
 });
 
+// Bol.com Advertising dashboard (protected)
+app.get('/bol-advertising', requireSession, (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'app', 'bol-advertising.html'));
+});
+
 // Public marketplace dashboard API (shows status from marketplace perspective)
 app.get('/api/alerts/marketplace-display', async (req, res) => {
   try {
