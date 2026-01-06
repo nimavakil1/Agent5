@@ -374,13 +374,13 @@ class FbmOrderImporter {
     }
 
     // Create/find shipping address (child contact)
-    // For B2B: Include company name FIRST, then contact name (for shipping labels)
-    // Format: "Company Name\nContact Name" so company appears on first line
+    // For B2B: Use person name only - company is already the parent
+    // Odoo handles parent company display on shipping labels automatically
     let deliveryName;
     if (isCompany && cleanedAddress.company) {
       const personName = cleanedAddress.name || order.recipientName;
-      // Company first, then contact - newline ensures proper display on labels
-      deliveryName = `${cleanedAddress.company}\n${personName}`;
+      // Just the person name - parent relationship provides company context
+      deliveryName = personName;
     } else {
       deliveryName = cleanDuplicateName(order.recipientName);
     }
