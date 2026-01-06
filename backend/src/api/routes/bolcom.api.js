@@ -1463,31 +1463,90 @@ router.get('/fbb/stats', async (req, res) => {
 // ============================================
 
 /**
+ * Helper to auto-paginate Bol.com Advertising API calls
+ * Bol.com API has a max page size of 50, so we need to paginate to get all results
+ */
+async function fetchAllPaginated(endpoint, bodyBase = {}, itemsKey = 'campaigns') {
+  const PAGE_SIZE = 50; // Bol.com API max
+  let allItems = [];
+  let page = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    const requestBody = { ...bodyBase, page, size: PAGE_SIZE };
+    const data = await advertiserRequest(endpoint, 'POST', requestBody);
+    const items = data[itemsKey] || [];
+    allItems = allItems.concat(items);
+
+    // If we got fewer than PAGE_SIZE, we've reached the end
+    hasMore = items.length === PAGE_SIZE;
+    page++;
+
+    // Safety limit to prevent infinite loops
+    if (page > 100) break;
+  }
+
+  return allItems;
+}
+
+/**
+ * Format campaign for API response
+ */
+function formatCampaign(c) {
+  return {
+    campaignId: c.campaignId,
+    name: c.name,
+    state: c.state,
+    startDate: c.startDate,
+    endDate: c.endDate,
+    campaignType: c.campaignType,
+    targetingType: c.targetingType,
+    dailyBudget: c.dailyBudget,
+    totalBudget: c.totalBudget,
+    targetCountries: c.targetCountries,
+    targetChannels: c.targetChannels,
+    acosTargetPercentage: c.acosTargetPercentage,
+    constraints: c.constraints
+  };
+}
+
+/**
  * Get all advertising campaigns
- * Query params: state (ENABLED, PAUSED, ARCHIVED), campaignIds, page, size
+ * Query params: state (ENABLED, PAUSED, ARCHIVED), campaignIds
  *
  * v11 API: POST /campaigns/list with body {"page": 1, "size": 50, "campaignIds": [...]}
  * See: https://api.bol.com/advertiser/docs/redoc/sponsored-products/v11/campaign-management.html
+ *
+ * NOTE: Auto-paginates to fetch ALL campaigns (Bol.com max page size is 50)
  */
 router.get('/advertising/campaigns', async (req, res) => {
   try {
-    const { state, campaignIds, page, size } = req.query;
+    const { state, campaignIds } = req.query;
 
-    // v11 API: POST /campaigns/list with filter body
-    const requestBody = {
-      page: parseInt(page) || 1,
-      size: parseInt(size) || 50
-    };
-
+    // If specific campaignIds requested, fetch just those
     if (campaignIds) {
-      requestBody.campaignIds = Array.isArray(campaignIds) ? campaignIds : [campaignIds];
+      const ids = Array.isArray(campaignIds) ? campaignIds : [campaignIds];
+      const data = await advertiserRequest('/campaigns/list', 'POST', {
+        campaignIds: ids,
+        page: 1,
+        size: 50
+      });
+      let campaigns = data.campaigns || [];
+
+      if (state) {
+        campaigns = campaigns.filter(c => c.state === state);
+      }
+
+      return res.json({
+        success: true,
+        count: campaigns.length,
+        campaigns: campaigns.map(formatCampaign)
+      });
     }
 
-    // v11 uses POST /campaigns/list
-    const data = await advertiserRequest('/campaigns/list', 'POST', requestBody);
-
-    // v11 returns campaigns as array directly
-    let campaigns = data.campaigns || [];
+    // Default: fetch ALL campaigns using auto-pagination
+    // (Bol.com API max page size is 50, but there can be 150+ campaigns)
+    let campaigns = await fetchAllPaginated('/campaigns/list', {}, 'campaigns');
 
     // Filter by state client-side if requested
     if (state) {
@@ -1497,21 +1556,7 @@ router.get('/advertising/campaigns', async (req, res) => {
     res.json({
       success: true,
       count: campaigns.length,
-      campaigns: campaigns.map(c => ({
-        campaignId: c.campaignId,
-        name: c.name,
-        state: c.state,
-        startDate: c.startDate,
-        endDate: c.endDate,
-        campaignType: c.campaignType,
-        targetingType: c.targetingType,
-        dailyBudget: c.dailyBudget,
-        totalBudget: c.totalBudget,
-        targetCountries: c.targetCountries,
-        targetChannels: c.targetChannels,
-        acosTargetPercentage: c.acosTargetPercentage,
-        constraints: c.constraints
-      }))
+      campaigns: campaigns.map(formatCampaign)
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1629,6 +1674,50 @@ router.get('/advertising/ad-groups/:adGroupId/keywords', async (req, res) => {
     success: false,
     error: 'This endpoint is deprecated. Use /advertising/campaigns/:campaignId/keywords instead'
   });
+});
+
+/**
+ * Get advertising summary with totals
+ * Auto-paginates to get accurate counts
+ */
+router.get('/advertising/summary', async (req, res) => {
+  try {
+    // Fetch ALL campaigns using auto-pagination
+    const allCampaigns = await fetchAllPaginated('/campaigns/list', {}, 'campaigns');
+
+    // Count by state
+    const byState = {};
+    for (const c of allCampaigns) {
+      byState[c.state] = (byState[c.state] || 0) + 1;
+    }
+
+    // Count by type
+    const byType = {};
+    for (const c of allCampaigns) {
+      byType[c.campaignType] = (byType[c.campaignType] || 0) + 1;
+    }
+
+    // Calculate budget totals
+    let totalDailyBudget = 0;
+    let totalBudget = 0;
+    for (const c of allCampaigns) {
+      if (c.dailyBudget) totalDailyBudget += c.dailyBudget;
+      if (c.totalBudget) totalBudget += c.totalBudget;
+    }
+
+    res.json({
+      success: true,
+      totalCampaigns: allCampaigns.length,
+      byState,
+      byType,
+      budgets: {
+        totalDailyBudget: totalDailyBudget.toFixed(2),
+        totalBudget: totalBudget.toFixed(2)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /**
