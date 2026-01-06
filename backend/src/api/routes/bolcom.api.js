@@ -230,6 +230,52 @@ async function advertiserRequest(endpoint, method = 'GET', body = null, retries 
 }
 
 /**
+ * Maximum date range for advertising reports (90 days)
+ * Bol.com Advertising API returns 500 errors for longer ranges
+ */
+const MAX_ADVERTISING_DATE_RANGE_DAYS = 90;
+
+/**
+ * Validate advertising report date range
+ * @param {string} startDate - Start date (YYYY-MM-DD)
+ * @param {string} endDate - End date (YYYY-MM-DD)
+ * @returns {Object} { valid: boolean, error?: string, startDate, endDate }
+ */
+function validateAdvertisingDateRange(startDate, endDate) {
+  // Default to last 7 days if not provided
+  const today = new Date();
+  const defaultEnd = today.toISOString().split('T')[0];
+  const defaultStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const start = startDate || defaultStart;
+  const end = endDate || defaultEnd;
+
+  const startMs = new Date(start).getTime();
+  const endMs = new Date(end).getTime();
+
+  if (isNaN(startMs) || isNaN(endMs)) {
+    return { valid: false, error: 'Invalid date format. Use YYYY-MM-DD.' };
+  }
+
+  if (startMs > endMs) {
+    return { valid: false, error: 'Start date must be before end date.' };
+  }
+
+  const daysDiff = Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24));
+
+  if (daysDiff > MAX_ADVERTISING_DATE_RANGE_DAYS) {
+    return {
+      valid: false,
+      error: `Date range exceeds maximum of ${MAX_ADVERTISING_DATE_RANGE_DAYS} days. Please select a shorter period.`,
+      maxDays: MAX_ADVERTISING_DATE_RANGE_DAYS,
+      requestedDays: daysDiff
+    };
+  }
+
+  return { valid: true, startDate: start, endDate: end, days: daysDiff };
+}
+
+/**
  * Check connection status
  */
 router.get('/status', async (req, res) => {
@@ -1731,9 +1777,24 @@ router.get('/advertising/summary', async (req, res) => {
 router.get('/advertising/reports/performance', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
+
+    // Validate date range
+    const dateValidation = validateAdvertisingDateRange(startDate, endDate);
+    if (!dateValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: dateValidation.error,
+        maxDays: dateValidation.maxDays,
+        requestedDays: dateValidation.requestedDays
+      });
+    }
+
     const client = new BolAdsClient();
 
-    const data = await client.getAdvertiserReport({ startDate, endDate });
+    const data = await client.getAdvertiserReport({
+      startDate: dateValidation.startDate,
+      endDate: dateValidation.endDate
+    });
 
     res.json({
       success: true,
@@ -1769,6 +1830,18 @@ router.get('/advertising/reports/performance', async (req, res) => {
 router.get('/advertising/reports/campaigns', async (req, res) => {
   try {
     const { startDate, endDate, campaignIds } = req.query;
+
+    // Validate date range
+    const dateValidation = validateAdvertisingDateRange(startDate, endDate);
+    if (!dateValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: dateValidation.error,
+        maxDays: dateValidation.maxDays,
+        requestedDays: dateValidation.requestedDays
+      });
+    }
+
     const client = new BolAdsClient();
 
     // Get list of campaigns first to get IDs if not provided
@@ -1788,7 +1861,10 @@ router.get('/advertising/reports/campaigns', async (req, res) => {
       });
     }
 
-    const data = await client.getCampaignsReport(ids, { startDate, endDate });
+    const data = await client.getCampaignsReport(ids, {
+      startDate: dateValidation.startDate,
+      endDate: dateValidation.endDate
+    });
 
     res.json({
       success: true,

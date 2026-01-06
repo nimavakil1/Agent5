@@ -393,6 +393,9 @@
     let currentSort = { field: 'cost', direction: 'desc' };
     let performanceChart = null;
 
+    // Maximum date range (90 days - Bol.com API limitation)
+    const MAX_DATE_RANGE_DAYS = 90;
+
     // Initialize date range (last 7 days)
     const endDate = new Date();
     const startDate = new Date();
@@ -400,6 +403,47 @@
 
     document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
     document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+
+    // Set max date to today
+    document.getElementById('endDate').max = endDate.toISOString().split('T')[0];
+    document.getElementById('startDate').max = endDate.toISOString().split('T')[0];
+
+    // Calculate minimum allowed start date
+    function updateMinStartDate() {
+      const end = document.getElementById('endDate').value;
+      if (end) {
+        const endMs = new Date(end).getTime();
+        const minStart = new Date(endMs - MAX_DATE_RANGE_DAYS * 24 * 60 * 60 * 1000);
+        document.getElementById('startDate').min = minStart.toISOString().split('T')[0];
+      }
+    }
+    updateMinStartDate();
+
+    // Validate date range
+    function validateDateRange() {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+
+      if (!start || !end) return { valid: true };
+
+      const startMs = new Date(start).getTime();
+      const endMs = new Date(end).getTime();
+      const daysDiff = Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24));
+
+      if (startMs > endMs) {
+        return { valid: false, error: 'Start date must be before end date.' };
+      }
+
+      if (daysDiff > MAX_DATE_RANGE_DAYS) {
+        return {
+          valid: false,
+          error: `Date range cannot exceed ${MAX_DATE_RANGE_DAYS} days. Please select a shorter period.`,
+          daysDiff
+        };
+      }
+
+      return { valid: true, daysDiff };
+    }
 
     // Utility functions
     function formatNumber(num) {
@@ -429,11 +473,21 @@
         const response = await fetch(`/api/bolcom/advertising/reports/performance?startDate=${start}&endDate=${end}`, {
           credentials: 'include'
         });
-        if (!response.ok) throw new Error('Failed to fetch performance');
-        return await response.json();
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          // Handle validation error with helpful message
+          if (data.maxDays) {
+            throw new Error(`Date range too large (max ${data.maxDays} days). You selected ${data.requestedDays} days.`);
+          }
+          throw new Error(data.error || 'Failed to fetch performance');
+        }
+
+        return data;
       } catch (error) {
         console.error('Error fetching performance:', error);
-        return null;
+        throw error; // Re-throw to be handled by refreshData
       }
     }
 
@@ -445,11 +499,21 @@
         const response = await fetch(`/api/bolcom/advertising/reports/campaigns?startDate=${start}&endDate=${end}`, {
           credentials: 'include'
         });
-        if (!response.ok) throw new Error('Failed to fetch campaigns');
-        return await response.json();
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          // Handle validation error with helpful message
+          if (data.maxDays) {
+            throw new Error(`Date range too large (max ${data.maxDays} days). You selected ${data.requestedDays} days.`);
+          }
+          throw new Error(data.error || 'Failed to fetch campaigns');
+        }
+
+        return data;
       } catch (error) {
         console.error('Error fetching campaigns:', error);
-        return null;
+        throw error; // Re-throw to be handled by refreshData
       }
     }
 
@@ -705,6 +769,18 @@
     // Main refresh function
     async function refreshData() {
       const tbody = document.getElementById('campaignTableBody');
+
+      // Validate date range first
+      const validation = validateDateRange();
+      if (!validation.valid) {
+        showToast(validation.error, 'error');
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 40px; color: #f87171;">
+          <span class="material-symbols-outlined" style="font-size: 48px; display: block; margin-bottom: 12px;">error</span>
+          ${validation.error}
+        </td></tr>`;
+        return;
+      }
+
       tbody.innerHTML = '<tr><td colspan="9"><div class="loading"><div class="spinner"></div>Loading campaigns...</div></td></tr>';
 
       try {
@@ -724,7 +800,12 @@
 
       } catch (error) {
         console.error('Error refreshing data:', error);
-        showToast('Failed to load data', 'error');
+        const errorMsg = error.message || 'Failed to load data';
+        showToast(errorMsg, 'error');
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 40px; color: #f87171;">
+          <span class="material-symbols-outlined" style="font-size: 48px; display: block; margin-bottom: 12px;">error</span>
+          ${errorMsg}
+        </td></tr>`;
       }
     }
 
@@ -765,7 +846,10 @@
     });
 
     document.getElementById('startDate').addEventListener('change', refreshData);
-    document.getElementById('endDate').addEventListener('change', refreshData);
+    document.getElementById('endDate').addEventListener('change', () => {
+      updateMinStartDate();
+      refreshData();
+    });
 
     // Initialize after shell loads
     async function init() {
