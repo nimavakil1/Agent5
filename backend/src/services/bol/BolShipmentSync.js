@@ -13,8 +13,11 @@
  * 4. Update MongoDB with shipment confirmation status
  */
 
-const BolOrder = require('../../models/BolOrder');
+const { getDb } = require('../../db');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+
+// Collection name for unified orders
+const COLLECTION_NAME = 'unified_orders';
 
 // Carrier name to Bol transporter code mapping
 // Reference: https://api.bol.com/retailer/public/Retailer-API/v10/functional/retailer-api/orders-shipments.html
@@ -264,39 +267,44 @@ class BolShipmentSync {
 
   /**
    * Process a single Bol order for shipment confirmation
+   * Works with unified_orders schema
    */
   async processOrder(bolOrder) {
+    // Get order ID from unified_orders schema
+    const orderId = bolOrder.sourceIds?.bolOrderId || bolOrder.orderId;
+
     const result = {
-      orderId: bolOrder.orderId,
+      orderId,
       success: false,
       skipped: false,
       error: null
     };
 
     try {
-      // Skip if already confirmed
-      if (bolOrder.shipmentConfirmedAt) {
+      // Skip if already confirmed (unified_orders uses bol.shipmentConfirmedAt)
+      if (bolOrder.bol?.shipmentConfirmedAt) {
         result.skipped = true;
         result.skipReason = 'Already confirmed';
         return result;
       }
 
-      // Skip FBB orders (fulfilled by Bol)
-      if (bolOrder.fulfilmentMethod === 'FBB') {
+      // Skip FBB orders (fulfilled by Bol) - unified_orders uses subChannel
+      if (bolOrder.subChannel === 'FBB') {
         result.skipped = true;
         result.skipReason = 'FBB order - fulfilled by Bol';
         return result;
       }
 
-      // Check if has Odoo order
-      if (!bolOrder.odoo?.saleOrderId) {
+      // Check if has Odoo order - unified_orders uses sourceIds.odooSaleOrderId
+      const odooSaleOrderId = bolOrder.sourceIds?.odooSaleOrderId;
+      if (!odooSaleOrderId) {
         result.skipped = true;
         result.skipReason = 'No Odoo order linked';
         return result;
       }
 
       // Get Odoo picking status
-      const pickingStatus = await this.getPickingStatus(bolOrder.odoo.saleOrderId);
+      const pickingStatus = await this.getPickingStatus(odooSaleOrderId);
 
       if (!pickingStatus) {
         result.skipped = true;
@@ -319,22 +327,25 @@ class BolShipmentSync {
         transport.trackAndTrace = pickingStatus.trackingRef;
       }
 
-      // Confirm shipment to Bol.com
-      await this.confirmShipment(
-        bolOrder.orderId,
-        bolOrder.orderItems || [],
-        transport
-      );
+      // Get order items - unified_orders uses 'items' with orderItemId field
+      const orderItems = (bolOrder.items || []).map(item => ({
+        orderItemId: item.orderItemId || item.bolOrderItemId
+      }));
 
-      // Update MongoDB
-      await BolOrder.updateOne(
-        { orderId: bolOrder.orderId },
+      // Confirm shipment to Bol.com
+      await this.confirmShipment(orderId, orderItems, transport);
+
+      // Update MongoDB - unified_orders collection with correct field paths
+      const db = getDb();
+      await db.collection(COLLECTION_NAME).updateOne(
+        { 'sourceIds.bolOrderId': orderId },
         {
           $set: {
-            shipmentConfirmedAt: new Date(),
-            shipmentReference: pickingStatus.pickingName,
-            trackingCode: pickingStatus.trackingRef || '',
-            status: 'SHIPPED'
+            'bol.shipmentConfirmedAt': new Date(),
+            'bol.shipmentReference': pickingStatus.pickingName,
+            'bol.trackingCode': pickingStatus.trackingRef || '',
+            'status.source': 'SHIPPED',
+            'status.unified': 'shipped'
           }
         }
       );
@@ -343,11 +354,11 @@ class BolShipmentSync {
       result.pickingName = pickingStatus.pickingName;
       result.trackingRef = pickingStatus.trackingRef;
 
-      console.log(`[BolShipmentSync] Confirmed shipment for order ${bolOrder.orderId}`);
+      console.log(`[BolShipmentSync] Confirmed shipment for order ${orderId}`);
 
     } catch (error) {
       result.error = error.message;
-      console.error(`[BolShipmentSync] Error processing order ${bolOrder.orderId}:`, error);
+      console.error(`[BolShipmentSync] Error processing order ${orderId}:`, error);
     }
 
     return result;
@@ -369,15 +380,18 @@ class BolShipmentSync {
       await this.init();
 
       // Find FBR orders with Odoo link but no shipment confirmation
-      const pendingOrders = await BolOrder.find({
-        'odoo.saleOrderId': { $exists: true, $ne: null },
-        shipmentConfirmedAt: { $exists: false },
-        fulfilmentMethod: 'FBR',
-        status: { $ne: 'CANCELLED' }
+      // Uses unified_orders collection with updated field paths
+      const db = getDb();
+      const pendingOrders = await db.collection(COLLECTION_NAME).find({
+        channel: 'bol',
+        'sourceIds.odooSaleOrderId': { $exists: true, $ne: null },
+        'bol.shipmentConfirmedAt': { $exists: false },
+        subChannel: 'FBR',
+        'status.source': { $nin: ['CANCELLED', 'SHIPPED'] }
       })
-        .sort({ orderPlacedDateTime: -1 })
+        .sort({ orderDate: -1 })
         .limit(100)
-        .lean();
+        .toArray();
 
       console.log(`[BolShipmentSync] Found ${pendingOrders.length} pending orders to check`);
 
@@ -435,7 +449,10 @@ class BolShipmentSync {
   async confirmSingleOrder(orderId) {
     await this.init();
 
-    const bolOrder = await BolOrder.findOne({ orderId }).lean();
+    const db = getDb();
+    const bolOrder = await db.collection(COLLECTION_NAME).findOne({
+      'sourceIds.bolOrderId': orderId
+    });
     if (!bolOrder) {
       return { success: false, error: 'Order not found' };
     }
