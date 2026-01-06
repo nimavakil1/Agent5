@@ -3807,6 +3807,292 @@ router.post('/vcs/create-orders', async (req, res) => {
   }
 });
 
+// ==================== MANUAL INVOICE QUEUE ====================
+
+/**
+ * @route GET /api/amazon/vcs/manual-required
+ * @desc Get orders requiring manual invoice creation (e.g., defective VAT registration)
+ */
+router.get('/vcs/manual-required', async (req, res) => {
+  try {
+    const db = getDb();
+
+    // Get orders with manual_required status
+    const orders = await db.collection('amazon_vcs_orders')
+      .find({ status: 'manual_required' })
+      .sort({ manualRequiredAt: -1 })
+      .toArray();
+
+    // Format for UI
+    const formattedOrders = orders.map(order => ({
+      _id: order._id.toString(),
+      orderId: order.orderId,
+      orderDate: order.orderDate,
+      shipmentDate: order.shipmentDate,
+      marketplaceId: order.marketplaceId,
+      currency: order.currency,
+
+      // Address info
+      shipFromCountry: order.shipFromCountry,
+      shipToCountry: order.shipToCountry,
+      shipToCity: order.shipToCity,
+      shipToPostalCode: order.shipToPostalCode,
+
+      // VAT info
+      isAmazonInvoiced: order.isAmazonInvoiced,
+      sellerTaxRegistration: order.sellerTaxRegistration || '',
+      buyerTaxRegistration: order.buyerTaxRegistration || '',
+      taxReportingScheme: order.taxReportingScheme || '',
+
+      // Totals (from order level, as item prices are 0)
+      totalExclusive: order.totalExclusive || 0,
+      totalTax: order.totalTax || 0,
+      totalInclusive: order.totalInclusive || 0,
+
+      // Items
+      items: (order.items || []).map(item => ({
+        sku: item.sku,
+        asin: item.asin,
+        quantity: item.quantity,
+        priceExclusive: item.priceExclusive || 0,
+        priceInclusive: item.priceInclusive || 0,
+        taxAmount: item.taxAmount || 0,
+        taxRate: item.taxRate || 0,
+        promoAmount: item.promoAmount || 0,
+        shippingExclusive: item.shippingExclusive || 0,
+        shippingTax: item.shippingTax || 0,
+      })),
+
+      // Manual required info
+      manualRequiredReason: order.manualRequiredReason,
+      manualRequiredAt: order.manualRequiredAt,
+
+      // Odoo info if exists
+      odooOrderId: order.odooOrderId,
+      odooOrderNumber: order.odooOrderNumber,
+    }));
+
+    res.json({
+      success: true,
+      count: formattedOrders.length,
+      orders: formattedOrders,
+    });
+
+  } catch (error) {
+    console.error('[VCS Manual Required] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/vcs/manual-invoice
+ * @desc Create invoice for a manual-required order with user-supplied data
+ * @body {
+ *   mongoId: string,           // MongoDB _id of the VCS order
+ *   sellerVatNumber: string,   // VAT number to use (e.g., BE0477472701)
+ *   items: [{
+ *     sku: string,
+ *     unitPriceExclusive: number,
+ *     quantity: number,
+ *     taxRate: number,         // e.g., 20 for 20%
+ *   }],
+ *   shipping: number,          // Optional shipping amount exclusive
+ *   shippingTaxRate: number,   // Optional shipping tax rate
+ * }
+ */
+router.post('/vcs/manual-invoice', async (req, res) => {
+  try {
+    const { mongoId, sellerVatNumber, items, shipping = 0, shippingTaxRate = 0 } = req.body;
+
+    if (!mongoId) {
+      return res.status(400).json({ error: 'mongoId is required' });
+    }
+    if (!sellerVatNumber) {
+      return res.status(400).json({ error: 'sellerVatNumber is required' });
+    }
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'items array is required with at least one item' });
+    }
+
+    // Validate all items have required fields
+    for (const item of items) {
+      if (!item.sku) {
+        return res.status(400).json({ error: 'Each item must have a sku' });
+      }
+      if (typeof item.unitPriceExclusive !== 'number' || item.unitPriceExclusive < 0) {
+        return res.status(400).json({ error: `Item ${item.sku}: unitPriceExclusive must be a non-negative number` });
+      }
+      if (typeof item.quantity !== 'number' || item.quantity <= 0) {
+        return res.status(400).json({ error: `Item ${item.sku}: quantity must be a positive number` });
+      }
+    }
+
+    const db = getDb();
+    const { ObjectId } = require('mongodb');
+
+    // Get the VCS order
+    const vcsOrder = await db.collection('amazon_vcs_orders').findOne({
+      _id: new ObjectId(mongoId),
+      status: 'manual_required'
+    });
+
+    if (!vcsOrder) {
+      return res.status(404).json({ error: 'Order not found or not in manual_required status' });
+    }
+
+    // Check Odoo credentials
+    if (!process.env.ODOO_URL || !process.env.ODOO_DB || !process.env.ODOO_USERNAME || !process.env.ODOO_PASSWORD) {
+      return res.status(400).json({
+        error: 'Odoo not configured',
+        missingEnvVars: ['ODOO_URL', 'ODOO_DB', 'ODOO_USERNAME', 'ODOO_PASSWORD'].filter(key => !process.env[key])
+      });
+    }
+
+    // Initialize Odoo client
+    const odooClient = new OdooDirectClient();
+    await odooClient.authenticate();
+
+    // Create a modified VCS order with user-supplied prices
+    const modifiedOrder = {
+      ...vcsOrder,
+      sellerTaxRegistration: sellerVatNumber,
+      items: vcsOrder.items.map(vcsItem => {
+        const userItem = items.find(i => i.sku === vcsItem.sku);
+        if (userItem) {
+          const taxAmount = userItem.unitPriceExclusive * userItem.quantity * (userItem.taxRate / 100);
+          return {
+            ...vcsItem,
+            priceExclusive: userItem.unitPriceExclusive * userItem.quantity,
+            taxAmount: taxAmount,
+            priceInclusive: (userItem.unitPriceExclusive * userItem.quantity) + taxAmount,
+            taxRate: userItem.taxRate,
+          };
+        }
+        return vcsItem;
+      }),
+    };
+
+    // Recalculate totals
+    modifiedOrder.totalExclusive = modifiedOrder.items.reduce((sum, i) => sum + (i.priceExclusive || 0), 0) + shipping;
+    modifiedOrder.totalTax = modifiedOrder.items.reduce((sum, i) => sum + (i.taxAmount || 0), 0) + (shipping * shippingTaxRate / 100);
+    modifiedOrder.totalInclusive = modifiedOrder.totalExclusive + modifiedOrder.totalTax;
+    modifiedOrder.totalShipping = shipping;
+    modifiedOrder.totalShippingTax = shipping * shippingTaxRate / 100;
+
+    // Initialize VcsOdooInvoicer
+    const invoicer = new VcsOdooInvoicer(odooClient);
+
+    // Find or create Odoo order
+    let odooOrderData = await invoicer.findOdooOrder(modifiedOrder);
+    if (!odooOrderData) {
+      odooOrderData = await invoicer.createOrderFromVcs(modifiedOrder);
+    }
+
+    const { saleOrder, orderLines } = odooOrderData;
+
+    // Update sale order line prices with user-supplied data
+    for (const line of orderLines) {
+      if (line.price_unit > 0) continue; // Already has price
+
+      // Get product SKU
+      if (!line.product_id) continue;
+      const products = await odooClient.searchRead('product.product',
+        [['id', '=', line.product_id[0]]],
+        ['default_code']
+      );
+      if (products.length === 0) continue;
+
+      const sku = products[0].default_code;
+      const userItem = items.find(i => i.sku === sku);
+      if (!userItem) continue;
+
+      // Update the line price
+      await odooClient.write('sale.order.line', [line.id], {
+        price_unit: userItem.unitPriceExclusive
+      });
+    }
+
+    // Determine partner for invoice
+    const partnerId = await invoicer.determinePartner(modifiedOrder, saleOrder);
+
+    // Create the invoice
+    const invoice = await invoicer.createInvoice(modifiedOrder, partnerId, saleOrder, orderLines);
+
+    // Update VCS order status
+    await db.collection('amazon_vcs_orders').updateOne(
+      { _id: new ObjectId(mongoId) },
+      {
+        $set: {
+          status: 'invoiced',
+          manualInvoiceData: { sellerVatNumber, items, shipping, shippingTaxRate },
+          odooInvoiceId: invoice.id,
+          odooInvoiceName: invoice.name,
+          odooSaleOrderId: saleOrder.id,
+          odooSaleOrderName: saleOrder.name,
+          invoicedAt: new Date(),
+        }
+      }
+    );
+
+    res.json({
+      success: true,
+      orderId: vcsOrder.orderId,
+      odooInvoice: {
+        id: invoice.id,
+        name: invoice.name,
+      },
+      odooSaleOrder: {
+        id: saleOrder.id,
+        name: saleOrder.name,
+      },
+      totals: {
+        exclusive: modifiedOrder.totalExclusive,
+        tax: modifiedOrder.totalTax,
+        inclusive: modifiedOrder.totalInclusive,
+      },
+    });
+
+  } catch (error) {
+    console.error('[VCS Manual Invoice] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/vcs/manual-required/:mongoId/dismiss
+ * @desc Dismiss a manual-required order (mark as skipped)
+ */
+router.post('/vcs/manual-required/:mongoId/dismiss', async (req, res) => {
+  try {
+    const { mongoId } = req.params;
+    const { reason } = req.body;
+
+    const db = getDb();
+    const { ObjectId } = require('mongodb');
+
+    const result = await db.collection('amazon_vcs_orders').updateOne(
+      { _id: new ObjectId(mongoId), status: 'manual_required' },
+      {
+        $set: {
+          status: 'skipped',
+          skippedReason: reason || 'Dismissed by user',
+          skippedAt: new Date(),
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Order not found or not in manual_required status' });
+    }
+
+    res.json({ success: true, message: 'Order dismissed' });
+
+  } catch (error) {
+    console.error('[VCS Dismiss Manual] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== SETTLEMENT REPORT SYNC (SP-API) ====================
 
 const { getSellerFinanceClient } = require('../../services/amazon/seller/SellerFinanceClient');

@@ -452,6 +452,48 @@
       </div>
     </div>
 
+    <!-- Manual Invoice Queue -->
+    <div id="manual-invoice-section" class="card hidden" style="border-color: rgba(245, 158, 11, 0.3);">
+      <div class="card-header">
+        <h2 class="card-title">
+          <span class="material-symbols-outlined" style="color: #f59e0b;">edit_note</span>
+          Manual Invoice Queue
+          <span id="manual-count-badge" class="badge badge-warning" style="margin-left: 8px;">0</span>
+        </h2>
+        <div class="actions-bar">
+          <button id="refresh-manual-btn" class="btn btn-secondary">
+            <span class="material-symbols-outlined">refresh</span>Refresh
+          </button>
+        </div>
+      </div>
+      <div class="card-body" style="padding: 12px 16px;">
+        <p style="font-size: 13px; color: #fb923c; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+          <span class="material-symbols-outlined" style="font-size: 18px;">warning</span>
+          These orders couldn't be automatically invoiced by Amazon (VAT registration issues, missing prices, etc). You can manually create invoices with correct prices.
+        </p>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Ship To</th>
+                <th>Buyer VAT</th>
+                <th>Items</th>
+                <th class="text-right">Order Total</th>
+                <th>Reason</th>
+                <th class="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="manual-queue-body">
+              <tr><td colspan="9" style="text-align: center; padding: 24px; color: #71717a;">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- Pending Returns (Credit Notes) -->
     <div id="returns-section" class="card returns-section hidden">
       <div class="card-header">
@@ -606,6 +648,7 @@
       loadSummary();
       loadPendingOrders();
       loadPendingReturns();
+      loadManualQueue();
       setupEventListeners();
     });
 
@@ -728,6 +771,9 @@
       document.getElementById('refresh-returns-btn')?.addEventListener('click', loadPendingReturns);
       document.getElementById('preview-credit-notes-btn')?.addEventListener('click', () => createCreditNotes(true));
       document.getElementById('create-credit-notes-btn')?.addEventListener('click', () => createCreditNotes(false));
+
+      // Manual invoice queue event listener
+      document.getElementById('refresh-manual-btn')?.addEventListener('click', loadManualQueue);
 
       // Select all returns checkbox
       document.getElementById('select-all-returns')?.addEventListener('change', (e) => {
@@ -2226,6 +2272,330 @@
       modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.remove();
       });
+    }
+
+    // ===============================
+    // Manual Invoice Queue Functions
+    // ===============================
+    let manualQueueOrders = [];
+
+    async function loadManualQueue() {
+      try {
+        const response = await fetch('/api/amazon/vcs/manual-required');
+        const data = await response.json();
+
+        if (data.success) {
+          manualQueueOrders = data.orders || [];
+          renderManualQueue();
+
+          // Show/hide section based on count
+          const section = document.getElementById('manual-invoice-section');
+          const badge = document.getElementById('manual-count-badge');
+
+          if (manualQueueOrders.length > 0) {
+            section.classList.remove('hidden');
+            badge.textContent = manualQueueOrders.length;
+          } else {
+            section.classList.add('hidden');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load manual queue:', error);
+      }
+    }
+
+    function renderManualQueue() {
+      const tbody = document.getElementById('manual-queue-body');
+
+      if (manualQueueOrders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 24px; color: #71717a;">No orders requiring manual intervention</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = manualQueueOrders.map(order => {
+        const date = order.orderDate ? new Date(order.orderDate).toLocaleDateString('de-DE') : '-';
+        const itemCount = order.items?.length || 0;
+        const total = order.orderTotal ? `€${order.orderTotal.toFixed(2)}` : '-';
+        const reason = (order.manualRequiredReason || 'Unknown').substring(0, 50);
+
+        return `
+          <tr>
+            <td><span class="order-id">${order.orderId}</span></td>
+            <td>${date}</td>
+            <td>${escapeHtml(order.customerName || '-')}</td>
+            <td>${getFlagImg(order.shipToCountry)}</td>
+            <td style="font-family: monospace; font-size: 11px;">${order.buyerVat || '<span style="color:#71717a">None</span>'}</td>
+            <td>${itemCount}</td>
+            <td class="text-right">${total}</td>
+            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(order.manualRequiredReason || '')}">
+              <span style="color: #fb923c; font-size: 12px;">${escapeHtml(reason)}</span>
+            </td>
+            <td class="text-center">
+              <button onclick="openManualInvoiceModal('${order.mongoId}')" class="btn btn-blue btn-sm" title="Create Manual Invoice">
+                <span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
+              </button>
+              <button onclick="dismissManualOrder('${order.mongoId}')" class="btn btn-secondary btn-sm" title="Dismiss/Skip">
+                <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    async function openManualInvoiceModal(mongoId) {
+      const order = manualQueueOrders.find(o => o.mongoId === mongoId);
+      if (!order) {
+        alert('Order not found');
+        return;
+      }
+
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.id = 'manual-invoice-modal';
+
+      const itemRows = (order.items || []).map((item, idx) => `
+        <tr>
+          <td style="font-family: monospace;">${escapeHtml(item.sku || '-')}</td>
+          <td style="font-family: monospace; font-size: 11px;">${escapeHtml(item.asin || '-')}</td>
+          <td class="text-center">${item.quantity || 1}</td>
+          <td>
+            <input type="number" step="0.01" min="0" class="filter-input manual-item-price"
+                   data-idx="${idx}" data-sku="${escapeHtml(item.sku)}"
+                   value="${item.priceExclusive || 0}"
+                   style="width: 90px; text-align: right;">
+          </td>
+          <td>
+            <select class="filter-select manual-item-tax" data-idx="${idx}" style="width: 80px;">
+              <option value="0" ${order.shipToCountry !== 'DE' && order.buyerVat ? 'selected' : ''}>0%</option>
+              <option value="7">7%</option>
+              <option value="10">10%</option>
+              <option value="19" ${order.shipToCountry === 'DE' && !order.buyerVat ? 'selected' : ''}>19%</option>
+              <option value="20">20%</option>
+              <option value="21">21%</option>
+            </select>
+          </td>
+        </tr>
+      `).join('');
+
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width: 800px;">
+          <div class="modal-header">
+            <div>
+              <h3 class="modal-title">
+                <span class="material-symbols-outlined" style="color: #f59e0b;">edit_note</span>
+                Manual Invoice - ${order.orderId}
+              </h3>
+              <span class="modal-subtitle">Enter the correct prices and VAT rates for this order</span>
+            </div>
+            <button onclick="this.closest('.modal').remove()" class="modal-close">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <!-- Order Info -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+              <div style="background: #252532; border-radius: 6px; padding: 10px;">
+                <div style="font-size: 11px; color: #71717a;">Ship To</div>
+                <div style="font-size: 13px; color: #fff;">${getFlagImg(order.shipToCountry)}</div>
+              </div>
+              <div style="background: #252532; border-radius: 6px; padding: 10px;">
+                <div style="font-size: 11px; color: #71717a;">Buyer VAT</div>
+                <div style="font-size: 13px; color: #fff; font-family: monospace;">${order.buyerVat || 'None (B2C)'}</div>
+              </div>
+              <div style="background: #252532; border-radius: 6px; padding: 10px;">
+                <div style="font-size: 11px; color: #71717a;">Amazon Order Total</div>
+                <div style="font-size: 13px; color: #fff;">€${(order.orderTotal || 0).toFixed(2)}</div>
+              </div>
+            </div>
+
+            <!-- Reason -->
+            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 10px; margin-bottom: 16px;">
+              <div style="font-size: 11px; color: #fb923c; font-weight: 600; margin-bottom: 4px;">Reason for Manual Invoice</div>
+              <div style="font-size: 12px; color: #e4e4e7;">${escapeHtml(order.manualRequiredReason || 'Unknown')}</div>
+            </div>
+
+            <!-- Seller VAT Number -->
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; font-size: 12px; color: #a1a1aa; margin-bottom: 6px;">
+                Seller VAT Number (used for this invoice)
+              </label>
+              <input type="text" id="manual-seller-vat" class="filter-input"
+                     value="${order.shipFromCountry === 'DE' ? 'DE270566915' : ''}"
+                     placeholder="e.g., DE270566915"
+                     style="max-width: 200px;">
+            </div>
+
+            <!-- Items Table -->
+            <div style="margin-bottom: 16px;">
+              <div style="font-size: 12px; color: #a1a1aa; margin-bottom: 8px; font-weight: 600;">Line Items</div>
+              <div class="table-container" style="border: 1px solid #252532; border-radius: 6px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>SKU</th>
+                      <th>ASIN</th>
+                      <th class="text-center">Qty</th>
+                      <th>Unit Price (excl. VAT)</th>
+                      <th>VAT Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${itemRows || '<tr><td colspan="5" style="text-align:center; color:#71717a;">No items</td></tr>'}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Shipping (Optional) -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="display: block; font-size: 12px; color: #a1a1aa; margin-bottom: 6px;">
+                  Shipping Cost (excl. VAT)
+                </label>
+                <input type="number" step="0.01" min="0" id="manual-shipping" class="filter-input" value="0" style="width: 100px;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 12px; color: #a1a1aa; margin-bottom: 6px;">
+                  Shipping VAT Rate
+                </label>
+                <select id="manual-shipping-tax" class="filter-select" style="width: 80px;">
+                  <option value="0">0%</option>
+                  <option value="19" selected>19%</option>
+                  <option value="21">21%</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button onclick="this.closest('.modal').remove()" class="btn btn-secondary">Cancel</button>
+            <button onclick="submitManualInvoice('${mongoId}')" class="btn btn-success">
+              <span class="material-symbols-outlined">receipt</span>
+              Create Invoice in Odoo
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+    }
+
+    async function submitManualInvoice(mongoId) {
+      const order = manualQueueOrders.find(o => o.mongoId === mongoId);
+      if (!order) {
+        alert('Order not found');
+        return;
+      }
+
+      // Gather form data
+      const sellerVatNumber = document.getElementById('manual-seller-vat').value.trim();
+      const shipping = parseFloat(document.getElementById('manual-shipping').value) || 0;
+      const shippingTaxRate = parseInt(document.getElementById('manual-shipping-tax').value) || 0;
+
+      // Gather item prices
+      const items = [];
+      document.querySelectorAll('.manual-item-price').forEach((input, idx) => {
+        const sku = input.dataset.sku;
+        const unitPriceExclusive = parseFloat(input.value) || 0;
+        const taxSelect = document.querySelector(`.manual-item-tax[data-idx="${idx}"]`);
+        const taxRate = taxSelect ? parseInt(taxSelect.value) || 0 : 0;
+        const originalItem = order.items[idx];
+
+        items.push({
+          sku,
+          unitPriceExclusive,
+          quantity: originalItem?.quantity || 1,
+          taxRate
+        });
+      });
+
+      // Validate
+      if (!sellerVatNumber) {
+        alert('Please enter the seller VAT number');
+        return;
+      }
+
+      const hasPrice = items.some(i => i.unitPriceExclusive > 0);
+      if (!hasPrice && shipping === 0) {
+        alert('Please enter at least one price');
+        return;
+      }
+
+      // Confirm
+      if (!confirm(`Create invoice in Odoo for order ${order.orderId}?\n\nThis will update the sale order prices and create an invoice.`)) {
+        return;
+      }
+
+      // Submit
+      const submitBtn = document.querySelector('#manual-invoice-modal .btn-success');
+      const originalText = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="material-symbols-outlined animate-spin">sync</span> Creating...';
+
+      try {
+        const response = await fetch('/api/amazon/vcs/manual-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mongoId,
+            sellerVatNumber,
+            items,
+            shipping,
+            shippingTaxRate
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert(`Invoice created successfully!\n\nInvoice: ${result.invoice?.name || 'Created'}`);
+          document.getElementById('manual-invoice-modal').remove();
+          loadManualQueue();
+          loadPendingOrders();
+        } else {
+          alert(`Error: ${result.error || 'Failed to create invoice'}`);
+        }
+      } catch (error) {
+        alert(`Error: ${error.message}`);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+      }
+    }
+
+    async function dismissManualOrder(mongoId) {
+      const order = manualQueueOrders.find(o => o.mongoId === mongoId);
+      if (!order) return;
+
+      if (!confirm(`Dismiss order ${order.orderId}?\n\nThis will mark it as skipped and remove it from the queue.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/amazon/vcs/manual-required/${mongoId}/dismiss`, {
+          method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          loadManualQueue();
+        } else {
+          alert(`Error: ${result.error || 'Failed to dismiss order'}`);
+        }
+      } catch (error) {
+        alert(`Error: ${error.message}`);
+      }
     }
   </script>
 </body>

@@ -498,10 +498,12 @@ class VcsOdooInvoicer {
       processed: 0,
       created: 0,
       skipped: 0,
+      manualRequired: 0,  // Track orders requiring manual invoice creation
       pricesUpdated: 0,  // Track orders where sale order line prices were updated
       errors: [],
       invoices: [],
       skippedOrders: [],  // Track skipped orders with reasons
+      manualRequiredOrders: [],  // Orders that need manual invoice creation
     };
 
     if (orderIds.length === 0) {
@@ -538,6 +540,33 @@ class VcsOdooInvoicer {
             customerName: order.buyerName || null,
           });
           await this.markOrderSkipped(order._id, 'Not invoiceable');
+          continue;
+        }
+
+        // Check if order requires manual invoice creation
+        // (e.g., Amazon couldn't invoice due to defective VAT registration)
+        const manualCheck = this.requiresManualInvoice(order);
+        if (manualCheck) {
+          result.manualRequired++;
+          result.manualRequiredOrders.push({
+            orderId: order.orderId,
+            mongoId: order._id.toString(),
+            customerName: order.buyerName || null,
+            orderDate: order.orderDate,
+            ...manualCheck,
+          });
+          // Mark as manual_required in MongoDB
+          await db.collection('amazon_vcs_orders').updateOne(
+            { _id: order._id },
+            {
+              $set: {
+                status: 'manual_required',
+                manualRequiredReason: manualCheck.reasons.join('; '),
+                manualRequiredAt: new Date(),
+              }
+            }
+          );
+          console.log(`[VcsOdooInvoicer] Order ${order.orderId} requires manual invoice: ${manualCheck.reasons.join(', ')}`);
           continue;
         }
 
@@ -673,10 +702,12 @@ class VcsOdooInvoicer {
       processed: 0,
       created: 0,
       skipped: 0,
+      manualRequired: 0,  // Track orders requiring manual invoice creation
       pricesUpdated: 0,  // Track orders where sale order line prices were updated
       errors: [],
       invoices: [],
       skippedOrders: [],  // Track skipped orders with reasons
+      manualRequiredOrders: [],  // Orders that need manual invoice creation
     };
 
     if (orderIds.length === 0) {
@@ -717,6 +748,7 @@ class VcsOdooInvoicer {
         orderId: order.orderId,
         created: result.created,
         skipped: result.skipped,
+        manualRequired: result.manualRequired,
         errors: result.errors.length,
       });
 
@@ -730,6 +762,33 @@ class VcsOdooInvoicer {
             customerName: order.buyerName || null,
           });
           await this.markOrderSkipped(order._id, 'Not invoiceable');
+          continue;
+        }
+
+        // Check if order requires manual invoice creation
+        // (e.g., Amazon couldn't invoice due to defective VAT registration)
+        const manualCheck = this.requiresManualInvoice(order);
+        if (manualCheck) {
+          result.manualRequired++;
+          result.manualRequiredOrders.push({
+            orderId: order.orderId,
+            mongoId: order._id.toString(),
+            customerName: order.buyerName || null,
+            orderDate: order.orderDate,
+            ...manualCheck,
+          });
+          // Mark as manual_required in MongoDB
+          await db.collection('amazon_vcs_orders').updateOne(
+            { _id: order._id },
+            {
+              $set: {
+                status: 'manual_required',
+                manualRequiredReason: manualCheck.reasons.join('; '),
+                manualRequiredAt: new Date(),
+              }
+            }
+          );
+          console.log(`[VcsOdooInvoicer] Order ${order.orderId} requires manual invoice: ${manualCheck.reasons.join(', ')}`);
           continue;
         }
 
@@ -872,6 +931,59 @@ class VcsOdooInvoicer {
     }
 
     return false;
+  }
+
+  /**
+   * Check if order requires manual invoice creation
+   * This happens when Amazon couldn't create an invoice (e.g., defective VAT registration)
+   * and item prices are 0, but the order has value that needs to be invoiced.
+   *
+   * @param {object} order - VCS order data
+   * @returns {object|null} null if not manual required, or object with reason if manual required
+   */
+  requiresManualInvoice(order) {
+    // Check if Amazon couldn't invoice (isAmazonInvoiced === false)
+    if (order.isAmazonInvoiced !== false) {
+      return null; // Amazon invoiced it, no manual intervention needed
+    }
+
+    // Check if seller VAT registration is missing/empty
+    const hasNoSellerVat = !order.sellerTaxRegistration || order.sellerTaxRegistration.trim() === '';
+
+    // Check if all items have 0 prices but order has value
+    const hasZeroPriceItems = order.items && order.items.every(item =>
+      (item.priceExclusive === 0 || item.priceExclusive === null) &&
+      (item.priceInclusive === 0 || item.priceInclusive === null)
+    );
+
+    // If Amazon couldn't invoice AND items have no prices - manual invoice required
+    if (hasZeroPriceItems) {
+      const reasons = [];
+      if (hasNoSellerVat) {
+        reasons.push('Missing/defective seller VAT registration');
+      }
+      reasons.push('Amazon could not create invoice (isAmazonInvoiced=false)');
+      reasons.push('Item prices are 0 in VCS data');
+
+      return {
+        isManualRequired: true,
+        reasons,
+        orderTotal: order.totalExclusive || 0,
+        buyerVat: order.buyerTaxRegistration || null,
+        shipFromCountry: order.shipFromCountry,
+        shipToCountry: order.shipToCountry,
+        items: (order.items || []).map(item => ({
+          sku: item.sku,
+          asin: item.asin,
+          quantity: item.quantity,
+          priceExclusive: item.priceExclusive,
+          priceInclusive: item.priceInclusive,
+          promoAmount: item.promoAmount,
+        })),
+      };
+    }
+
+    return null;
   }
 
   /**
