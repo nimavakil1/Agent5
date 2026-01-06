@@ -293,6 +293,29 @@ class SellerTrackingPusher {
       }
 
     } catch (error) {
+      // Check if error indicates order is already shipped/fulfilled
+      const errorMsg = error.message || '';
+      const isAlreadyShipped = errorMsg.includes('PackageToUpdateNotFound') ||
+                               errorMsg.includes('already fulfilled') ||
+                               errorMsg.includes('already shipped');
+
+      if (isAlreadyShipped) {
+        // Mark as pushed since Amazon already has this as shipped
+        console.log(`[SellerTrackingPusher] Order ${order.amazonOrderId} already shipped on Amazon, marking as pushed`);
+        await this.collection.updateOne(
+          { amazonOrderId: order.amazonOrderId },
+          {
+            $set: {
+              'odoo.trackingPushed': true,
+              'odoo.trackingPushedAt': new Date(),
+              'odoo.trackingPushNote': 'Auto-marked - order already shipped on Amazon'
+            }
+          }
+        );
+        result.pushed = true;
+        return result;
+      }
+
       console.error(`[SellerTrackingPusher] Error confirming shipment for ${order.amazonOrderId}:`, error.message);
       throw error;
     }
