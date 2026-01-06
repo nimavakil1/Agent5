@@ -83,7 +83,8 @@
         { id: 'orders', path: '/bol/orders.html', name: 'Orders', icon: 'shopping_cart' },
         { id: 'shipments', path: '/bol/shipments.html', name: 'Shipments', icon: 'local_shipping' },
         { id: 'returns', path: '/bol/returns.html', name: 'Returns', icon: 'assignment_return' },
-        { id: 'invoices', path: '/bol/invoices.html', name: 'Invoices', icon: 'receipt_long' }
+        { id: 'invoices', path: '/bol/invoices.html', name: 'Invoices', icon: 'receipt_long' },
+        { id: 'advertising', path: '/bol/advertising.html', name: 'Advertising', icon: 'campaign' }
       ]
     },
     'fulfillment': {

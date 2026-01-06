@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advertising - Bol.com</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/shell-v2.js"></script>
+  <style>
+    .page { max-width: 1600px; margin: 0 auto; padding: 32px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .page-logo-container { background: #fff; border-radius: 10px; padding: 8px 14px; display: flex; align-items: center; justify-content: center; }
+    .page-logo { height: 28px; width: auto; }
+    .header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+    /* Date Picker */
+    .date-picker { display: flex; align-items: center; gap: 8px; background: #252532; padding: 8px 14px; border-radius: 10px; border: 1px solid #3f3f50; }
+    .date-picker span { font-size: 13px; color: #71717a; }
+    .date-picker input { background: transparent; border: none; color: #e4e4e7; font-size: 13px; cursor: pointer; outline: none; }
+    .date-picker input::-webkit-calendar-picker-indicator { filter: invert(1); }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #6366f1; color: white; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-secondary { background: #252532; color: #e4e4e7; border: 1px solid #3f3f50; }
+    .btn-secondary:hover { background: #2a2a3a; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn .material-symbols-outlined { font-size: 18px; }
+
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 1400px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 768px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .stat-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      padding: 20px;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--accent-color, #6366f1);
+      border-radius: 16px 0 0 16px;
+    }
+    .stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3); }
+    .stat-card .icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      background: var(--accent-color, #6366f1);
+      color: white;
+    }
+    .stat-card .icon .material-symbols-outlined { font-size: 22px; }
+    .stat-card .label { font-size: 12px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .stat-card .value { font-size: 1.75rem; font-weight: 700; color: #fff; }
+
+    /* Card */
+    .card { background: #18181f; border: 1px solid #252532; border-radius: 16px; overflow: hidden; }
+    .card-header { padding: 18px 24px; border-bottom: 1px solid #252532; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .card-title { font-size: 16px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 10px; }
+    .card-title .material-symbols-outlined { font-size: 20px; color: #0066ff; }
+    .card-body { padding: 24px; }
+
+    /* Filters */
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 6px 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid #3f3f50;
+      border-radius: 20px;
+      color: #a1a1aa;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+    .filter-btn:hover { background: rgba(255, 255, 255, 0.1); color: white; }
+    .filter-btn.active { background: #0066ff; border-color: #0066ff; color: white; }
+
+    /* Table */
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; background: #12121a; border-bottom: 1px solid #252532; cursor: pointer; white-space: nowrap; }
+    th:hover { color: #818cf8; }
+    th.sorted { color: #6366f1; }
+    th .sort-icon { font-size: 11px; vertical-align: middle; margin-left: 3px; opacity: 0.5; }
+    th.sorted .sort-icon { opacity: 1; }
+    td { padding: 14px 16px; font-size: 14px; color: #e4e4e7; border-bottom: 1px solid #252532; }
+    tr:hover td { background: rgba(99, 102, 241, 0.05); }
+
+    /* Campaign Name */
+    .campaign-name { display: flex; align-items: center; gap: 10px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .status-dot.active { background: #22c55e; }
+    .status-dot.paused { background: #f59e0b; }
+    .status-dot.ended { background: #52525b; }
+    .campaign-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+
+    /* Metrics */
+    .metric { font-weight: 500; font-family: 'JetBrains Mono', monospace; }
+    .metric.positive { color: #4ade80; }
+    .metric.negative { color: #f87171; }
+    .metric.neutral { color: #fbbf24; }
+
+    /* Action Buttons */
+    .campaign-actions { display: flex; gap: 6px; }
+    .action-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      font-size: 16px;
+    }
+    .action-btn.pause { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .action-btn.pause:hover { background: rgba(251, 191, 36, 0.3); }
+    .action-btn.play { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+    .action-btn.play:hover { background: rgba(74, 222, 128, 0.3); }
+
+    /* Content Grid */
+    .content-grid { display: grid; grid-template-columns: 1fr 360px; gap: 24px; }
+    @media (max-width: 1200px) { .content-grid { grid-template-columns: 1fr; } }
+
+    /* Sidebar */
+    .sidebar { display: flex; flex-direction: column; gap: 20px; }
+    .sidebar-card { background: #18181f; border: 1px solid #252532; border-radius: 16px; padding: 20px; }
+    .sidebar-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; color: #e4e4e7; }
+    .sidebar-card h3 .material-symbols-outlined { font-size: 18px; color: #6366f1; }
+
+    /* Chart Container */
+    .chart-container { position: relative; height: 180px; }
+
+    /* Top Performers List */
+    .performer-list { display: flex; flex-direction: column; gap: 10px; }
+    .performer-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 10px;
+      transition: background 0.2s;
+    }
+    .performer-item:hover { background: rgba(255, 255, 255, 0.06); }
+    .performer-item .rank {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: #6366f1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 11px;
+      margin-right: 10px;
+      color: white;
+    }
+    .performer-item .rank.gold { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .performer-item .rank.silver { background: linear-gradient(135deg, #9ca3af, #6b7280); }
+    .performer-item .rank.bronze { background: linear-gradient(135deg, #ea580c, #c2410c); }
+    .performer-item .name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #a1a1aa; }
+    .performer-item .value { font-weight: 600; color: #4ade80; font-size: 13px; }
+
+    /* Quick Stats */
+    .quick-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .quick-stat { text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.03); border-radius: 10px; }
+    .quick-stat .label { font-size: 11px; color: #52525b; text-transform: uppercase; margin-bottom: 4px; }
+    .quick-stat .value { font-size: 1.1rem; font-weight: 600; color: #e4e4e7; }
+
+    /* Budget Progress */
+    .budget-progress { margin-top: 12px; }
+    .progress-bar { height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #4ade80); border-radius: 4px; transition: width 0.5s ease; }
+    .budget-labels { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: #52525b; }
+
+    /* Search Box */
+    .search-box { background: #12121a; border: 1px solid #252532; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; }
+    .search-box .material-symbols-outlined { font-size: 18px; color: #52525b; }
+    .search-box input { background: transparent; border: none; color: #e4e4e7; font-size: 13px; width: 180px; outline: none; }
+    .search-box input::placeholder { color: #52525b; }
+
+    /* Empty State */
+    .empty-state { padding: 60px 20px; text-align: center; }
+    .empty-state .material-symbols-outlined { font-size: 48px; color: #3f3f50; margin-bottom: 16px; }
+    .empty-state-title { font-size: 16px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
+    .empty-state-text { font-size: 14px; color: #71717a; }
+
+    /* Loading */
+    .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: #71717a; }
+    .spinner { width: 24px; height: 24px; border: 3px solid #252532; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Badge */
+    .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; background: #6366f1; color: white; margin-left: 10px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div class="page-logo-container">
+        <img src="/assets/logos/bolcom.png" alt="Bol.com" class="page-logo">
+      </div>
+      <div class="header-actions">
+        <div class="date-picker">
+          <span>From</span>
+          <input type="date" id="startDate">
+          <span>to</span>
+          <input type="date" id="endDate">
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="refreshData()">
+          <span class="material-symbols-outlined">refresh</span>
+          Refresh
+        </button>
+      </div>
+    </header>
+
+    <!-- Stats Overview -->
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card" style="--accent-color: #3b82f6">
+        <div class="icon"><span class="material-symbols-outlined">visibility</span></div>
+        <div class="label">Impressions</div>
+        <div class="value" id="totalImpressions">-</div>
+      </div>
+      <div class="stat-card" style="--accent-color: #8b5cf6">
+        <div class="icon"><span class="material-symbols-outlined">ads_click</span></div>
+        <div class="label">Clicks</div>
+        <div class="value" id="totalClicks">-</div>
+      </div>
+      <div class="stat-card" style="--accent-color: #ef4444">
+        <div class="icon"><span class="material-symbols-outlined">payments</span></div>
+        <div class="label">Ad Spend</div>
+        <div class="value" id="totalCost">-</div>
+      </div>
+      <div class="stat-card" style="--accent-color: #22c55e">
+        <div class="icon"><span class="material-symbols-outlined">shopping_cart</span></div>
+        <div class="label">Sales (14d)</div>
+        <div class="value" id="totalSales">-</div>
+      </div>
+      <div class="stat-card" style="--accent-color: #f59e0b">
+        <div class="icon"><span class="material-symbols-outlined">trending_up</span></div>
+        <div class="label">ROAS</div>
+        <div class="value" id="totalRoas">-</div>
+      </div>
+      <div class="stat-card" style="--accent-color: #0066ff">
+        <div class="icon"><span class="material-symbols-outlined">percent</span></div>
+        <div class="label">ACoS</div>
+        <div class="value" id="totalAcos">-</div>
+      </div>
+    </div>
+
+    <!-- Section Header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+      <div style="display: flex; align-items: center;">
+        <span style="font-size: 18px; font-weight: 600; color: #fff;">Campaigns</span>
+        <span class="badge" id="campaignCount">0</span>
+      </div>
+      <div class="filters">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="ENABLED">Active</button>
+        <button class="filter-btn" data-filter="PAUSED">Paused</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content-grid">
+      <!-- Campaign Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-outlined">campaign</span>
+            Campaign Performance
+          </div>
+          <div class="search-box">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="searchInput" placeholder="Search campaigns...">
+          </div>
+        </div>
+        <div class="card-body" style="padding: 0;">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th class="sortable" data-sort="name">Campaign <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="impressions">Impr. <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="clicks">Clicks <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="ctr">CTR <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="cost">Spend <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="sales">Sales <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="roas">ROAS <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="acos">ACoS <span class="sort-icon"></span></th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="campaignTableBody">
+                <tr>
+                  <td colspan="9">
+                    <div class="loading">
+                      <div class="spinner"></div>
+                      Loading campaigns...
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <!-- Performance Chart -->
+        <div class="sidebar-card">
+          <h3><span class="material-symbols-outlined">bar_chart</span> Spend vs Sales</h3>
+          <div class="chart-container">
+            <canvas id="performanceChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Performers -->
+        <div class="sidebar-card">
+          <h3><span class="material-symbols-outlined">emoji_events</span> Top ROAS Campaigns</h3>
+          <div class="performer-list" id="topPerformers">
+            <div class="performer-item">
+              <span class="rank gold">1</span>
+              <span class="name">Loading...</span>
+              <span class="value">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="sidebar-card">
+          <h3><span class="material-symbols-outlined">analytics</span> Quick Stats</h3>
+          <div class="quick-stats">
+            <div class="quick-stat">
+              <div class="label">Avg. CPC</div>
+              <div class="value" id="avgCpc">-</div>
+            </div>
+            <div class="quick-stat">
+              <div class="label">Conv. Rate</div>
+              <div class="value" id="convRate">-</div>
+            </div>
+            <div class="quick-stat">
+              <div class="label">Conversions</div>
+              <div class="value" id="totalConversions">-</div>
+            </div>
+            <div class="quick-stat">
+              <div class="label">Avg. Bid</div>
+              <div class="value" id="avgBid">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Budget Overview -->
+        <div class="sidebar-card">
+          <h3><span class="material-symbols-outlined">account_balance_wallet</span> Daily Budget Usage</h3>
+          <div class="budget-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" id="budgetProgress" style="width: 0%"></div>
+            </div>
+            <div class="budget-labels">
+              <span id="budgetSpent">Spent: -</span>
+              <span id="budgetTotal">Budget: -</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let campaigns = [];
+    let performanceData = null;
+    let currentFilter = 'all';
+    let currentSort = { field: 'cost', direction: 'desc' };
+    let performanceChart = null;
+
+    // Initialize date range (last 7 days)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+
+    document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+    document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+
+    // Utility functions
+    function formatNumber(num) {
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+      return num.toLocaleString();
+    }
+
+    function formatCurrency(num) {
+      return '\u20AC' + (num || 0).toFixed(2);
+    }
+
+    function showToast(message, type = 'info') {
+      if (window.Agent5Shell && window.Agent5Shell.showToast) {
+        window.Agent5Shell.showToast(message, type);
+      } else {
+        console.log(`[${type}] ${message}`);
+      }
+    }
+
+    // API calls
+    async function fetchPerformance() {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+
+      try {
+        const response = await fetch(`/api/bolcom/advertising/reports/performance?startDate=${start}&endDate=${end}`, {
+          credentials: 'include'
+        });
+        if (!response.ok) throw new Error('Failed to fetch performance');
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching performance:', error);
+        return null;
+      }
+    }
+
+    async function fetchCampaigns() {
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+
+      try {
+        const response = await fetch(`/api/bolcom/advertising/reports/campaigns?startDate=${start}&endDate=${end}`, {
+          credentials: 'include'
+        });
+        if (!response.ok) throw new Error('Failed to fetch campaigns');
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching campaigns:', error);
+        return null;
+      }
+    }
+
+    async function fetchCampaignList() {
+      try {
+        const response = await fetch('/api/bolcom/advertising/campaigns', {
+          credentials: 'include'
+        });
+        if (!response.ok) throw new Error('Failed to fetch campaign list');
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching campaign list:', error);
+        return null;
+      }
+    }
+
+    async function toggleCampaignState(campaignId, currentState) {
+      const newState = currentState === 'ENABLED' ? 'PAUSED' : 'ACTIVE';
+      try {
+        const response = await fetch(`/api/bolcom/advertising/campaigns/${campaignId}/state`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ state: newState })
+        });
+
+        if (!response.ok) throw new Error('Failed to update campaign');
+
+        showToast(`Campaign ${newState === 'ACTIVE' ? 'activated' : 'paused'} successfully`, 'success');
+        refreshData();
+      } catch (error) {
+        showToast('Failed to update campaign state', 'error');
+      }
+    }
+
+    // Render functions
+    function updateOverviewStats(data) {
+      if (!data || !data.totals) return;
+
+      const t = data.totals;
+      document.getElementById('totalImpressions').textContent = formatNumber(t.impressions || 0);
+      document.getElementById('totalClicks').textContent = formatNumber(t.clicks || 0);
+      document.getElementById('totalCost').textContent = formatCurrency(parseFloat(t.cost) || 0);
+      document.getElementById('totalSales').textContent = formatCurrency(parseFloat(t.sales) || 0);
+      document.getElementById('totalRoas').textContent = t.roas || 'N/A';
+      document.getElementById('totalAcos').textContent = t.acos || 'N/A';
+
+      // Quick stats
+      document.getElementById('avgCpc').textContent = formatCurrency(parseFloat(t.averageCpc) || 0);
+      document.getElementById('convRate').textContent = t.conversionRate || '0%';
+      document.getElementById('totalConversions').textContent = t.conversions || 0;
+      document.getElementById('avgBid').textContent = formatCurrency(0.83);
+    }
+
+    function renderCampaignTable(campaignData, campaignListData) {
+      const tbody = document.getElementById('campaignTableBody');
+
+      if (!campaignData || !campaignData.campaigns || campaignData.campaigns.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="9">
+              <div class="empty-state">
+                <span class="material-symbols-outlined">search</span>
+                <div class="empty-state-title">No campaigns found</div>
+                <div class="empty-state-text">Try adjusting your date range or filters</div>
+              </div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      // Merge campaign list data
+      const campaignList = campaignListData?.campaigns || [];
+      const campaignMap = {};
+      campaignList.forEach(c => {
+        campaignMap[c.id] = c;
+      });
+
+      campaigns = campaignData.campaigns.map(c => {
+        const info = campaignMap[c.campaignId] || {};
+        return {
+          ...c,
+          name: info.name || c.campaignId,
+          state: info.state || 'UNKNOWN'
+        };
+      });
+
+      // Apply filter
+      let filtered = campaigns;
+      if (currentFilter !== 'all') {
+        filtered = campaigns.filter(c => c.state === currentFilter);
+      }
+
+      // Apply search
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      if (searchTerm) {
+        filtered = filtered.filter(c => c.name.toLowerCase().includes(searchTerm));
+      }
+
+      // Apply sort
+      filtered.sort((a, b) => {
+        let aVal = a[currentSort.field];
+        let bVal = b[currentSort.field];
+
+        if (typeof aVal === 'string') {
+          aVal = aVal.replace(/[^0-9.]/g, '') || aVal;
+          bVal = bVal.replace(/[^0-9.]/g, '') || bVal;
+        }
+
+        const modifier = currentSort.direction === 'asc' ? 1 : -1;
+        return (parseFloat(aVal) - parseFloat(bVal)) * modifier;
+      });
+
+      document.getElementById('campaignCount').textContent = filtered.length;
+
+      tbody.innerHTML = filtered.map(c => {
+        const stateClass = c.state === 'ENABLED' ? 'active' : (c.state === 'PAUSED' ? 'paused' : 'ended');
+        const roasValue = parseFloat((c.roas || '0').replace(/[^0-9.]/g, ''));
+        const roasClass = roasValue >= 5 ? 'positive' : (roasValue >= 2 ? 'neutral' : 'negative');
+        const acosValue = parseFloat((c.acos || '0').replace('%', ''));
+        const acosClass = acosValue <= 15 ? 'positive' : (acosValue <= 30 ? 'neutral' : 'negative');
+
+        return `
+          <tr>
+            <td>
+              <div class="campaign-name">
+                <div class="status-dot ${stateClass}"></div>
+                <span title="${c.name}">${c.name}</span>
+              </div>
+            </td>
+            <td class="metric">${formatNumber(c.impressions || 0)}</td>
+            <td class="metric">${formatNumber(c.clicks || 0)}</td>
+            <td class="metric">${c.ctr || '0%'}</td>
+            <td class="metric">${c.cost || '\u20AC0.00'}</td>
+            <td class="metric">${c.sales || '\u20AC0.00'}</td>
+            <td class="metric ${roasClass}">${c.roas || 'N/A'}</td>
+            <td class="metric ${acosClass}">${c.acos || 'N/A'}</td>
+            <td>
+              <div class="campaign-actions">
+                ${c.state === 'ENABLED'
+                  ? `<button class="action-btn pause" onclick="toggleCampaignState('${c.campaignId}', 'ENABLED')" title="Pause">\u23F8</button>`
+                  : `<button class="action-btn play" onclick="toggleCampaignState('${c.campaignId}', 'PAUSED')" title="Activate">\u25B6</button>`
+                }
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderTopPerformers(campaignData) {
+      const container = document.getElementById('topPerformers');
+
+      if (!campaignData || !campaignData.campaigns) {
+        container.innerHTML = '<div class="performer-item"><span class="name">No data</span></div>';
+        return;
+      }
+
+      const sorted = [...campaignData.campaigns]
+        .filter(c => c.roas && c.roas !== 'N/A')
+        .sort((a, b) => {
+          const aRoas = parseFloat((a.roas || '0').replace(/[^0-9.]/g, ''));
+          const bRoas = parseFloat((b.roas || '0').replace(/[^0-9.]/g, ''));
+          return bRoas - aRoas;
+        })
+        .slice(0, 5);
+
+      container.innerHTML = sorted.map((c, i) => {
+        const rankClass = i === 0 ? 'gold' : (i === 1 ? 'silver' : (i === 2 ? 'bronze' : ''));
+        return `
+          <div class="performer-item">
+            <span class="rank ${rankClass}">${i + 1}</span>
+            <span class="name" title="${c.campaignId}">${c.campaignId.substring(0, 18)}...</span>
+            <span class="value">${c.roas}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderChart(campaignData) {
+      const ctx = document.getElementById('performanceChart').getContext('2d');
+
+      if (performanceChart) {
+        performanceChart.destroy();
+      }
+
+      if (!campaignData || !campaignData.campaigns) return;
+
+      const topCampaigns = [...campaignData.campaigns]
+        .sort((a, b) => parseFloat(a.cost?.replace(/[\u20AC,]/g, '') || 0) - parseFloat(b.cost?.replace(/[\u20AC,]/g, '') || 0))
+        .reverse()
+        .slice(0, 6);
+
+      const labels = topCampaigns.map(c => c.campaignId.substring(0, 8) + '...');
+      const spendData = topCampaigns.map(c => parseFloat(c.cost?.replace(/[\u20AC,]/g, '') || 0));
+      const salesData = topCampaigns.map(c => parseFloat(c.sales?.replace(/[\u20AC,]/g, '') || 0));
+
+      performanceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Spend',
+              data: spendData,
+              backgroundColor: 'rgba(239, 68, 68, 0.7)',
+              borderRadius: 4
+            },
+            {
+              label: 'Sales',
+              data: salesData,
+              backgroundColor: 'rgba(74, 222, 128, 0.7)',
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: '#71717a', boxWidth: 12, font: { size: 11 } }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: '#52525b', font: { size: 10 }, maxRotation: 45 }
+            },
+            y: {
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: { color: '#52525b', font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    function updateBudgetProgress(campaignListData) {
+      if (!campaignListData || !campaignListData.campaigns) return;
+
+      const totalBudget = campaignListData.campaigns.reduce((sum, c) => sum + (c.dailyBudget || 0), 0);
+      const spent = parseFloat(document.getElementById('totalCost').textContent.replace(/[\u20AC,]/g, '') || 0);
+      const percentage = totalBudget > 0 ? Math.min((spent / totalBudget) * 100, 100) : 0;
+
+      document.getElementById('budgetProgress').style.width = percentage + '%';
+      document.getElementById('budgetSpent').textContent = 'Spent: ' + formatCurrency(spent);
+      document.getElementById('budgetTotal').textContent = 'Budget: ' + formatCurrency(totalBudget);
+    }
+
+    // Main refresh function
+    async function refreshData() {
+      const tbody = document.getElementById('campaignTableBody');
+      tbody.innerHTML = '<tr><td colspan="9"><div class="loading"><div class="spinner"></div>Loading campaigns...</div></td></tr>';
+
+      try {
+        const [perfData, campData, campListData] = await Promise.all([
+          fetchPerformance(),
+          fetchCampaigns(),
+          fetchCampaignList()
+        ]);
+
+        performanceData = perfData;
+
+        updateOverviewStats(perfData);
+        renderCampaignTable(campData, campListData);
+        renderTopPerformers(campData);
+        renderChart(campData);
+        updateBudgetProgress(campListData);
+
+      } catch (error) {
+        console.error('Error refreshing data:', error);
+        showToast('Failed to load data', 'error');
+      }
+    }
+
+    // Event listeners
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        refreshData();
+      });
+    });
+
+    document.querySelectorAll('th.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const field = th.dataset.sort;
+        if (currentSort.field === field) {
+          currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentSort.field = field;
+          currentSort.direction = 'desc';
+        }
+
+        document.querySelectorAll('th.sortable').forEach(t => {
+          t.classList.remove('sorted');
+          t.querySelector('.sort-icon').textContent = '';
+        });
+        th.classList.add('sorted');
+        th.querySelector('.sort-icon').textContent = currentSort.direction === 'asc' ? '\u25B2' : '\u25BC';
+
+        refreshData();
+      });
+    });
+
+    document.getElementById('searchInput').addEventListener('input', () => {
+      clearTimeout(window.searchTimeout);
+      window.searchTimeout = setTimeout(refreshData, 300);
+    });
+
+    document.getElementById('startDate').addEventListener('change', refreshData);
+    document.getElementById('endDate').addEventListener('change', refreshData);
+
+    // Initialize after shell loads
+    async function init() {
+      await new Promise(resolve => {
+        const check = () => {
+          if (window.Agent5Shell && window.Agent5Shell.getCurrentUser()) resolve();
+          else setTimeout(check, 100);
+        };
+        check();
+      });
+      refreshData();
+    }
+
+    init();
+
+    // Auto-refresh every 5 minutes
+    setInterval(refreshData, 300000);
+  </script>
+</body>
+</html>
