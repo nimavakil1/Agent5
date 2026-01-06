@@ -115,13 +115,11 @@ class BolFBBDeliverySync {
   }
 
   /**
-   * Extract Bol order ID from Odoo order name (e.g., "FBBA000DLU8TM" -> "000DLU8TM")
+   * Extract Bol order ID from Odoo order name (e.g., "FBBA000DLU8TM" -> "A000DLU8TM")
+   * FBB prefix is 3 chars, Bol order IDs start with "A" (e.g., A000DLU8TM)
    */
   extractBolOrderId(odooOrderName) {
-    // Remove FBB/FBBA prefix
-    if (odooOrderName.startsWith('FBBA')) {
-      return odooOrderName.substring(4);
-    }
+    // Remove FBB prefix only (3 chars), keep the Bol order ID including the "A"
     if (odooOrderName.startsWith('FBB')) {
       return odooOrderName.substring(3);
     }
