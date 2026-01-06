@@ -235,6 +235,7 @@ Return ONLY a JSON object: { "company": string|null, "name": string|null, "stree
   _cleanWithFallback(rawAddress) {
     const recipientName = rawAddress.recipientName?.trim() || '';
     const buyerName = rawAddress.buyerName?.trim() || '';
+    const buyerCompanyName = rawAddress.buyerCompanyName?.trim() || '';
     const addr1 = rawAddress.addressLine1?.trim() || '';
     const addr2 = rawAddress.addressLine2?.trim() || '';
     const addr3 = rawAddress.addressLine3?.trim() || '';
@@ -248,17 +249,29 @@ Return ONLY a JSON object: { "company": string|null, "name": string|null, "stree
     // Clean legal terms from names
     const cleanedRecipient = recipientName.replace(LEGAL_TERMS_REGEX, '').trim();
     const cleanedBuyer = buyerName.replace(LEGAL_TERMS_REGEX, '').trim();
+    const cleanedCompany = buyerCompanyName.replace(LEGAL_TERMS_REGEX, '').trim();
 
     let company = null;
     let name = null;
 
-    if (looksLikeCompany) {
+    // Priority 1: Use explicit buyer-company-name if provided (B2B orders)
+    if (buyerCompanyName) {
+      company = cleanedCompany;
+      // Use recipient as personal name if it doesn't look like a company
+      if (!looksLikeCompany && cleanedRecipient) {
+        name = cleanedRecipient;
+      } else if (cleanedBuyer && cleanedBuyer.toLowerCase() !== cleanedCompany.toLowerCase()) {
+        name = cleanedBuyer;
+      }
+    } else if (looksLikeCompany) {
+      // Priority 2: recipientName looks like a company
       company = cleanedRecipient;
       // Use buyer name as personal name if different
       if (cleanedBuyer && cleanedBuyer.toLowerCase() !== cleanedRecipient.toLowerCase()) {
         name = cleanedBuyer;
       }
     } else {
+      // Priority 3: No company detected, use as personal name
       name = cleanedRecipient || cleanedBuyer;
     }
 
