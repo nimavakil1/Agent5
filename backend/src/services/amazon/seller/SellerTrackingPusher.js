@@ -15,8 +15,8 @@ const { getSellerClient } = require('./SellerClient');
 const { getMarketplaceConfig: _getMarketplaceConfig } = require('./SellerMarketplaceConfig');
 const { getItemQuantity } = require('./SellerOrderSchema');
 
-// Collection name for seller orders - DO NOT import from SellerOrderImporter (it uses unified_orders)
-const SELLER_ORDERS_COLLECTION = 'seller_orders';
+// Collection name - unified_orders is the single source of truth
+const UNIFIED_ORDERS_COLLECTION = 'unified_orders';
 
 /**
  * Amazon Seller Sales Team IDs in Odoo
@@ -85,7 +85,7 @@ class SellerTrackingPusher {
     await this.client.init();
 
     const db = getDb();
-    this.collection = db.collection(SELLER_ORDERS_COLLECTION);
+    this.collection = db.collection(UNIFIED_ORDERS_COLLECTION);
   }
 
   /**
@@ -155,10 +155,10 @@ class SellerTrackingPusher {
         }
 
         try {
-          // Check if already pushed in MongoDB
+          // Check if already pushed in MongoDB (unified_orders schema)
           const existingOrder = await this.collection.findOne({
-            amazonOrderId: amazonOrderId,
-            'odoo.trackingPushed': true
+            'sourceIds.amazonOrderId': amazonOrderId,
+            'amazonSeller.trackingPushed': true
           });
 
           if (existingOrder) {
@@ -166,8 +166,8 @@ class SellerTrackingPusher {
             continue;
           }
 
-          // Get order from MongoDB for marketplace and item details
-          let mongoOrder = await this.collection.findOne({ amazonOrderId: amazonOrderId });
+          // Get order from MongoDB for marketplace and item details (unified_orders schema)
+          let mongoOrder = await this.collection.findOne({ 'sourceIds.amazonOrderId': amazonOrderId });
 
           if (!mongoOrder) {
             // Order not in MongoDB - try to find by partial match or skip
@@ -175,6 +175,14 @@ class SellerTrackingPusher {
             result.skipped++;
             continue;
           }
+
+          // Adapt unified_orders structure to expected format
+          // unified_orders stores amazonOrderId in sourceIds, marketplaceId in amazonSeller
+          mongoOrder = {
+            ...mongoOrder,
+            amazonOrderId: mongoOrder.sourceIds?.amazonOrderId,
+            marketplaceId: mongoOrder.amazonSeller?.marketplaceId || mongoOrder.marketplace?.id
+          };
 
           // Push tracking
           const pushResult = await this.pushPickingTracking(mongoOrder, picking);
@@ -271,17 +279,18 @@ class SellerTrackingPusher {
       });
 
       if (confirmResult.success) {
-        // Update MongoDB
+        // Update MongoDB (unified_orders schema)
         await this.collection.updateOne(
-          { amazonOrderId: order.amazonOrderId },
+          { 'sourceIds.amazonOrderId': order.amazonOrderId },
           {
             $set: {
-              'odoo.trackingPushed': true,
-              'odoo.trackingNumber': trackingNumber,
-              'odoo.carrierName': carrierName,
-              'odoo.trackingPushedAt': new Date(),
-              'odoo.pickingId': picking.id,
-              'odoo.pickingName': picking.name
+              'amazonSeller.trackingPushed': true,
+              'amazonSeller.trackingNumber': trackingNumber,
+              'amazonSeller.carrierName': carrierName,
+              'amazonSeller.trackingPushedAt': new Date(),
+              'amazonSeller.pickingId': picking.id,
+              'amazonSeller.pickingName': picking.name,
+              'status.unified': 'shipped'
             }
           }
         );
@@ -300,15 +309,16 @@ class SellerTrackingPusher {
                                errorMsg.includes('already shipped');
 
       if (isAlreadyShipped) {
-        // Mark as pushed since Amazon already has this as shipped
+        // Mark as pushed since Amazon already has this as shipped (unified_orders schema)
         console.log(`[SellerTrackingPusher] Order ${order.amazonOrderId} already shipped on Amazon, marking as pushed`);
         await this.collection.updateOne(
-          { amazonOrderId: order.amazonOrderId },
+          { 'sourceIds.amazonOrderId': order.amazonOrderId },
           {
             $set: {
-              'odoo.trackingPushed': true,
-              'odoo.trackingPushedAt': new Date(),
-              'odoo.trackingPushNote': 'Auto-marked - order already shipped on Amazon'
+              'amazonSeller.trackingPushed': true,
+              'amazonSeller.trackingPushedAt': new Date(),
+              'amazonSeller.trackingPushNote': 'Auto-marked - order already shipped on Amazon',
+              'status.unified': 'shipped'
             }
           }
         );
@@ -414,9 +424,9 @@ class SellerTrackingPusher {
       { limit: 10000 }
     );
 
-    // Count from MongoDB
+    // Count from MongoDB (unified_orders schema)
     const pushed = await this.collection.countDocuments({
-      'odoo.trackingPushed': true
+      'amazonSeller.trackingPushed': true
     });
 
     return {
