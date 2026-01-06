@@ -1792,8 +1792,8 @@ router.get('/advertising/reports/campaigns', async (req, res) => {
 
     res.json({
       success: true,
-      count: data.reportData?.length || 0,
-      campaigns: (data.reportData || []).map(c => ({
+      count: data.subTotals?.length || 0,
+      campaigns: (data.subTotals || []).map(c => ({
         campaignId: c.entityId,
         impressions: c.impressions || 0,
         clicks: c.clicks || 0,
@@ -1881,8 +1881,8 @@ router.get('/advertising/reports/products', async (req, res) => {
 
     res.json({
       success: true,
-      count: data.reportData?.length || 0,
-      products: (data.reportData || []).map(a => ({
+      count: data.subTotals?.length || 0,
+      products: (data.subTotals || []).map(a => ({
         adId: a.entityId,
         impressions: a.impressions || 0,
         clicks: a.clicks || 0,
@@ -1937,8 +1937,8 @@ router.get('/advertising/reports/keywords', async (req, res) => {
 
     res.json({
       success: true,
-      count: data.reportData?.length || 0,
-      keywords: (data.reportData || []).map(k => ({
+      count: data.subTotals?.length || 0,
+      keywords: (data.subTotals || []).map(k => ({
         keywordId: k.entityId,
         impressions: k.impressions || 0,
         clicks: k.clicks || 0,
@@ -1976,8 +1976,8 @@ router.get('/advertising/reports/target-pages', async (req, res) => {
 
     res.json({
       success: true,
-      count: data.reportData?.length || 0,
-      targetPages: (data.reportData || []).map(t => ({
+      count: data.subTotals?.length || 0,
+      targetPages: (data.subTotals || []).map(t => ({
         targetPage: t.targetPage,
         impressions: t.impressions || 0,
         clicks: t.clicks || 0,
@@ -2020,13 +2020,13 @@ router.get('/advertising/reports/search-terms', async (req, res) => {
 
     res.json({
       success: true,
-      count: data.reportData?.length || 0,
+      count: data.subTotals?.length || 0,
       pagination: {
         page: parseInt(page),
         pageSize: parseInt(pageSize),
-        hasMore: (data.reportData?.length || 0) >= parseInt(pageSize)
+        hasMore: (data.subTotals?.length || 0) >= parseInt(pageSize)
       },
-      searchTerms: (data.reportData || []).map(s => ({
+      searchTerms: (data.subTotals || []).map(s => ({
         searchTerm: s.searchTerm,
         impressions: s.impressions || 0,
         clicks: s.clicks || 0,
@@ -2069,13 +2069,13 @@ router.get('/advertising/reports/categories', async (req, res) => {
 
     res.json({
       success: true,
-      count: data.reportData?.length || 0,
+      count: data.subTotals?.length || 0,
       pagination: {
         page: parseInt(page),
         pageSize: parseInt(pageSize),
-        hasMore: (data.reportData?.length || 0) >= parseInt(pageSize)
+        hasMore: (data.subTotals?.length || 0) >= parseInt(pageSize)
       },
-      categories: (data.reportData || []).map(c => ({
+      categories: (data.subTotals || []).map(c => ({
         categoryId: c.categoryId,
         categoryName: c.categoryName,
         impressions: c.impressions || 0,
