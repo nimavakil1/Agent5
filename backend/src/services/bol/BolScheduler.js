@@ -18,6 +18,8 @@ const { runStockSync } = require('./BolStockSync');
 const { runShipmentSync } = require('./BolShipmentSync');
 const { runCancellationCheck } = require('./BolCancellationHandler');
 const { runFulfillmentSwap } = require('./BolFulfillmentSwapper');
+const { runBolSalesInvoicing } = require('./BolSalesInvoicer');
+const { runFBBDeliverySync } = require('./BolFBBDeliverySync');
 const { getModuleLogger } = require('../logging/ModuleLogger');
 
 // Get Bol module logger
@@ -30,6 +32,7 @@ let shipmentCheckInterval = null;
 let fulfillmentSwapInterval = null;
 let returnsSyncInterval = null;
 let shipmentsSyncInterval = null;
+let fbbDeliverySyncInterval = null;
 
 // Interval settings (in milliseconds)
 const ORDER_POLL_INTERVAL = 15 * 60 * 1000;       // 15 minutes
@@ -38,6 +41,7 @@ const SHIPMENT_CHECK_INTERVAL = 5 * 60 * 1000;    // 5 minutes
 const FULFILLMENT_SWAP_INTERVAL = 60 * 60 * 1000; // 1 hour
 const RETURNS_SYNC_INTERVAL = 60 * 60 * 1000;     // 1 hour
 const SHIPMENTS_SYNC_INTERVAL = 60 * 60 * 1000;   // 1 hour
+const FBB_DELIVERY_SYNC_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 /**
  * Calculate milliseconds until next 3:00 AM
@@ -73,15 +77,25 @@ async function runNightlySync() {
     const orderResults = await orderCreator.createPendingOrders({ limit: 100 });
     console.log('[BolScheduler] Order creation complete:', orderResults);
 
-    // Step 3: Book any new invoices to Odoo
-    console.log('[BolScheduler] Booking unbooked invoices to Odoo...');
+    // Step 3: Book any new vendor bills (Bol charges to us) to Odoo
+    console.log('[BolScheduler] Booking unbooked vendor bills to Odoo...');
     const bookingResults = await BolInvoiceBooker.bookAllUnbooked();
-    console.log('[BolScheduler] Invoice booking complete:', bookingResults);
+    console.log('[BolScheduler] Vendor bill booking complete:', bookingResults);
+
+    // Step 4: Sync FBB delivery status (mark shipped FBB orders as delivered in Odoo)
+    console.log('[BolScheduler] Syncing FBB delivery status to Odoo...');
+    const fbbDeliveryResults = await runFBBDeliverySync({ limit: 200 });
+    console.log('[BolScheduler] FBB delivery sync complete:', fbbDeliveryResults);
+
+    // Step 5: Create and post customer invoices for fully delivered orders
+    console.log('[BolScheduler] Creating sales invoices for delivered orders...');
+    const invoicingResults = await runBolSalesInvoicing({ limit: 100 });
+    console.log('[BolScheduler] Sales invoicing complete:', invoicingResults);
 
     await timer.success(
-      `Nightly sync complete: ${syncResults.orders || 0} orders, ${orderResults.created || 0} Odoo orders, ${bookingResults.booked || 0} invoices booked`,
+      `Nightly sync complete: ${syncResults.orders || 0} orders, ${orderResults.created || 0} Odoo orders, ${fbbDeliveryResults.delivered || 0} FBB delivered, ${bookingResults.booked || 0} vendor bills, ${invoicingResults.posted || 0} invoices posted`,
       {
-        details: { sync: syncResults, orders: orderResults, booking: bookingResults }
+        details: { sync: syncResults, orders: orderResults, fbbDelivery: fbbDeliveryResults, booking: bookingResults, invoicing: invoicingResults }
       }
     );
   } catch (error) {
@@ -245,6 +259,27 @@ async function doShipmentsSync() {
 }
 
 /**
+ * Sync FBB (Fulfillment by Bol) delivery status to Odoo
+ * Updates Odoo pickings/qty_delivered when Bol confirms shipment
+ */
+async function doFBBDeliverySync() {
+  const timer = logger.startTimer('FBB_DELIVERY_SYNC', 'scheduler');
+  try {
+    console.log('[BolScheduler] Syncing FBB delivery status to Odoo...');
+    const results = await runFBBDeliverySync();
+    if (results && results.delivered > 0) {
+      console.log(`[BolScheduler] Marked ${results.delivered} FBB orders as delivered in Odoo`);
+      await timer.success(`FBB delivery sync: ${results.delivered} orders marked delivered`, { details: results });
+    } else {
+      await timer.info('FBB delivery sync complete, no orders to update', { details: results });
+    }
+  } catch (error) {
+    console.error('[BolScheduler] FBB delivery sync failed:', error.message);
+    await timer.error('FBB delivery sync failed', error);
+  }
+}
+
+/**
  * Schedule the nightly sync job
  */
 function scheduleNightlySync() {
@@ -265,7 +300,7 @@ function start() {
   // Log scheduler start
   logger.info('SCHEDULER_START', 'Bol scheduler started', {
     details: {
-      jobs: ['ORDER_POLL', 'STOCK_SYNC', 'SHIPMENT_CHECK', 'FULFILLMENT_SWAP', 'RETURNS_SYNC', 'SHIPMENTS_SYNC', 'NIGHTLY_SYNC'],
+      jobs: ['ORDER_POLL', 'STOCK_SYNC', 'SHIPMENT_CHECK', 'FULFILLMENT_SWAP', 'RETURNS_SYNC', 'SHIPMENTS_SYNC', 'FBB_DELIVERY_SYNC', 'NIGHTLY_SYNC'],
       intervals: {
         orderPoll: '15 min',
         stockSync: '15 min',
@@ -273,6 +308,7 @@ function start() {
         fulfillmentSwap: '1 hour',
         returnsSync: '1 hour',
         shipmentsSync: '1 hour',
+        fbbDeliverySync: '1 hour',
         nightlySync: '3:00 AM daily'
       }
     }
@@ -320,6 +356,12 @@ function start() {
     shipmentsSyncInterval = setInterval(doShipmentsSync, SHIPMENTS_SYNC_INTERVAL);
   }, 7 * 60 * 1000);
 
+  // FBB delivery sync every hour (start after 8 minutes)
+  setTimeout(() => {
+    doFBBDeliverySync();
+    fbbDeliverySyncInterval = setInterval(doFBBDeliverySync, FBB_DELIVERY_SYNC_INTERVAL);
+  }, 8 * 60 * 1000);
+
   console.log('[BolScheduler] All jobs scheduled');
 }
 
@@ -355,6 +397,10 @@ function stop() {
     clearInterval(shipmentsSyncInterval);
     shipmentsSyncInterval = null;
   }
+  if (fbbDeliverySyncInterval) {
+    clearInterval(fbbDeliverySyncInterval);
+    fbbDeliverySyncInterval = null;
+  }
   console.log('[BolScheduler] All jobs stopped');
 }
 
@@ -363,7 +409,7 @@ function stop() {
  */
 function getStatus() {
   return {
-    running: !!(nightlySyncJob || orderPollInterval || stockSyncInterval || shipmentCheckInterval || fulfillmentSwapInterval || returnsSyncInterval || shipmentsSyncInterval),
+    running: !!(nightlySyncJob || orderPollInterval || stockSyncInterval || shipmentCheckInterval || fulfillmentSwapInterval || returnsSyncInterval || shipmentsSyncInterval || fbbDeliverySyncInterval),
     nightlySync: {
       scheduled: !!nightlySyncJob,
       nextRunAt: nightlySyncJob ? new Date(Date.now() + getMillisUntil3AM()) : null
@@ -374,9 +420,32 @@ function getStatus() {
       shipmentCheck: !!shipmentCheckInterval,
       fulfillmentSwap: !!fulfillmentSwapInterval,
       returnsSync: !!returnsSyncInterval,
-      shipmentsSync: !!shipmentsSyncInterval
+      shipmentsSync: !!shipmentsSyncInterval,
+      fbbDeliverySync: !!fbbDeliverySyncInterval
     }
   };
+}
+
+/**
+ * Run sales invoicing manually (for API trigger)
+ */
+async function doSalesInvoicing(options = {}) {
+  const timer = logger.startTimer('SALES_INVOICING', 'scheduler');
+  try {
+    console.log('[BolScheduler] Running sales invoicing...');
+    const results = await runBolSalesInvoicing(options);
+    if (results.posted > 0) {
+      console.log(`[BolScheduler] Created and posted ${results.posted} invoices`);
+      await timer.success(`Sales invoicing: ${results.posted} invoices posted`, { details: results });
+    } else {
+      await timer.info('Sales invoicing complete, no new invoices', { details: results });
+    }
+    return results;
+  } catch (error) {
+    console.error('[BolScheduler] Sales invoicing failed:', error.message);
+    await timer.error('Sales invoicing failed', error);
+    throw error;
+  }
 }
 
 module.exports = {
@@ -389,5 +458,7 @@ module.exports = {
   doShipmentCheck,
   doFulfillmentSwap,
   doReturnsSync,
-  doShipmentsSync
+  doShipmentsSync,
+  doFBBDeliverySync,
+  doSalesInvoicing
 };

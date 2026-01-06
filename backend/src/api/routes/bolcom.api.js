@@ -2636,4 +2636,120 @@ router.get('/invoices/unbooked', async (req, res) => {
   }
 });
 
+// ============================================
+// SALES INVOICING (Customer Invoices)
+// ============================================
+
+const { getBolSalesInvoicer, runBolSalesInvoicing } = require('../../services/bol/BolSalesInvoicer');
+
+/**
+ * Get sales invoicing status
+ * GET /api/bolcom/sales-invoicing/status
+ */
+router.get('/sales-invoicing/status', async (req, res) => {
+  try {
+    const invoicer = await getBolSalesInvoicer();
+    const status = await invoicer.getStatus();
+    res.json({ success: true, ...status });
+  } catch (error) {
+    console.error('[BolComAPI] Error getting sales invoicing status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Run sales invoicing (create and post invoices for delivered orders)
+ * POST /api/bolcom/sales-invoicing/run
+ *
+ * Body: { limit: 100, dryRun: false }
+ */
+router.post('/sales-invoicing/run', async (req, res) => {
+  try {
+    const { limit = 100, dryRun = false } = req.body;
+    console.log(`[BolComAPI] Running sales invoicing (limit=${limit}, dryRun=${dryRun})...`);
+
+    const results = await runBolSalesInvoicing({ limit, dryRun });
+
+    res.json({
+      success: true,
+      ...results
+    });
+  } catch (error) {
+    console.error('[BolComAPI] Error running sales invoicing:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get orders ready for invoicing
+ * GET /api/bolcom/sales-invoicing/ready-orders
+ */
+router.get('/sales-invoicing/ready-orders', async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    const invoicer = await getBolSalesInvoicer();
+    const orders = await invoicer.findOrdersReadyForInvoicing({ limit: parseInt(limit) });
+
+    res.json({
+      success: true,
+      count: orders.length,
+      orders: orders.map(o => ({
+        id: o.id,
+        name: o.name,
+        clientOrderRef: o.client_order_ref,
+        partner: o.partner_id ? o.partner_id[1] : null,
+        amountTotal: o.amount_total,
+        lineCount: o.lineCount
+      }))
+    });
+  } catch (error) {
+    console.error('[BolComAPI] Error getting ready orders:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// FBB DELIVERY SYNC (Mark FBB orders delivered in Odoo)
+// ============================================
+
+const { getBolFBBDeliverySync, runFBBDeliverySync } = require('../../services/bol/BolFBBDeliverySync');
+
+/**
+ * Get FBB delivery sync status
+ * GET /api/bolcom/fbb-delivery/status
+ */
+router.get('/fbb-delivery/status', async (req, res) => {
+  try {
+    const sync = await getBolFBBDeliverySync();
+    const status = sync.getStatus();
+    res.json({ success: true, ...status });
+  } catch (error) {
+    console.error('[BolComAPI] Error getting FBB delivery status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Run FBB delivery sync (mark shipped FBB orders as delivered in Odoo)
+ * POST /api/bolcom/fbb-delivery/sync
+ *
+ * Body: { limit: 100 }
+ */
+router.post('/fbb-delivery/sync', async (req, res) => {
+  try {
+    const { limit = 100 } = req.body;
+    console.log(`[BolComAPI] Running FBB delivery sync (limit=${limit})...`);
+
+    const results = await runFBBDeliverySync({ limit });
+
+    res.json({
+      success: true,
+      ...results
+    });
+  } catch (error) {
+    console.error('[BolComAPI] Error running FBB delivery sync:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
