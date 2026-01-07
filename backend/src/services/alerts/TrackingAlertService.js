@@ -655,10 +655,21 @@ async function runTrackingHealthCheck() {
   return health;
 }
 
+/**
+ * Record sync run (standalone function for external use)
+ * @param {string} channel - 'bolShipment', 'amazonFbm', or 'amazonVendor'
+ * @param {boolean} success - Whether the sync was successful
+ * @param {object} details - Additional details about the sync
+ */
+function recordSyncRun(channel, success = true, details = {}) {
+  return TrackingAlertService.recordSyncRun(channel, success, details);
+}
+
 module.exports = {
   TrackingAlertService,
   getTrackingAlertService,
   runTrackingHealthCheck,
+  recordSyncRun,  // Now properly exported!
   ALERT_THRESHOLDS,
   SYNC_STATUS
 };
