@@ -382,10 +382,15 @@ class BolShipmentSync {
       // Find FBR orders with Odoo link but no shipment confirmation
       // Uses unified_orders collection with updated field paths
       const db = getDb();
+      // IMPORTANT: Check for BOTH null value AND missing field
+      // The field can be: null (explicitly set), undefined/missing, or a Date
       const pendingOrders = await db.collection(COLLECTION_NAME).find({
         channel: 'bol',
         'sourceIds.odooSaleOrderId': { $exists: true, $ne: null },
-        'bol.shipmentConfirmedAt': { $exists: false },
+        $or: [
+          { 'bol.shipmentConfirmedAt': null },
+          { 'bol.shipmentConfirmedAt': { $exists: false } }
+        ],
         subChannel: 'FBR',
         'status.source': { $nin: ['CANCELLED', 'SHIPPED'] }
       })

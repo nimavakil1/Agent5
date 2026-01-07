@@ -542,8 +542,12 @@ async function bookInvoice(invoiceId) {
 async function bookAllUnbooked() {
   console.log('[BolInvoiceBooker] Finding unbooked invoices...');
 
+  // Check for BOTH null and missing field
   const unbookedInvoices = await BolInvoice.find({
-    'odoo.billId': { $exists: false },
+    $or: [
+      { 'odoo.billId': null },
+      { 'odoo.billId': { $exists: false } }
+    ],
     totalAmountExclVat: { $gt: 0 }
   }).sort({ issueDate: -1 });
 

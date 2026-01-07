@@ -7,7 +7,7 @@ const { MongoClient } = require('mongodb');
 const axios = require('axios');
 
 async function confirmShipment(bolOrderId, trackingCode, transporterCode = 'DPD-BE') {
-  const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017/agent5');
+  const client = new MongoClient(process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/agent5');
   await client.connect();
   const db = client.db();
 
@@ -80,11 +80,11 @@ async function confirmShipment(bolOrderId, trackingCode, transporterCode = 'DPD-
       return;
     }
 
-    // Build shipment request
+    // Build shipment request - Correct format for POST /retailer/shipments
+    // Note: orderItems should NOT include quantity!
     const shipmentBody = {
       orderItems: unshippedItems.map(item => ({
-        orderItemId: item.orderItemId,
-        quantity: item.quantity - (item.quantityShipped || 0)
+        orderItemId: item.orderItemId
       })),
       shipmentReference: order.sourceIds.odooSaleOrderName || bolOrderId,
       transport: {
@@ -97,7 +97,8 @@ async function confirmShipment(bolOrderId, trackingCode, transporterCode = 'DPD-
     console.log(JSON.stringify(shipmentBody, null, 2));
 
     try {
-      const shipRes = await axios.put('https://api.bol.com/retailer/orders/shipment', shipmentBody, {
+      // Correct endpoint: POST /retailer/shipments (not PUT /orders/shipment!)
+      const shipRes = await axios.post('https://api.bol.com/retailer/shipments', shipmentBody, {
         headers: {
           'Content-Type': 'application/vnd.retailer.v10+json',
           'Accept': 'application/vnd.retailer.v10+json',
