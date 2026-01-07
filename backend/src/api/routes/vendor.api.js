@@ -219,8 +219,13 @@ router.get('/orders/consolidate', async (req, res) => {
     // Build filter - default to orders ready to ship
     // Include both New and Acknowledged states for consolidation
     // Filter for not_shipped status - exclude fully_shipped and cancelled
+    // Support both unified schema (amazonVendor.shipmentStatus) and legacy (shipmentStatus)
+    const shipmentStatusFilter = req.query.shipmentStatus || 'not_shipped';
     const query = {
-      shipmentStatus: req.query.shipmentStatus || 'not_shipped'
+      $or: [
+        { 'amazonVendor.shipmentStatus': shipmentStatusFilter },
+        { shipmentStatus: shipmentStatusFilter, 'amazonVendor.shipmentStatus': { $exists: false } }
+      ]
     };
 
     // State filter - default to both New and Acknowledged
