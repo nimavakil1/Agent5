@@ -840,6 +840,41 @@ router.post('/orders/:poNumber/create-odoo', async (req, res) => {
 });
 
 /**
+ * @route POST /api/vendor/orders/:poNumber/update-odoo
+ * @desc Update an existing Odoo order with new quantities from MongoDB
+ * @desc Used when quantities are changed after initial acknowledgment
+ */
+router.post('/orders/:poNumber/update-odoo', async (req, res) => {
+  try {
+    const creator = await getVendorOrderCreator();
+
+    const result = await creator.updateOrder(req.params.poNumber);
+
+    if (!result.success && result.errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        errors: result.errors,
+        warnings: result.warnings
+      });
+    }
+
+    res.json({
+      success: true,
+      updated: result.updated,
+      purchaseOrderNumber: result.purchaseOrderNumber,
+      odooOrderId: result.odooOrderId,
+      odooOrderName: result.odooOrderName,
+      linesUpdated: result.linesUpdated,
+      linesRemoved: result.linesRemoved,
+      warnings: result.warnings
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /orders/:poNumber/update-odoo error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route POST /api/vendor/orders/create-pending
  * @desc Create Odoo orders for all pending POs (those without Odoo orders)
  * @body limit - Optional: max POs to process (default 50)

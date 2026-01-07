@@ -21,6 +21,8 @@
     .btn-success:hover { background: #16a34a; }
     .btn-blue { background: #6366f1; color: white; }
     .btn-blue:hover { background: #4f46e5; }
+    .btn-warning { background: #f59e0b; color: white; }
+    .btn-warning:hover { background: #d97706; }
     .btn-sm { padding: 6px 12px; font-size: 13px; }
     .btn .material-symbols-outlined { font-size: 20px; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -255,6 +257,7 @@
     }
     let orders = [], stats = {}, currentPage = 0, pageSize = 50, totalOrders = 0, currentPO = null, currentStatFilter = null;
     let currentPOData = null; // Full PO data with stock info
+    let pendingQtyUpdates = {}; // Track modified quantities on acknowledged orders: { ean: newQty }
     async function init() {
       // Set default column filters: New + Not Shipped
       document.getElementById('col-filter-state').value = 'New';
@@ -620,7 +623,7 @@
       }];
 
       try {
-        // Save to MongoDB
+        // Save to MongoDB ONLY (don't re-ack to Amazon yet)
         const saveRes = await fetch('/api/vendor/orders/' + currentPO + '/update-acknowledgments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -629,22 +632,27 @@
         });
         if (!saveRes.ok) throw new Error('Failed to save');
 
-        // Re-send acknowledgment to Amazon
-        const ackRes = await fetch('/api/vendor/orders/' + currentPO + '/acknowledge', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ status: 'Accepted' })
-        });
-        if (!ackRes.ok) throw new Error('Failed to re-acknowledge');
+        // Track this update as pending
+        pendingQtyUpdates[ean] = newQty;
 
-        // Update UI
+        // Update the item in currentPOData
+        item.acknowledgeQty = newQty;
+        item.productAvailability = newQty > 0 ? 'accepted' : 'rejected_TemporarilyUnavailable';
+
+        // Update UI - show the new qty
         const cell = document.querySelector('.accepted-qty-cell[data-ean="' + ean + '"]');
         cell.dataset.accepted = newQty;
-        cell.innerHTML = '<span class="accepted-qty-value">' + newQty + '</span>' +
+        cell.innerHTML = '<span class="accepted-qty-value" style="color: #fbbf24;">' + newQty + ' ✎</span>' +
           '<button class="edit-qty-btn" onclick="editAcceptedQty(this, \'' + ean + '\', ' + orderedQty + ')" title="Edit accepted quantity"><span class="material-symbols-outlined">edit</span></button>';
 
-        window.Agent5Shell?.showToast?.('Quantity updated and re-acknowledged', 'success');
+        // Enable the action button with "Update" text
+        const ackBtn = document.getElementById('modal-ack-odoo');
+        ackBtn.disabled = false;
+        ackBtn.innerHTML = '<span class="material-symbols-outlined">sync</span>Update AMZ + Odoo';
+        ackBtn.classList.remove('btn-primary');
+        ackBtn.classList.add('btn-warning');
+
+        window.Agent5Shell?.showToast?.('Quantity saved. Click "Update AMZ + Odoo" to sync changes.', 'info');
       } catch (e) {
         window.Agent5Shell?.showToast?.('Error: ' + e.message, 'error');
         cancelEditQty(ean, originalQty, parseInt(input.max));
@@ -741,15 +749,19 @@
       loadOrders();
     }
 
-    // Combined workflow: Acknowledge AMZ + Send to Odoo
+    // Combined workflow: Acknowledge AMZ + Send to Odoo (or Update if already acknowledged)
     async function acknowledgeAndCreateOdoo(po) {
       const o = currentPOData;
       if (!o) return;
 
       const isAcknowledged = o.purchaseOrderState === 'Acknowledged' || o.acknowledgment?.acknowledged;
       const hasOdooOrder = !!o.odoo?.saleOrderId;
+      const hasPendingUpdates = Object.keys(pendingQtyUpdates).length > 0;
 
-      // Collect quantities from inputs
+      // Determine if this is an UPDATE operation (acknowledged + has Odoo + has pending changes)
+      const isUpdateMode = isAcknowledged && hasOdooOrder && hasPendingUpdates;
+
+      // Collect quantities from inputs (for new acknowledgment)
       const inputs = document.querySelectorAll('.ack-qty-input');
       const items = [];
       let totalOrdered = 0, totalAccepted = 0;
@@ -769,44 +781,58 @@
         });
       });
 
+      // For update mode, collect from pendingQtyUpdates
+      if (isUpdateMode) {
+        totalOrdered = 0;
+        totalAccepted = 0;
+        items.length = 0;
+        for (const item of (o.items || [])) {
+          const ean = item.vendorProductIdentifier;
+          const orderedQty = item.orderedQuantity?.amount || 0;
+          const ackQty = item.acknowledgeQty ?? orderedQty;
+          totalOrdered += orderedQty;
+          totalAccepted += ackQty;
+          items.push({
+            vendorProductIdentifier: ean,
+            acknowledgeQty: ackQty,
+            backorderQty: 0,
+            productAvailability: ackQty > 0 ? 'accepted' : 'rejected_TemporarilyUnavailable'
+          });
+        }
+      }
+
       // Close the order modal
       closeModal();
 
       // Show progress modal
-      showProgressModal('Processing PO ' + po);
+      const modalTitle = isUpdateMode ? 'Updating PO ' + po : 'Processing PO ' + po;
+      showProgressModal(modalTitle);
 
       // Add steps based on what needs to be done
-      if (!isAcknowledged) {
-        addProgressStep('save', 'Save quantities', 'Preparing ' + items.length + ' items...');
-        addProgressStep('ack', 'Acknowledge to Amazon', 'Sending acknowledgment...');
+      if (isUpdateMode) {
+        // Update mode: re-ack to Amazon + update Odoo
+        addProgressStep('ack', 'Re-acknowledge to Amazon', 'Sending updated quantities...');
         addProgressStep('verify', 'Verify acknowledgment', 'Confirming with Amazon...');
-      }
-      if (!hasOdooOrder) {
-        addProgressStep('odoo', 'Create Odoo order', 'Syncing to ERP...');
+        addProgressStep('odoo', 'Update Odoo order', 'Syncing changes to ' + o.odoo.saleOrderName + '...');
+      } else {
+        // Normal mode: new acknowledgment + create Odoo
+        if (!isAcknowledged) {
+          addProgressStep('save', 'Save quantities', 'Preparing ' + items.length + ' items...');
+          addProgressStep('ack', 'Acknowledge to Amazon', 'Sending acknowledgment...');
+          addProgressStep('verify', 'Verify acknowledgment', 'Confirming with Amazon...');
+        }
+        if (!hasOdooOrder) {
+          addProgressStep('odoo', 'Create Odoo order', 'Syncing to ERP...');
+        }
       }
 
       const result = { success: true, steps: [] };
 
       try {
-        // Step 1: Save quantities (if not acknowledged)
-        if (!isAcknowledged && items.length > 0) {
-          updateProgressStep('save', 'active');
-          const saveRes = await fetch('/api/vendor/orders/' + po + '/update-acknowledgments', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ items })
-          });
-          if (!saveRes.ok) {
-            const d = await saveRes.json();
-            throw { step: 'save', message: d.error || 'Failed to save quantities' };
-          }
-          updateProgressStep('save', 'success', items.length + ' items saved');
-          result.steps.push({ step: 'Save quantities', status: 'success', detail: items.length + ' items' });
-        }
+        if (isUpdateMode) {
+          // ========== UPDATE MODE ==========
 
-        // Step 2: Acknowledge to Amazon (if not acknowledged)
-        if (!isAcknowledged) {
+          // Step 1: Re-acknowledge to Amazon with new quantities
           updateProgressStep('ack', 'active');
           const ackRes = await fetch('/api/vendor/orders/' + po + '/acknowledge', {
             method: 'POST',
@@ -816,60 +842,132 @@
           });
           if (!ackRes.ok) {
             const d = await ackRes.json();
-            throw { step: 'ack', message: d.error || 'Failed to acknowledge' };
+            throw { step: 'ack', message: d.error || 'Failed to re-acknowledge' };
           }
           const ackData = await ackRes.json();
           if (ackData.skipped) {
             throw { step: 'ack', message: 'Skipped: ' + ackData.skipReason };
           }
           updateProgressStep('ack', 'success', 'Sent to Amazon');
-          result.steps.push({ step: 'Acknowledge Amazon', status: 'success', detail: 'Accepted ' + totalAccepted + '/' + totalOrdered + ' qty' });
+          result.steps.push({ step: 'Re-acknowledge Amazon', status: 'success', detail: 'Updated ' + Object.keys(pendingQtyUpdates).length + ' items' });
 
-          // Step 3: Verify acknowledgment
+          // Step 2: Verify acknowledgment
           updateProgressStep('verify', 'active', 'Waiting for confirmation...');
-          // Small delay to let Amazon process
           await new Promise(r => setTimeout(r, 1500));
-
-          // Re-fetch order to verify state changed
           const verifyRes = await fetch('/api/vendor/orders/' + po, { credentials: 'include' });
           if (verifyRes.ok) {
             const verifyData = await verifyRes.json();
             const newState = verifyData.order?.purchaseOrderState;
-            if (newState === 'Acknowledged') {
-              updateProgressStep('verify', 'success', 'Amazon confirmed');
-              result.steps.push({ step: 'Verify acknowledgment', status: 'success', detail: 'State: Acknowledged' });
-            } else {
-              updateProgressStep('verify', 'success', 'State: ' + (newState || 'pending'));
-              result.steps.push({ step: 'Verify acknowledgment', status: 'success', detail: 'State: ' + (newState || 'pending') });
-            }
+            updateProgressStep('verify', 'success', newState === 'Acknowledged' ? 'Amazon confirmed' : 'State: ' + (newState || 'pending'));
+            result.steps.push({ step: 'Verify acknowledgment', status: 'success', detail: 'State: ' + (newState || 'Acknowledged') });
           } else {
             updateProgressStep('verify', 'success', 'Sent (verification pending)');
             result.steps.push({ step: 'Verify acknowledgment', status: 'success', detail: 'Sent (async verification)' });
           }
-        }
 
-        // Step 4: Create Odoo order (if not exists)
-        if (!hasOdooOrder) {
+          // Step 3: Update existing Odoo order
           updateProgressStep('odoo', 'active');
-          const odooRes = await fetch('/api/vendor/orders/' + po + '/create-odoo', {
+          const odooRes = await fetch('/api/vendor/orders/' + po + '/update-odoo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ confirm: true })
+            credentials: 'include'
           });
           if (!odooRes.ok) {
             const d = await odooRes.json();
-            throw { step: 'odoo', message: d.error || d.errors?.join(', ') || 'Failed to create Odoo order' };
+            throw { step: 'odoo', message: d.error || d.errors?.join(', ') || 'Failed to update Odoo order' };
           }
           const odooData = await odooRes.json();
-          if (odooData.skipped) {
-            updateProgressStep('odoo', 'success', 'Skipped: ' + odooData.skipReason);
-            result.steps.push({ step: 'Create Odoo order', status: 'skipped', detail: odooData.skipReason });
-          } else {
-            updateProgressStep('odoo', 'success', odooData.odooOrderName);
-            result.odooOrderName = odooData.odooOrderName;
-            result.odooOrderId = odooData.odooOrderId;
-            result.steps.push({ step: 'Create Odoo order', status: 'success', detail: odooData.odooOrderName });
+          updateProgressStep('odoo', 'success', odooData.linesUpdated + ' lines updated, ' + odooData.linesRemoved + ' removed');
+          result.odooOrderName = odooData.odooOrderName;
+          result.odooOrderId = odooData.odooOrderId;
+          result.steps.push({ step: 'Update Odoo order', status: 'success', detail: odooData.odooOrderName + ' (' + odooData.linesUpdated + ' updated)' });
+
+          // Clear pending updates
+          pendingQtyUpdates = {};
+
+        } else {
+          // ========== NORMAL MODE (CREATE) ==========
+
+          // Step 1: Save quantities (if not acknowledged)
+          if (!isAcknowledged && items.length > 0) {
+            updateProgressStep('save', 'active');
+            const saveRes = await fetch('/api/vendor/orders/' + po + '/update-acknowledgments', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ items })
+            });
+            if (!saveRes.ok) {
+              const d = await saveRes.json();
+              throw { step: 'save', message: d.error || 'Failed to save quantities' };
+            }
+            updateProgressStep('save', 'success', items.length + ' items saved');
+            result.steps.push({ step: 'Save quantities', status: 'success', detail: items.length + ' items' });
+          }
+
+          // Step 2: Acknowledge to Amazon (if not acknowledged)
+          if (!isAcknowledged) {
+            updateProgressStep('ack', 'active');
+            const ackRes = await fetch('/api/vendor/orders/' + po + '/acknowledge', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ status: 'Accepted' })
+            });
+            if (!ackRes.ok) {
+              const d = await ackRes.json();
+              throw { step: 'ack', message: d.error || 'Failed to acknowledge' };
+            }
+            const ackData = await ackRes.json();
+            if (ackData.skipped) {
+              throw { step: 'ack', message: 'Skipped: ' + ackData.skipReason };
+            }
+            updateProgressStep('ack', 'success', 'Sent to Amazon');
+            result.steps.push({ step: 'Acknowledge Amazon', status: 'success', detail: 'Accepted ' + totalAccepted + '/' + totalOrdered + ' qty' });
+
+            // Step 3: Verify acknowledgment
+            updateProgressStep('verify', 'active', 'Waiting for confirmation...');
+            await new Promise(r => setTimeout(r, 1500));
+            const verifyRes = await fetch('/api/vendor/orders/' + po, { credentials: 'include' });
+            if (verifyRes.ok) {
+              const verifyData = await verifyRes.json();
+              const newState = verifyData.order?.purchaseOrderState;
+              if (newState === 'Acknowledged') {
+                updateProgressStep('verify', 'success', 'Amazon confirmed');
+                result.steps.push({ step: 'Verify acknowledgment', status: 'success', detail: 'State: Acknowledged' });
+              } else {
+                updateProgressStep('verify', 'success', 'State: ' + (newState || 'pending'));
+                result.steps.push({ step: 'Verify acknowledgment', status: 'success', detail: 'State: ' + (newState || 'pending') });
+              }
+            } else {
+              updateProgressStep('verify', 'success', 'Sent (verification pending)');
+              result.steps.push({ step: 'Verify acknowledgment', status: 'success', detail: 'Sent (async verification)' });
+            }
+          }
+
+          // Step 4: Create Odoo order (if not exists)
+          if (!hasOdooOrder) {
+            updateProgressStep('odoo', 'active');
+            const odooRes = await fetch('/api/vendor/orders/' + po + '/create-odoo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ confirm: true })
+            });
+            if (!odooRes.ok) {
+              const d = await odooRes.json();
+              throw { step: 'odoo', message: d.error || d.errors?.join(', ') || 'Failed to create Odoo order' };
+            }
+            const odooData = await odooRes.json();
+            if (odooData.skipped) {
+              updateProgressStep('odoo', 'success', 'Skipped: ' + odooData.skipReason);
+              result.steps.push({ step: 'Create Odoo order', status: 'skipped', detail: odooData.skipReason });
+            } else {
+              updateProgressStep('odoo', 'success', odooData.odooOrderName);
+              result.odooOrderName = odooData.odooOrderName;
+              result.odooOrderId = odooData.odooOrderId;
+              result.steps.push({ step: 'Create Odoo order', status: 'success', detail: odooData.odooOrderName });
+            }
           }
         }
 
@@ -878,9 +976,10 @@
         hideProgressModal();
 
         // Build summary HTML
+        const successTitle = isUpdateMode ? 'Successfully Updated' : 'Successfully Processed';
         let summaryHtml = '<div style="text-align:center;margin-bottom:20px;">' +
           '<span class="material-symbols-outlined" style="font-size:48px;color:#4ade80;">check_circle</span>' +
-          '<h3 style="color:#e4e4e7;margin:16px 0 8px;">Successfully Processed</h3>' +
+          '<h3 style="color:#e4e4e7;margin:16px 0 8px;">' + successTitle + '</h3>' +
           '<p style="color:#71717a;">PO ' + po + '</p></div>';
 
         summaryHtml += '<table class="summary-table"><thead><tr><th>Step</th><th>Status</th><th>Detail</th></tr></thead><tbody>';
@@ -897,7 +996,7 @@
             '<span class="material-symbols-outlined">open_in_new</span>Open in Odoo</a></div>';
         }
 
-        showSummaryModal('PO ' + po + ' Processed', summaryHtml);
+        showSummaryModal('PO ' + po + (isUpdateMode ? ' Updated' : ' Processed'), summaryHtml);
 
       } catch (e) {
         // Handle error
@@ -913,7 +1012,7 @@
 
         let errorHtml = '<div style="text-align:center;margin-bottom:20px;">' +
           '<span class="material-symbols-outlined" style="font-size:48px;color:#ef4444;">error</span>' +
-          '<h3 style="color:#e4e4e7;margin:16px 0 8px;">Error Processing PO</h3>' +
+          '<h3 style="color:#e4e4e7;margin:16px 0 8px;">Error ' + (isUpdateMode ? 'Updating' : 'Processing') + ' PO</h3>' +
           '<p style="color:#ef4444;">' + message + '</p></div>';
 
         if (result.steps.length > 0) {

@@ -630,6 +630,120 @@ class VendorOrderCreator {
   }
 
   /**
+   * Update an existing Odoo order with new quantities from MongoDB
+   * Used when quantities are changed after initial acknowledgment
+   *
+   * @param {string} poNumber - Amazon Vendor PO number
+   * @param {object} options - Update options
+   * @returns {object} Result with success status and details
+   */
+  async updateOrder(poNumber, options = {}) {
+    const result = {
+      success: false,
+      purchaseOrderNumber: poNumber,
+      odooOrderId: null,
+      odooOrderName: null,
+      updated: false,
+      linesUpdated: 0,
+      linesRemoved: 0,
+      errors: [],
+      warnings: []
+    };
+
+    try {
+      // Step 1: Get PO from MongoDB
+      const po = await this.importer.getPurchaseOrder(poNumber);
+      if (!po) {
+        result.errors.push(`PO not found in database: ${poNumber}`);
+        return result;
+      }
+
+      // Step 2: Check that Odoo order exists
+      if (!po.odoo?.saleOrderId) {
+        result.errors.push(`No Odoo order linked to PO ${poNumber}`);
+        return result;
+      }
+
+      const odooOrderId = po.odoo.saleOrderId;
+      const odooOrderName = po.odoo.saleOrderName;
+      result.odooOrderId = odooOrderId;
+      result.odooOrderName = odooOrderName;
+
+      // Step 3: Get current Odoo order lines
+      const existingLines = await this.odoo.searchRead('sale.order.line',
+        [['order_id', '=', odooOrderId]],
+        ['id', 'product_id', 'product_uom_qty', 'price_unit']
+      );
+
+      // Build a map of existing lines by product_id
+      const existingLineMap = {};
+      for (const line of existingLines) {
+        if (line.product_id) {
+          existingLineMap[line.product_id[0]] = line;
+        }
+      }
+
+      // Step 4: Process each item from MongoDB
+      for (const item of (po.items || [])) {
+        const sku = item.ean || item.vendorProductIdentifier;
+        const asin = item.asin || item.amazonProductIdentifier;
+
+        // Get product ID (use cached if available)
+        let productId = item.odooProductId || null;
+        if (!productId) {
+          productId = await this.findProduct(sku, asin);
+        }
+
+        if (!productId) {
+          result.warnings.push(`Item ${item.itemSequenceNumber}: Product not found (SKU: ${sku})`);
+          continue;
+        }
+
+        const existingLine = existingLineMap[productId];
+        const newQty = item.acknowledgeQty ?? (item.quantity || item.orderedQuantity?.amount || 0);
+
+        if (!existingLine) {
+          // Line doesn't exist in Odoo - skip or add?
+          if (newQty > 0) {
+            result.warnings.push(`Item ${item.itemSequenceNumber}: Line not found in Odoo order (SKU: ${sku})`);
+          }
+          continue;
+        }
+
+        // Check if qty changed
+        if (existingLine.product_uom_qty === newQty) {
+          continue; // No change needed
+        }
+
+        // Update or remove the line
+        if (newQty === 0) {
+          // Remove the line (qty = 0 means rejected)
+          await this.odoo.unlink('sale.order.line', [existingLine.id]);
+          result.linesRemoved++;
+          result.warnings.push(`Item ${item.itemSequenceNumber}: Line removed (qty=0)`);
+        } else {
+          // Update the quantity
+          await this.odoo.write('sale.order.line', [existingLine.id], {
+            product_uom_qty: newQty
+          });
+          result.linesUpdated++;
+        }
+      }
+
+      result.success = true;
+      result.updated = result.linesUpdated > 0 || result.linesRemoved > 0;
+
+      console.log(`[VendorOrderCreator] Updated Odoo order ${odooOrderName}: ${result.linesUpdated} lines updated, ${result.linesRemoved} lines removed`);
+      return result;
+
+    } catch (error) {
+      result.errors.push(error.message);
+      console.error(`[VendorOrderCreator] Error updating order for PO ${poNumber}:`, error);
+      return result;
+    }
+  }
+
+  /**
    * Build order notes from PO data
    */
   buildOrderNotes(po) {
