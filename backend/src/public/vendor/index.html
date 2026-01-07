@@ -437,6 +437,9 @@
       }
       tableHtml += '<th>Unit Price</th><th>Total</th></tr></thead><tbody>';
 
+      let acceptedTotal = 0;
+      const currency = o.totals?.currency || 'EUR';
+
       (o.items || []).forEach((it, i) => {
         const vendorId = it.vendorProductIdentifier || '-';
         // Use cached product info if available
@@ -445,14 +448,26 @@
         const cwStock = it.qtyAvailable ?? 0;
         const productName = it.odooProductName || '';
         const currentAckQty = it.acknowledgeQty ?? orderedQty;
+        const unitPrice = it.netCost?.amount || 0;
 
-        tableHtml += '<tr data-ean="' + vendorId + '" data-ordered="' + orderedQty + '"><td>' + (i+1) + '</td><td style="font-family:monospace;font-size:12px;">' + sku + '</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + productName + '">' + (productName || '-') + '</td><td>' + orderedQty + '</td>';
+        // Calculate accepted qty for this line
+        let lineAcceptedQty;
+        if (!isAcknowledged) {
+          lineAcceptedQty = currentAckQty;
+        } else {
+          const aq = getAcceptedQty(it, o);
+          lineAcceptedQty = typeof aq === 'number' ? aq : (parseInt(aq) || 0);
+        }
+        const lineTotal = lineAcceptedQty * unitPrice;
+        acceptedTotal += lineTotal;
+
+        tableHtml += '<tr data-ean="' + vendorId + '" data-ordered="' + orderedQty + '" data-unit-price="' + unitPrice + '"><td>' + (i+1) + '</td><td style="font-family:monospace;font-size:12px;">' + sku + '</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + productName + '">' + (productName || '-') + '</td><td>' + orderedQty + '</td>';
 
         if (!isAcknowledged) {
           const stockColor = cwStock >= orderedQty ? '#4ade80' : (cwStock > 0 ? '#fbbf24' : '#ef4444');
           const stockDisplay = it.odooProductId ? cwStock : (stockLoading ? '<span class="stock-loading">...</span>' : '-');
           tableHtml += '<td class="stock-cell" style="color:' + stockColor + ';font-weight:600;" data-ean="' + vendorId + '">' + stockDisplay + '</td>';
-          tableHtml += '<td><input type="number" class="ack-qty-input" data-ean="' + vendorId + '" value="' + currentAckQty + '" min="0" max="' + orderedQty + '" style="width:60px;padding:6px 8px;background:#12121a;border:1px solid #252532;border-radius:6px;color:#e4e4e7;text-align:center;"></td>';
+          tableHtml += '<td><input type="number" class="ack-qty-input" data-ean="' + vendorId + '" value="' + currentAckQty + '" min="0" max="' + orderedQty + '" style="width:60px;padding:6px 8px;background:#12121a;border:1px solid #252532;border-radius:6px;color:#e4e4e7;text-align:center;" onchange="updateLineTotals()"></td>';
         } else {
           // For acknowledged orders: show accepted qty with pencil icon
           const acceptedQty = getAcceptedQty(it, o);
@@ -463,11 +478,11 @@
           tableHtml += '<td>' + (it.shippedQuantity?.amount ?? it.receivingStatus?.receivedQuantity?.amount ?? '-') + '</td>';
         }
 
-        tableHtml += '<td>' + formatCurrency(it.netCost?.amount, it.netCost?.currencyCode) + '</td>';
-        tableHtml += '<td>' + formatCurrency(orderedQty * (it.netCost?.amount || 0), it.netCost?.currencyCode) + '</td></tr>';
+        tableHtml += '<td>' + formatCurrency(unitPrice, it.netCost?.currencyCode) + '</td>';
+        tableHtml += '<td class="line-total">' + formatCurrency(lineTotal, it.netCost?.currencyCode) + '</td></tr>';
       });
 
-      tableHtml += '<tr class="totals-row"><td colspan="7" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.total, o.totals?.currency) + '</td></tr></tbody></table></div>';
+      tableHtml += '<tr class="totals-row"><td colspan="7" style="text-align:right;">Accepted Total:</td><td id="accepted-total">' + formatCurrency(acceptedTotal, currency) + '</td></tr></tbody></table></div>';
 
       // Accept All Ordered button (only if not acknowledged)
       const autoFillHtml = !isAcknowledged ? '<div style="margin-top:16px;display:flex;gap:12px;"><button class="btn btn-secondary" onclick="fillAllOrdered()" title="Accept all ordered QTYs - good when you KNOW there will be availability before shipment. This just fills the Accept Qty fields."><span class="material-symbols-outlined">select_all</span>Accept All Ordered</button></div>' : '';
@@ -516,6 +531,15 @@
                 ackInput.value = Math.min(orderedQty, stock);
               }
             }
+            // Update line total cell
+            const lineTotalCell = document.querySelector('tr[data-ean="' + item.vendorProductIdentifier + '"] .line-total');
+            if (lineTotalCell) {
+              const row = lineTotalCell.closest('tr');
+              const unitPrice = parseFloat(row.dataset.unitPrice) || 0;
+              const ackInput = row.querySelector('.ack-qty-input');
+              const ackQty = ackInput ? parseInt(ackInput.value) || 0 : 0;
+              lineTotalCell.textContent = formatCurrency(ackQty * unitPrice, currentPOData?.totals?.currency || 'EUR');
+            }
             // Also update product name if it was missing
             const row = document.querySelector('tr[data-ean="' + item.vendorProductIdentifier + '"]');
             if (row && item.odooProductName) {
@@ -533,6 +557,18 @@
               }
             }
           });
+          // Update order total after all items processed
+          let acceptedTotal = 0;
+          document.querySelectorAll('.ack-qty-input').forEach(input => {
+            const row = input.closest('tr');
+            const ackQty = parseInt(input.value) || 0;
+            const unitPrice = parseFloat(row.dataset.unitPrice) || 0;
+            acceptedTotal += ackQty * unitPrice;
+          });
+          const totalCell = document.getElementById('accepted-total');
+          if (totalCell) {
+            totalCell.textContent = formatCurrency(acceptedTotal, currentPOData?.totals?.currency || 'EUR');
+          }
           // Update cached PO data
           if (currentPOData) {
             currentPOData.items = currentPOData.items.map(it => {
@@ -624,6 +660,7 @@
         const cwStock = parseInt(row.cells[4].textContent) || 0;
         input.value = Math.min(orderedQty, cwStock);
       });
+      updateLineTotals();
       window.Agent5Shell?.showToast?.('Quantities set based on CW stock', 'success');
     }
 
@@ -633,7 +670,30 @@
         const orderedQty = parseInt(row.cells[3].textContent) || 0;
         input.value = orderedQty;
       });
+      updateLineTotals();
       window.Agent5Shell?.showToast?.('All quantities set to ordered amount', 'success');
+    }
+
+    function updateLineTotals() {
+      // Recalculate line totals and order total based on accept qty inputs
+      let acceptedTotal = 0;
+      document.querySelectorAll('.ack-qty-input').forEach(input => {
+        const row = input.closest('tr');
+        const ackQty = parseInt(input.value) || 0;
+        const unitPrice = parseFloat(row.dataset.unitPrice) || 0;
+        const lineTotal = ackQty * unitPrice;
+        acceptedTotal += lineTotal;
+        // Update line total cell
+        const lineTotalCell = row.querySelector('.line-total');
+        if (lineTotalCell) {
+          lineTotalCell.textContent = formatCurrency(lineTotal, currentPOData?.totals?.currency || 'EUR');
+        }
+      });
+      // Update order total
+      const totalCell = document.getElementById('accepted-total');
+      if (totalCell) {
+        totalCell.textContent = formatCurrency(acceptedTotal, currentPOData?.totals?.currency || 'EUR');
+      }
     }
 
     // Progress and Summary Modal functions
