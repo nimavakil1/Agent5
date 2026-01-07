@@ -690,10 +690,25 @@ class VendorASNCreator {
       results.push(result);
     }
 
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+
+    // Record sync run for tracking health monitoring
+    try {
+      const { recordSyncRun } = require('../../alerts/TrackingAlertService');
+      recordSyncRun('amazonVendor', failed === 0 || readyPOs.length === 0, {
+        total: readyPOs.length,
+        successful,
+        failed
+      });
+    } catch (_) {
+      // TrackingAlertService may not be initialized yet
+    }
+
     return {
       total: readyPOs.length,
-      successful: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length,
+      successful,
+      failed,
       results
     };
   }
