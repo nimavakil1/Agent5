@@ -446,8 +446,17 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       query = {
         purchaseOrderNumber: poNumber,
         consolidationOverride: true,
-        purchaseOrderState: { $in: ['New', 'Acknowledged'] },
-        shipmentStatus: 'not_shipped'
+        $or: [
+          { 'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] } },
+          { purchaseOrderState: { $in: ['New', 'Acknowledged'] }, 'amazonVendor.purchaseOrderState': { $exists: false } }
+        ],
+        // Support both unified and legacy schema for shipment status
+        $and: [
+          { $or: [
+            { 'amazonVendor.shipmentStatus': 'not_shipped' },
+            { shipmentStatus: 'not_shipped', 'amazonVendor.shipmentStatus': { $exists: false } }
+          ]}
+        ]
       };
 
       console.log('[VendorAPI] Consolidate detail (SEPARATE) - groupId:', groupId, 'poNumber:', poNumber);
@@ -462,11 +471,22 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       }
 
       // Build query - include both New and Acknowledged states, exclude overridden orders
+      // Support both unified (amazonVendor.*) and legacy schema
       query = {
         'shipToParty.partyId': fcPartyId,
-        purchaseOrderState: { $in: ['New', 'Acknowledged'] },
-        shipmentStatus: 'not_shipped',
-        consolidationOverride: { $ne: true } // Exclude orders that were removed from consolidation
+        consolidationOverride: { $ne: true }, // Exclude orders that were removed from consolidation
+        // PO state: check both unified and legacy fields
+        $or: [
+          { 'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] } },
+          { purchaseOrderState: { $in: ['New', 'Acknowledged'] }, 'amazonVendor.purchaseOrderState': { $exists: false } }
+        ],
+        // Shipment status: check both unified and legacy fields
+        $and: [
+          { $or: [
+            { 'amazonVendor.shipmentStatus': 'not_shipped' },
+            { shipmentStatus: 'not_shipped', 'amazonVendor.shipmentStatus': { $exists: false } }
+          ]}
+        ]
       };
 
       console.log('[VendorAPI] Consolidate detail - groupId:', groupId, 'fcPartyId:', fcPartyId, 'dateStr:', dateStr);
@@ -1324,10 +1344,21 @@ async function generatePackingList(req, res) {
     const dateStr = lastUnderscoreIndex > 0 ? groupId.substring(lastUnderscoreIndex + 1) : 'nodate';
 
     // Build query - include both New and Acknowledged states
+    // Support both unified (amazonVendor.*) and legacy schema
     const query = {
       'shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
-      purchaseOrderState: { $in: ['New', 'Acknowledged'] },
-      shipmentStatus: { $ne: 'shipped' }
+      // PO state: check both unified and legacy fields
+      $or: [
+        { 'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] } },
+        { purchaseOrderState: { $in: ['New', 'Acknowledged'] }, 'amazonVendor.purchaseOrderState': { $exists: false } }
+      ],
+      // Shipment status: exclude fully_shipped from both unified and legacy
+      $and: [
+        { $or: [
+          { 'amazonVendor.shipmentStatus': { $nin: ['fully_shipped', 'shipped'] } },
+          { shipmentStatus: { $nin: ['fully_shipped', 'shipped'] }, 'amazonVendor.shipmentStatus': { $exists: false } }
+        ]}
+      ]
     };
 
     // CRITICAL: Isolate test data from production data
