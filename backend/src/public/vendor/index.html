@@ -838,7 +838,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ status: 'Accepted' })
+            body: JSON.stringify({ status: 'Accepted', force: true })  // force=true for re-ack
           });
           if (!ackRes.ok) {
             const d = await ackRes.json();

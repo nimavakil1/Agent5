@@ -73,10 +73,11 @@ class VendorPOAcknowledger {
    * @param {string} options.status - Acknowledgment status (Accepted, Backordered, Rejected)
    * @param {Array} options.items - Optional item-level acknowledgments
    * @param {boolean} options.dryRun - If true, don't submit to Amazon
+   * @param {boolean} options.force - If true, re-acknowledge even if already acknowledged (for qty updates)
    * @returns {Object} Result with success status and transaction ID
    */
   async acknowledgePO(poNumber, options = {}) {
-    const { status = ACK_CODES.ACCEPTED, items = null, dryRun = false } = options;
+    const { status = ACK_CODES.ACCEPTED, items = null, dryRun = false, force = false } = options;
 
     const result = {
       success: false,
@@ -95,10 +96,10 @@ class VendorPOAcknowledger {
         return result;
       }
 
-      // Check if already acknowledged
+      // Check if already acknowledged (skip check if force=true for qty updates)
       // Handle unified schema (amazonVendor.acknowledgment) and legacy (acknowledgment)
       const acknowledgment = po.amazonVendor?.acknowledgment || po.acknowledgment;
-      if (acknowledgment?.acknowledged) {
+      if (acknowledgment?.acknowledged && !force) {
         result.success = true;
         result.skipped = true;
         result.skipReason = `Already acknowledged at ${acknowledgment.acknowledgedAt}`;

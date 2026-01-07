@@ -738,7 +738,8 @@ router.post('/orders/:poNumber/acknowledge', async (req, res) => {
 
     const result = await acknowledger.acknowledgePO(req.params.poNumber, {
       status: req.body.status || ACK_CODES.ACCEPTED,
-      dryRun: req.body.dryRun || false
+      dryRun: req.body.dryRun || false,
+      force: req.body.force || false  // Allow re-acknowledgment for qty updates
     });
 
     if (!result.success && result.errors.length > 0) {
