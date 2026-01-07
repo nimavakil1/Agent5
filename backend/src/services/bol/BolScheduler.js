@@ -9,6 +9,8 @@
  * - FBB/FBR fulfillment swap check every hour
  * - Returns sync from Bol.com every hour
  * - Shipments list sync from Bol.com every hour
+ * - FBB delivery sync every hour (marks shipped orders as delivered)
+ * - Sales invoicing every hour (creates invoices for delivered orders)
  */
 
 const BolSyncService = require('./BolSyncService');
@@ -33,6 +35,7 @@ let fulfillmentSwapInterval = null;
 let returnsSyncInterval = null;
 let shipmentsSyncInterval = null;
 let fbbDeliverySyncInterval = null;
+let salesInvoicingInterval = null;
 
 // Interval settings (in milliseconds)
 const ORDER_POLL_INTERVAL = 15 * 60 * 1000;       // 15 minutes
@@ -42,6 +45,7 @@ const FULFILLMENT_SWAP_INTERVAL = 60 * 60 * 1000; // 1 hour
 const RETURNS_SYNC_INTERVAL = 60 * 60 * 1000;     // 1 hour
 const SHIPMENTS_SYNC_INTERVAL = 60 * 60 * 1000;   // 1 hour
 const FBB_DELIVERY_SYNC_INTERVAL = 60 * 60 * 1000; // 1 hour
+const SALES_INVOICING_INTERVAL = 60 * 60 * 1000;   // 1 hour
 
 /**
  * Calculate milliseconds until next 3:00 AM
@@ -300,7 +304,7 @@ function start() {
   // Log scheduler start
   logger.info('SCHEDULER_START', 'Bol scheduler started', {
     details: {
-      jobs: ['ORDER_POLL', 'STOCK_SYNC', 'SHIPMENT_CHECK', 'FULFILLMENT_SWAP', 'RETURNS_SYNC', 'SHIPMENTS_SYNC', 'FBB_DELIVERY_SYNC', 'NIGHTLY_SYNC'],
+      jobs: ['ORDER_POLL', 'STOCK_SYNC', 'SHIPMENT_CHECK', 'FULFILLMENT_SWAP', 'RETURNS_SYNC', 'SHIPMENTS_SYNC', 'FBB_DELIVERY_SYNC', 'SALES_INVOICING', 'NIGHTLY_SYNC'],
       intervals: {
         orderPoll: '15 min',
         stockSync: '15 min',
@@ -309,6 +313,7 @@ function start() {
         returnsSync: '1 hour',
         shipmentsSync: '1 hour',
         fbbDeliverySync: '1 hour',
+        salesInvoicing: '1 hour',
         nightlySync: '3:00 AM daily'
       }
     }
@@ -362,6 +367,12 @@ function start() {
     fbbDeliverySyncInterval = setInterval(doFBBDeliverySync, FBB_DELIVERY_SYNC_INTERVAL);
   }, 8 * 60 * 1000);
 
+  // Sales invoicing every hour (start after 10 minutes - after FBB delivery sync)
+  setTimeout(() => {
+    doSalesInvoicing({ limit: 50 });
+    salesInvoicingInterval = setInterval(() => doSalesInvoicing({ limit: 50 }), SALES_INVOICING_INTERVAL);
+  }, 10 * 60 * 1000);
+
   console.log('[BolScheduler] All jobs scheduled');
 }
 
@@ -401,6 +412,10 @@ function stop() {
     clearInterval(fbbDeliverySyncInterval);
     fbbDeliverySyncInterval = null;
   }
+  if (salesInvoicingInterval) {
+    clearInterval(salesInvoicingInterval);
+    salesInvoicingInterval = null;
+  }
   console.log('[BolScheduler] All jobs stopped');
 }
 
@@ -409,7 +424,7 @@ function stop() {
  */
 function getStatus() {
   return {
-    running: !!(nightlySyncJob || orderPollInterval || stockSyncInterval || shipmentCheckInterval || fulfillmentSwapInterval || returnsSyncInterval || shipmentsSyncInterval || fbbDeliverySyncInterval),
+    running: !!(nightlySyncJob || orderPollInterval || stockSyncInterval || shipmentCheckInterval || fulfillmentSwapInterval || returnsSyncInterval || shipmentsSyncInterval || fbbDeliverySyncInterval || salesInvoicingInterval),
     nightlySync: {
       scheduled: !!nightlySyncJob,
       nextRunAt: nightlySyncJob ? new Date(Date.now() + getMillisUntil3AM()) : null
@@ -421,7 +436,8 @@ function getStatus() {
       fulfillmentSwap: !!fulfillmentSwapInterval,
       returnsSync: !!returnsSyncInterval,
       shipmentsSync: !!shipmentsSyncInterval,
-      fbbDeliverySync: !!fbbDeliverySyncInterval
+      fbbDeliverySync: !!fbbDeliverySyncInterval,
+      salesInvoicing: !!salesInvoicingInterval
     }
   };
 }
