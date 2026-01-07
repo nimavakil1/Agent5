@@ -715,12 +715,13 @@ class VendorOrderCreator {
           continue; // No change needed
         }
 
-        // Update or remove the line
+        // Update the line (set qty to 0 for rejected items - can't delete from confirmed orders)
         if (newQty === 0) {
-          // Remove the line (qty = 0 means rejected)
-          await this.odoo.unlink('sale.order.line', [existingLine.id]);
-          result.linesRemoved++;
-          result.warnings.push(`Item ${item.itemSequenceNumber}: Line removed (qty=0)`);
+          await this.odoo.write('sale.order.line', [existingLine.id], {
+            product_uom_qty: 0
+          });
+          result.linesUpdated++;
+          result.warnings.push(`Item ${item.itemSequenceNumber}: Line qty set to 0`);
         } else {
           // Update the quantity
           await this.odoo.write('sale.order.line', [existingLine.id], {
@@ -731,9 +732,9 @@ class VendorOrderCreator {
       }
 
       result.success = true;
-      result.updated = result.linesUpdated > 0 || result.linesRemoved > 0;
+      result.updated = result.linesUpdated > 0;
 
-      console.log(`[VendorOrderCreator] Updated Odoo order ${odooOrderName}: ${result.linesUpdated} lines updated, ${result.linesRemoved} lines removed`);
+      console.log(`[VendorOrderCreator] Updated Odoo order ${odooOrderName}: ${result.linesUpdated} lines updated`);
       return result;
 
     } catch (error) {
