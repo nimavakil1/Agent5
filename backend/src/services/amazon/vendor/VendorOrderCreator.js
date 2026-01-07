@@ -400,10 +400,20 @@ class VendorOrderCreator {
           continue;
         }
 
-        // Use acknowledgeQty (accepted quantity) if > 0, otherwise fall back to orderedQuantity
+        // Use acknowledgeQty (accepted quantity) if set, otherwise fall back to orderedQuantity
         // Handle unified schema (quantity) and legacy (orderedQuantity.amount)
         const orderedQty = item.quantity || item.orderedQuantity?.amount || 1;
-        const quantity = (item.acknowledgeQty > 0) ? item.acknowledgeQty : orderedQty;
+
+        // If acknowledgeQty is explicitly set to 0 (rejected item), skip this line entirely
+        if (item.acknowledgeQty === 0) {
+          warnings.push(`Item ${item.itemSequenceNumber}: Skipped (acknowledgeQty = 0, rejected)`);
+          continue;
+        }
+
+        // Use acknowledgeQty if set and > 0, otherwise use orderedQty
+        const quantity = (item.acknowledgeQty != null && item.acknowledgeQty > 0)
+          ? item.acknowledgeQty
+          : orderedQty;
         // Handle unified schema (unitPrice) and legacy (netCost.amount)
         const netCost = parseFloat(item.unitPrice) || parseFloat(item.netCost?.amount) || 0;
         const priceUnit = netCost > 0 ? netCost : 0;
