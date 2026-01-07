@@ -198,11 +198,54 @@
       <div class="modal-body" id="po-modal-body"></div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-        <button class="btn btn-success" onclick="createOdooOrder(currentPO)" id="modal-create-odoo"><span class="material-symbols-outlined">add_shopping_cart</span>Create Odoo Order</button>
-        <button class="btn btn-primary" onclick="acknowledgePO(currentPO)" id="modal-ack"><span class="material-symbols-outlined">check_circle</span>Acknowledge</button>
+        <button class="btn btn-primary" onclick="acknowledgeAndCreateOdoo(currentPO)" id="modal-ack-odoo"><span class="material-symbols-outlined">rocket_launch</span>Acknowledge AMZ + Send to Odoo</button>
       </div>
     </div>
   </div>
+  <!-- Progress Modal -->
+  <div class="modal-overlay" id="progress-modal">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header"><h2 class="modal-title" id="progress-title">Processing...</h2></div>
+      <div class="modal-body" id="progress-body">
+        <div class="progress-steps" id="progress-steps"></div>
+      </div>
+    </div>
+  </div>
+  <!-- Summary Modal -->
+  <div class="modal-overlay" id="summary-modal">
+    <div class="modal" style="max-width: 600px;">
+      <div class="modal-header"><h2 class="modal-title" id="summary-title">Summary</h2><button class="modal-close" onclick="closeSummaryModal()"><span class="material-symbols-outlined">close</span></button></div>
+      <div class="modal-body" id="summary-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeSummaryModal()">Done</button>
+      </div>
+    </div>
+  </div>
+  <style>
+    .progress-steps { display: flex; flex-direction: column; gap: 16px; }
+    .progress-step { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #12121a; border-radius: 10px; border: 1px solid #252532; }
+    .progress-step.active { border-color: #f97316; background: rgba(249, 115, 22, 0.1); }
+    .progress-step.success { border-color: #22c55e; background: rgba(34, 197, 94, 0.1); }
+    .progress-step.error { border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+    .progress-step-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #252532; }
+    .progress-step.active .progress-step-icon { background: #f97316; }
+    .progress-step.success .progress-step-icon { background: #22c55e; }
+    .progress-step.error .progress-step-icon { background: #ef4444; }
+    .progress-step-icon .material-symbols-outlined { font-size: 18px; color: #71717a; }
+    .progress-step.active .progress-step-icon .material-symbols-outlined,
+    .progress-step.success .progress-step-icon .material-symbols-outlined,
+    .progress-step.error .progress-step-icon .material-symbols-outlined { color: white; }
+    .progress-step-content { flex: 1; }
+    .progress-step-title { font-weight: 600; color: #e4e4e7; font-size: 14px; }
+    .progress-step-subtitle { font-size: 12px; color: #71717a; margin-top: 2px; }
+    .progress-step.active .progress-step-icon .material-symbols-outlined { animation: spin 0.8s linear infinite; }
+    .summary-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    .summary-table th, .summary-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #252532; font-size: 13px; }
+    .summary-table th { background: #12121a; color: #71717a; font-weight: 600; }
+    .summary-table td { color: #e4e4e7; }
+    .summary-success { color: #4ade80; font-weight: 600; }
+    .summary-error { color: #ef4444; font-weight: 600; }
+  </style>
   <script>
     const MARKETPLACE_FLAGS = { DE: 'de', FR: 'fr', IT: 'it', ES: 'es', NL: 'nl', BE: 'be', PL: 'pl', SE: 'se', UK: 'gb', GB: 'gb', CZ: 'cz', AT: 'at' };
     function getFlagImg(mp) {
@@ -426,14 +469,21 @@
 
       tableHtml += '<tr class="totals-row"><td colspan="7" style="text-align:right;">Total:</td><td>' + formatCurrency(o.totals?.total, o.totals?.currency) + '</td></tr></tbody></table></div>';
 
-      // Auto-fill button (only if not acknowledged)
-      const autoFillHtml = !isAcknowledged ? '<div style="margin-top:16px;display:flex;gap:12px;"><button class="btn btn-secondary" onclick="autoFillFromStock()" title="Fill Accept Qty with available CW stock (min of ordered vs available)"><span class="material-symbols-outlined">auto_fix</span>Auto-fill from CW Stock</button><button class="btn btn-secondary" onclick="fillAllOrdered()" title="Accept all ordered QTYs - good when you KNOW there will be availability before shipment. This just fills the Accept Qty fields."><span class="material-symbols-outlined">select_all</span>Accept All Ordered</button></div>' : '';
+      // Accept All Ordered button (only if not acknowledged)
+      const autoFillHtml = !isAcknowledged ? '<div style="margin-top:16px;display:flex;gap:12px;"><button class="btn btn-secondary" onclick="fillAllOrdered()" title="Accept all ordered QTYs - good when you KNOW there will be availability before shipment. This just fills the Accept Qty fields."><span class="material-symbols-outlined">select_all</span>Accept All Ordered</button></div>' : '';
 
       const odooHtml = o.odoo?.saleOrderId ? '<div style="margin-top:20px;padding:16px;background:rgba(99,102,241,0.1);border-radius:10px;border:1px solid rgba(99,102,241,0.3);"><strong style="color:#818cf8;">Odoo Order:</strong><a href="https://acropaq.odoo.com/web#id=' + o.odoo.saleOrderId + '&model=sale.order&view_type=form" target="_blank" class="odoo-link" style="margin-left:8px;">' + o.odoo.saleOrderName + '</a></div>' : '';
 
       document.getElementById('po-modal-body').innerHTML = headerHtml + deliveryHtml + tableHtml + autoFillHtml + odooHtml;
-      document.getElementById('modal-create-odoo').disabled = !!o.odoo?.saleOrderId;
-      document.getElementById('modal-ack').disabled = isAcknowledged;
+      // Disable combined button if already acknowledged AND has Odoo order
+      document.getElementById('modal-ack-odoo').disabled = isAcknowledged && !!o.odoo?.saleOrderId;
+      // Update button text based on state
+      const ackBtn = document.getElementById('modal-ack-odoo');
+      if (isAcknowledged && !o.odoo?.saleOrderId) {
+        ackBtn.innerHTML = '<span class="material-symbols-outlined">add_shopping_cart</span>Send to Odoo';
+      } else if (!isAcknowledged && o.odoo?.saleOrderId) {
+        ackBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span>Acknowledge Only';
+      }
     }
 
     async function loadStockInBackground(po) {
@@ -449,7 +499,7 @@
           // Remove loading indicator from header
           const loadingSpan = document.querySelector('.stock-loading');
           if (loadingSpan) loadingSpan.remove();
-          // Update stock cells in the current modal
+          // Update stock cells and AUTO-FILL accept qty inputs
           (stockData.items || []).forEach(item => {
             const cell = document.querySelector('.stock-cell[data-ean="' + item.vendorProductIdentifier + '"]');
             if (cell) {
@@ -459,6 +509,12 @@
               const stockColor = stock >= orderedQty ? '#4ade80' : (stock > 0 ? '#fbbf24' : '#ef4444');
               cell.style.color = stockColor;
               cell.textContent = stock;
+
+              // AUTO-FILL: Set accept qty to min(ordered, available)
+              const ackInput = row.querySelector('.ack-qty-input');
+              if (ackInput) {
+                ackInput.value = Math.min(orderedQty, stock);
+              }
             }
             // Also update product name if it was missing
             const row = document.querySelector('tr[data-ean="' + item.vendorProductIdentifier + '"]');
@@ -579,6 +635,241 @@
       });
       window.Agent5Shell?.showToast?.('All quantities set to ordered amount', 'success');
     }
+
+    // Progress and Summary Modal functions
+    function showProgressModal(title) {
+      document.getElementById('progress-title').textContent = title;
+      document.getElementById('progress-steps').innerHTML = '';
+      document.getElementById('progress-modal').classList.add('open');
+    }
+    function hideProgressModal() {
+      document.getElementById('progress-modal').classList.remove('open');
+    }
+    function addProgressStep(id, title, subtitle = '') {
+      const html = '<div class="progress-step" id="step-' + id + '">' +
+        '<div class="progress-step-icon"><span class="material-symbols-outlined">radio_button_unchecked</span></div>' +
+        '<div class="progress-step-content"><div class="progress-step-title">' + title + '</div>' +
+        (subtitle ? '<div class="progress-step-subtitle">' + subtitle + '</div>' : '') +
+        '</div></div>';
+      document.getElementById('progress-steps').insertAdjacentHTML('beforeend', html);
+    }
+    function updateProgressStep(id, state, subtitle = null) {
+      const step = document.getElementById('step-' + id);
+      if (!step) return;
+      step.className = 'progress-step ' + state;
+      const icon = step.querySelector('.material-symbols-outlined');
+      if (state === 'active') icon.textContent = 'sync';
+      else if (state === 'success') icon.textContent = 'check_circle';
+      else if (state === 'error') icon.textContent = 'error';
+      if (subtitle !== null) {
+        let sub = step.querySelector('.progress-step-subtitle');
+        if (!sub) {
+          step.querySelector('.progress-step-content').insertAdjacentHTML('beforeend', '<div class="progress-step-subtitle"></div>');
+          sub = step.querySelector('.progress-step-subtitle');
+        }
+        sub.textContent = subtitle;
+      }
+    }
+    function showSummaryModal(title, bodyHtml) {
+      document.getElementById('summary-title').textContent = title;
+      document.getElementById('summary-body').innerHTML = bodyHtml;
+      document.getElementById('summary-modal').classList.add('open');
+    }
+    function closeSummaryModal() {
+      document.getElementById('summary-modal').classList.remove('open');
+      loadStats();
+      loadOrders();
+    }
+
+    // Combined workflow: Acknowledge AMZ + Send to Odoo
+    async function acknowledgeAndCreateOdoo(po) {
+      const o = currentPOData;
+      if (!o) return;
+
+      const isAcknowledged = o.purchaseOrderState === 'Acknowledged' || o.acknowledgment?.acknowledged;
+      const hasOdooOrder = !!o.odoo?.saleOrderId;
+
+      // Collect quantities from inputs
+      const inputs = document.querySelectorAll('.ack-qty-input');
+      const items = [];
+      let totalOrdered = 0, totalAccepted = 0;
+
+      inputs.forEach(input => {
+        const ean = input.dataset.ean;
+        const ackQty = parseInt(input.value) || 0;
+        const row = input.closest('tr');
+        const orderedQty = parseInt(row.cells[3].textContent) || 0;
+        totalOrdered += orderedQty;
+        totalAccepted += ackQty;
+        items.push({
+          vendorProductIdentifier: ean,
+          acknowledgeQty: ackQty,
+          backorderQty: 0,
+          productAvailability: ackQty > 0 ? 'accepted' : 'rejected_TemporarilyUnavailable'
+        });
+      });
+
+      // Close the order modal
+      closeModal();
+
+      // Show progress modal
+      showProgressModal('Processing PO ' + po);
+
+      // Add steps based on what needs to be done
+      if (!isAcknowledged) {
+        addProgressStep('save', 'Save quantities', 'Preparing ' + items.length + ' items...');
+        addProgressStep('ack', 'Acknowledge to Amazon', 'Sending acknowledgment...');
+        addProgressStep('verify', 'Verify acknowledgment', 'Confirming with Amazon...');
+      }
+      if (!hasOdooOrder) {
+        addProgressStep('odoo', 'Create Odoo order', 'Syncing to ERP...');
+      }
+
+      const result = { success: true, steps: [] };
+
+      try {
+        // Step 1: Save quantities (if not acknowledged)
+        if (!isAcknowledged && items.length > 0) {
+          updateProgressStep('save', 'active');
+          const saveRes = await fetch('/api/vendor/orders/' + po + '/update-acknowledgments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ items })
+          });
+          if (!saveRes.ok) {
+            const d = await saveRes.json();
+            throw { step: 'save', message: d.error || 'Failed to save quantities' };
+          }
+          updateProgressStep('save', 'success', items.length + ' items saved');
+          result.steps.push({ step: 'Save quantities', status: 'success', detail: items.length + ' items' });
+        }
+
+        // Step 2: Acknowledge to Amazon (if not acknowledged)
+        if (!isAcknowledged) {
+          updateProgressStep('ack', 'active');
+          const ackRes = await fetch('/api/vendor/orders/' + po + '/acknowledge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ status: 'Accepted' })
+          });
+          if (!ackRes.ok) {
+            const d = await ackRes.json();
+            throw { step: 'ack', message: d.error || 'Failed to acknowledge' };
+          }
+          const ackData = await ackRes.json();
+          if (ackData.skipped) {
+            throw { step: 'ack', message: 'Skipped: ' + ackData.skipReason };
+          }
+          updateProgressStep('ack', 'success', 'Sent to Amazon');
+          result.steps.push({ step: 'Acknowledge Amazon', status: 'success', detail: 'Accepted ' + totalAccepted + '/' + totalOrdered + ' qty' });
+
+          // Step 3: Verify acknowledgment
+          updateProgressStep('verify', 'active', 'Waiting for confirmation...');
+          // Small delay to let Amazon process
+          await new Promise(r => setTimeout(r, 1500));
+
+          // Re-fetch order to verify state changed
+          const verifyRes = await fetch('/api/vendor/orders/' + po, { credentials: 'include' });
+          if (verifyRes.ok) {
+            const verifyData = await verifyRes.json();
+            const newState = verifyData.order?.purchaseOrderState;
+            if (newState === 'Acknowledged') {
+              updateProgressStep('verify', 'success', 'Amazon confirmed');
+              result.steps.push({ step: 'Verify acknowledgment', status: 'success', detail: 'State: Acknowledged' });
+            } else {
+              updateProgressStep('verify', 'success', 'State: ' + (newState || 'pending'));
+              result.steps.push({ step: 'Verify acknowledgment', status: 'success', detail: 'State: ' + (newState || 'pending') });
+            }
+          } else {
+            updateProgressStep('verify', 'success', 'Sent (verification pending)');
+            result.steps.push({ step: 'Verify acknowledgment', status: 'success', detail: 'Sent (async verification)' });
+          }
+        }
+
+        // Step 4: Create Odoo order (if not exists)
+        if (!hasOdooOrder) {
+          updateProgressStep('odoo', 'active');
+          const odooRes = await fetch('/api/vendor/orders/' + po + '/create-odoo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ confirm: true })
+          });
+          if (!odooRes.ok) {
+            const d = await odooRes.json();
+            throw { step: 'odoo', message: d.error || d.errors?.join(', ') || 'Failed to create Odoo order' };
+          }
+          const odooData = await odooRes.json();
+          if (odooData.skipped) {
+            updateProgressStep('odoo', 'success', 'Skipped: ' + odooData.skipReason);
+            result.steps.push({ step: 'Create Odoo order', status: 'skipped', detail: odooData.skipReason });
+          } else {
+            updateProgressStep('odoo', 'success', odooData.odooOrderName);
+            result.odooOrderName = odooData.odooOrderName;
+            result.odooOrderId = odooData.odooOrderId;
+            result.steps.push({ step: 'Create Odoo order', status: 'success', detail: odooData.odooOrderName });
+          }
+        }
+
+        // All done - show summary after brief delay
+        await new Promise(r => setTimeout(r, 500));
+        hideProgressModal();
+
+        // Build summary HTML
+        let summaryHtml = '<div style="text-align:center;margin-bottom:20px;">' +
+          '<span class="material-symbols-outlined" style="font-size:48px;color:#4ade80;">check_circle</span>' +
+          '<h3 style="color:#e4e4e7;margin:16px 0 8px;">Successfully Processed</h3>' +
+          '<p style="color:#71717a;">PO ' + po + '</p></div>';
+
+        summaryHtml += '<table class="summary-table"><thead><tr><th>Step</th><th>Status</th><th>Detail</th></tr></thead><tbody>';
+        result.steps.forEach(s => {
+          const statusClass = s.status === 'success' ? 'summary-success' : (s.status === 'skipped' ? '' : 'summary-error');
+          const statusIcon = s.status === 'success' ? '✓' : (s.status === 'skipped' ? '○' : '✗');
+          summaryHtml += '<tr><td>' + s.step + '</td><td class="' + statusClass + '">' + statusIcon + ' ' + s.status + '</td><td>' + (s.detail || '-') + '</td></tr>';
+        });
+        summaryHtml += '</tbody></table>';
+
+        if (result.odooOrderName) {
+          summaryHtml += '<div style="margin-top:20px;text-align:center;">' +
+            '<a href="https://acropaq.odoo.com/web#id=' + result.odooOrderId + '&model=sale.order&view_type=form" target="_blank" class="btn btn-blue">' +
+            '<span class="material-symbols-outlined">open_in_new</span>Open in Odoo</a></div>';
+        }
+
+        showSummaryModal('PO ' + po + ' Processed', summaryHtml);
+
+      } catch (e) {
+        // Handle error
+        const step = e.step || 'unknown';
+        const message = e.message || String(e);
+        updateProgressStep(step, 'error', message);
+        result.success = false;
+        result.error = message;
+
+        // Wait a moment then show error summary
+        await new Promise(r => setTimeout(r, 1000));
+        hideProgressModal();
+
+        let errorHtml = '<div style="text-align:center;margin-bottom:20px;">' +
+          '<span class="material-symbols-outlined" style="font-size:48px;color:#ef4444;">error</span>' +
+          '<h3 style="color:#e4e4e7;margin:16px 0 8px;">Error Processing PO</h3>' +
+          '<p style="color:#ef4444;">' + message + '</p></div>';
+
+        if (result.steps.length > 0) {
+          errorHtml += '<table class="summary-table"><thead><tr><th>Step</th><th>Status</th><th>Detail</th></tr></thead><tbody>';
+          result.steps.forEach(s => {
+            const statusClass = s.status === 'success' ? 'summary-success' : 'summary-error';
+            const statusIcon = s.status === 'success' ? '✓' : '✗';
+            errorHtml += '<tr><td>' + s.step + '</td><td class="' + statusClass + '">' + statusIcon + ' ' + s.status + '</td><td>' + (s.detail || '-') + '</td></tr>';
+          });
+          errorHtml += '</tbody></table>';
+        }
+
+        showSummaryModal('Error - PO ' + po, errorHtml);
+      }
+    }
+
     function closeModal() { document.getElementById('po-modal').classList.remove('open'); currentPO = null; currentPOData = null; }
     async function syncShipmentStatus() {
       const btn = document.getElementById('sync-shipments-btn');
