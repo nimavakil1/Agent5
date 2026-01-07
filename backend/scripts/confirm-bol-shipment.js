@@ -4,7 +4,7 @@
  */
 require('dotenv').config();
 const { MongoClient } = require('mongodb');
-const fetch = require('node-fetch');
+const axios = require('axios');
 
 async function confirmShipment(bolOrderId, trackingCode, transporterCode = 'DPD-BE') {
   const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017/agent5');
@@ -28,16 +28,14 @@ async function confirmShipment(bolOrderId, trackingCode, transporterCode = 'DPD-
     // Get Bol API token
     const credentials = Buffer.from(process.env.BOL_CLIENT_ID + ':' + process.env.BOL_CLIENT_SECRET).toString('base64');
 
-    const tokenRes = await fetch('https://login.bol.com/token', {
-      method: 'POST',
+    const tokenRes = await axios.post('https://login.bol.com/token', 'grant_type=client_credentials', {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json',
         'Authorization': 'Basic ' + credentials
-      },
-      body: 'grant_type=client_credentials'
+      }
     });
-    const tokenData = await tokenRes.json();
+    const tokenData = tokenRes.data;
 
     if (!tokenData.access_token) {
       console.error('Failed to get Bol token:', tokenData);
@@ -45,13 +43,13 @@ async function confirmShipment(bolOrderId, trackingCode, transporterCode = 'DPD-
     }
 
     // Get order items from Bol
-    const orderRes = await fetch('https://api.bol.com/retailer/orders/' + bolOrderId, {
+    const orderRes = await axios.get('https://api.bol.com/retailer/orders/' + bolOrderId, {
       headers: {
         'Accept': 'application/vnd.retailer.v10+json',
         'Authorization': 'Bearer ' + tokenData.access_token
       }
     });
-    const bolOrder = await orderRes.json();
+    const bolOrder = orderRes.data;
 
     if (!bolOrder.orderItems || bolOrder.orderItems.length === 0) {
       console.error('No order items found:', bolOrder);
@@ -98,36 +96,37 @@ async function confirmShipment(bolOrderId, trackingCode, transporterCode = 'DPD-
     console.log('\nSending shipment confirmation:');
     console.log(JSON.stringify(shipmentBody, null, 2));
 
-    const shipRes = await fetch('https://api.bol.com/retailer/orders/shipment', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/vnd.retailer.v10+json',
-        'Accept': 'application/vnd.retailer.v10+json',
-        'Authorization': 'Bearer ' + tokenData.access_token
-      },
-      body: JSON.stringify(shipmentBody)
-    });
-
-    const result = await shipRes.text();
-    console.log('\nBol API response:', shipRes.status);
-    console.log(result);
-
-    if (shipRes.status === 202) {
-      console.log('\n✅ Shipment confirmed successfully!');
-
-      // Update MongoDB
-      await db.collection('unified_orders').updateOne(
-        { 'sourceIds.bolOrderId': bolOrderId },
-        {
-          $set: {
-            'bol.shipmentConfirmedAt': new Date(),
-            'bol.trackingCode': trackingCode,
-            'status.source': 'SHIPPED'
-          }
+    try {
+      const shipRes = await axios.put('https://api.bol.com/retailer/orders/shipment', shipmentBody, {
+        headers: {
+          'Content-Type': 'application/vnd.retailer.v10+json',
+          'Accept': 'application/vnd.retailer.v10+json',
+          'Authorization': 'Bearer ' + tokenData.access_token
         }
-      );
-    } else {
-      console.log('\n❌ Shipment confirmation failed!');
+      });
+
+      console.log('\nBol API response:', shipRes.status);
+      console.log(JSON.stringify(shipRes.data, null, 2));
+
+      if (shipRes.status === 202) {
+        console.log('\n✅ Shipment confirmed successfully!');
+
+        // Update MongoDB
+        await db.collection('unified_orders').updateOne(
+          { 'sourceIds.bolOrderId': bolOrderId },
+          {
+            $set: {
+              'bol.shipmentConfirmedAt': new Date(),
+              'bol.trackingCode': trackingCode,
+              'status.source': 'SHIPPED'
+            }
+          }
+        );
+      } else {
+        console.log('\n❌ Shipment confirmation failed!');
+      }
+    } catch (shipError) {
+      console.error('\n❌ Shipment confirmation failed:', shipError.response?.data || shipError.message);
     }
 
   } finally {
