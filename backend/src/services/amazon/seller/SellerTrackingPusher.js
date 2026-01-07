@@ -320,7 +320,9 @@ class SellerTrackingPusher {
       const errorMsg = error.message || '';
       const isAlreadyShipped = errorMsg.includes('PackageToUpdateNotFound') ||
                                errorMsg.includes('already fulfilled') ||
-                               errorMsg.includes('already shipped');
+                               errorMsg.includes('already shipped') ||
+                               errorMsg.includes('InvalidPackageVersion') ||
+                               errorMsg.includes('maximum number of allowed updates');
 
       if (isAlreadyShipped) {
         // Mark as pushed since Amazon already has this as shipped (unified_orders schema)

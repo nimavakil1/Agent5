@@ -35,12 +35,67 @@ const ALERT_THRESHOLDS = {
   CRITICAL_STUCK_COUNT: 3
 };
 
-// Sync job last run tracking
+// Sync job last run tracking (loaded from MongoDB on startup)
 const SYNC_STATUS = {
   bolShipment: { lastRun: null, lastSuccess: null, errorCount: 0 },
   amazonFbm: { lastRun: null, lastSuccess: null, errorCount: 0 },
   amazonVendor: { lastRun: null, lastSuccess: null, errorCount: 0 }
 };
+
+// Track if status has been loaded from database
+let syncStatusLoaded = false;
+
+/**
+ * Persist SYNC_STATUS to MongoDB for reliability across restarts
+ */
+async function persistSyncStatus() {
+  try {
+    const db = getDb();
+    await db.collection('system_status').updateOne(
+      { _id: 'tracking_sync_status' },
+      {
+        $set: {
+          syncStatus: SYNC_STATUS,
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true }
+    );
+  } catch (error) {
+    console.error('[TrackingAlert] Failed to persist sync status:', error.message);
+  }
+}
+
+/**
+ * Load SYNC_STATUS from MongoDB (called on startup)
+ */
+async function loadSyncStatus() {
+  if (syncStatusLoaded) return;
+
+  try {
+    const db = getDb();
+    const stored = await db.collection('system_status').findOne({ _id: 'tracking_sync_status' });
+
+    if (stored && stored.syncStatus) {
+      // Restore saved status
+      for (const channel of Object.keys(SYNC_STATUS)) {
+        if (stored.syncStatus[channel]) {
+          SYNC_STATUS[channel] = {
+            ...SYNC_STATUS[channel],
+            ...stored.syncStatus[channel],
+            // Convert date strings back to Date objects
+            lastRun: stored.syncStatus[channel].lastRun ? new Date(stored.syncStatus[channel].lastRun) : null,
+            lastSuccess: stored.syncStatus[channel].lastSuccess ? new Date(stored.syncStatus[channel].lastSuccess) : null
+          };
+        }
+      }
+      console.log('[TrackingAlert] Loaded sync status from database');
+    }
+    syncStatusLoaded = true;
+  } catch (error) {
+    console.error('[TrackingAlert] Failed to load sync status:', error.message);
+  }
+}
 
 class TrackingAlertService {
   constructor() {
@@ -55,6 +110,9 @@ class TrackingAlertService {
     this.odoo = new OdooDirectClient();
     await this.odoo.authenticate();
     this.db = getDb();
+
+    // Load saved sync status from MongoDB (survives restarts)
+    await loadSyncStatus();
 
     const webhookUrl = process.env.TEAMS_TRACKING_WEBHOOK_URL ||
                       process.env.TEAMS_ALERTS_WEBHOOK_URL ||
@@ -81,6 +139,11 @@ class TrackingAlertService {
     status.lastDetails = details;
 
     console.log(`[TrackingAlert] Recorded sync run for ${channel}: ${success ? 'SUCCESS' : 'FAILED'}`);
+
+    // Persist to MongoDB for reliability across restarts (fire-and-forget)
+    persistSyncStatus().catch(err => {
+      console.error('[TrackingAlert] Failed to persist sync status:', err.message);
+    });
   }
 
   /**
