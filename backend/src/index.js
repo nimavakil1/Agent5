@@ -456,6 +456,27 @@ app.get('/api/alerts/warehouse-display', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+// Public tracking health display endpoint (no auth for monitoring dashboard)
+app.get('/api/alerts/tracking-display', async (req, res) => {
+  try {
+    const { getTrackingAlertService } = require('./services/alerts/TrackingAlertService');
+    const service = getTrackingAlertService();
+    const health = await service.getTrackingHealth();
+    res.json({
+      timestamp: new Date().toISOString(),
+      status: health.status,
+      summary: health.summary,
+      alerts: health.alerts,
+      stuckOrders: {
+        bol: health.stuckOrders.bol.slice(0, 20),
+        amazonFbm: health.stuckOrders.amazonFbm.slice(0, 20),
+        amazonVendor: health.stuckOrders.amazonVendor.slice(0, 20)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 // Alerts API (Teams notifications, late orders alerts) - requires auth
 app.use('/api/alerts', requireSession, alertsRouter);
 
