@@ -208,6 +208,20 @@ class SellerTrackingPusher {
     }
 
     console.log(`[SellerTrackingPusher] Push complete: ${result.pushed} pushed, ${result.skipped} skipped, ${result.alreadyPushed} already pushed, ${result.errors.length} errors`);
+
+    // Record sync run for tracking health monitoring
+    try {
+      const { recordSyncRun } = require('../../alerts/TrackingAlertService');
+      recordSyncRun('amazonFbm', result.errors.length === 0, {
+        pushed: result.pushed,
+        skipped: result.skipped,
+        alreadyPushed: result.alreadyPushed,
+        errors: result.errors.length
+      });
+    } catch (_) {
+      // TrackingAlertService may not be initialized yet
+    }
+
     return result;
   }
 

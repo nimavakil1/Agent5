@@ -14,6 +14,7 @@ let _bolShipmentCheckTimer = null;
 let _bolCancellationCheckTimer = null;
 let _lateOrdersAlertCronMorning = null;
 let _lateOrdersAlertCronAfternoon = null;
+let _trackingHealthTimer = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -177,6 +178,19 @@ function start() {
       console.log('[scheduler] Late Orders Alert scheduled: 7:00 and 14:00 daily (Europe/Brussels timezone)');
     }
   } catch (e) { console.error('[scheduler] Late Orders Alert cron init error', e); }
+
+  // Tracking Health Check - CRITICAL: Ensures no tracking confirmations are missed
+  // Runs every 15 minutes to detect stuck orders and stale sync jobs
+  try {
+    const trackingCheckMinutes = Number(process.env.TRACKING_HEALTH_CHECK_INTERVAL_MIN || '15');
+    const trackingCheckMs = Math.max(5, trackingCheckMinutes) * 60 * 1000;
+
+    _trackingHealthTimer = setInterval(checkTrackingHealth, trackingCheckMs);
+    // Initial check after 5 minutes (let other syncs run first)
+    setTimeout(checkTrackingHealth, 5 * 60 * 1000);
+
+    console.log(`[scheduler] Tracking Health Check initialized (every ${trackingCheckMinutes} min) - CRITICAL for tracking reliability`);
+  } catch (e) { console.error('[scheduler] Tracking Health Check init error', e); }
 }
 
 /**
@@ -446,6 +460,55 @@ async function sendLateOrdersAlert() {
   }
 }
 
+/**
+ * CRITICAL: Check tracking health across all channels
+ * Detects stuck orders (shipped in Odoo but tracking not confirmed to marketplace)
+ * Sends Teams alert if issues found
+ *
+ * Monitors:
+ * - Bol.com FBR orders (shipping confirmation)
+ * - Amazon FBM orders (tracking push)
+ * - Amazon Vendor orders (ASN confirmation)
+ */
+async function checkTrackingHealth() {
+  try {
+    const { runTrackingHealthCheck, SYNC_STATUS } = require('../services/alerts/TrackingAlertService');
+
+    // Record that this sync ran (for staleness detection)
+    SYNC_STATUS.trackingHealthCheck = {
+      lastRun: new Date(),
+      success: true
+    };
+
+    const health = await runTrackingHealthCheck();
+
+    // Log status
+    const stuckTotal =
+      health.stuckOrders.bol.length +
+      health.stuckOrders.amazonFbm.length +
+      health.stuckOrders.amazonVendor.length;
+
+    if (stuckTotal > 0 || health.alerts.length > 0) {
+      console.log(`[scheduler] ⚠️ Tracking Health: ${stuckTotal} stuck orders, ${health.alerts.length} alerts`);
+      console.log(`[scheduler]   Bol: ${health.stuckOrders.bol.length}, FBM: ${health.stuckOrders.amazonFbm.length}, Vendor: ${health.stuckOrders.amazonVendor.length}`);
+    } else {
+      console.log('[scheduler] Tracking Health: OK - all channels synced, no stuck orders');
+    }
+  } catch (e) {
+    console.error('[scheduler] Tracking Health Check error:', e?.message || e);
+
+    // Record failure for staleness detection
+    try {
+      const { SYNC_STATUS } = require('../services/alerts/TrackingAlertService');
+      SYNC_STATUS.trackingHealthCheck = {
+        lastRun: new Date(),
+        success: false,
+        error: e?.message || String(e)
+      };
+    } catch (_) {}
+  }
+}
+
 module.exports = {
   start,
   checkAmazonSettlementReminders,
@@ -456,5 +519,6 @@ module.exports = {
   syncBolStock,
   checkBolShipments,
   checkBolCancellations,
-  sendLateOrdersAlert
+  sendLateOrdersAlert,
+  checkTrackingHealth
 };

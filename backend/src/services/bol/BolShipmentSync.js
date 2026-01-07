@@ -495,7 +495,20 @@ async function getBolShipmentSync() {
  */
 async function runShipmentSync() {
   const sync = await getBolShipmentSync();
-  return sync.syncAll();
+  const result = await sync.syncAll();
+
+  // Record sync run for tracking health monitoring
+  try {
+    const { recordSyncRun } = require('../alerts/TrackingAlertService');
+    recordSyncRun('bolShipment', result.success, {
+      confirmed: result.confirmed || 0,
+      failed: result.failed || 0
+    });
+  } catch (_) {
+    // TrackingAlertService may not be initialized yet
+  }
+
+  return result;
 }
 
 module.exports = {

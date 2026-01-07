@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router();
 const { getLateOrdersAlertService } = require('../../services/alerts/LateOrdersAlertService');
 const { getMarketplaceDashboardService } = require('../../services/alerts/MarketplaceDashboardService');
+const { getTrackingAlertService, runTrackingHealthCheck, SYNC_STATUS } = require('../../services/alerts/TrackingAlertService');
 
 /**
  * GET /api/alerts/late-orders/status
@@ -190,6 +191,132 @@ router.get('/config', async (req, res) => {
       defaultUserId: process.env.MS_USER_ID || null
     }
   });
+});
+
+// ==========================================
+// TRACKING HEALTH ENDPOINTS
+// Critical: Ensures no tracking is ever missed
+// ==========================================
+
+/**
+ * GET /api/alerts/tracking-health
+ * Get comprehensive tracking health status for all channels
+ * Returns stuck orders, failed pushes, sync status
+ */
+router.get('/tracking-health', async (req, res) => {
+  try {
+    const service = getTrackingAlertService();
+    const health = await service.getTrackingHealth();
+    res.json(health);
+  } catch (error) {
+    console.error('[Alerts API] Error getting tracking health:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/alerts/tracking-health/sync-status
+ * Get current sync job status for all tracking channels
+ */
+router.get('/tracking-health/sync-status', async (req, res) => {
+  try {
+    const service = getTrackingAlertService();
+    res.json(service.getSyncStatus());
+  } catch (error) {
+    console.error('[Alerts API] Error getting sync status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/alerts/tracking-health/stuck-orders
+ * Get all stuck orders that need tracking confirmation
+ */
+router.get('/tracking-health/stuck-orders', async (req, res) => {
+  try {
+    const service = getTrackingAlertService();
+    const [bol, fbm, vendor] = await Promise.all([
+      service.getStuckBolOrders(),
+      service.getStuckAmazonFbmOrders(),
+      service.getStuckVendorOrders()
+    ]);
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      total: bol.length + fbm.length + vendor.length,
+      bol: { count: bol.length, orders: bol },
+      amazonFbm: { count: fbm.length, orders: fbm },
+      amazonVendor: { count: vendor.length, orders: vendor }
+    });
+  } catch (error) {
+    console.error('[Alerts API] Error getting stuck orders:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/alerts/tracking-health/check
+ * Run health check and send alert if issues found
+ */
+router.post('/tracking-health/check', async (req, res) => {
+  try {
+    const health = await runTrackingHealthCheck();
+    res.json({
+      success: true,
+      status: health.status,
+      alertCount: health.alerts.length,
+      stuckCount: {
+        bol: health.stuckOrders.bol.length,
+        amazonFbm: health.stuckOrders.amazonFbm.length,
+        amazonVendor: health.stuckOrders.amazonVendor.length
+      }
+    });
+  } catch (error) {
+    console.error('[Alerts API] Error running tracking health check:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/alerts/tracking-health/send-alert
+ * Force send a tracking alert to Teams (regardless of status)
+ */
+router.post('/tracking-health/send-alert', async (req, res) => {
+  try {
+    const service = getTrackingAlertService();
+    const result = await service.sendAlertIfNeeded();
+    res.json(result);
+  } catch (error) {
+    console.error('[Alerts API] Error sending tracking alert:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/alerts/tracking-display
+ * Public endpoint for tracking health dashboard display
+ */
+router.get('/tracking-display', async (req, res) => {
+  try {
+    const service = getTrackingAlertService();
+    const health = await service.getTrackingHealth();
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      status: health.status,
+      summary: health.summary,
+      alerts: health.alerts,
+      // Limit stuck orders for display
+      stuckOrders: {
+        bol: health.stuckOrders.bol.slice(0, 20),
+        amazonFbm: health.stuckOrders.amazonFbm.slice(0, 20),
+        amazonVendor: health.stuckOrders.amazonVendor.slice(0, 20)
+      }
+    });
+  } catch (error) {
+    console.error('[Alerts API] Error getting tracking display data:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 module.exports = router;

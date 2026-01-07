@@ -715,17 +715,23 @@ class VendorOrderCreator {
           continue; // No change needed
         }
 
+        // Get the Amazon net cost (price) - must set this when updating qty to prevent Odoo from recalculating
+        const netCost = parseFloat(item.unitPrice) || parseFloat(item.netCost?.amount) || 0;
+        const priceUnit = netCost > 0 ? netCost : existingLine.price_unit; // Fallback to existing price
+
         // Update the line (set qty to 0 for rejected items - can't delete from confirmed orders)
         if (newQty === 0) {
           await this.odoo.write('sale.order.line', [existingLine.id], {
-            product_uom_qty: 0
+            product_uom_qty: 0,
+            price_unit: priceUnit  // Preserve price when setting qty to 0
           });
           result.linesUpdated++;
           result.warnings.push(`Item ${item.itemSequenceNumber}: Line qty set to 0`);
         } else {
-          // Update the quantity
+          // Update the quantity AND price (Odoo recalculates price on qty change, so we must set it explicitly)
           await this.odoo.write('sale.order.line', [existingLine.id], {
-            product_uom_qty: newQty
+            product_uom_qty: newQty,
+            price_unit: priceUnit
           });
           result.linesUpdated++;
         }
