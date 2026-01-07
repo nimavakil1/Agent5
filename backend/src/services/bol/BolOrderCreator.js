@@ -46,7 +46,7 @@ const BOL_TEAM_ID = 10;
 // Fiscal positions: Using (TxIn) versions since Bol prices include tax
 const TAX_CONFIG = {
   'NL->NL': { taxId: 150, journalCode: 'VNL', journalId: 16, fiscalPositionId: 42 },   // FBB to NL: NL*VAT | Régime National (TxIn)
-  'NL->BE': { taxId: 147, journalCode: 'VBE', journalId: 1, fiscalPositionId: 40 },    // FBB to BE: BE*OSS | B2C Belgium (TxIn)
+  'NL->BE': { taxId: 147, journalCode: 'VBE', journalId: 1, fiscalPositionId: 41 },    // FBB to BE: BE*VAT | Régime National (TxIn) - DOMESTIC (Acropaq is Belgian)
   'BE->NL': { taxId: 153, journalCode: 'VOS', journalId: 12, fiscalPositionId: 46 },   // FBR to NL: NL*OSS | B2C Netherlands (TxIn)
   'BE->BE': { taxId: 147, journalCode: 'VBE', journalId: 1, fiscalPositionId: 41 },    // FBR to BE: BE*VAT | Régime National (TxIn)
 };
