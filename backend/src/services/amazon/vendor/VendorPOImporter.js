@@ -1220,7 +1220,7 @@ class VendorPOImporter {
     }
 
     // Use cached Odoo client for performance
-    const { getCachedOdooClient } = require('../../core/agents/integrations/OdooMCP');
+    const { getCachedOdooClient } = require('../../../core/agents/integrations/OdooMCP');
     const odoo = await getCachedOdooClient();
 
     let updated = 0;
