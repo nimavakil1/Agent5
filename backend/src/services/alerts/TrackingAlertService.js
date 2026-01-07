@@ -657,11 +657,15 @@ async function runTrackingHealthCheck() {
 
 /**
  * Record sync run (standalone function for external use)
+ * CRITICAL: Must load existing sync status before modifying to prevent data loss on restart
  * @param {string} channel - 'bolShipment', 'amazonFbm', or 'amazonVendor'
  * @param {boolean} success - Whether the sync was successful
  * @param {object} details - Additional details about the sync
  */
-function recordSyncRun(channel, success = true, details = {}) {
+async function recordSyncRun(channel, success = true, details = {}) {
+  // CRITICAL: Load saved sync status first to prevent race condition on server restart
+  // Without this, sync jobs running immediately after restart would overwrite saved data
+  await loadSyncStatus();
   return TrackingAlertService.recordSyncRun(channel, success, details);
 }
 
