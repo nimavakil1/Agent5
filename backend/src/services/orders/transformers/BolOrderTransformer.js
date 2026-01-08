@@ -58,6 +58,7 @@ function transformBolOrder(bolOrder) {
 
   const shippingAddress = {
     name: fullName || null,
+    company: ship.company || null,
     street: street || null,
     street2: null,
     city: ship.city || null,
@@ -71,9 +72,11 @@ function transformBolOrder(bolOrder) {
   // Build customer info
   const bill = bolOrder.billingDetails || {};
   const customerName = [bill.salutation, bill.firstName, bill.surname].filter(Boolean).join(' ');
+  const companyName = bill.company || ship.company || null;
 
   const customer = {
     name: customerName || fullName || null,
+    company: companyName,
     email: bill.email || ship.email || null,
     odooPartnerId: bolOrder.odoo?.saleOrderId ? null : null, // Will be populated from Odoo sync
     odooPartnerName: null
@@ -257,6 +260,7 @@ function transformBolApiOrder(bolApiOrder) {
 
   const shippingAddress = {
     name: fullName || null,
+    company: ship.company || null,
     street: street || null,
     street2: null,
     city: ship.city || null,
@@ -270,6 +274,7 @@ function transformBolApiOrder(bolApiOrder) {
   // Customer info from billing
   const bill = bolApiOrder.billingDetails || {};
   const customerName = [bill.salutation, bill.firstName, bill.surname].filter(Boolean).join(' ');
+  const customerCompany = bill.company || ship.company || null;
 
   // Unified shipping deadline (for cross-channel queries)
   // FBR: Use earliest latestDeliveryDate from items
@@ -316,6 +321,7 @@ function transformBolApiOrder(bolApiOrder) {
 
     customer: {
       name: customerName || fullName || null,
+      company: customerCompany,
       email: bill.email || ship.email || null,
       odooPartnerId: null,
       odooPartnerName: null

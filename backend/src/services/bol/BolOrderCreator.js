@@ -203,8 +203,10 @@ class BolOrderCreator {
     const rawName = `${firstName} ${surname}`.trim();
     const zipCode = shipmentDetails.zipCode || '';
     const countryCode = shipmentDetails.countryCode || 'NL';
+    // Get company directly from Bol API data (already extracted in buildShipmentDetails)
+    const bolCompany = shipmentDetails.company || '';
 
-    if (!rawName) {
+    if (!rawName && !bolCompany) {
       throw new Error('No customer name in shipping details');
     }
 
@@ -241,10 +243,14 @@ class BolOrderCreator {
       };
     }
 
+    // Use company from Bol API if available, otherwise use AI-detected company
+    const company = bolCompany || cleanedAddress.company || null;
+    const personalName = cleanedAddress.name || rawName;
+
     // Build display name: company first, then personal name
-    const displayName = cleanedAddress.company
-      ? (cleanedAddress.name ? `${cleanedAddress.company}, ${cleanedAddress.name}` : cleanedAddress.company)
-      : (cleanedAddress.name || rawName);
+    const displayName = company
+      ? (personalName ? `${company}, ${personalName}` : company)
+      : personalName;
 
     // Check cache first
     const cacheKey = `${displayName}|${zipCode}`;
@@ -826,9 +832,17 @@ class BolOrderCreator {
       houseNumberExtension = streetMatch[3] || '';
     }
 
+    // Get company from unified order (shippingAddress.company, customer.company, or rawResponse)
+    const company = addr.company ||
+      bolOrder.customer?.company ||
+      bolOrder.rawResponse?.shipmentDetails?.company ||
+      bolOrder.rawResponse?.billingDetails?.company ||
+      '';
+
     return {
       firstName,
       surname,
+      company,
       streetName,
       houseNumber,
       houseNumberExtension,
