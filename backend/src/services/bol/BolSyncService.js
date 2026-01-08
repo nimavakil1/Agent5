@@ -220,15 +220,37 @@ async function syncOrders(mode = 'RECENT', onProgress = null) {
         unifiedOrder.importedAt = new Date();
         unifiedOrder.updatedAt = new Date();
 
-        // Remove createdAt from data to avoid conflict with $setOnInsert
-        const { createdAt, ...dataWithoutCreatedAt } = unifiedOrder;
+        // Remove fields that should NOT be overwritten if already set:
+        // - createdAt: use $setOnInsert
+        // - odoo: contains Odoo link data set by BolOrderCreator
+        // - sourceIds.odooSaleOrderId/Name: Odoo link IDs
+        const { createdAt, odoo, sourceIds, ...dataWithoutProtectedFields } = unifiedOrder;
+
+        // Preserve sourceIds but without Odoo fields (those are set by BolOrderCreator)
+        const safeSourceIds = {
+          amazonOrderId: sourceIds.amazonOrderId,
+          amazonVendorPONumber: sourceIds.amazonVendorPONumber,
+          bolOrderId: sourceIds.bolOrderId
+          // Deliberately NOT including odooSaleOrderId and odooSaleOrderName
+        };
 
         // Upsert to unified_orders
+        // Use $setOnInsert for fields that should only be set on insert
         await collection.updateOne(
           { unifiedOrderId: unifiedOrder.unifiedOrderId },
           {
-            $set: dataWithoutCreatedAt,
-            $setOnInsert: { createdAt: createdAt || new Date() }
+            $set: {
+              ...dataWithoutProtectedFields,
+              'sourceIds.amazonOrderId': safeSourceIds.amazonOrderId,
+              'sourceIds.amazonVendorPONumber': safeSourceIds.amazonVendorPONumber,
+              'sourceIds.bolOrderId': safeSourceIds.bolOrderId
+            },
+            $setOnInsert: {
+              createdAt: createdAt || new Date(),
+              odoo: odoo || {},
+              'sourceIds.odooSaleOrderId': null,
+              'sourceIds.odooSaleOrderName': null
+            }
           },
           { upsert: true }
         );
