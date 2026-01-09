@@ -487,8 +487,10 @@ class SellerOrderCreator {
    * Handles both legacy and unified schema field names
    */
   getOrderConfig(order) {
-    // Get marketplace ID (unified: marketplace.code or amazonSeller.marketplaceId, legacy: marketplaceId)
-    const marketplaceId = order.marketplace?.code || order.amazonSeller?.marketplaceId || order.marketplaceId;
+    // Get marketplace ID (unified: marketplace.id or amazonSeller.marketplaceId, legacy: marketplaceId)
+    // NOTE: marketplace.id is the Amazon marketplace ID (e.g., "APJ6JRA9NG5V4")
+    //       marketplace.code is the country code (e.g., "IT") - don't use this for config lookup!
+    const marketplaceId = order.marketplace?.id || order.amazonSeller?.marketplaceId || order.marketplaceId;
     const marketplaceConfig = getMarketplaceConfig(marketplaceId);
 
     // Get fulfillment channel (unified: amazonSeller.fulfillmentChannel, legacy: fulfillmentChannel)
