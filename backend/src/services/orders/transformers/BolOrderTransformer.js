@@ -34,8 +34,11 @@ function transformBolOrder(bolOrder) {
     const lineTotal = item.totalPrice || (item.unitPrice * item.quantity) || 0;
     subtotal += lineTotal;
 
+    // Clean SKU: strip -TEMP suffix (temporary products in Bol that map to real products in Odoo)
+    const cleanedSku = item.sku ? item.sku.replace(/-TEMP$/, '') : null;
+
     return {
-      sku: item.sku || null,
+      sku: cleanedSku,
       asin: null, // Not applicable for Bol.com
       ean: item.ean || null,
       name: item.title || '',
@@ -236,8 +239,12 @@ function transformBolApiOrder(bolApiOrder) {
     const lineTotal = totalPrice || (unitPrice * (item.quantity || 1));
     subtotal += lineTotal;
 
+    // Clean SKU: strip -TEMP suffix (temporary products in Bol that map to real products in Odoo)
+    const rawSku = item.offer?.reference || item.offerReference || null;
+    const cleanedSku = rawSku ? rawSku.replace(/-TEMP$/, '') : null;
+
     return {
-      sku: item.offer?.reference || item.offerReference || null,
+      sku: cleanedSku,
       asin: null,
       ean: item.product?.ean || item.ean || null,
       name: item.product?.title || '',

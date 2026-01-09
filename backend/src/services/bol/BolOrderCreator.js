@@ -343,6 +343,35 @@ class BolOrderCreator {
   }
 
   /**
+   * Find product by SKU (internal reference / default_code)
+   * @param {string} sku - Product SKU
+   */
+  async findProductBySku(sku) {
+    if (!sku) return null;
+
+    // Check cache (use sku: prefix to distinguish from EAN cache)
+    const cacheKey = `sku:${sku}`;
+    if (this.productCache[cacheKey]) {
+      return this.productCache[cacheKey];
+    }
+
+    // Search by internal reference (default_code)
+    const products = await this.odoo.searchRead('product.product',
+      [['default_code', '=', sku]],
+      ['id', 'name', 'default_code'],
+      { limit: 1 }
+    );
+
+    if (products.length > 0) {
+      this.productCache[cacheKey] = products[0].id;
+      console.log(`[BolOrderCreator] Found product by SKU ${sku}: ${products[0].name}`);
+      return products[0].id;
+    }
+
+    return null;
+  }
+
+  /**
    * Create Odoo order for a single Bol order
    * @param {string} orderId - Bol order ID
    * @param {object} options - Creation options
@@ -453,10 +482,19 @@ class BolOrderCreator {
       // Use unified schema items array
       const orderLines = [];
       for (const item of (bolOrder.items || [])) {
-        const productId = await this.findProduct(item.ean);
+        // Try to find product by EAN first, then fall back to SKU (default_code)
+        let productId = await this.findProduct(item.ean);
+
+        if (!productId && item.sku) {
+          // Fallback: try to find by SKU (internal reference)
+          productId = await this.findProductBySku(item.sku);
+          if (productId) {
+            console.log(`[BolOrderCreator] Product found via SKU fallback: ${item.sku}`);
+          }
+        }
 
         if (!productId) {
-          result.warnings.push(`Product not found for EAN ${item.ean}: ${item.name}`);
+          result.warnings.push(`Product not found for EAN ${item.ean} or SKU ${item.sku}: ${item.name}`);
           continue;
         }
 
