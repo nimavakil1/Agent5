@@ -14,7 +14,7 @@ const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP'
 const { skuResolver } = require('../SkuResolver');
 const { getDb } = require('../../../db');
 const { cleanDuplicateName } = require('./SellerOrderCreator');
-const { getAddressCleaner } = require('./AddressCleaner');
+const { getAddressCleanerAI } = require('./AddressCleanerAI');
 
 // Odoo constants
 const PAYMENT_TERM_21_DAYS = 2;
@@ -331,13 +331,12 @@ class FbmOrderImporter {
 
   /**
    * Find or create customer with separate invoice and shipping addresses
-   * Uses AI-powered AddressCleaner to properly parse company vs personal names
+   * Uses AddressCleanerAI (Claude Sonnet) to intelligently parse Amazon address data
    * @returns {Object} { customerId, invoiceAddressId, shippingAddressId }
    */
   async findOrCreateCustomer(order) {
-    // Use AddressCleaner to parse the address with Claude AI
-    // This correctly identifies company names in address2/address3
-    const addressCleaner = getAddressCleaner();
+    // Use AddressCleanerAI (Claude Sonnet) to intelligently parse addresses
+    const addressCleaner = getAddressCleanerAI();
     const cleanedAddress = await addressCleaner.cleanAddress({
       recipientName: order.recipientName,
       buyerName: order.buyerName,
@@ -352,9 +351,15 @@ class FbmOrderImporter {
       isBusinessOrder: order.isBusinessOrder
     });
 
-    // Use company name for B2B (if detected), otherwise personal name
+    // Log AI parsing result for debugging
+    console.log(`[FbmOrderImporter] AI parsed address for ${order.orderId}: company="${cleanedAddress.company}", name="${cleanedAddress.name}", isCompany=${cleanedAddress.isCompany}, confidence=${cleanedAddress.confidence}`);
+    if (cleanedAddress.notes) {
+      console.log(`[FbmOrderImporter] AI notes: ${cleanedAddress.notes}`);
+    }
+
+    // Use company name for B2B (if detected by AI), otherwise personal name
     const customerName = cleanedAddress.company || cleanedAddress.name || order.buyerName || order.recipientName;
-    const isCompany = !!cleanedAddress.company;
+    const isCompany = cleanedAddress.isCompany || !!cleanedAddress.company;
 
     const customerCacheKey = `customer|${customerName}|${order.buyerEmail || order.postalCode}`;
 
