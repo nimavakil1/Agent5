@@ -181,16 +181,39 @@ class GLSClient {
 
     const today = shippingDate || new Date().toISOString().split('T')[0];
 
-    // Truncate names to 39 chars (GLS limit)
-    const truncateName = (name, maxLen = 39) => {
-      if (!name) return '';
-      return name.length > maxLen ? name.substring(0, maxLen) : name;
+    // Build name fields for GLS (max 39 chars each for Name1, Name2, Name3)
+    // If company exists: combine "Company Name" in Name1, overflow to Name2
+    // If no company: just use name, overflow to Name2 if needed
+    const buildNameFields = (address) => {
+      const GLS_NAME_LIMIT = 39;
+      let fullName = '';
+
+      if (address.company && address.company.trim()) {
+        // Company exists: combine "Company + Name"
+        fullName = address.company.trim();
+        if (address.name && address.name.trim()) {
+          fullName += ' ' + address.name.trim();
+        }
+      } else {
+        // No company: just use name
+        fullName = (address.name || '').trim();
+      }
+
+      // Split into Name1 and Name2 (39 chars each)
+      const name1 = fullName.substring(0, GLS_NAME_LIMIT);
+      const name2 = fullName.length > GLS_NAME_LIMIT
+        ? fullName.substring(GLS_NAME_LIMIT, GLS_NAME_LIMIT * 2)
+        : '';
+
+      return { name1, name2 };
     };
 
-    const senderName1 = truncateName(sender.name);
-    const senderName2 = truncateName(sender.name?.substring(39, 78) || '');
-    const receiverName1 = truncateName(receiver.name);
-    const receiverName2 = truncateName(receiver.name?.substring(39, 78) || '');
+    const senderNames = buildNameFields(sender);
+    const receiverNames = buildNameFields(receiver);
+    const senderName1 = senderNames.name1;
+    const senderName2 = senderNames.name2;
+    const receiverName1 = receiverNames.name1;
+    const receiverName2 = receiverNames.name2;
 
     let serviceXml = '';
     if (service) {

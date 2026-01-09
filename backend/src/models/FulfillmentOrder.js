@@ -64,6 +64,7 @@ const fulfillmentOrderSchema = new mongoose.Schema({
   },
   shippingAddress: {
     name: { type: String },
+    company: { type: String }, // Company name for GLS Name1 field
     street: { type: String },
     street2: { type: String },
     city: { type: String },

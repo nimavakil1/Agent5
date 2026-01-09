@@ -204,17 +204,39 @@ class FulfillmentSync {
     if (order.partner_id?.[0]) {
       const partners = await this.odoo.searchRead('res.partner',
         [['id', '=', order.partner_id[0]]],
-        ['name', 'email', 'phone', 'street', 'street2', 'city', 'zip', 'state_id', 'country_id', 'is_company']
+        ['name', 'email', 'phone', 'street', 'street2', 'city', 'zip', 'state_id', 'country_id', 'is_company', 'parent_id']
       );
       partner = partners[0];
+
+      // If partner has a parent company, fetch the company name
+      if (partner?.parent_id?.[0]) {
+        const parentCompanies = await this.odoo.searchRead('res.partner',
+          [['id', '=', partner.parent_id[0]]],
+          ['name']
+        );
+        if (parentCompanies[0]) {
+          partner.companyName = parentCompanies[0].name;
+        }
+      }
     }
 
     if (order.partner_shipping_id?.[0] && order.partner_shipping_id[0] !== order.partner_id?.[0]) {
       const shippingPartners = await this.odoo.searchRead('res.partner',
         [['id', '=', order.partner_shipping_id[0]]],
-        ['name', 'email', 'phone', 'street', 'street2', 'city', 'zip', 'state_id', 'country_id']
+        ['name', 'email', 'phone', 'street', 'street2', 'city', 'zip', 'state_id', 'country_id', 'is_company', 'parent_id']
       );
       shippingPartner = shippingPartners[0];
+
+      // If shipping partner has a parent company, fetch the company name
+      if (shippingPartner?.parent_id?.[0]) {
+        const parentCompanies = await this.odoo.searchRead('res.partner',
+          [['id', '=', shippingPartner.parent_id[0]]],
+          ['name']
+        );
+        if (parentCompanies[0]) {
+          shippingPartner.companyName = parentCompanies[0].name;
+        }
+      }
     } else {
       shippingPartner = partner;
     }
@@ -279,11 +301,16 @@ class FulfillmentSync {
         name: partner?.name,
         email: partner?.email,
         phone: partner?.phone,
-        company: partner?.is_company ? partner.name : null
+        // Company: use parent company name if available, otherwise use own name if it's a company
+        company: partner?.companyName ||
+          (partner?.is_company ? partner.name : null)
       },
 
       shippingAddress: {
         name: shippingPartner?.name,
+        // Company: use parent company name if available, otherwise use own name if it's a company
+        company: shippingPartner?.companyName ||
+          (shippingPartner?.is_company ? shippingPartner.name : null),
         street: shippingPartner?.street,
         street2: shippingPartner?.street2,
         city: shippingPartner?.city,
