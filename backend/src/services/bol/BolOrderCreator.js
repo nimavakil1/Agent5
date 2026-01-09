@@ -69,9 +69,8 @@ class BolOrderCreator {
       await this.odoo.authenticate();
     }
 
-    // Initialize AI address cleaner
-    this.addressCleaner = getAddressCleaner({ useAI: true });
-    await this.addressCleaner.init();
+    // Initialize address cleaner (simple regex-based cleaning)
+    this.addressCleaner = getAddressCleaner();
 
     // Find or create shipping product
     await this.findShippingProduct();
