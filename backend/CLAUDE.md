@@ -72,3 +72,47 @@ Fully implemented in:
 - `/core/agents/services/SupplyChainManager.js`
 - `/core/agents/services/StockoutAnalyzer.js`
 - `/api/routes/purchasing.api.js`
+
+## ACRODOO - Natural Language Odoo Assistant (Jan 2025)
+
+**Full Specifications:** See `/ACRODOO_BUILD.md` in project root
+
+### What is ACRODOO?
+ACRODOO is an AI-powered conversational interface that lets users interact with Odoo using natural language instead of navigating complex menus. It's the "intelligence layer" on top of Odoo.
+
+### Key Files
+- `/core/agents/specialized/AcrodooAgent.js` - Main agent class
+- `/core/agents/specialized/AcrodooTools.js` - Tool definitions
+- `/api/routes/acrodoo.api.js` - API endpoints
+- `/models/AcrodooConversation.js` - Chat history model
+- `/public/acrodoo/` - Frontend UI
+
+### Architecture
+```
+User → Chat UI → /api/acrodoo/chat → AcrodooAgent → OdooDirectClient → Odoo
+                                          ↓
+                                   Claude API (Anthropic)
+```
+
+### Safety Rules (CRITICAL)
+1. NEVER execute unlink/delete operations
+2. ALWAYS show preview before writes
+3. REQUIRE explicit user approval for writes
+4. Log all operations to AuditLog
+5. Offer alternatives (archive/cancel/reverse) instead of delete
+
+### Odoo Models Reference
+| Model | Use | Key Fields |
+|-------|-----|------------|
+| res.partner | Customers/Suppliers | name, email, phone, is_company |
+| sale.order | Sales Orders | name, partner_id, date_order, amount_total, state |
+| account.move | Invoices | name, invoice_date, amount_total, state, payment_state |
+| stock.picking | Deliveries | name, scheduled_date, state |
+| product.product | Products | name, default_code, qty_available |
+| purchase.order | Purchase Orders | name, date_order, amount_total, state |
+
+### Testing Checklist
+- [ ] "Show me today's orders" → Should query sale.order
+- [ ] "Find customer X" → Should search res.partner
+- [ ] "Create customer Test B.V." → Should preview, then create after approval
+- [ ] "Delete order 123" → Should REFUSE and suggest cancel instead

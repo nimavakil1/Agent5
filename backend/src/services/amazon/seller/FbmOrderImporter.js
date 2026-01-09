@@ -15,6 +15,7 @@ const { skuResolver } = require('../SkuResolver');
 const { getDb } = require('../../../db');
 const { cleanDuplicateName } = require('./SellerOrderCreator');
 const { getAddressCleanerAI } = require('./AddressCleanerAI');
+const { SPECIAL_PRODUCTS } = require('./SellerMarketplaceConfig');
 
 // Odoo constants
 const PAYMENT_TERM_21_DAYS = 2;
@@ -231,11 +232,21 @@ class FbmOrderImporter {
       // Parse quantity
       const quantity = parseInt(cols[headerIndex['quantity-to-ship']]?.trim() || '1');
 
-      // Skip promotion/discount items - they appear in TSV as separate line items
-      // Indicators: price <= 0, qty = 0, or SKU looks like promotion code (alphanumeric, no dashes, 5-10 chars)
+      // Check if this is a promotion/discount item
+      // Promotion items appear in TSV as separate line items with price <= 0 or qty = 0
       const isPromotionItem = this.isPromotionSku(sku, itemPrice, quantity);
       if (isPromotionItem) {
-        console.log(`[FbmOrderImporter] Skipping promotion item: SKU=${sku}, price=${itemPrice}, qty=${quantity}`);
+        // Mark as promotion item - will use PROMOTION_DISCOUNT product in Odoo
+        console.log(`[FbmOrderImporter] Detected promotion item: SKU=${sku}, price=${itemPrice}, qty=${quantity}`);
+        orderGroups[orderId].items.push({
+          sku: 'PROMOTION DISCOUNT',
+          resolvedSku: 'PROMOTION DISCOUNT',
+          quantity: 1,
+          productName: `Promotion: ${sku}`,
+          itemPrice: itemPrice, // Keep original (negative) price
+          shippingPrice: 0,
+          isPromotion: true
+        });
         continue;
       }
 
@@ -899,6 +910,18 @@ class FbmOrderImporter {
           let hasError = false;
 
           for (const item of order.items) {
+            // Check if this is a promotion item - use PROMOTION_DISCOUNT product directly
+            if (item.isPromotion || item.resolvedSku === 'PROMOTION DISCOUNT') {
+              console.log(`[FbmOrderImporter] Adding promotion item: price=${item.itemPrice}`);
+              orderLines.push({
+                product_id: SPECIAL_PRODUCTS.PROMOTION_DISCOUNT.id,
+                quantity: 1,
+                price_unit: item.itemPrice || 0, // Keep original (negative) price
+                name: item.productName || 'Promotion Discount'
+              });
+              continue;
+            }
+
             const product = await this.findProduct(item.resolvedSku, item.sku);
             if (!product) {
               results.errors.push({
@@ -1020,6 +1043,18 @@ class FbmOrderImporter {
     const orderLines = [];
 
     for (const item of order.items) {
+      // Check if this is a promotion item - use PROMOTION_DISCOUNT product directly
+      if (item.isPromotion || item.resolvedSku === 'PROMOTION DISCOUNT') {
+        console.log(`[FbmOrderImporter] retryOrderWithSku: Adding promotion item: price=${item.itemPrice}`);
+        orderLines.push({
+          product_id: SPECIAL_PRODUCTS.PROMOTION_DISCOUNT.id,
+          quantity: 1,
+          price_unit: item.itemPrice || 0, // Keep original (negative) price
+          name: item.productName || 'Promotion Discount'
+        });
+        continue;
+      }
+
       // Check if there's a corrected SKU for this item
       const correctedSku = skuMappings[item.sku];
 

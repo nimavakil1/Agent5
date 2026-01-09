@@ -1399,9 +1399,10 @@ class VcsOdooInvoicer {
   /**
    * Check if an invoice already exists for a sale order
    * @param {string} saleOrderName - The Odoo sale order name (e.g., "FBA305-1901951-5970703")
+   * @param {string} amazonOrderId - Optional Amazon order ID (e.g., "305-1901951-5970703") to check in ref field
    * @returns {object|null} Existing invoice or null
    */
-  async findExistingInvoice(saleOrderName) {
+  async findExistingInvoice(saleOrderName, amazonOrderId = null) {
     // Build list of possible order name variants to check
     // e.g., "FBA305-1901951-5970703" should also check "305-1901951-5970703"
     const namesToCheck = [saleOrderName];
@@ -1411,17 +1412,26 @@ class VcsOdooInvoicer {
       namesToCheck.push(saleOrderName.substring(3)); // Remove FBA/FBM prefix
     }
 
-    // Search for invoices with invoice_origin matching any of the name variants
+    // Extract Amazon order ID from sale order name if not provided
+    const orderIdToCheck = amazonOrderId || saleOrderName.replace(/^(FBA|FBM)/, '');
+
+    // Search for invoices with EITHER:
+    // 1. invoice_origin matching any of the name variants, OR
+    // 2. ref field matching the Amazon order ID (primary duplicate check)
     const invoices = await this.odoo.searchRead('account.move',
       [
+        '|',
         ['invoice_origin', 'in', namesToCheck],
+        ['ref', '=', orderIdToCheck],
         ['move_type', '=', 'out_invoice'],
       ],
-      ['id', 'name', 'state', 'amount_total', 'invoice_origin']
+      ['id', 'name', 'state', 'amount_total', 'invoice_origin', 'ref']
     );
 
     if (invoices.length > 0) {
-      return invoices[0];
+      // Prefer posted invoices over drafts
+      const posted = invoices.find(inv => inv.state === 'posted');
+      return posted || invoices[0];
     }
 
     return null;

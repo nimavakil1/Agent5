@@ -203,56 +203,52 @@ class SellerOrderImporter {
 
     const rawItems = await this.client.getAllOrderItems(amazonOrderId);
 
-    // Transform items to unified format, filtering out promotion/discount items
+    // Transform items to unified format, converting promotion items to use PROMOTION DISCOUNT product
     // @type {import('./SellerOrderSchema').AmazonOrderItem[]}
     // IMPORTANT: Use 'quantity' field (not 'quantityOrdered') - see SellerOrderSchema.js
-    const items = rawItems
-      .filter(item => {
-        // Skip promotion/discount items
-        const sku = item.SellerSKU || '';
-        const qty = item.QuantityOrdered || 0;
-        const price = parseFloat(item.ItemPrice?.Amount) || 0;
+    const items = rawItems.map(item => {
+      const sku = item.SellerSKU || '';
+      const qty = item.QuantityOrdered || 0;
+      const itemPrice = parseFloat(item.ItemPrice?.Amount) || 0;
+      const itemTax = parseFloat(item.ItemTax?.Amount) || 0;
 
-        // Skip items with zero quantity
-        if (qty === 0) {
-          console.log(`[SellerOrderImporter] Skipping zero-qty item: SKU=${sku}`);
-          return false;
-        }
+      // Check if this is a promotion item
+      const isPromotion = this.isPromotionItem(sku, itemPrice, qty);
 
-        // Skip items that look like promotion codes (alphanumeric, 5-10 chars, ends with letter, has letters and numbers)
-        const isAlphanumericOnly = /^[A-Z0-9]+$/i.test(sku);
-        const hasNoDashes = !sku.includes('-') && !sku.includes('_');
-        const length5to10 = sku.length >= 5 && sku.length <= 10;
-        const endsWithLetter = /[A-Za-z]$/.test(sku);
-        const hasLettersAndNumbers = /[A-Za-z]/.test(sku) && /[0-9]/.test(sku);
-
-        if (isAlphanumericOnly && hasNoDashes && length5to10 && endsWithLetter && hasLettersAndNumbers && price <= 0) {
-          console.log(`[SellerOrderImporter] Skipping promotion item: SKU=${sku}, price=${price}`);
-          return false;
-        }
-
-        return true;
-      })
-      .map(item => {
-        const itemPrice = parseFloat(item.ItemPrice?.Amount) || 0;
-        const itemTax = parseFloat(item.ItemTax?.Amount) || 0;
-        const qty = item.QuantityOrdered || 1;
-
+      if (isPromotion) {
+        console.log(`[SellerOrderImporter] Detected promotion item: SKU=${sku}, price=${itemPrice}`);
         return {
-          sku: item.SellerSKU,
-          sellerSku: item.SellerSKU, // Alias for compatibility
-          asin: item.ASIN,
+          sku: 'PROMOTION DISCOUNT',
+          sellerSku: 'PROMOTION DISCOUNT',
+          asin: null,
           ean: null,
-          name: item.Title,
-          title: item.Title, // Alias for compatibility
-          quantity: qty, // ALWAYS use 'quantity', never 'quantityOrdered'
-          quantityShipped: item.QuantityShipped || 0,
-          unitPrice: itemPrice / qty,
+          name: `Promotion: ${sku}`,
+          title: `Promotion: ${sku}`,
+          quantity: 1,
+          quantityShipped: 0,
+          unitPrice: itemPrice, // Keep original (negative) price
           lineTotal: itemPrice,
-          tax: itemTax,
-          orderItemId: item.OrderItemId
+          tax: 0,
+          orderItemId: item.OrderItemId,
+          isPromotion: true
         };
-      });
+      }
+
+      return {
+        sku: item.SellerSKU,
+        sellerSku: item.SellerSKU, // Alias for compatibility
+        asin: item.ASIN,
+        ean: null,
+        name: item.Title,
+        title: item.Title, // Alias for compatibility
+        quantity: qty || 1, // ALWAYS use 'quantity', never 'quantityOrdered'
+        quantityShipped: item.QuantityShipped || 0,
+        unitPrice: itemPrice / (qty || 1),
+        lineTotal: itemPrice,
+        tax: itemTax,
+        orderItemId: item.OrderItemId
+      };
+    });
 
     // Calculate totals
     let subtotal = 0;
@@ -280,6 +276,54 @@ class SellerOrderImporter {
     );
 
     return items;
+  }
+
+  /**
+   * Check if an item is a promotion/discount item based on its characteristics
+   *
+   * Promotion items typically have:
+   * - Zero quantity or zero/negative price
+   * - SKU patterns that look like promo codes (alphanumeric, 5-10 chars, ends with letter)
+   *
+   * @param {string} sku - The seller SKU
+   * @param {number} price - The item price
+   * @param {number} quantity - The quantity ordered
+   * @returns {boolean} True if this looks like a promotion item
+   */
+  isPromotionItem(sku, price, quantity) {
+    if (!sku) return true; // Skip empty SKUs
+
+    // Skip items with zero or negative price and zero quantity
+    if (price <= 0 && quantity === 0) {
+      return true;
+    }
+
+    // Skip items with zero quantity (likely cancelled/promotional)
+    if (quantity === 0) {
+      return true;
+    }
+
+    // Check if SKU looks like a promotion code:
+    // - All alphanumeric (no dashes, no underscores)
+    // - 5-10 characters
+    // - Contains mix of letters and numbers (real SKUs are usually numeric or have dashes)
+    // - Ends with a letter (many promotion codes do, like "595771C")
+    const isAlphanumericOnly = /^[A-Z0-9]+$/i.test(sku);
+    const hasNoDashes = !sku.includes('-') && !sku.includes('_');
+    const length5to10 = sku.length >= 5 && sku.length <= 10;
+    const endsWithLetter = /[A-Za-z]$/.test(sku);
+    const hasLettersAndNumbers = /[A-Za-z]/.test(sku) && /[0-9]/.test(sku);
+
+    // Pattern: alphanumeric only, 5-10 chars, ends with letter, has both letters and numbers
+    // This matches patterns like "595771C", "ABC123D" but NOT "10060K-FBM" or "12345"
+    if (isAlphanumericOnly && hasNoDashes && length5to10 && endsWithLetter && hasLettersAndNumbers) {
+      // If the price is 0 or negative, it's likely a promotion
+      if (price <= 0) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**

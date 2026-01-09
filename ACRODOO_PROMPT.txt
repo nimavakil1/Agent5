@@ -1,0 +1,33 @@
+Build ACRODOO - a natural language AI assistant for Odoo ERP.
+
+First, read /Users/nimavakil/Agent5/ACRODOO_BUILD.md for full specifications.
+
+Then read these existing files to understand the patterns:
+- /Users/nimavakil/Agent5/backend/src/core/agents/integrations/OdooMCP.js (Odoo client)
+- /Users/nimavakil/Agent5/backend/src/core/agents/specialized/ModuleAssistant.js (agent pattern)
+- /Users/nimavakil/Agent5/backend/src/services/mcpTools.js (tools pattern)
+
+Create these files in order:
+
+1. /backend/src/core/agents/specialized/AcrodooAgent.js - Main agent class
+2. /backend/src/core/agents/specialized/AcrodooTools.js - Tool definitions and executor
+3. /backend/src/models/AcrodooConversation.js - MongoDB model for chat history
+4. /backend/src/api/routes/acrodoo.api.js - API endpoints
+5. /backend/src/public/acrodoo/index.html - Chat UI
+6. /backend/src/public/acrodoo/acrodoo.js - Frontend logic
+7. /backend/src/public/acrodoo/acrodoo.css - Styling
+
+Then update /backend/src/index.js to:
+- Import and mount the acrodoo router
+- Add 'acrodoo' to protectedSections array
+
+Key requirements:
+- Use Anthropic Claude (claude-sonnet-4-20250514) via existing AnthropicProvider
+- Use existing OdooDirectClient for all Odoo operations
+- NEVER allow delete/unlink - only archive, cancel, or reverse
+- ALWAYS show preview before any write operation
+- Require explicit user approval ("OK", "yes") before executing writes
+- Log all write operations to AuditLog
+- Match existing Agent5 dark theme styling
+
+Start with the AcrodooAgent.js - get basic read queries working first, then add write capabilities.

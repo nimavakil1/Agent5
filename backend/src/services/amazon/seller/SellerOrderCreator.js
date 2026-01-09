@@ -723,7 +723,21 @@ class SellerOrderCreator {
         const amazonSku = item.sellerSku;
         const quantity = getItemQuantity(item);
 
-        // Skip items with zero quantity (promotional/cancelled items)
+        // Check if this is a promotion item (marked by SellerOrderImporter or FbmOrderImporter)
+        // Promotion items use the PROMOTION_DISCOUNT product in Odoo
+        if (item.isPromotion || amazonSku === 'PROMOTION DISCOUNT') {
+          const promoPrice = item.unitPrice || item.lineTotal || 0;
+          console.log(`[SellerOrderCreator] Adding promotion item: price=${promoPrice}`);
+          lines.push({
+            product_id: SPECIAL_PRODUCTS.PROMOTION_DISCOUNT.id,
+            product_uom_qty: 1,
+            price_unit: promoPrice, // Keep original (negative) price
+            name: item.name || item.title || 'Promotion Discount'
+          });
+          continue;
+        }
+
+        // Skip items with zero quantity (cancelled items)
         if (quantity === 0) {
           console.log(`[SellerOrderCreator] Skipping zero-qty item: SKU=${amazonSku}`);
           continue;

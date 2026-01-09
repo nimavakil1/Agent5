@@ -1,0 +1,3000 @@
+[dotenv@17.2.3] injecting env (80) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+Finding all Amazon Marketplace orders (paginated)...
+
+Fetching orders 0 to 1000...
+Fetching orders 1000 to 2000...
+Fetching orders 2000 to 3000...
+Fetching orders 3000 to 4000...
+Fetching orders 4000 to 5000...
+Fetching orders 5000 to 6000...
+Fetching orders 6000 to 7000...
+Fetching orders 7000 to 8000...
+Fetching orders 8000 to 9000...
+Fetching orders 9000 to 10000...
+Fetching orders 10000 to 11000...
+Fetching orders 11000 to 12000...
+Fetching orders 12000 to 13000...
+Fetching orders 13000 to 14000...
+Fetching orders 14000 to 15000...
+Fetching orders 15000 to 16000...
+Fetching orders 16000 to 17000...
+Fetching orders 17000 to 18000...
+Fetching orders 18000 to 19000...
+Fetching orders 19000 to 20000...
+Fetching orders 20000 to 21000...
+Fetching orders 21000 to 22000...
+Fetching orders 22000 to 23000...
+Fetching orders 23000 to 24000...
+Fetching orders 24000 to 25000...
+Fetching orders 25000 to 26000...
+Fetching orders 26000 to 27000...
+Fetching orders 27000 to 28000...
+Fetching orders 28000 to 29000...
+Fetching orders 29000 to 30000...
+Fetching orders 30000 to 31000...
+Fetching orders 31000 to 32000...
+Fetching orders 32000 to 33000...
+Fetching orders 33000 to 34000...
+Fetching orders 34000 to 35000...
+Fetching orders 35000 to 36000...
+Fetching orders 36000 to 37000...
+Fetching orders 37000 to 38000...
+Fetching orders 38000 to 39000...
+Fetching orders 39000 to 40000...
+Fetching orders 40000 to 41000...
+Fetching orders 41000 to 42000...
+Fetching orders 42000 to 43000...
+Fetching orders 43000 to 44000...
+Fetching orders 44000 to 45000...
+Fetching orders 45000 to 46000...
+Fetching orders 46000 to 47000...
+Fetching orders 47000 to 48000...
+Fetching orders 48000 to 49000...
+Fetching orders 49000 to 50000...
+Fetching orders 50000 to 51000...
+Fetching orders 51000 to 52000...
+Fetching orders 52000 to 53000...
+Fetching orders 53000 to 54000...
+Fetching orders 54000 to 55000...
+Fetching orders 55000 to 56000...
+Fetching orders 56000 to 57000...
+Fetching orders 57000 to 58000...
+Fetching orders 58000 to 59000...
+Fetching orders 59000 to 60000...
+Fetching orders 60000 to 61000...
+Fetching orders 61000 to 62000...
+Fetching orders 62000 to 63000...
+Fetching orders 63000 to 64000...
+Fetching orders 64000 to 65000...
+Fetching orders 65000 to 66000...
+
+Found 65119 Amazon Marketplace orders
+
+=== DUPLICATE ORDERS FOUND: 531 ===
+
+Duplicates with SAME amount: 98
+Duplicates with DIFFERENT amounts: 433
+
+=== DUPLICATES WITH DIFFERENT AMOUNTS (most problematic) ===
+
+Amazon Order ID: 304-6206430-6815550
+  Duplicate count: 2
+  - Odoo ID: 15491 | Name: FBA304-6206430-6815550 | Amount: EUR 49.90 | Status: no | Invoice: NO | Created: 2024-02-29 09:32:17
+  - Odoo ID: 15410 | Name: FBA304-6206430-6815550 | Amount: EUR 24.95 | Status: no | Invoice: NO | Created: 2024-02-28 17:32:44
+
+Amazon Order ID: 404-8107986-3680334
+  Duplicate count: 2
+  - Odoo ID: 17060 | Name: FBA404-8107986-3680334 | Amount: EUR 71.52 | Status: no | Invoice: NO | Created: 2024-03-04 09:25:41
+  - Odoo ID: 16899 | Name: FBA404-8107986-3680334 | Amount: EUR 17.88 | Status: no | Invoice: NO | Created: 2024-03-04 01:29:53
+
+Amazon Order ID: 305-0383375-3541118
+  Duplicate count: 2
+  - Odoo ID: 28705 | Name: FBA305-0383375-3541118 | Amount: EUR 22.67 | Status: to invoice | Invoice: NO | Created: 2024-04-26 01:28:12
+  - Odoo ID: 28704 | Name: FBA305-0383375-3541118 | Amount: EUR 45.33 | Status: to invoice | Invoice: YES (183227,181679,174039,173222) | Created: 2024-04-26 01:28:12
+
+Amazon Order ID: 302-0715257-7145950
+  Duplicate count: 2
+  - Odoo ID: 30473 | Name: FBA302-0715257-7145950 | Amount: EUR 19.95 | Status: to invoice | Invoice: NO | Created: 2024-05-03 01:28:54
+  - Odoo ID: 30472 | Name: FBA302-0715257-7145950 | Amount: EUR 41.90 | Status: to invoice | Invoice: YES (182950) | Created: 2024-05-03 01:28:54
+
+Amazon Order ID: 405-3759785-6388314
+  Duplicate count: 2
+  - Odoo ID: 35197 | Name: FBA405-3759785-6388314 | Amount: EUR 20.11 | Status: to invoice | Invoice: NO | Created: 2024-05-23 09:32:59
+  - Odoo ID: 35115 | Name: FBA405-3759785-6388314 | Amount: EUR 24.15 | Status: invoiced | Invoice: YES (182307) | Created: 2024-05-23 01:29:01
+
+Amazon Order ID: 407-1505304-0552325
+  Duplicate count: 2
+  - Odoo ID: 37820 | Name: FBA407-1505304-0552325 | Amount: EUR 22.95 | Status: to invoice | Invoice: NO | Created: 2024-06-01 09:28:57
+  - Odoo ID: 37819 | Name: FBA407-1505304-0552325 | Amount: EUR 38.90 | Status: invoiced | Invoice: YES (184344,183560) | Created: 2024-06-01 09:28:57
+
+Amazon Order ID: 402-9628735-7567567
+  Duplicate count: 2
+  - Odoo ID: 38282 | Name: FBA402-9628735-7567567 | Amount: EUR 15.61 | Status: to invoice | Invoice: NO | Created: 2024-06-03 09:27:55
+  - Odoo ID: 38281 | Name: FBA402-9628735-7567567 | Amount: EUR 78.05 | Status: to invoice | Invoice: YES (184583,184593,184581,184582,184579,184580) | Created: 2024-06-03 09:27:55
+
+Amazon Order ID: 028-0279447-3067506
+  Duplicate count: 2
+  - Odoo ID: 42935 | Name: FBA028-0279447-3067506 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-06-18 01:33:08
+  - Odoo ID: 42757 | Name: FBA028-0279447-3067506 | Amount: EUR 17.95 | Status: invoiced | Invoice: YES (188345) | Created: 2024-06-17 17:28:00
+
+Amazon Order ID: 028-1515191-7300310
+  Duplicate count: 2
+  - Odoo ID: 43006 | Name: FBA028-1515191-7300310 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-06-18 09:28:01
+  - Odoo ID: 42926 | Name: FBA028-1515191-7300310 | Amount: EUR 95.80 | Status: to invoice | Invoice: YES (188530,187853,188355) | Created: 2024-06-18 01:32:10
+
+Amazon Order ID: 028-2976173-8817901
+  Duplicate count: 2
+  - Odoo ID: 43603 | Name: FBA028-2976173-8817901 | Amount: EUR 99.75 | Status: to invoice | Invoice: NO | Created: 2024-06-19 17:30:16
+  - Odoo ID: 43165 | Name: FBA028-2976173-8817901 | Amount: EUR 39.90 | Status: to invoice | Invoice: YES (188044,187605,187529,188571,188312,188423,187999) | Created: 2024-06-18 17:25:12
+
+Amazon Order ID: 403-6017028-8195514
+  Duplicate count: 2
+  - Odoo ID: 44930 | Name: FBA403-6017028-8195514 | Amount: EUR 19.95 | Status: to invoice | Invoice: NO | Created: 2024-06-24 09:26:56
+  - Odoo ID: 44929 | Name: FBA403-6017028-8195514 | Amount: EUR 21.95 | Status: invoiced | Invoice: YES (189693) | Created: 2024-06-24 09:26:56
+
+Amazon Order ID: 305-4811559-8974763
+  Duplicate count: 2
+  - Odoo ID: 45798 | Name: FBA305-4811559-8974763 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-06-26 17:28:52
+  - Odoo ID: 45068 | Name: FBA305-4811559-8974763 | Amount: EUR 21.95 | Status: invoiced | Invoice: YES (188181) | Created: 2024-06-24 17:30:12
+
+Amazon Order ID: 405-1210040-1104322
+  Duplicate count: 2
+  - Odoo ID: 46527 | Name: FBA405-1210040-1104322 | Amount: EUR 24.15 | Status: to invoice | Invoice: NO | Created: 2024-06-29 01:29:58
+  - Odoo ID: 46227 | Name: FBA405-1210040-1104322 | Amount: EUR 144.91 | Status: to invoice | Invoice: YES (189801) | Created: 2024-06-28 01:34:19
+
+Amazon Order ID: 306-0339527-1782734
+  Duplicate count: 2
+  - Odoo ID: 49290 | Name: FBA306-0339527-1782734 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-07-08 01:28:21
+  - Odoo ID: 49232 | Name: FBA306-0339527-1782734 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (191347) | Created: 2024-07-07 17:28:32
+
+Amazon Order ID: 303-8886163-4756330
+  Duplicate count: 2
+  - Odoo ID: 49412 | Name: FBA303-8886163-4756330 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-07-08 09:28:18
+  - Odoo ID: 49314 | Name: FBA303-8886163-4756330 | Amount: EUR 47.90 | Status: to invoice | Invoice: YES (192006) | Created: 2024-07-08 01:31:12
+
+Amazon Order ID: 306-1610188-8451535
+  Duplicate count: 2
+  - Odoo ID: 49643 | Name: FBA306-1610188-8451535 | Amount: EUR 47.90 | Status: to invoice | Invoice: NO | Created: 2024-07-09 01:27:52
+  - Odoo ID: 49420 | Name: FBA306-1610188-8451535 | Amount: EUR 46.90 | Status: to invoice | Invoice: YES (191815) | Created: 2024-07-08 09:29:09
+
+Amazon Order ID: 306-6052664-9159558
+  Duplicate count: 2
+  - Odoo ID: 49955 | Name: FBA306-6052664-9159558 | Amount: EUR 19.95 | Status: to invoice | Invoice: NO | Created: 2024-07-10 09:25:31
+  - Odoo ID: 49655 | Name: FBA306-6052664-9159558 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (191474) | Created: 2024-07-09 01:28:45
+
+Amazon Order ID: 302-5922415-7657958
+  Duplicate count: 2
+  - Odoo ID: 52650 | Name: FBA302-5922415-7657958 | Amount: EUR 22.95 | Status: to invoice | Invoice: NO | Created: 2024-07-23 09:28:29
+  - Odoo ID: 52582 | Name: FBA302-5922415-7657958 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (199415) | Created: 2024-07-23 01:30:16
+
+Amazon Order ID: 402-8123733-0476355
+  Duplicate count: 2
+  - Odoo ID: 53438 | Name: FBA402-8123733-0476355 | Amount: EUR 74.85 | Status: to invoice | Invoice: NO | Created: 2024-07-27 01:29:51
+  - Odoo ID: 53242 | Name: FBA402-8123733-0476355 | Amount: EUR 299.40 | Status: to invoice | Invoice: YES (199065,199000,199048,199002,199076,199060,199054,199069,198974,198991,199010,199049,199651,199669,199658) | Created: 2024-07-26 01:28:06
+
+Amazon Order ID: 408-3877034-5282717
+  Duplicate count: 2
+  - Odoo ID: 54582 | Name: FBA408-3877034-5282717 | Amount: EUR 55.54 | Status: to invoice | Invoice: NO | Created: 2024-08-01 17:32:39
+  - Odoo ID: 53860 | Name: FBA408-3877034-5282717 | Amount: EUR 53.12 | Status: to invoice | Invoice: YES (231028) | Created: 2024-07-29 17:25:45
+
+Amazon Order ID: 303-2934861-0441917
+  Duplicate count: 2
+  - Odoo ID: 55609 | Name: FBA303-2934861-0441917 | Amount: EUR 28.98 | Status: to invoice | Invoice: NO | Created: 2024-08-06 09:32:14
+  - Odoo ID: 55447 | Name: FBA303-2934861-0441917 | Amount: EUR 48.71 | Status: to invoice | Invoice: YES (202695,211635) | Created: 2024-08-05 17:31:08
+
+Amazon Order ID: 403-8475135-0357936
+  Duplicate count: 2
+  - Odoo ID: 57414 | Name: FBA403-8475135-0357936 | Amount: EUR 60.38 | Status: to invoice | Invoice: NO | Created: 2024-08-14 09:26:42
+  - Odoo ID: 56384 | Name: FBA403-8475135-0357936 | Amount: EUR 111.08 | Status: no | Invoice: YES (209766,202766) | Created: 2024-08-09 09:30:28
+
+Amazon Order ID: 402-3677764-8293135
+  Duplicate count: 2
+  - Odoo ID: 58321 | Name: FBA402-3677764-8293135 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-08-17 01:33:38
+  - Odoo ID: 58219 | Name: FBA402-3677764-8293135 | Amount: EUR 45.90 | Status: invoiced | Invoice: YES (209669,209758) | Created: 2024-08-16 17:32:00
+
+Amazon Order ID: 406-5842131-6873937
+  Duplicate count: 2
+  - Odoo ID: 61174 | Name: FBA406-5842131-6873937 | Amount: EUR 19.38 | Status: to invoice | Invoice: NO | Created: 2024-08-23 09:33:55
+  - Odoo ID: 61173 | Name: FBA406-5842131-6873937 | Amount: EUR 47.90 | Status: invoiced | Invoice: YES (209076,209201) | Created: 2024-08-23 09:33:55
+
+Amazon Order ID: 405-3811238-0426701
+  Duplicate count: 2
+  - Odoo ID: 65581 | Name: FBA405-3811238-0426701 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-08-31 01:40:10
+  - Odoo ID: 65390 | Name: FBA405-3811238-0426701 | Amount: EUR 19.95 | Status: invoiced | Invoice: YES (209262) | Created: 2024-08-30 17:32:47
+
+Amazon Order ID: 171-8838362-3507505
+  Duplicate count: 2
+  - Odoo ID: 67911 | Name: FBA171-8838362-3507505 | Amount: EUR 39.90 | Status: to invoice | Invoice: NO | Created: 2024-09-04 01:53:19
+  - Odoo ID: 67910 | Name: FBA171-8838362-3507505 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (217272) | Created: 2024-09-04 01:53:19
+
+Amazon Order ID: 406-6741528-8683540
+  Duplicate count: 2
+  - Odoo ID: 68069 | Name: FBA406-6741528-8683540 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-09-04 09:28:21
+  - Odoo ID: 67935 | Name: FBA406-6741528-8683540 | Amount: EUR 19.95 | Status: invoiced | Invoice: YES (217267) | Created: 2024-09-04 01:56:30
+
+Amazon Order ID: 402-7313237-9922711
+  Duplicate count: 2
+  - Odoo ID: 68430 | Name: FBA402-7313237-9922711 | Amount: EUR 108.17 | Status: invoiced | Invoice: YES (359850) | Created: 2024-09-04 18:10:51
+  - Odoo ID: 68080 | Name: FBA402-7313237-9922711 | Amount: EUR 98.14 | Status: to invoice | Invoice: NO | Created: 2024-09-04 09:35:01
+
+Amazon Order ID: 408-4632291-9798724
+  Duplicate count: 2
+  - Odoo ID: 68568 | Name: FBA408-4632291-9798724 | Amount: EUR 36.14 | Status: to invoice | Invoice: NO | Created: 2024-09-05 01:38:07
+  - Odoo ID: 68412 | Name: FBA408-4632291-9798724 | Amount: EUR 18.05 | Status: invoiced | Invoice: YES (216892) | Created: 2024-09-04 18:09:28
+
+Amazon Order ID: 402-4469866-3773146
+  Duplicate count: 3
+  - Odoo ID: 69002 | Name: FBA402-4469866-3773146 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-09-05 17:35:58
+  - Odoo ID: 68389 | Name: FBA402-4469866-3773146 | Amount: EUR 19.95 | Status: to invoice | Invoice: NO | Created: 2024-09-04 18:00:46
+  - Odoo ID: 68388 | Name: FBA402-4469866-3773146 | Amount: EUR 19.95 | Status: invoiced | Invoice: YES (217372) | Created: 2024-09-04 18:00:46
+
+Amazon Order ID: 405-9046873-4040350
+  Duplicate count: 2
+  - Odoo ID: 69004 | Name: FBA405-9046873-4040350 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-09-05 17:36:32
+  - Odoo ID: 68400 | Name: FBA405-9046873-4040350 | Amount: EUR 19.95 | Status: invoiced | Invoice: YES (217230) | Created: 2024-09-04 18:07:42
+
+Amazon Order ID: 304-9789389-7169120
+  Duplicate count: 2
+  - Odoo ID: 69224 | Name: FBA304-9789389-7169120 | Amount: EUR 26.95 | Status: to invoice | Invoice: NO | Created: 2024-09-06 01:35:31
+  - Odoo ID: 69045 | Name: FBA304-9789389-7169120 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (217530) | Created: 2024-09-05 17:38:21
+
+Amazon Order ID: 406-3895835-9890743
+  Duplicate count: 2
+  - Odoo ID: 70044 | Name: FBA406-3895835-9890743 | Amount: EUR 18.07 | Status: to invoice | Invoice: NO | Created: 2024-09-08 01:27:58
+  - Odoo ID: 67865 | Name: FBA406-3895835-9890743 | Amount: EUR 19.95 | Status: invoiced | Invoice: YES (217425) | Created: 2024-09-04 01:34:02
+
+Amazon Order ID: 171-2770469-6346716
+  Duplicate count: 2
+  - Odoo ID: 75729 | Name: FBA171-2770469-6346716 | Amount: EUR 55.54 | Status: to invoice | Invoice: NO | Created: 2024-09-20 01:28:58
+  - Odoo ID: 75131 | Name: FBA171-2770469-6346716 | Amount: EUR 222.16 | Status: to invoice | Invoice: YES (218004,216862) | Created: 2024-09-18 09:26:18
+
+Amazon Order ID: 407-7475444-9284345
+  Duplicate count: 2
+  - Odoo ID: 76826 | Name: FBA407-7475444-9284345 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-09-23 17:31:35
+  - Odoo ID: 73088 | Name: FBA407-7475444-9284345 | Amount: EUR 22.95 | Status: invoiced | Invoice: YES (217798) | Created: 2024-09-13 17:31:23
+
+Amazon Order ID: 304-4390750-8950756
+  Duplicate count: 2
+  - Odoo ID: 78734 | Name: FBA304-4390750-8950756 | Amount: EUR 18.14 | Status: to invoice | Invoice: NO | Created: 2024-09-28 09:27:24
+  - Odoo ID: 78657 | Name: FBA304-4390750-8950756 | Amount: EUR 45.74 | Status: to invoice | Invoice: YES (230248,220392) | Created: 2024-09-28 01:28:25
+
+Amazon Order ID: 302-9960876-2050724
+  Duplicate count: 2
+  - Odoo ID: 81623 | Name: FBA302-9960876-2050724 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-10-07 01:33:12
+  - Odoo ID: 81187 | Name: FBA302-9960876-2050724 | Amount: EUR 46.90 | Status: invoiced | Invoice: YES (227358,227495) | Created: 2024-10-05 09:32:49
+
+Amazon Order ID: 405-5026340-0515510
+  Duplicate count: 2
+  - Odoo ID: 84384 | Name: FBA405-5026340-0515510 | Amount: EUR 207.60 | Status: to invoice | Invoice: NO | Created: 2024-10-13 17:28:26
+  - Odoo ID: 84191 | Name: FBA405-5026340-0515510 | Amount: EUR 155.70 | Status: to invoice | Invoice: YES (228993,228992,227173,227167,227194,227215,227200) | Created: 2024-10-13 01:34:48
+
+Amazon Order ID: 306-5519311-7460329
+  Duplicate count: 2
+  - Odoo ID: 85269 | Name: FBA306-5519311-7460329 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-10-15 17:28:47
+  - Odoo ID: 84978 | Name: FBA306-5519311-7460329 | Amount: EUR 25.99 | Status: invoiced | Invoice: YES (227684) | Created: 2024-10-15 01:26:39
+
+Amazon Order ID: 406-6789241-1740315
+  Duplicate count: 2
+  - Odoo ID: 85286 | Name: FBA406-6789241-1740315 | Amount: EUR 47.90 | Status: to invoice | Invoice: NO | Created: 2024-10-15 17:34:59
+  - Odoo ID: 85285 | Name: FBA406-6789241-1740315 | Amount: EUR 39.90 | Status: invoiced | Invoice: YES (229035) | Created: 2024-10-15 17:34:59
+
+Amazon Order ID: 303-2798106-9089168
+  Duplicate count: 2
+  - Odoo ID: 85450 | Name: FBA303-2798106-9089168 | Amount: EUR 28.98 | Status: to invoice | Invoice: NO | Created: 2024-10-16 01:39:22
+  - Odoo ID: 83429 | Name: FBA303-2798106-9089168 | Amount: EUR 15.25 | Status: invoiced | Invoice: YES (230246) | Created: 2024-10-10 17:39:34
+
+Amazon Order ID: 305-8563639-4001133
+  Duplicate count: 2
+  - Odoo ID: 85754 | Name: FBA305-8563639-4001133 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-10-16 17:38:45
+  - Odoo ID: 85107 | Name: FBA305-8563639-4001133 | Amount: EUR 14.99 | Status: invoiced | Invoice: YES (227498) | Created: 2024-10-15 09:36:07
+
+Amazon Order ID: 306-0685657-7093167
+  Duplicate count: 2
+  - Odoo ID: 87099 | Name: FBA306-0685657-7093167 | Amount: EUR 77.97 | Status: to invoice | Invoice: NO | Created: 2024-10-21 17:28:55
+  - Odoo ID: 87098 | Name: FBA306-0685657-7093167 | Amount: EUR 47.90 | Status: invoiced | Invoice: YES (230114) | Created: 2024-10-21 17:28:55
+
+Amazon Order ID: 402-7255193-6791554
+  Duplicate count: 2
+  - Odoo ID: 87554 | Name: FBA402-7255193-6791554 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-10-23 01:28:36
+  - Odoo ID: 87242 | Name: FBA402-7255193-6791554 | Amount: EUR 24.94 | Status: invoiced | Invoice: YES (227812) | Created: 2024-10-22 01:38:42
+
+Amazon Order ID: 304-5458375-5573105
+  Duplicate count: 2
+  - Odoo ID: 87565 | Name: FBA304-5458375-5573105 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-10-23 01:32:24
+  - Odoo ID: 87564 | Name: FBA304-5458375-5573105 | Amount: EUR 25.99 | Status: invoiced | Invoice: YES (227095) | Created: 2024-10-23 01:32:24
+
+Amazon Order ID: 305-1832129-2833959
+  Duplicate count: 2
+  - Odoo ID: 87682 | Name: FBA305-1832129-2833959 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-10-23 09:36:37
+  - Odoo ID: 87570 | Name: FBA305-1832129-2833959 | Amount: EUR 18.95 | Status: invoiced | Invoice: YES (227051) | Created: 2024-10-23 01:32:24
+
+Amazon Order ID: 407-0631019-0025130
+  Duplicate count: 2
+  - Odoo ID: 88247 | Name: FBA407-0631019-0025130 | Amount: EUR 70.47 | Status: to invoice | Invoice: NO | Created: 2024-10-25 09:26:47
+  - Odoo ID: 88246 | Name: FBA407-0631019-0025130 | Amount: EUR 35.23 | Status: to invoice | Invoice: NO | Created: 2024-10-25 09:26:47
+
+Amazon Order ID: 302-0347860-5367530
+  Duplicate count: 2
+  - Odoo ID: 88238 | Name: FBA302-0347860-5367530 | Amount: EUR 14.99 | Status: to invoice | Invoice: NO | Created: 2024-10-25 09:26:47
+  - Odoo ID: 88163 | Name: FBA302-0347860-5367530 | Amount: EUR 39.94 | Status: to invoice | Invoice: YES (226873) | Created: 2024-10-25 01:36:16
+
+Amazon Order ID: 402-9891381-8261903
+  Duplicate count: 2
+  - Odoo ID: 89470 | Name: FBA402-9891381-8261903 | Amount: EUR 26.95 | Status: to invoice | Invoice: NO | Created: 2024-10-29 17:45:41
+  - Odoo ID: 88974 | Name: FBA402-9891381-8261903 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (227758) | Created: 2024-10-28 10:00:28
+
+Amazon Order ID: 404-9392622-8770703
+  Duplicate count: 2
+  - Odoo ID: 89544 | Name: FBA404-9392622-8770703 | Amount: EUR 39.58 | Status: to invoice | Invoice: NO | Created: 2024-10-30 01:28:38
+  - Odoo ID: 89309 | Name: FBA404-9392622-8770703 | Amount: EUR 41.24 | Status: to invoice | Invoice: YES (229137) | Created: 2024-10-29 09:40:22
+
+Amazon Order ID: 304-4615876-4785169
+  Duplicate count: 2
+  - Odoo ID: 89546 | Name: FBA304-4615876-4785169 | Amount: EUR 69.04 | Status: to invoice | Invoice: NO | Created: 2024-10-30 01:28:38
+  - Odoo ID: 89545 | Name: FBA304-4615876-4785169 | Amount: EUR 739.43 | Status: to invoice | Invoice: YES (230247,229865,229863,229864) | Created: 2024-10-30 01:28:38
+
+Amazon Order ID: 406-3788725-6686734
+  Duplicate count: 2
+  - Odoo ID: 89690 | Name: FBA406-3788725-6686734 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-10-30 09:57:37
+  - Odoo ID: 89689 | Name: FBA406-3788725-6686734 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (229510) | Created: 2024-10-30 09:57:37
+
+Amazon Order ID: 305-2515977-4840365
+  Duplicate count: 2
+  - Odoo ID: 90211 | Name: FBA305-2515977-4840365 | Amount: EUR 48.90 | Status: to invoice | Invoice: YES (240321) | Created: 2024-11-01 01:37:04
+  - Odoo ID: 89926 | Name: FBA305-2515977-4840365 | Amount: EUR 62.85 | Status: to invoice | Invoice: YES (229365,236090) | Created: 2024-10-31 01:29:18
+
+Amazon Order ID: 303-5554747-5538701
+  Duplicate count: 2
+  - Odoo ID: 90350 | Name: FBA303-5554747-5538701 | Amount: EUR 25.95 | Status: to invoice | Invoice: NO | Created: 2024-11-01 17:28:13
+  - Odoo ID: 90212 | Name: FBA303-5554747-5538701 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (226749) | Created: 2024-11-01 01:37:04
+
+Amazon Order ID: 407-7194443-7898732
+  Duplicate count: 2
+  - Odoo ID: 92412 | Name: FBA407-7194443-7898732 | Amount: EUR 32.06 | Status: no | Invoice: NO | Created: 2024-11-07 17:28:58
+  - Odoo ID: 104005 | Name: FBA407-7194443-7898732 | Amount: EUR 36.89 | Status: invoiced | Invoice: YES (248100) | Created: 2024-12-25 10:15:47
+
+Amazon Order ID: 404-1453717-7463508
+  Duplicate count: 2
+  - Odoo ID: 93041 | Name: FBA404-1453717-7463508 | Amount: EUR 87.00 | Status: no | Invoice: NO | Created: 2024-11-09 17:06:48
+  - Odoo ID: 102356 | Name: FBA404-1453717-7463508 | Amount: EUR 71.90 | Status: to invoice | Invoice: YES (236310) | Created: 2024-12-24 09:13:19
+
+Amazon Order ID: 405-4361035-6780360
+  Duplicate count: 2
+  - Odoo ID: 93414 | Name: FBA405-4361035-6780360 | Amount: EUR 36.24 | Status: no | Invoice: NO | Created: 2024-11-11 09:11:25
+  - Odoo ID: 104060 | Name: FBA405-4361035-6780360 | Amount: EUR 29.95 | Status: invoiced | Invoice: YES (236374) | Created: 2024-12-25 10:17:36
+
+Amazon Order ID: 403-2621559-5253143
+  Duplicate count: 2
+  - Odoo ID: 93444 | Name: FBA403-2621559-5253143 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-11 17:04:32
+  - Odoo ID: 104266 | Name: FBA403-2621559-5253143 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236339) | Created: 2024-12-25 17:39:20
+
+Amazon Order ID: 406-1591629-1113929
+  Duplicate count: 2
+  - Odoo ID: 93498 | Name: FBA406-1591629-1113929 | Amount: EUR 84.58 | Status: no | Invoice: NO | Created: 2024-11-11 17:34:48
+  - Odoo ID: 104271 | Name: FBA406-1591629-1113929 | Amount: EUR 69.90 | Status: invoiced | Invoice: YES (236127) | Created: 2024-12-25 17:39:24
+
+Amazon Order ID: 171-8343059-1462741
+  Duplicate count: 2
+  - Odoo ID: 93688 | Name: FBA171-8343059-1462741 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-12 01:21:33
+  - Odoo ID: 104267 | Name: FBA171-8343059-1462741 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236338) | Created: 2024-12-25 17:39:20
+
+Amazon Order ID: 304-2024554-1759526
+  Duplicate count: 2
+  - Odoo ID: 93689 | Name: FBA304-2024554-1759526 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-12 01:22:49
+  - Odoo ID: 104273 | Name: FBA304-2024554-1759526 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236070) | Created: 2024-12-25 17:39:29
+
+Amazon Order ID: 404-1193986-5990739
+  Duplicate count: 2
+  - Odoo ID: 93827 | Name: FBA404-1193986-5990739 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-12 09:04:54
+  - Odoo ID: 104252 | Name: FBA404-1193986-5990739 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236598) | Created: 2024-12-25 17:38:58
+
+Amazon Order ID: 304-1686415-2748336
+  Duplicate count: 2
+  - Odoo ID: 93995 | Name: FBA304-1686415-2748336 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-12 17:07:05
+  - Odoo ID: 104253 | Name: FBA304-1686415-2748336 | Amount: EUR 28.94 | Status: invoiced | Invoice: YES (236010) | Created: 2024-12-25 17:38:58
+
+Amazon Order ID: 403-8032180-7129960
+  Duplicate count: 2
+  - Odoo ID: 94030 | Name: FBA403-8032180-7129960 | Amount: EUR 32.61 | Status: no | Invoice: NO | Created: 2024-11-12 17:09:15
+  - Odoo ID: 104097 | Name: FBA403-8032180-7129960 | Amount: EUR 26.95 | Status: invoiced | Invoice: YES (236519) | Created: 2024-12-25 10:19:04
+
+Amazon Order ID: 304-6467414-9499505
+  Duplicate count: 2
+  - Odoo ID: 94091 | Name: FBA304-6467414-9499505 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-13 01:05:11
+  - Odoo ID: 104259 | Name: FBA304-6467414-9499505 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236009) | Created: 2024-12-25 17:39:10
+
+Amazon Order ID: 404-1194710-0004331
+  Duplicate count: 2
+  - Odoo ID: 94104 | Name: FBA404-1194710-0004331 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-13 01:06:46
+  - Odoo ID: 104264 | Name: FBA404-1194710-0004331 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236236) | Created: 2024-12-25 17:39:15
+
+Amazon Order ID: 405-2306102-9088333
+  Duplicate count: 2
+  - Odoo ID: 94141 | Name: FBA405-2306102-9088333 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-13 09:09:11
+  - Odoo ID: 104272 | Name: FBA405-2306102-9088333 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236228) | Created: 2024-12-25 17:39:29
+
+Amazon Order ID: 305-5234802-3313906
+  Duplicate count: 2
+  - Odoo ID: 94152 | Name: FBA305-5234802-3313906 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-13 09:15:52
+  - Odoo ID: 104212 | Name: FBA305-5234802-3313906 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236046) | Created: 2024-12-25 17:27:34
+
+Amazon Order ID: 303-1990621-2256305
+  Duplicate count: 2
+  - Odoo ID: 94156 | Name: FBA303-1990621-2256305 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-13 09:19:28
+  - Odoo ID: 104117 | Name: FBA303-1990621-2256305 | Amount: EUR 29.94 | Status: invoiced | Invoice: YES (239421) | Created: 2024-12-25 10:19:37
+
+Amazon Order ID: 306-2723017-4210740
+  Duplicate count: 2
+  - Odoo ID: 94178 | Name: FBA306-2723017-4210740 | Amount: EUR 65.22 | Status: no | Invoice: NO | Created: 2024-11-13 17:02:34
+  - Odoo ID: 104218 | Name: FBA306-2723017-4210740 | Amount: EUR 53.90 | Status: invoiced | Invoice: YES (236160) | Created: 2024-12-25 17:37:59
+
+Amazon Order ID: 406-9722835-5069913
+  Duplicate count: 2
+  - Odoo ID: 94182 | Name: FBA406-9722835-5069913 | Amount: EUR 33.82 | Status: no | Invoice: NO | Created: 2024-11-13 17:03:11
+  - Odoo ID: 104238 | Name: FBA406-9722835-5069913 | Amount: EUR 27.95 | Status: invoiced | Invoice: YES (236388) | Created: 2024-12-25 17:38:31
+
+Amazon Order ID: 305-3667416-6286768
+  Duplicate count: 2
+  - Odoo ID: 94188 | Name: FBA305-3667416-6286768 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-13 17:03:49
+  - Odoo ID: 104274 | Name: FBA305-3667416-6286768 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (235980) | Created: 2024-12-25 17:39:29
+
+Amazon Order ID: 304-5776068-2365935
+  Duplicate count: 2
+  - Odoo ID: 94200 | Name: FBA304-5776068-2365935 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-13 17:04:39
+  - Odoo ID: 104261 | Name: FBA304-5776068-2365935 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236042) | Created: 2024-12-25 17:39:10
+
+Amazon Order ID: 407-3519559-5665126
+  Duplicate count: 2
+  - Odoo ID: 94208 | Name: FBA407-3519559-5665126 | Amount: EUR 36.24 | Status: no | Invoice: NO | Created: 2024-11-13 17:05:12
+  - Odoo ID: 104050 | Name: FBA407-3519559-5665126 | Amount: EUR 33.94 | Status: invoiced | Invoice: YES (236622) | Created: 2024-12-25 10:17:08
+
+Amazon Order ID: 403-1117381-2558732
+  Duplicate count: 2
+  - Odoo ID: 94226 | Name: FBA403-1117381-2558732 | Amount: EUR 61.07 | Status: no | Invoice: NO | Created: 2024-11-13 17:06:33
+  - Odoo ID: 104251 | Name: FBA403-1117381-2558732 | Amount: EUR 50.47 | Status: invoiced | Invoice: YES (236532) | Created: 2024-12-25 17:38:58
+
+Amazon Order ID: 304-9293679-8612329
+  Duplicate count: 2
+  - Odoo ID: 94243 | Name: FBA304-9293679-8612329 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-14 01:25:46
+  - Odoo ID: 104244 | Name: FBA304-9293679-8612329 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236563) | Created: 2024-12-25 17:38:37
+
+Amazon Order ID: 405-2498914-8969158
+  Duplicate count: 2
+  - Odoo ID: 94247 | Name: FBA405-2498914-8969158 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-14 01:26:09
+  - Odoo ID: 104249 | Name: FBA405-2498914-8969158 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236115) | Created: 2024-12-25 17:38:50
+
+Amazon Order ID: 171-0174856-8212341
+  Duplicate count: 2
+  - Odoo ID: 94257 | Name: FBA171-0174856-8212341 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-14 01:26:54
+  - Odoo ID: 104216 | Name: FBA171-0174856-8212341 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236135) | Created: 2024-12-25 17:37:54
+
+Amazon Order ID: 028-8579630-4550764
+  Duplicate count: 2
+  - Odoo ID: 94307 | Name: FBA028-8579630-4550764 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-14 09:06:11
+  - Odoo ID: 104171 | Name: FBA028-8579630-4550764 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236576) | Created: 2024-12-25 10:22:02
+
+Amazon Order ID: 402-6228835-7156336
+  Duplicate count: 2
+  - Odoo ID: 94311 | Name: FBA402-6228835-7156336 | Amount: EUR 38.66 | Status: no | Invoice: NO | Created: 2024-11-14 09:06:49
+  - Odoo ID: 104247 | Name: FBA402-6228835-7156336 | Amount: EUR 31.95 | Status: invoiced | Invoice: YES (236457) | Created: 2024-12-25 17:38:45
+
+Amazon Order ID: 406-0280616-5945958
+  Duplicate count: 2
+  - Odoo ID: 94316 | Name: FBA406-0280616-5945958 | Amount: EUR 26.56 | Status: no | Invoice: NO | Created: 2024-11-14 09:07:16
+  - Odoo ID: 104241 | Name: FBA406-0280616-5945958 | Amount: EUR 21.95 | Status: invoiced | Invoice: YES (236256) | Created: 2024-12-25 17:38:31
+
+Amazon Order ID: 303-2697127-5905945
+  Duplicate count: 2
+  - Odoo ID: 94390 | Name: FBA303-2697127-5905945 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-14 17:01:27
+  - Odoo ID: 104223 | Name: FBA303-2697127-5905945 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236031) | Created: 2024-12-25 17:38:04
+
+Amazon Order ID: 304-3408651-8475528
+  Duplicate count: 2
+  - Odoo ID: 94396 | Name: FBA304-3408651-8475528 | Amount: EUR 24.36 | Status: invoiced | Invoice: YES (357817) | Created: 2024-11-14 17:01:49
+  - Odoo ID: 104178 | Name: FBA304-3408651-8475528 | Amount: EUR 29.18 | Status: to invoice | Invoice: NO | Created: 2024-12-25 10:22:16
+
+Amazon Order ID: 305-8720192-8836325
+  Duplicate count: 2
+  - Odoo ID: 94402 | Name: FBA305-8720192-8836325 | Amount: EUR 35.03 | Status: no | Invoice: NO | Created: 2024-11-14 17:02:15
+  - Odoo ID: 104222 | Name: FBA305-8720192-8836325 | Amount: EUR 28.95 | Status: invoiced | Invoice: YES (236034) | Created: 2024-12-25 17:38:04
+
+Amazon Order ID: 402-1387212-9645142
+  Duplicate count: 2
+  - Odoo ID: 94408 | Name: FBA402-1387212-9645142 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-14 17:02:38
+  - Odoo ID: 104225 | Name: FBA402-1387212-9645142 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236254) | Created: 2024-12-25 17:38:09
+
+Amazon Order ID: 402-8705425-8763556
+  Duplicate count: 2
+  - Odoo ID: 94409 | Name: FBA402-8705425-8763556 | Amount: EUR 36.24 | Status: no | Invoice: NO | Created: 2024-11-14 17:02:40
+  - Odoo ID: 104236 | Name: FBA402-8705425-8763556 | Amount: EUR 29.95 | Status: invoiced | Invoice: YES (236390) | Created: 2024-12-25 17:38:26
+
+Amazon Order ID: 406-3025211-4737944
+  Duplicate count: 2
+  - Odoo ID: 94414 | Name: FBA406-3025211-4737944 | Amount: EUR 32.61 | Status: no | Invoice: NO | Created: 2024-11-14 17:02:54
+  - Odoo ID: 104173 | Name: FBA406-3025211-4737944 | Amount: EUR 53.90 | Status: to invoice | Invoice: YES (236210,236214) | Created: 2024-12-25 10:22:02
+
+Amazon Order ID: 303-7828668-0550709
+  Duplicate count: 2
+  - Odoo ID: 94416 | Name: FBA303-7828668-0550709 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-14 17:02:59
+  - Odoo ID: 104214 | Name: FBA303-7828668-0550709 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236049) | Created: 2024-12-25 17:27:34
+
+Amazon Order ID: 408-8808304-5486709
+  Duplicate count: 2
+  - Odoo ID: 94421 | Name: FBA408-8808304-5486709 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-14 17:03:10
+  - Odoo ID: 104227 | Name: FBA408-8808304-5486709 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (236456) | Created: 2024-12-25 17:38:09
+
+Amazon Order ID: 406-6818193-5917909
+  Duplicate count: 2
+  - Odoo ID: 94428 | Name: FBA406-6818193-5917909 | Amount: EUR 57.96 | Status: no | Invoice: NO | Created: 2024-11-14 17:03:27
+  - Odoo ID: 104226 | Name: FBA406-6818193-5917909 | Amount: EUR 47.90 | Status: invoiced | Invoice: YES (236118) | Created: 2024-12-25 17:38:09
+
+Amazon Order ID: 405-6464759-3499569
+  Duplicate count: 2
+  - Odoo ID: 94471 | Name: FBA405-6464759-3499569 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-15 01:03:31
+  - Odoo ID: 104177 | Name: FBA405-6464759-3499569 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236249) | Created: 2024-12-25 10:22:16
+
+Amazon Order ID: 306-0226120-5853151
+  Duplicate count: 2
+  - Odoo ID: 94472 | Name: FBA306-0226120-5853151 | Amount: EUR 18.14 | Status: no | Invoice: NO | Created: 2024-11-15 01:03:36
+  - Odoo ID: 104161 | Name: FBA306-0226120-5853151 | Amount: EUR 14.99 | Status: invoiced | Invoice: YES (236020) | Created: 2024-12-25 10:21:28
+
+Amazon Order ID: 406-6687375-7578748
+  Duplicate count: 2
+  - Odoo ID: 94474 | Name: FBA406-6687375-7578748 | Amount: EUR 35.23 | Status: invoiced | Invoice: YES (357849) | Created: 2024-11-15 01:03:43
+  - Odoo ID: 104167 | Name: FBA406-6687375-7578748 | Amount: EUR 40.06 | Status: to invoice | Invoice: NO | Created: 2024-12-25 10:21:50
+
+Amazon Order ID: 402-2300082-0133126
+  Duplicate count: 2
+  - Odoo ID: 94482 | Name: FBA402-2300082-0133126 | Amount: EUR 36.55 | Status: no | Invoice: NO | Created: 2024-11-15 01:04:08
+  - Odoo ID: 104175 | Name: FBA402-2300082-0133126 | Amount: EUR 30.21 | Status: invoiced | Invoice: YES (236144) | Created: 2024-12-25 10:22:02
+
+Amazon Order ID: 306-9710118-5002757
+  Duplicate count: 2
+  - Odoo ID: 94483 | Name: FBA306-9710118-5002757 | Amount: EUR 31.40 | Status: to invoice | Invoice: YES (236579) | Created: 2024-11-15 01:04:10
+  - Odoo ID: 104217 | Name: FBA306-9710118-5002757 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236064) | Created: 2024-12-25 17:37:54
+
+Amazon Order ID: 304-1387844-9585167
+  Duplicate count: 2
+  - Odoo ID: 94486 | Name: FBA304-1387844-9585167 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-15 01:04:18
+  - Odoo ID: 104215 | Name: FBA304-1387844-9585167 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236079) | Created: 2024-12-25 17:37:54
+
+Amazon Order ID: 406-9693657-4677906
+  Duplicate count: 2
+  - Odoo ID: 94493 | Name: FBA406-9693657-4677906 | Amount: EUR 33.82 | Status: no | Invoice: NO | Created: 2024-11-15 01:04:36
+  - Odoo ID: 104213 | Name: FBA406-9693657-4677906 | Amount: EUR 27.95 | Status: invoiced | Invoice: YES (236141) | Created: 2024-12-25 17:27:34
+
+Amazon Order ID: 305-5131728-8669904
+  Duplicate count: 2
+  - Odoo ID: 94517 | Name: FBA305-5131728-8669904 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-15 09:05:50
+  - Odoo ID: 104176 | Name: FBA305-5131728-8669904 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236026) | Created: 2024-12-25 10:22:16
+
+Amazon Order ID: 028-6015573-4081163
+  Duplicate count: 2
+  - Odoo ID: 94522 | Name: FBA028-6015573-4081163 | Amount: EUR 25.37 | Status: no | Invoice: NO | Created: 2024-11-15 09:06:11
+  - Odoo ID: 104103 | Name: FBA028-6015573-4081163 | Amount: EUR 20.97 | Status: to invoice | Invoice: NO | Created: 2024-12-25 10:19:11
+
+Amazon Order ID: 306-1863091-8078748
+  Duplicate count: 2
+  - Odoo ID: 94525 | Name: FBA306-1863091-8078748 | Amount: EUR 28.98 | Status: to invoice | Invoice: YES (236582) | Created: 2024-11-15 09:06:22
+  - Odoo ID: 104141 | Name: FBA306-1863091-8078748 | Amount: EUR 27.94 | Status: invoiced | Invoice: YES (236065) | Created: 2024-12-25 10:20:24
+
+Amazon Order ID: 171-5758839-5762724
+  Duplicate count: 2
+  - Odoo ID: 94527 | Name: FBA171-5758839-5762724 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-15 09:06:28
+  - Odoo ID: 104169 | Name: FBA171-5758839-5762724 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236394) | Created: 2024-12-25 10:22:02
+
+Amazon Order ID: 302-4583415-1892320
+  Duplicate count: 2
+  - Odoo ID: 94591 | Name: FBA302-4583415-1892320 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-15 17:04:56
+  - Odoo ID: 104142 | Name: FBA302-4583415-1892320 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236581) | Created: 2024-12-25 10:20:24
+
+Amazon Order ID: 408-8482482-5198737
+  Duplicate count: 2
+  - Odoo ID: 94595 | Name: FBA408-8482482-5198737 | Amount: EUR 36.24 | Status: no | Invoice: NO | Created: 2024-11-15 17:05:52
+  - Odoo ID: 104044 | Name: FBA408-8482482-5198737 | Amount: EUR 29.95 | Status: invoiced | Invoice: YES (236373) | Created: 2024-12-25 10:16:59
+
+Amazon Order ID: 402-9855124-7325927
+  Duplicate count: 2
+  - Odoo ID: 94602 | Name: FBA402-9855124-7325927 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-15 17:07:05
+  - Odoo ID: 104157 | Name: FBA402-9855124-7325927 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236142) | Created: 2024-12-25 10:21:28
+
+Amazon Order ID: 404-6891155-1165154
+  Duplicate count: 2
+  - Odoo ID: 94603 | Name: FBA404-6891155-1165154 | Amount: EUR 21.72 | Status: no | Invoice: NO | Created: 2024-11-15 17:07:21
+  - Odoo ID: 104101 | Name: FBA404-6891155-1165154 | Amount: EUR 17.95 | Status: invoiced | Invoice: YES (236560) | Created: 2024-12-25 10:19:04
+
+Amazon Order ID: 404-6512954-1948310
+  Duplicate count: 2
+  - Odoo ID: 94605 | Name: FBA404-6512954-1948310 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-15 17:07:34
+  - Odoo ID: 104155 | Name: FBA404-6512954-1948310 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236223) | Created: 2024-12-25 10:21:18
+
+Amazon Order ID: 403-9224967-4769128
+  Duplicate count: 2
+  - Odoo ID: 94611 | Name: FBA403-9224967-4769128 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-15 17:08:24
+  - Odoo ID: 104158 | Name: FBA403-9224967-4769128 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236464) | Created: 2024-12-25 10:21:28
+
+Amazon Order ID: 306-4314219-7736343
+  Duplicate count: 2
+  - Odoo ID: 94614 | Name: FBA306-4314219-7736343 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-15 17:09:03
+  - Odoo ID: 104163 | Name: FBA306-4314219-7736343 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (240365) | Created: 2024-12-25 10:21:39
+
+Amazon Order ID: 028-2233900-5573157
+  Duplicate count: 2
+  - Odoo ID: 94619 | Name: FBA028-2233900-5573157 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-15 17:09:41
+  - Odoo ID: 104159 | Name: FBA028-2233900-5573157 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (239585) | Created: 2024-12-25 10:21:28
+
+Amazon Order ID: 305-9705841-1670757
+  Duplicate count: 2
+  - Odoo ID: 94626 | Name: FBA305-9705841-1670757 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-15 17:13:39
+  - Odoo ID: 104162 | Name: FBA305-9705841-1670757 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236076) | Created: 2024-12-25 10:21:28
+
+Amazon Order ID: 171-7955490-6097161
+  Duplicate count: 2
+  - Odoo ID: 94630 | Name: FBA171-7955490-6097161 | Amount: EUR 35.03 | Status: no | Invoice: NO | Created: 2024-11-15 17:16:33
+  - Odoo ID: 104133 | Name: FBA171-7955490-6097161 | Amount: EUR 28.95 | Status: invoiced | Invoice: YES (236608) | Created: 2024-12-25 10:20:17
+
+Amazon Order ID: 405-0536742-1962766
+  Duplicate count: 2
+  - Odoo ID: 94632 | Name: FBA405-0536742-1962766 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-15 17:18:31
+  - Odoo ID: 104111 | Name: FBA405-0536742-1962766 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236244) | Created: 2024-12-25 10:19:28
+
+Amazon Order ID: 304-3970097-9410743
+  Duplicate count: 2
+  - Odoo ID: 94633 | Name: FBA304-3970097-9410743 | Amount: EUR 62.80 | Status: no | Invoice: NO | Created: 2024-11-15 17:19:09
+  - Odoo ID: 104152 | Name: FBA304-3970097-9410743 | Amount: EUR 51.90 | Status: invoiced | Invoice: YES (239169) | Created: 2024-12-25 10:21:06
+
+Amazon Order ID: 303-2828256-0555526
+  Duplicate count: 2
+  - Odoo ID: 94636 | Name: FBA303-2828256-0555526 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-15 17:31:52
+  - Odoo ID: 104150 | Name: FBA303-2828256-0555526 | Amount: EUR 29.94 | Status: invoiced | Invoice: YES (239981) | Created: 2024-12-25 10:20:58
+
+Amazon Order ID: 305-2004819-7564329
+  Duplicate count: 2
+  - Odoo ID: 94679 | Name: FBA305-2004819-7564329 | Amount: EUR 35.03 | Status: no | Invoice: NO | Created: 2024-11-16 01:10:27
+  - Odoo ID: 104138 | Name: FBA305-2004819-7564329 | Amount: EUR 28.95 | Status: invoiced | Invoice: YES (236067) | Created: 2024-12-25 10:20:17
+
+Amazon Order ID: 306-6678218-0849130
+  Duplicate count: 2
+  - Odoo ID: 94683 | Name: FBA306-6678218-0849130 | Amount: EUR 72.48 | Status: no | Invoice: NO | Created: 2024-11-16 01:15:02
+  - Odoo ID: 104108 | Name: FBA306-6678218-0849130 | Amount: EUR 59.90 | Status: invoiced | Invoice: YES (239384) | Created: 2024-12-25 10:19:21
+
+Amazon Order ID: 305-3697272-4854744
+  Duplicate count: 2
+  - Odoo ID: 94742 | Name: FBA305-3697272-4854744 | Amount: EUR 61.59 | Status: no | Invoice: NO | Created: 2024-11-16 17:03:37
+  - Odoo ID: 104132 | Name: FBA305-3697272-4854744 | Amount: EUR 50.90 | Status: to invoice | Invoice: YES (236068) | Created: 2024-12-25 10:20:10
+
+Amazon Order ID: 306-8833006-1831517
+  Duplicate count: 2
+  - Odoo ID: 94748 | Name: FBA306-8833006-1831517 | Amount: EUR 30.19 | Status: to invoice | Invoice: YES (241776) | Created: 2024-11-16 17:05:36
+  - Odoo ID: 104139 | Name: FBA306-8833006-1831517 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236074) | Created: 2024-12-25 10:20:24
+
+Amazon Order ID: 405-2205488-6415511
+  Duplicate count: 2
+  - Odoo ID: 94750 | Name: FBA405-2205488-6415511 | Amount: EUR 32.61 | Status: no | Invoice: NO | Created: 2024-11-16 17:06:20
+  - Odoo ID: 104110 | Name: FBA405-2205488-6415511 | Amount: EUR 26.95 | Status: invoiced | Invoice: YES (236516) | Created: 2024-12-25 10:19:21
+
+Amazon Order ID: 303-0315327-5901947
+  Duplicate count: 2
+  - Odoo ID: 94751 | Name: FBA303-0315327-5901947 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-16 17:06:33
+  - Odoo ID: 104120 | Name: FBA303-0315327-5901947 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236016) | Created: 2024-12-25 10:19:51
+
+Amazon Order ID: 171-9755857-2632310
+  Duplicate count: 2
+  - Odoo ID: 94754 | Name: FBA171-9755857-2632310 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-16 17:07:21
+  - Odoo ID: 104131 | Name: FBA171-9755857-2632310 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236247) | Created: 2024-12-25 10:20:10
+
+Amazon Order ID: 404-5859723-0476363
+  Duplicate count: 2
+  - Odoo ID: 94757 | Name: FBA404-5859723-0476363 | Amount: EUR 35.03 | Status: no | Invoice: NO | Created: 2024-11-16 17:08:16
+  - Odoo ID: 104137 | Name: FBA404-5859723-0476363 | Amount: EUR 28.95 | Status: invoiced | Invoice: YES (236609) | Created: 2024-12-25 10:20:17
+
+Amazon Order ID: 028-7710616-9387531
+  Duplicate count: 2
+  - Odoo ID: 94761 | Name: FBA028-7710616-9387531 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-16 17:09:20
+  - Odoo ID: 104107 | Name: FBA028-7710616-9387531 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236023) | Created: 2024-12-25 10:19:21
+
+Amazon Order ID: 028-1599278-0653934
+  Duplicate count: 2
+  - Odoo ID: 94762 | Name: FBA028-1599278-0653934 | Amount: EUR 36.24 | Status: no | Invoice: NO | Created: 2024-11-16 17:09:32
+  - Odoo ID: 104000 | Name: FBA028-1599278-0653934 | Amount: EUR 33.94 | Status: invoiced | Invoice: YES (240421) | Created: 2024-12-25 10:15:37
+
+Amazon Order ID: 404-5480463-4359547
+  Duplicate count: 2
+  - Odoo ID: 94765 | Name: FBA404-5480463-4359547 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-16 17:10:34
+  - Odoo ID: 104087 | Name: FBA404-5480463-4359547 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236611) | Created: 2024-12-25 10:18:42
+
+Amazon Order ID: 303-2960497-6125157
+  Duplicate count: 2
+  - Odoo ID: 94766 | Name: FBA303-2960497-6125157 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-16 17:11:35
+  - Odoo ID: 104134 | Name: FBA303-2960497-6125157 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236028) | Created: 2024-12-25 10:20:17
+
+Amazon Order ID: 171-3258548-7371566
+  Duplicate count: 2
+  - Odoo ID: 94771 | Name: FBA171-3258548-7371566 | Amount: EUR 27.77 | Status: no | Invoice: NO | Created: 2024-11-16 17:16:54
+  - Odoo ID: 104004 | Name: FBA171-3258548-7371566 | Amount: EUR 22.95 | Status: invoiced | Invoice: YES (236477) | Created: 2024-12-25 10:15:47
+
+Amazon Order ID: 171-5818901-8065955
+  Duplicate count: 2
+  - Odoo ID: 94772 | Name: FBA171-5818901-8065955 | Amount: EUR 26.56 | Status: no | Invoice: NO | Created: 2024-11-16 17:17:56
+  - Odoo ID: 104006 | Name: FBA171-5818901-8065955 | Amount: EUR 21.95 | Status: invoiced | Invoice: YES (236478) | Created: 2024-12-25 10:15:47
+
+Amazon Order ID: 302-3692517-9445926
+  Duplicate count: 2
+  - Odoo ID: 94779 | Name: FBA302-3692517-9445926 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-16 17:27:03
+  - Odoo ID: 104140 | Name: FBA302-3692517-9445926 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236586) | Created: 2024-12-25 10:20:24
+
+Amazon Order ID: 305-1359356-2018766
+  Duplicate count: 2
+  - Odoo ID: 94781 | Name: FBA305-1359356-2018766 | Amount: EUR 36.24 | Status: no | Invoice: NO | Created: 2024-11-16 17:27:55
+  - Odoo ID: 104116 | Name: FBA305-1359356-2018766 | Amount: EUR 29.95 | Status: invoiced | Invoice: YES (239476) | Created: 2024-12-25 10:19:37
+
+Amazon Order ID: 305-7624509-5311506
+  Duplicate count: 2
+  - Odoo ID: 94784 | Name: FBA305-7624509-5311506 | Amount: EUR 18.14 | Status: no | Invoice: NO | Created: 2024-11-16 17:29:08
+  - Odoo ID: 104026 | Name: FBA305-7624509-5311506 | Amount: EUR 14.99 | Status: invoiced | Invoice: YES (240719) | Created: 2024-12-25 10:16:26
+
+Amazon Order ID: 404-2390687-6654752
+  Duplicate count: 2
+  - Odoo ID: 94785 | Name: FBA404-2390687-6654752 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-16 17:29:23
+  - Odoo ID: 104078 | Name: FBA404-2390687-6654752 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236621) | Created: 2024-12-25 10:18:18
+
+Amazon Order ID: 304-3718425-3317957
+  Duplicate count: 2
+  - Odoo ID: 94786 | Name: FBA304-3718425-3317957 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-16 17:29:37
+  - Odoo ID: 104135 | Name: FBA304-3718425-3317957 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236071) | Created: 2024-12-25 10:20:17
+
+Amazon Order ID: 305-5669657-8920369
+  Duplicate count: 2
+  - Odoo ID: 94817 | Name: FBA305-5669657-8920369 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-17 01:07:44
+  - Odoo ID: 104122 | Name: FBA305-5669657-8920369 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (236572) | Created: 2024-12-25 10:20:01
+
+Amazon Order ID: 404-5462080-8093938
+  Duplicate count: 2
+  - Odoo ID: 94819 | Name: FBA404-5462080-8093938 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-17 01:08:19
+  - Odoo ID: 104129 | Name: FBA404-5462080-8093938 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (236422) | Created: 2024-12-25 10:20:06
+
+Amazon Order ID: 171-0258246-6559553
+  Duplicate count: 2
+  - Odoo ID: 94823 | Name: FBA171-0258246-6559553 | Amount: EUR 82.16 | Status: no | Invoice: NO | Created: 2024-11-17 01:09:45
+  - Odoo ID: 104079 | Name: FBA171-0258246-6559553 | Amount: EUR 67.90 | Status: invoiced | Invoice: YES (236420) | Created: 2024-12-25 10:18:25
+
+Amazon Order ID: 408-3680382-4985932
+  Duplicate count: 2
+  - Odoo ID: 94826 | Name: FBA408-3680382-4985932 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-17 01:10:36
+  - Odoo ID: 104128 | Name: FBA408-3680382-4985932 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236226) | Created: 2024-12-25 10:20:06
+
+Amazon Order ID: 171-2971917-9582718
+  Duplicate count: 2
+  - Odoo ID: 94832 | Name: FBA171-2971917-9582718 | Amount: EUR 33.82 | Status: no | Invoice: NO | Created: 2024-11-17 01:15:54
+  - Odoo ID: 104069 | Name: FBA171-2971917-9582718 | Amount: EUR 27.95 | Status: invoiced | Invoice: YES (236592) | Created: 2024-12-25 10:17:51
+
+Amazon Order ID: 407-7305396-7476351
+  Duplicate count: 2
+  - Odoo ID: 94835 | Name: FBA407-7305396-7476351 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-17 01:17:53
+  - Odoo ID: 104090 | Name: FBA407-7305396-7476351 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (236522) | Created: 2024-12-25 10:18:49
+
+Amazon Order ID: 302-0713365-3507539
+  Duplicate count: 2
+  - Odoo ID: 94847 | Name: FBA302-0713365-3507539 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-17 09:05:47
+  - Odoo ID: 104121 | Name: FBA302-0713365-3507539 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236036) | Created: 2024-12-25 10:19:51
+
+Amazon Order ID: 403-7008946-0736339
+  Duplicate count: 2
+  - Odoo ID: 94849 | Name: FBA403-7008946-0736339 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-17 09:07:44
+  - Odoo ID: 104126 | Name: FBA403-7008946-0736339 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236590) | Created: 2024-12-25 10:20:06
+
+Amazon Order ID: 306-5600918-5584360
+  Duplicate count: 2
+  - Odoo ID: 94854 | Name: FBA306-5600918-5584360 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-17 09:11:30
+  - Odoo ID: 104112 | Name: FBA306-5600918-5584360 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236571) | Created: 2024-12-25 10:19:28
+
+Amazon Order ID: 406-4549635-6904322
+  Duplicate count: 2
+  - Odoo ID: 94914 | Name: FBA406-4549635-6904322 | Amount: EUR 55.60 | Status: no | Invoice: NO | Created: 2024-11-17 17:07:15
+  - Odoo ID: 103937 | Name: FBA406-4549635-6904322 | Amount: EUR 45.95 | Status: invoiced | Invoice: YES (236368) | Created: 2024-12-25 09:43:15
+
+Amazon Order ID: 028-7950264-3213900
+  Duplicate count: 2
+  - Odoo ID: 94916 | Name: FBA028-7950264-3213900 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-17 17:08:24
+  - Odoo ID: 104106 | Name: FBA028-7950264-3213900 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (239551) | Created: 2024-12-25 10:19:11
+
+Amazon Order ID: 408-5275202-7553928
+  Duplicate count: 2
+  - Odoo ID: 94918 | Name: FBA408-5275202-7553928 | Amount: EUR 55.54 | Status: no | Invoice: NO | Created: 2024-11-17 17:09:31
+  - Odoo ID: 104099 | Name: FBA408-5275202-7553928 | Amount: EUR 45.90 | Status: invoiced | Invoice: YES (236591) | Created: 2024-12-25 10:19:04
+
+Amazon Order ID: 304-1738688-3252331
+  Duplicate count: 2
+  - Odoo ID: 94930 | Name: FBA304-1738688-3252331 | Amount: EUR 36.41 | Status: no | Invoice: NO | Created: 2024-11-17 17:18:34
+  - Odoo ID: 104123 | Name: FBA304-1738688-3252331 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236030) | Created: 2024-12-25 10:20:01
+
+Amazon Order ID: 405-2745940-9121907
+  Duplicate count: 2
+  - Odoo ID: 94931 | Name: FBA405-2745940-9121907 | Amount: EUR 60.44 | Status: no | Invoice: NO | Created: 2024-11-17 17:19:14
+  - Odoo ID: 104100 | Name: FBA405-2745940-9121907 | Amount: EUR 49.95 | Status: invoiced | Invoice: YES (236407) | Created: 2024-12-25 10:19:04
+
+Amazon Order ID: 306-3349639-1589141
+  Duplicate count: 2
+  - Odoo ID: 94932 | Name: FBA306-3349639-1589141 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-17 17:20:23
+  - Odoo ID: 104119 | Name: FBA306-3349639-1589141 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236077) | Created: 2024-12-25 10:19:44
+
+Amazon Order ID: 407-4398969-6367509
+  Duplicate count: 2
+  - Odoo ID: 94936 | Name: FBA407-4398969-6367509 | Amount: EUR 22.93 | Status: to invoice | Invoice: YES (241845) | Created: 2024-11-17 17:29:59
+  - Odoo ID: 102337 | Name: FBA407-4398969-6367509 | Amount: EUR 18.95 | Status: invoiced | Invoice: YES (236370) | Created: 2024-12-24 09:13:14
+
+Amazon Order ID: 028-1581475-4635522
+  Duplicate count: 2
+  - Odoo ID: 94939 | Name: FBA028-1581475-4635522 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-17 17:31:11
+  - Odoo ID: 104118 | Name: FBA028-1581475-4635522 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236570) | Created: 2024-12-25 10:19:44
+
+Amazon Order ID: 405-3205137-4401152
+  Duplicate count: 2
+  - Odoo ID: 94943 | Name: FBA405-3205137-4401152 | Amount: EUR 32.61 | Status: no | Invoice: NO | Created: 2024-11-17 17:33:57
+  - Odoo ID: 104096 | Name: FBA405-3205137-4401152 | Amount: EUR 26.95 | Status: invoiced | Invoice: YES (236521) | Created: 2024-12-25 10:18:56
+
+Amazon Order ID: 406-3007297-3352360
+  Duplicate count: 2
+  - Odoo ID: 94961 | Name: FBA406-3007297-3352360 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-17 17:45:24
+  - Odoo ID: 104109 | Name: FBA406-3007297-3352360 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236589) | Created: 2024-12-25 10:19:21
+
+Amazon Order ID: 404-2593933-6847542
+  Duplicate count: 2
+  - Odoo ID: 94963 | Name: FBA404-2593933-6847542 | Amount: EUR 36.55 | Status: no | Invoice: NO | Created: 2024-11-17 17:46:24
+  - Odoo ID: 104105 | Name: FBA404-2593933-6847542 | Amount: EUR 30.21 | Status: invoiced | Invoice: YES (236093) | Created: 2024-12-25 10:19:11
+
+Amazon Order ID: 405-6712362-7457967
+  Duplicate count: 2
+  - Odoo ID: 94964 | Name: FBA405-6712362-7457967 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-17 17:46:58
+  - Odoo ID: 104113 | Name: FBA405-6712362-7457967 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236287) | Created: 2024-12-25 10:19:28
+
+Amazon Order ID: 171-5385876-8697966
+  Duplicate count: 2
+  - Odoo ID: 94965 | Name: FBA171-5385876-8697966 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-17 17:52:49
+  - Odoo ID: 104086 | Name: FBA171-5385876-8697966 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236362) | Created: 2024-12-25 10:18:32
+
+Amazon Order ID: 171-5825999-0448315
+  Duplicate count: 2
+  - Odoo ID: 94972 | Name: FBA171-5825999-0448315 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-17 17:57:22
+  - Odoo ID: 104088 | Name: FBA171-5825999-0448315 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (236467) | Created: 2024-12-25 10:18:42
+
+Amazon Order ID: 304-7624946-2337131
+  Duplicate count: 2
+  - Odoo ID: 94973 | Name: FBA304-7624946-2337131 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-17 17:57:52
+  - Odoo ID: 104115 | Name: FBA304-7624946-2337131 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236075) | Created: 2024-12-25 10:19:37
+
+Amazon Order ID: 404-2329807-8011547
+  Duplicate count: 2
+  - Odoo ID: 95006 | Name: FBA404-2329807-8011547 | Amount: EUR 194.39 | Status: no | Invoice: NO | Created: 2024-11-18 01:01:39
+  - Odoo ID: 104043 | Name: FBA404-2329807-8011547 | Amount: EUR 206.55 | Status: to invoice | Invoice: YES (236375,236377) | Created: 2024-12-25 10:16:59
+
+Amazon Order ID: 402-9668268-5501909
+  Duplicate count: 2
+  - Odoo ID: 95008 | Name: FBA402-9668268-5501909 | Amount: EUR 36.24 | Status: no | Invoice: NO | Created: 2024-11-18 01:02:04
+  - Odoo ID: 104070 | Name: FBA402-9668268-5501909 | Amount: EUR 29.95 | Status: invoiced | Invoice: YES (236364) | Created: 2024-12-25 10:17:56
+
+Amazon Order ID: 408-6606451-6629902
+  Duplicate count: 2
+  - Odoo ID: 95014 | Name: FBA408-6606451-6629902 | Amount: EUR 59.44 | Status: no | Invoice: NO | Created: 2024-11-18 01:03:25
+  - Odoo ID: 104061 | Name: FBA408-6606451-6629902 | Amount: EUR 49.12 | Status: to invoice | Invoice: NO | Created: 2024-12-25 10:17:44
+
+Amazon Order ID: 306-8597890-8276307
+  Duplicate count: 2
+  - Odoo ID: 95016 | Name: FBA306-8597890-8276307 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-18 01:03:54
+  - Odoo ID: 104098 | Name: FBA306-8597890-8276307 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236660) | Created: 2024-12-25 10:19:04
+
+Amazon Order ID: 302-2508831-0683557
+  Duplicate count: 2
+  - Odoo ID: 95021 | Name: FBA302-2508831-0683557 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-18 01:05:32
+  - Odoo ID: 104085 | Name: FBA302-2508831-0683557 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (236658) | Created: 2024-12-25 10:18:32
+
+Amazon Order ID: 305-9026979-8889138
+  Duplicate count: 2
+  - Odoo ID: 95025 | Name: FBA305-9026979-8889138 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-18 01:07:03
+  - Odoo ID: 104074 | Name: FBA305-9026979-8889138 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (240487) | Created: 2024-12-25 10:18:12
+
+Amazon Order ID: 402-5348365-4308348
+  Duplicate count: 2
+  - Odoo ID: 95026 | Name: FBA402-5348365-4308348 | Amount: EUR 54.41 | Status: no | Invoice: NO | Created: 2024-11-18 01:07:34
+  - Odoo ID: 104104 | Name: FBA402-5348365-4308348 | Amount: EUR 44.97 | Status: invoiced | Invoice: YES (236492) | Created: 2024-12-25 10:19:11
+
+Amazon Order ID: 402-9109557-5171534
+  Duplicate count: 2
+  - Odoo ID: 95027 | Name: FBA402-9109557-5171534 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-18 01:07:56
+  - Odoo ID: 104102 | Name: FBA402-9109557-5171534 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236493) | Created: 2024-12-25 10:19:11
+
+Amazon Order ID: 405-2457281-7701912
+  Duplicate count: 2
+  - Odoo ID: 95090 | Name: FBA405-2457281-7701912 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-18 09:05:52
+  - Odoo ID: 104082 | Name: FBA405-2457281-7701912 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236359) | Created: 2024-12-25 10:18:32
+
+Amazon Order ID: 303-6774177-8976305
+  Duplicate count: 2
+  - Odoo ID: 95096 | Name: FBA303-6774177-8976305 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-18 09:07:54
+  - Odoo ID: 104051 | Name: FBA303-6774177-8976305 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236675) | Created: 2024-12-25 10:17:15
+
+Amazon Order ID: 305-0002972-2291517
+  Duplicate count: 2
+  - Odoo ID: 95106 | Name: FBA305-0002972-2291517 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-18 09:09:45
+  - Odoo ID: 104095 | Name: FBA305-0002972-2291517 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236664) | Created: 2024-12-25 10:18:56
+
+Amazon Order ID: 405-0741627-5693122
+  Duplicate count: 2
+  - Odoo ID: 95107 | Name: FBA405-0741627-5693122 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-18 09:10:04
+  - Odoo ID: 104093 | Name: FBA405-0741627-5693122 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (236615) | Created: 2024-12-25 10:18:49
+
+Amazon Order ID: 405-9688425-7212369
+  Duplicate count: 2
+  - Odoo ID: 95108 | Name: FBA405-9688425-7212369 | Amount: EUR 55.60 | Status: to invoice | Invoice: YES (236365) | Created: 2024-11-18 09:10:17
+  - Odoo ID: 104049 | Name: FBA405-9688425-7212369 | Amount: EUR 45.95 | Status: invoiced | Invoice: YES (236616) | Created: 2024-12-25 10:17:08
+
+Amazon Order ID: 306-9223255-3943526
+  Duplicate count: 2
+  - Odoo ID: 95203 | Name: FBA306-9223255-3943526 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-18 17:08:11
+  - Odoo ID: 104063 | Name: FBA306-9223255-3943526 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236659) | Created: 2024-12-25 10:17:44
+
+Amazon Order ID: 404-4656372-5377948
+  Duplicate count: 2
+  - Odoo ID: 95205 | Name: FBA404-4656372-5377948 | Amount: EUR 55.60 | Status: no | Invoice: NO | Created: 2024-11-18 17:08:53
+  - Odoo ID: 104055 | Name: FBA404-4656372-5377948 | Amount: EUR 45.95 | Status: invoiced | Invoice: YES (236357) | Created: 2024-12-25 10:17:15
+
+Amazon Order ID: 304-9246661-4085104
+  Duplicate count: 2
+  - Odoo ID: 95206 | Name: FBA304-9246661-4085104 | Amount: EUR 35.03 | Status: no | Invoice: NO | Created: 2024-11-18 17:09:10
+  - Odoo ID: 104076 | Name: FBA304-9246661-4085104 | Amount: EUR 28.95 | Status: invoiced | Invoice: YES (236665) | Created: 2024-12-25 10:18:18
+
+Amazon Order ID: 302-5998587-8998750
+  Duplicate count: 2
+  - Odoo ID: 95211 | Name: FBA302-5998587-8998750 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-18 17:10:57
+  - Odoo ID: 104073 | Name: FBA302-5998587-8998750 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (240500) | Created: 2024-12-25 10:18:12
+
+Amazon Order ID: 403-5551798-5430748
+  Duplicate count: 2
+  - Odoo ID: 95212 | Name: FBA403-5551798-5430748 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-18 17:11:48
+  - Odoo ID: 104024 | Name: FBA403-5551798-5430748 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236170) | Created: 2024-12-25 10:16:18
+
+Amazon Order ID: 403-6217144-0125919
+  Duplicate count: 2
+  - Odoo ID: 95214 | Name: FBA403-6217144-0125919 | Amount: EUR 39.87 | Status: no | Invoice: NO | Created: 2024-11-18 17:14:38
+  - Odoo ID: 104045 | Name: FBA403-6217144-0125919 | Amount: EUR 32.95 | Status: invoiced | Invoice: YES (236520) | Created: 2024-12-25 10:16:59
+
+Amazon Order ID: 405-8061278-4277933
+  Duplicate count: 2
+  - Odoo ID: 95217 | Name: FBA405-8061278-4277933 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-18 17:15:43
+  - Odoo ID: 104048 | Name: FBA405-8061278-4277933 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236363) | Created: 2024-12-25 10:17:08
+
+Amazon Order ID: 171-6766580-8650709
+  Duplicate count: 2
+  - Odoo ID: 95221 | Name: FBA171-6766580-8650709 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-18 17:18:43
+  - Odoo ID: 104077 | Name: FBA171-6766580-8650709 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236366) | Created: 2024-12-25 10:18:18
+
+Amazon Order ID: 402-5490770-3597925
+  Duplicate count: 2
+  - Odoo ID: 95223 | Name: FBA402-5490770-3597925 | Amount: EUR 55.60 | Status: no | Invoice: NO | Created: 2024-11-18 17:20:05
+  - Odoo ID: 104056 | Name: FBA402-5490770-3597925 | Amount: EUR 45.95 | Status: invoiced | Invoice: YES (236614) | Created: 2024-12-25 10:17:28
+
+Amazon Order ID: 407-2337354-3126737
+  Duplicate count: 2
+  - Odoo ID: 95226 | Name: FBA407-2337354-3126737 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-18 17:28:58
+  - Odoo ID: 104072 | Name: FBA407-2337354-3126737 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236169) | Created: 2024-12-25 10:18:12
+
+Amazon Order ID: 171-2150409-2441924
+  Duplicate count: 2
+  - Odoo ID: 95228 | Name: FBA171-2150409-2441924 | Amount: EUR 24.14 | Status: no | Invoice: NO | Created: 2024-11-18 17:29:57
+  - Odoo ID: 104058 | Name: FBA171-2150409-2441924 | Amount: EUR 19.95 | Status: invoiced | Invoice: YES (236175) | Created: 2024-12-25 10:17:28
+
+Amazon Order ID: 406-9879914-0385935
+  Duplicate count: 2
+  - Odoo ID: 95229 | Name: FBA406-9879914-0385935 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-18 17:30:14
+  - Odoo ID: 104065 | Name: FBA406-9879914-0385935 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236321) | Created: 2024-12-25 10:17:51
+
+Amazon Order ID: 028-3443533-5173133
+  Duplicate count: 2
+  - Odoo ID: 95230 | Name: FBA028-3443533-5173133 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-18 17:30:29
+  - Odoo ID: 104071 | Name: FBA028-3443533-5173133 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (240522) | Created: 2024-12-25 10:18:06
+
+Amazon Order ID: 304-3365865-6260325
+  Duplicate count: 2
+  - Odoo ID: 95239 | Name: FBA304-3365865-6260325 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-18 17:34:05
+  - Odoo ID: 103987 | Name: FBA304-3365865-6260325 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (240693) | Created: 2024-12-25 10:15:03
+
+Amazon Order ID: 408-2354043-2330753
+  Duplicate count: 2
+  - Odoo ID: 95240 | Name: FBA408-2354043-2330753 | Amount: EUR 35.03 | Status: no | Invoice: NO | Created: 2024-11-18 17:34:23
+  - Odoo ID: 104068 | Name: FBA408-2354043-2330753 | Amount: EUR 28.95 | Status: invoiced | Invoice: YES (236360) | Created: 2024-12-25 10:17:51
+
+Amazon Order ID: 402-6020381-7843554
+  Duplicate count: 3
+  - Odoo ID: 95243 | Name: FBA402-6020381-7843554 | Amount: EUR 67.58 | Status: no | Invoice: NO | Created: 2024-11-18 17:35:38
+  - Odoo ID: 104008 | Name: FBA402-6020381-7843554 | Amount: EUR 18.95 | Status: to invoice | Invoice: NO | Created: 2024-12-25 10:15:47
+  - Odoo ID: 104007 | Name: FBA402-6020381-7843554 | Amount: EUR 36.90 | Status: invoiced | Invoice: YES (236480,236485) | Created: 2024-12-25 10:15:47
+
+Amazon Order ID: 407-5894241-4904337
+  Duplicate count: 2
+  - Odoo ID: 95301 | Name: FBA407-5894241-4904337 | Amount: EUR 36.24 | Status: no | Invoice: NO | Created: 2024-11-19 01:07:07
+  - Odoo ID: 103933 | Name: FBA407-5894241-4904337 | Amount: EUR 29.95 | Status: invoiced | Invoice: YES (236369) | Created: 2024-12-25 09:43:15
+
+Amazon Order ID: 303-2801235-8225900
+  Duplicate count: 2
+  - Odoo ID: 95303 | Name: FBA303-2801235-8225900 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-19 01:08:21
+  - Odoo ID: 104057 | Name: FBA303-2801235-8225900 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236661) | Created: 2024-12-25 10:17:28
+
+Amazon Order ID: 304-6009009-5233935
+  Duplicate count: 2
+  - Odoo ID: 95311 | Name: FBA304-6009009-5233935 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-19 01:11:21
+  - Odoo ID: 104015 | Name: FBA304-6009009-5233935 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236625) | Created: 2024-12-25 10:16:04
+
+Amazon Order ID: 408-3316072-8057167
+  Duplicate count: 2
+  - Odoo ID: 95312 | Name: FBA408-3316072-8057167 | Amount: EUR 60.44 | Status: no | Invoice: NO | Created: 2024-11-19 01:11:55
+  - Odoo ID: 104041 | Name: FBA408-3316072-8057167 | Amount: EUR 49.95 | Status: invoiced | Invoice: YES (236537) | Created: 2024-12-25 10:16:51
+
+Amazon Order ID: 302-3295571-1490720
+  Duplicate count: 2
+  - Odoo ID: 95313 | Name: FBA302-3295571-1490720 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-19 01:13:39
+  - Odoo ID: 104042 | Name: FBA302-3295571-1490720 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (240452) | Created: 2024-12-25 10:16:51
+
+Amazon Order ID: 303-1175004-5937102
+  Duplicate count: 2
+  - Odoo ID: 95316 | Name: FBA303-1175004-5937102 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-19 01:16:27
+  - Odoo ID: 104047 | Name: FBA303-1175004-5937102 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236629) | Created: 2024-12-25 10:17:08
+
+Amazon Order ID: 306-2224994-6458708
+  Duplicate count: 2
+  - Odoo ID: 95317 | Name: FBA306-2224994-6458708 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-19 01:16:55
+  - Odoo ID: 104033 | Name: FBA306-2224994-6458708 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236623) | Created: 2024-12-25 10:16:44
+
+Amazon Order ID: 405-0102863-6605915
+  Duplicate count: 2
+  - Odoo ID: 95322 | Name: FBA405-0102863-6605915 | Amount: EUR 48.28 | Status: no | Invoice: NO | Created: 2024-11-19 01:20:22
+  - Odoo ID: 103999 | Name: FBA405-0102863-6605915 | Amount: EUR 39.90 | Status: invoiced | Invoice: YES (236479) | Created: 2024-12-25 10:15:37
+
+Amazon Order ID: 303-2546512-6797147
+  Duplicate count: 2
+  - Odoo ID: 95324 | Name: FBA303-2546512-6797147 | Amount: EUR 95.28 | Status: no | Invoice: NO | Created: 2024-11-19 01:21:10
+  - Odoo ID: 104052 | Name: FBA303-2546512-6797147 | Amount: EUR 67.90 | Status: invoiced | Invoice: YES (236663) | Created: 2024-12-25 10:17:15
+
+Amazon Order ID: 303-7063234-9105938
+  Duplicate count: 2
+  - Odoo ID: 95326 | Name: FBA303-7063234-9105938 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-19 01:29:27
+  - Odoo ID: 104054 | Name: FBA303-7063234-9105938 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (240484) | Created: 2024-12-25 10:17:15
+
+Amazon Order ID: 306-3741033-7616322
+  Duplicate count: 2
+  - Odoo ID: 95327 | Name: FBA306-3741033-7616322 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-19 01:29:43
+  - Odoo ID: 104022 | Name: FBA306-3741033-7616322 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236626) | Created: 2024-12-25 10:16:18
+
+Amazon Order ID: 303-1934630-7305140
+  Duplicate count: 2
+  - Odoo ID: 95330 | Name: FBA303-1934630-7305140 | Amount: EUR 105.43 | Status: to invoice | Invoice: NO | Created: 2024-11-19 01:30:39
+  - Odoo ID: 104032 | Name: FBA303-1934630-7305140 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236662) | Created: 2024-12-25 10:16:26
+
+Amazon Order ID: 302-0364617-7197150
+  Duplicate count: 2
+  - Odoo ID: 95351 | Name: FBA302-0364617-7197150 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-19 09:02:24
+  - Odoo ID: 104010 | Name: FBA302-0364617-7197150 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (240692) | Created: 2024-12-25 10:15:47
+
+Amazon Order ID: 402-7994678-4877107
+  Duplicate count: 2
+  - Odoo ID: 95356 | Name: FBA402-7994678-4877107 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-19 09:05:18
+  - Odoo ID: 104013 | Name: FBA402-7994678-4877107 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236577) | Created: 2024-12-25 10:16:04
+
+Amazon Order ID: 028-2078547-9952308
+  Duplicate count: 2
+  - Odoo ID: 95357 | Name: FBA028-2078547-9952308 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-19 09:05:41
+  - Odoo ID: 104018 | Name: FBA028-2078547-9952308 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (240701) | Created: 2024-12-25 10:16:11
+
+Amazon Order ID: 305-0877912-0889137
+  Duplicate count: 2
+  - Odoo ID: 95358 | Name: FBA305-0877912-0889137 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-19 09:06:03
+  - Odoo ID: 104027 | Name: FBA305-0877912-0889137 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236631) | Created: 2024-12-25 10:16:26
+
+Amazon Order ID: 305-0307006-4105917
+  Duplicate count: 2
+  - Odoo ID: 95359 | Name: FBA305-0307006-4105917 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-19 09:06:29
+  - Odoo ID: 104029 | Name: FBA305-0307006-4105917 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236630) | Created: 2024-12-25 10:16:26
+
+Amazon Order ID: 305-1901991-4551566
+  Duplicate count: 2
+  - Odoo ID: 95361 | Name: FBA305-1901991-4551566 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-19 09:07:09
+  - Odoo ID: 104017 | Name: FBA305-1901991-4551566 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236627) | Created: 2024-12-25 10:16:11
+
+Amazon Order ID: 405-3277718-8671568
+  Duplicate count: 2
+  - Odoo ID: 95362 | Name: FBA405-3277718-8671568 | Amount: EUR 55.60 | Status: no | Invoice: NO | Created: 2024-11-19 09:07:26
+  - Odoo ID: 104003 | Name: FBA405-3277718-8671568 | Amount: EUR 45.95 | Status: invoiced | Invoice: YES (236174) | Created: 2024-12-25 10:15:37
+
+Amazon Order ID: 305-8056995-6014755
+  Duplicate count: 2
+  - Odoo ID: 95415 | Name: FBA305-8056995-6014755 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-19 17:08:25
+  - Odoo ID: 104023 | Name: FBA305-8056995-6014755 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (240669) | Created: 2024-12-25 10:16:18
+
+Amazon Order ID: 407-3118774-0914731
+  Duplicate count: 2
+  - Odoo ID: 95421 | Name: FBA407-3118774-0914731 | Amount: EUR 55.60 | Status: no | Invoice: NO | Created: 2024-11-19 17:09:34
+  - Odoo ID: 104030 | Name: FBA407-3118774-0914731 | Amount: EUR 45.95 | Status: invoiced | Invoice: YES (236148) | Created: 2024-12-25 10:16:26
+
+Amazon Order ID: 304-5473602-7629168
+  Duplicate count: 2
+  - Odoo ID: 95425 | Name: FBA304-5473602-7629168 | Amount: EUR 35.03 | Status: no | Invoice: NO | Created: 2024-11-19 17:10:16
+  - Odoo ID: 104028 | Name: FBA304-5473602-7629168 | Amount: EUR 28.95 | Status: invoiced | Invoice: YES (236628) | Created: 2024-12-25 10:16:26
+
+Amazon Order ID: 303-3140706-8085167
+  Duplicate count: 2
+  - Odoo ID: 95428 | Name: FBA303-3140706-8085167 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-19 17:11:33
+  - Odoo ID: 103998 | Name: FBA303-3140706-8085167 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (240694) | Created: 2024-12-25 10:15:37
+
+Amazon Order ID: 028-1351967-0777964
+  Duplicate count: 2
+  - Odoo ID: 95429 | Name: FBA028-1351967-0777964 | Amount: EUR 36.41 | Status: no | Invoice: NO | Created: 2024-11-19 17:12:42
+  - Odoo ID: 104031 | Name: FBA028-1351967-0777964 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (240717) | Created: 2024-12-25 10:16:26
+
+Amazon Order ID: 404-6382887-2920329
+  Duplicate count: 2
+  - Odoo ID: 95438 | Name: FBA404-6382887-2920329 | Amount: EUR 33.82 | Status: no | Invoice: NO | Created: 2024-11-19 17:18:02
+  - Odoo ID: 103995 | Name: FBA404-6382887-2920329 | Amount: EUR 27.95 | Status: invoiced | Invoice: YES (236176) | Created: 2024-12-25 10:15:30
+
+Amazon Order ID: 302-3270182-0370745
+  Duplicate count: 2
+  - Odoo ID: 95441 | Name: FBA302-3270182-0370745 | Amount: EUR 31.40 | Status: to invoice | Invoice: YES (240724) | Created: 2024-11-19 17:20:03
+  - Odoo ID: 104011 | Name: FBA302-3270182-0370745 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (240716) | Created: 2024-12-25 10:16:04
+
+Amazon Order ID: 404-7096741-8769966
+  Duplicate count: 2
+  - Odoo ID: 95443 | Name: FBA404-7096741-8769966 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-19 17:21:13
+  - Odoo ID: 104021 | Name: FBA404-7096741-8769966 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236189) | Created: 2024-12-25 10:16:18
+
+Amazon Order ID: 405-2778968-2909151
+  Duplicate count: 2
+  - Odoo ID: 95445 | Name: FBA405-2778968-2909151 | Amount: EUR 26.56 | Status: no | Invoice: NO | Created: 2024-11-19 17:31:30
+  - Odoo ID: 104001 | Name: FBA405-2778968-2909151 | Amount: EUR 21.95 | Status: invoiced | Invoice: YES (236551) | Created: 2024-12-25 10:15:37
+
+Amazon Order ID: 404-1826703-8971522
+  Duplicate count: 2
+  - Odoo ID: 95446 | Name: FBA404-1826703-8971522 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-19 17:32:10
+  - Odoo ID: 103981 | Name: FBA404-1826703-8971522 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236146) | Created: 2024-12-25 10:14:57
+
+Amazon Order ID: 028-9614359-0153145
+  Duplicate count: 2
+  - Odoo ID: 95450 | Name: FBA028-9614359-0153145 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-19 17:33:47
+  - Odoo ID: 104009 | Name: FBA028-9614359-0153145 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (240698) | Created: 2024-12-25 10:15:47
+
+Amazon Order ID: 404-9368258-9082757
+  Duplicate count: 2
+  - Odoo ID: 95497 | Name: FBA404-9368258-9082757 | Amount: EUR 39.87 | Status: no | Invoice: NO | Created: 2024-11-20 01:11:07
+  - Odoo ID: 103983 | Name: FBA404-9368258-9082757 | Amount: EUR 32.95 | Status: invoiced | Invoice: YES (236495) | Created: 2024-12-25 10:14:57
+
+Amazon Order ID: 302-9839621-5547534
+  Duplicate count: 2
+  - Odoo ID: 95499 | Name: FBA302-9839621-5547534 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-20 01:12:45
+  - Odoo ID: 103991 | Name: FBA302-9839621-5547534 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (240713) | Created: 2024-12-25 10:15:22
+
+Amazon Order ID: 305-3882509-3560307
+  Duplicate count: 2
+  - Odoo ID: 95506 | Name: FBA305-3882509-3560307 | Amount: EUR 30.19 | Status: to invoice | Invoice: YES (236674) | Created: 2024-11-20 01:18:46
+  - Odoo ID: 103973 | Name: FBA305-3882509-3560307 | Amount: EUR 28.94 | Status: invoiced | Invoice: YES (236672) | Created: 2024-12-25 10:14:51
+
+Amazon Order ID: 402-9880570-1885966
+  Duplicate count: 2
+  - Odoo ID: 95507 | Name: FBA402-9880570-1885966 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-20 01:19:13
+  - Odoo ID: 103989 | Name: FBA402-9880570-1885966 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236320) | Created: 2024-12-25 10:15:13
+
+Amazon Order ID: 405-1070694-5642764
+  Duplicate count: 2
+  - Odoo ID: 95511 | Name: FBA405-1070694-5642764 | Amount: EUR 50.75 | Status: no | Invoice: NO | Created: 2024-11-20 01:20:59
+  - Odoo ID: 103993 | Name: FBA405-1070694-5642764 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236147) | Created: 2024-12-25 10:15:22
+
+Amazon Order ID: 305-5928712-4265907
+  Duplicate count: 2
+  - Odoo ID: 95574 | Name: FBA305-5928712-4265907 | Amount: EUR 35.01 | Status: no | Invoice: NO | Created: 2024-11-20 09:04:57
+  - Odoo ID: 103975 | Name: FBA305-5928712-4265907 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236670) | Created: 2024-12-25 10:14:51
+
+Amazon Order ID: 407-5214577-5023553
+  Duplicate count: 2
+  - Odoo ID: 95590 | Name: FBA407-5214577-5023553 | Amount: EUR 32.61 | Status: no | Invoice: NO | Created: 2024-11-20 09:27:02
+  - Odoo ID: 103946 | Name: FBA407-5214577-5023553 | Amount: EUR 26.95 | Status: invoiced | Invoice: YES (236432) | Created: 2024-12-25 10:05:58
+
+Amazon Order ID: 405-5252115-5072329
+  Duplicate count: 2
+  - Odoo ID: 95669 | Name: FBA405-5252115-5072329 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-20 17:05:40
+  - Odoo ID: 103969 | Name: FBA405-5252115-5072329 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236150) | Created: 2024-12-25 10:14:38
+
+Amazon Order ID: 405-6341502-1882739
+  Duplicate count: 2
+  - Odoo ID: 95673 | Name: FBA405-6341502-1882739 | Amount: EUR 36.24 | Status: no | Invoice: NO | Created: 2024-11-20 17:07:40
+  - Odoo ID: 103959 | Name: FBA405-6341502-1882739 | Amount: EUR 29.95 | Status: invoiced | Invoice: YES (236619) | Created: 2024-12-25 10:14:18
+
+Amazon Order ID: 407-5985252-3853960
+  Duplicate count: 2
+  - Odoo ID: 95674 | Name: FBA407-5985252-3853960 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-20 17:07:56
+  - Odoo ID: 103976 | Name: FBA407-5985252-3853960 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236543) | Created: 2024-12-25 10:14:51
+
+Amazon Order ID: 406-3382502-2208349
+  Duplicate count: 2
+  - Odoo ID: 95680 | Name: FBA406-3382502-2208349 | Amount: EUR 72.48 | Status: no | Invoice: NO | Created: 2024-11-20 17:10:26
+  - Odoo ID: 103971 | Name: FBA406-3382502-2208349 | Amount: EUR 59.90 | Status: invoiced | Invoice: YES (237264) | Created: 2024-12-25 10:14:44
+
+Amazon Order ID: 302-3210137-4459556
+  Duplicate count: 2
+  - Odoo ID: 95681 | Name: FBA302-3210137-4459556 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-20 17:11:01
+  - Odoo ID: 103966 | Name: FBA302-3210137-4459556 | Amount: EUR 28.94 | Status: invoiced | Invoice: YES (236671) | Created: 2024-12-25 10:14:26
+
+Amazon Order ID: 305-2093526-0841911
+  Duplicate count: 2
+  - Odoo ID: 95686 | Name: FBA305-2093526-0841911 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-20 17:17:19
+  - Odoo ID: 103968 | Name: FBA305-2093526-0841911 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (240750) | Created: 2024-12-25 10:14:38
+
+Amazon Order ID: 402-3253703-9385155
+  Duplicate count: 2
+  - Odoo ID: 95694 | Name: FBA402-3253703-9385155 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-20 17:32:06
+  - Odoo ID: 103963 | Name: FBA402-3253703-9385155 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236149) | Created: 2024-12-25 10:14:26
+
+Amazon Order ID: 305-6213205-1272301
+  Duplicate count: 2
+  - Odoo ID: 95700 | Name: FBA305-6213205-1272301 | Amount: EUR 31.40 | Status: no | Invoice: NO | Created: 2024-11-20 17:35:50
+  - Odoo ID: 103892 | Name: FBA305-6213205-1272301 | Amount: EUR 29.94 | Status: invoiced | Invoice: YES (236637) | Created: 2024-12-25 09:42:29
+
+Amazon Order ID: 303-5212838-6797149
+  Duplicate count: 2
+  - Odoo ID: 95703 | Name: FBA303-5212838-6797149 | Amount: EUR 30.19 | Status: to invoice | Invoice: YES (240786) | Created: 2024-11-20 17:37:04
+  - Odoo ID: 103978 | Name: FBA303-5212838-6797149 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (240775) | Created: 2024-12-25 10:14:57
+
+Amazon Order ID: 306-1868782-8385161
+  Duplicate count: 2
+  - Odoo ID: 95711 | Name: FBA306-1868782-8385161 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-20 17:39:46
+  - Odoo ID: 103952 | Name: FBA306-1868782-8385161 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (236673) | Created: 2024-12-25 10:14:12
+
+Amazon Order ID: 306-4791973-6567509
+  Duplicate count: 2
+  - Odoo ID: 95715 | Name: FBA306-4791973-6567509 | Amount: EUR 41.08 | Status: no | Invoice: NO | Created: 2024-11-20 17:41:46
+  - Odoo ID: 103950 | Name: FBA306-4791973-6567509 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (236636) | Created: 2024-12-25 10:14:07
+
+Amazon Order ID: 306-2932005-7916326
+  Duplicate count: 2
+  - Odoo ID: 95720 | Name: FBA306-2932005-7916326 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2024-11-20 17:44:21
+  - Odoo ID: 103965 | Name: FBA306-2932005-7916326 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (240759) | Created: 2024-12-25 10:14:26
+
+Amazon Order ID: 171-1756420-2893130
+  Duplicate count: 2
+  - Odoo ID: 95729 | Name: FBA171-1756420-2893130 | Amount: EUR 60.44 | Status: no | Invoice: NO | Created: 2024-11-20 17:52:58
+  - Odoo ID: 103875 | Name: FBA171-1756420-2893130 | Amount: EUR 49.95 | Status: invoiced | Invoice: YES (236514) | Created: 2024-12-25 09:42:08
+
+Amazon Order ID: 171-1473652-6625938
+  Duplicate count: 2
+  - Odoo ID: 95730 | Name: FBA171-1473652-6625938 | Amount: EUR 43.50 | Status: no | Invoice: NO | Created: 2024-11-20 17:53:37
+  - Odoo ID: 103956 | Name: FBA171-1473652-6625938 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (236618) | Created: 2024-12-25 10:14:12
+
+Amazon Order ID: 408-5166912-5375555
+  Duplicate count: 2
+  - Odoo ID: 95781 | Name: FBA408-5166912-5375555 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-21 09:08:07
+  - Odoo ID: 103934 | Name: FBA408-5166912-5375555 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (236542) | Created: 2024-12-25 09:43:15
+
+Amazon Order ID: 306-6251895-5125144
+  Duplicate count: 2
+  - Odoo ID: 95783 | Name: FBA306-6251895-5125144 | Amount: EUR 60.38 | Status: no | Invoice: NO | Created: 2024-11-21 09:08:30
+  - Odoo ID: 103919 | Name: FBA306-6251895-5125144 | Amount: EUR 49.90 | Status: invoiced | Invoice: YES (236638) | Created: 2024-12-25 09:42:54
+
+Amazon Order ID: 403-8803422-6925901
+  Duplicate count: 2
+  - Odoo ID: 95793 | Name: FBA403-8803422-6925901 | Amount: EUR 42.28 | Status: no | Invoice: NO | Created: 2024-11-21 09:11:45
+  - Odoo ID: 103936 | Name: FBA403-8803422-6925901 | Amount: EUR 29.95 | Status: invoiced | Invoice: YES (236620) | Created: 2024-12-25 09:43:15
+
+Amazon Order ID: 171-8170738-6467520
+  Duplicate count: 2
+  - Odoo ID: 101645 | Name: FBA171-8170738-6467520 | Amount: EUR 181.38 | Status: to invoice | Invoice: NO | Created: 2024-12-24 05:17:02
+  - Odoo ID: 101644 | Name: FBA171-8170738-6467520 | Amount: EUR 54.41 | Status: to invoice | Invoice: YES (246424,246403,246405) | Created: 2024-12-24 05:17:02
+
+Amazon Order ID: 028-2533251-8708367
+  Duplicate count: 2
+  - Odoo ID: 101923 | Name: FBA028-2533251-8708367 | Amount: EUR 131.70 | Status: to invoice | Invoice: YES (246546) | Created: 2024-12-24 07:29:10
+  - Odoo ID: 101922 | Name: FBA028-2533251-8708367 | Amount: EUR 37.90 | Status: to invoice | Invoice: YES (246796,246530) | Created: 2024-12-24 07:29:10
+
+Amazon Order ID: 304-1788777-4088333
+  Duplicate count: 2
+  - Odoo ID: 101983 | Name: FBA304-1788777-4088333 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-12-24 07:37:09
+  - Odoo ID: 101956 | Name: FBA304-1788777-4088333 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (246492) | Created: 2024-12-24 07:31:26
+
+Amazon Order ID: 306-1227489-2013114
+  Duplicate count: 2
+  - Odoo ID: 102697 | Name: FBA306-1227489-2013114 | Amount: EUR 27.78 | Status: to invoice | Invoice: NO | Created: 2024-12-24 10:42:41
+  - Odoo ID: 102656 | Name: FBA306-1227489-2013114 | Amount: EUR 20.28 | Status: invoiced | Invoice: YES (241167) | Created: 2024-12-24 10:39:58
+
+Amazon Order ID: 404-6534272-6997106
+  Duplicate count: 2
+  - Odoo ID: 102828 | Name: FBA404-6534272-6997106 | Amount: EUR 32.61 | Status: to invoice | Invoice: NO | Created: 2024-12-24 11:00:43
+  - Odoo ID: 102777 | Name: FBA404-6534272-6997106 | Amount: EUR 35.03 | Status: invoiced | Invoice: YES (241838) | Created: 2024-12-24 10:54:12
+
+Amazon Order ID: 408-3437160-1732313
+  Duplicate count: 2
+  - Odoo ID: 103032 | Name: FBA408-3437160-1732313 | Amount: EUR 24.75 | Status: to invoice | Invoice: NO | Created: 2024-12-24 12:04:27
+  - Odoo ID: 102936 | Name: FBA408-3437160-1732313 | Amount: EUR 31.81 | Status: invoiced | Invoice: YES (248097) | Created: 2024-12-24 11:34:24
+
+Amazon Order ID: 306-5864004-8498739
+  Duplicate count: 2
+  - Odoo ID: 103593 | Name: FBA306-5864004-8498739 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-12-25 09:38:07
+  - Odoo ID: 102442 | Name: FBA306-5864004-8498739 | Amount: EUR 26.95 | Status: invoiced | Invoice: YES (240910) | Created: 2024-12-24 09:14:07
+
+Amazon Order ID: 406-6475398-8223540
+  Duplicate count: 2
+  - Odoo ID: 103694 | Name: FBA406-6475398-8223540 | Amount: EUR 49.90 | Status: invoiced | Invoice: YES (267613) | Created: 2024-12-25 09:39:44
+  - Odoo ID: 102491 | Name: FBA406-6475398-8223540 | Amount: EUR 25.95 | Status: invoiced | Invoice: YES (236424) | Created: 2024-12-24 09:14:35
+
+Amazon Order ID: 302-0616236-2857123
+  Duplicate count: 2
+  - Odoo ID: 103816 | Name: FBA302-0616236-2857123 | Amount: EUR 25.95 | Status: to invoice | Invoice: NO | Created: 2024-12-25 09:41:19
+  - Odoo ID: 103815 | Name: FBA302-0616236-2857123 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (240586) | Created: 2024-12-25 09:41:19
+
+Amazon Order ID: 408-2008832-1801166
+  Duplicate count: 2
+  - Odoo ID: 103955 | Name: FBA408-2008832-1801166 | Amount: EUR 35.95 | Status: to invoice | Invoice: NO | Created: 2024-12-25 10:14:12
+  - Odoo ID: 103954 | Name: FBA408-2008832-1801166 | Amount: EUR 71.90 | Status: invoiced | Invoice: YES (236167) | Created: 2024-12-25 10:14:12
+
+Amazon Order ID: 408-1572985-4693924
+  Duplicate count: 2
+  - Odoo ID: 104149 | Name: FBA408-1572985-4693924 | Amount: EUR 24.34 | Status: to invoice | Invoice: NO | Created: 2024-12-25 10:20:50
+  - Odoo ID: 94532 | Name: FBA408-1572985-4693924 | Amount: EUR 0.00 | Status: no | Invoice: NO | Created: 2024-11-15 09:06:51
+
+Amazon Order ID: 028-9768770-5197157
+  Duplicate count: 2
+  - Odoo ID: 104637 | Name: FBA028-9768770-5197157 | Amount: EUR 26.95 | Status: no | Invoice: YES (246804,246803) | Created: 2024-12-28 01:27:37
+  - Odoo ID: 104569 | Name: FBA028-9768770-5197157 | Amount: EUR 24.95 | Status: no | Invoice: NO | Created: 2024-12-27 17:27:09
+
+Amazon Order ID: 302-6583764-0537129
+  Duplicate count: 2
+  - Odoo ID: 104904 | Name: FBA302-6583764-0537129 | Amount: EUR 26.95 | Status: no | Invoice: NO | Created: 2024-12-30 01:28:12
+  - Odoo ID: 104791 | Name: FBA302-6583764-0537129 | Amount: EUR 24.95 | Status: to invoice | Invoice: YES (258911,246199) | Created: 2024-12-29 01:26:55
+
+Amazon Order ID: 402-7467199-1756329
+  Duplicate count: 2
+  - Odoo ID: 105873 | Name: FBA402-7467199-1756329 | Amount: EUR 28.18 | Status: invoiced | Invoice: YES (256923) | Created: 2025-01-04 01:28:44
+  - Odoo ID: 105562 | Name: FBA402-7467199-1756329 | Amount: EUR 112.72 | Status: invoiced | Invoice: YES (256929) | Created: 2025-01-03 01:28:39
+
+Amazon Order ID: 303-7247448-7339544
+  Duplicate count: 2
+  - Odoo ID: 108593 | Name: FBA303-7247448-7339544 | Amount: EUR 26.95 | Status: invoiced | Invoice: YES (252028) | Created: 2025-01-15 01:29:19
+  - Odoo ID: 108364 | Name: FBA303-7247448-7339544 | Amount: EUR 28.95 | Status: invoiced | Invoice: YES (251499) | Created: 2025-01-14 09:27:15
+
+Amazon Order ID: 403-7936300-9042746
+  Duplicate count: 2
+  - Odoo ID: 108842 | Name: FBA403-7936300-9042746 | Amount: EUR 25.95 | Status: to invoice | Invoice: NO | Created: 2025-01-15 17:33:09
+  - Odoo ID: 108303 | Name: FBA403-7936300-9042746 | Amount: EUR 26.95 | Status: invoiced | Invoice: YES (258852) | Created: 2025-01-14 01:26:31
+
+Amazon Order ID: 171-3993131-0629916
+  Duplicate count: 2
+  - Odoo ID: 110349 | Name: FBA171-3993131-0629916 | Amount: EUR 111.08 | Status: to invoice | Invoice: YES (259153) | Created: 2025-01-22 01:28:38
+  - Odoo ID: 110249 | Name: FBA171-3993131-0629916 | Amount: EUR 166.62 | Status: to invoice | Invoice: YES (259152) | Created: 2025-01-21 17:28:38
+
+Amazon Order ID: 407-7173824-1223567
+  Duplicate count: 2
+  - Odoo ID: 110551 | Name: FBA407-7173824-1223567 | Amount: EUR 45.52 | Status: to invoice | Invoice: NO | Created: 2025-01-22 17:28:56
+  - Odoo ID: 109608 | Name: FBA407-7173824-1223567 | Amount: EUR 37.58 | Status: to invoice | Invoice: YES (256937) | Created: 2025-01-19 01:25:17
+
+Amazon Order ID: 408-7212263-2238706
+  Duplicate count: 2
+  - Odoo ID: 110915 | Name: FBA408-7212263-2238706 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (258916) | Created: 2025-01-24 09:29:28
+  - Odoo ID: 110852 | Name: FBA408-7212263-2238706 | Amount: EUR 28.95 | Status: invoiced | Invoice: YES (258940) | Created: 2025-01-24 01:29:26
+
+Amazon Order ID: 403-7638711-4086702
+  Duplicate count: 2
+  - Odoo ID: 111069 | Name: FBA403-7638711-4086702 | Amount: EUR 23.75 | Status: to invoice | Invoice: NO | Created: 2025-01-25 01:29:06
+  - Odoo ID: 111068 | Name: FBA403-7638711-4086702 | Amount: EUR 19.78 | Status: invoiced | Invoice: YES (256943) | Created: 2025-01-25 01:29:06
+
+Amazon Order ID: 306-9345381-5955503
+  Duplicate count: 2
+  - Odoo ID: 111592 | Name: FBA306-9345381-5955503 | Amount: EUR 39.90 | Status: to invoice | Invoice: NO | Created: 2025-01-27 17:27:41
+  - Odoo ID: 111245 | Name: FBA306-9345381-5955503 | Amount: EUR 49.90 | Status: to invoice | Invoice: YES (258844,258848) | Created: 2025-01-26 09:25:22
+
+Amazon Order ID: 304-5882767-3597907
+  Duplicate count: 2
+  - Odoo ID: 111678 | Name: FBA304-5882767-3597907 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (256488) | Created: 2025-01-28 01:28:11
+  - Odoo ID: 111383 | Name: FBA304-5882767-3597907 | Amount: EUR 22.95 | Status: no | Invoice: NO | Created: 2025-01-27 01:25:18
+
+Amazon Order ID: 028-6545835-5620342
+  Duplicate count: 2
+  - Odoo ID: 114682 | Name: FBA028-6545835-5620342 | Amount: EUR 49.90 | Status: to invoice | Invoice: NO | Created: 2025-02-10 09:25:26
+  - Odoo ID: 114681 | Name: FBA028-6545835-5620342 | Amount: EUR 28.95 | Status: invoiced | Invoice: YES (260272) | Created: 2025-02-10 09:25:26
+
+Amazon Order ID: 028-7565359-0209102
+  Duplicate count: 2
+  - Odoo ID: 115240 | Name: FBA028-7565359-0209102 | Amount: EUR 10.95 | Status: to invoice | Invoice: NO | Created: 2025-02-12 01:29:12
+  - Odoo ID: 114581 | Name: FBA028-7565359-0209102 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (260163) | Created: 2025-02-09 17:28:03
+
+Amazon Order ID: 304-3155106-5782710
+  Duplicate count: 3
+  - Odoo ID: 115674 | Name: FBA304-3155106-5782710 | Amount: EUR 12.04 | Status: invoiced | Invoice: YES (261228) | Created: 2025-02-13 17:30:15
+  - Odoo ID: 115292 | Name: FBA304-3155106-5782710 | Amount: EUR 98.99 | Status: to invoice | Invoice: NO | Created: 2025-02-12 09:25:21
+  - Odoo ID: 115137 | Name: FBA304-3155106-5782710 | Amount: EUR 111.39 | Status: no | Invoice: YES (260099,260364) | Created: 2025-02-11 17:28:54
+
+Amazon Order ID: 171-7280778-4351546
+  Duplicate count: 2
+  - Odoo ID: 116684 | Name: FBA171-7280778-4351546 | Amount: EUR 22.76 | Status: invoiced | Invoice: YES (260448) | Created: 2025-02-18 09:25:40
+  - Odoo ID: 115229 | Name: FBA171-7280778-4351546 | Amount: EUR 68.28 | Status: to invoice | Invoice: YES (260997) | Created: 2025-02-12 01:29:06
+
+Amazon Order ID: 171-4398199-8449957
+  Duplicate count: 2
+  - Odoo ID: 120088 | Name: FBA171-4398199-8449957 | Amount: EUR 27.95 | Status: invoiced | Invoice: YES (266701) | Created: 2025-03-11 09:25:50
+  - Odoo ID: 120057 | Name: FBA171-4398199-8449957 | Amount: EUR 34.95 | Status: invoiced | Invoice: YES (266713) | Created: 2025-03-11 01:27:36
+
+Amazon Order ID: 406-9707601-3345903
+  Duplicate count: 2
+  - Odoo ID: 120957 | Name: FBA406-9707601-3345903 | Amount: EUR 349.50 | Status: to invoice | Invoice: YES (266830) | Created: 2025-03-14 17:25:18
+  - Odoo ID: 120852 | Name: FBA406-9707601-3345903 | Amount: EUR 174.75 | Status: to invoice | Invoice: YES (266714,266523,266107,266536) | Created: 2025-03-14 09:29:35
+
+Amazon Order ID: 028-5935505-2577137
+  Duplicate count: 2
+  - Odoo ID: 124719 | Name: FBA028-5935505-2577137 | Amount: EUR 21.72 | Status: invoiced | Invoice: YES (267018) | Created: 2025-03-28 09:27:12
+  - Odoo ID: 124348 | Name: FBA028-5935505-2577137 | Amount: EUR 30.19 | Status: invoiced | Invoice: YES (267196) | Created: 2025-03-26 17:30:05
+
+Amazon Order ID: 406-6788268-4504364
+  Duplicate count: 2
+  - Odoo ID: 125693 | Name: FBA406-6788268-4504364 | Amount: EUR 241.52 | Status: to invoice | Invoice: YES (274773) | Created: 2025-04-02 01:29:31
+  - Odoo ID: 125692 | Name: FBA406-6788268-4504364 | Amount: EUR 195.66 | Status: to invoice | Invoice: YES (275091) | Created: 2025-04-02 01:29:31
+
+Amazon Order ID: 028-7034663-4382759
+  Duplicate count: 2
+  - Odoo ID: 125944 | Name: FBA028-7034663-4382759 | Amount: EUR 92.99 | Status: to invoice | Invoice: YES (273930) | Created: 2025-04-03 01:32:18
+  - Odoo ID: 125943 | Name: FBA028-7034663-4382759 | Amount: EUR 76.12 | Status: to invoice | Invoice: NO | Created: 2025-04-03 01:32:18
+
+Amazon Order ID: 305-7352024-0685105
+  Duplicate count: 2
+  - Odoo ID: 126787 | Name: FBA305-7352024-0685105 | Amount: EUR 32.61 | Status: no | Invoice: NO | Created: 2025-04-07 17:29:29
+  - Odoo ID: 126786 | Name: FBA305-7352024-0685105 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2025-04-07 17:29:29
+
+Amazon Order ID: 306-4762737-4445945
+  Duplicate count: 2
+  - Odoo ID: 128089 | Name: FBA306-4762737-4445945 | Amount: EUR 125.83 | Status: to invoice | Invoice: YES (273872) | Created: 2025-04-14 17:28:16
+  - Odoo ID: 127950 | Name: FBA306-4762737-4445945 | Amount: EUR 45.74 | Status: to invoice | Invoice: YES (270917,271541,274606,274380) | Created: 2025-04-14 09:32:16
+
+Amazon Order ID: 304-0507267-5785913
+  Duplicate count: 2
+  - Odoo ID: 128180 | Name: FBA304-0507267-5785913 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (273992) | Created: 2025-04-15 01:30:06
+  - Odoo ID: 128179 | Name: FBA304-0507267-5785913 | Amount: EUR 27.53 | Status: invoiced | Invoice: YES (274636) | Created: 2025-04-15 01:30:06
+
+Amazon Order ID: 304-2678694-8962726
+  Duplicate count: 2
+  - Odoo ID: 128191 | Name: FBA304-2678694-8962726 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (273708) | Created: 2025-04-15 01:30:14
+  - Odoo ID: 127714 | Name: FBA304-2678694-8962726 | Amount: EUR 45.87 | Status: to invoice | Invoice: YES (274510) | Created: 2025-04-12 17:27:10
+
+Amazon Order ID: 403-9379607-9423536
+  Duplicate count: 2
+  - Odoo ID: 129392 | Name: FBA403-9379607-9423536 | Amount: EUR 38.97 | Status: to invoice | Invoice: YES (275023) | Created: 2025-04-22 09:27:28
+  - Odoo ID: 129354 | Name: FBA403-9379607-9423536 | Amount: EUR 38.96 | Status: to invoice | Invoice: YES (274282) | Created: 2025-04-22 01:27:09
+
+Amazon Order ID: 306-6807390-9520350
+  Duplicate count: 2
+  - Odoo ID: 129594 | Name: FBA306-6807390-9520350 | Amount: EUR 22.87 | Status: to invoice | Invoice: YES (273723) | Created: 2025-04-23 01:30:26
+  - Odoo ID: 129513 | Name: FBA306-6807390-9520350 | Amount: EUR 114.38 | Status: to invoice | Invoice: YES (274476) | Created: 2025-04-22 17:27:52
+
+Amazon Order ID: 028-3388441-7026761
+  Duplicate count: 2
+  - Odoo ID: 129855 | Name: FBA028-3388441-7026761 | Amount: EUR 127.41 | Status: to invoice | Invoice: YES (274670) | Created: 2025-04-24 01:29:33
+  - Odoo ID: 129854 | Name: FBA028-3388441-7026761 | Amount: EUR 212.38 | Status: to invoice | Invoice: YES (273936) | Created: 2025-04-24 01:29:33
+
+Amazon Order ID: 302-1107761-2749130
+  Duplicate count: 2
+  - Odoo ID: 130047 | Name: FBA302-1107761-2749130 | Amount: EUR 30.98 | Status: to invoice | Invoice: YES (273997) | Created: 2025-04-24 17:33:05
+  - Odoo ID: 129576 | Name: FBA302-1107761-2749130 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (283606,274458) | Created: 2025-04-23 01:26:59
+
+Amazon Order ID: 306-8015384-9161163
+  Duplicate count: 2
+  - Odoo ID: 130485 | Name: FBA306-8015384-9161163 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (273848) | Created: 2025-04-28 01:25:45
+  - Odoo ID: 130484 | Name: FBA306-8015384-9161163 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (273769) | Created: 2025-04-28 01:25:45
+
+Amazon Order ID: 305-1884948-7373126
+  Duplicate count: 2
+  - Odoo ID: 132207 | Name: FBA305-1884948-7373126 | Amount: EUR 114.71 | Status: invoiced | Invoice: YES (283296) | Created: 2025-05-07 01:25:34
+  - Odoo ID: 132206 | Name: FBA305-1884948-7373126 | Amount: EUR 86.06 | Status: invoiced | Invoice: YES (282608) | Created: 2025-05-07 01:25:34
+
+Amazon Order ID: 406-4534071-2620345
+  Duplicate count: 2
+  - Odoo ID: 132475 | Name: FBA406-4534071-2620345 | Amount: EUR 86.04 | Status: invoiced | Invoice: YES (282984) | Created: 2025-05-07 17:36:40
+  - Odoo ID: 132252 | Name: FBA406-4534071-2620345 | Amount: EUR 86.03 | Status: invoiced | Invoice: YES (283010) | Created: 2025-05-07 01:32:41
+
+Amazon Order ID: 407-4314161-8064347
+  Duplicate count: 2
+  - Odoo ID: 132704 | Name: FBA407-4314161-8064347 | Amount: EUR 45.86 | Status: to invoice | Invoice: YES (283046) | Created: 2025-05-09 01:34:47
+  - Odoo ID: 132518 | Name: FBA407-4314161-8064347 | Amount: EUR 57.35 | Status: to invoice | Invoice: YES (283168) | Created: 2025-05-08 01:25:26
+
+Amazon Order ID: 302-4815247-5207549
+  Duplicate count: 2
+  - Odoo ID: 132819 | Name: FBA302-4815247-5207549 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (283318) | Created: 2025-05-09 17:33:55
+  - Odoo ID: 132696 | Name: FBA302-4815247-5207549 | Amount: EUR 33.27 | Status: to invoice | Invoice: YES (282371) | Created: 2025-05-09 01:34:39
+
+Amazon Order ID: 306-9059569-4401111
+  Duplicate count: 2
+  - Odoo ID: 134087 | Name: FBA306-9059569-4401111 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (283422) | Created: 2025-05-15 09:27:17
+  - Odoo ID: 134086 | Name: FBA306-9059569-4401111 | Amount: EUR 30.98 | Status: to invoice | Invoice: YES (282293,282314) | Created: 2025-05-15 09:27:17
+
+Amazon Order ID: 406-4929183-6064355
+  Duplicate count: 2
+  - Odoo ID: 134967 | Name: FBA406-4929183-6064355 | Amount: EUR 27.77 | Status: invoiced | Invoice: YES (283157) | Created: 2025-05-20 01:32:04
+  - Odoo ID: 134574 | Name: FBA406-4929183-6064355 | Amount: EUR 59.17 | Status: invoiced | Invoice: YES (279065,279063) | Created: 2025-05-18 01:27:16
+
+Amazon Order ID: 171-5254816-7801914
+  Duplicate count: 2
+  - Odoo ID: 135679 | Name: FBA171-5254816-7801914 | Amount: EUR 31.40 | Status: to invoice | Invoice: NO | Created: 2025-05-23 01:35:00
+  - Odoo ID: 135678 | Name: FBA171-5254816-7801914 | Amount: EUR 28.98 | Status: invoiced | Invoice: YES (282952) | Created: 2025-05-23 01:35:00
+
+Amazon Order ID: 402-2315884-3610715
+  Duplicate count: 2
+  - Odoo ID: 136768 | Name: FBA402-2315884-3610715 | Amount: EUR 34.42 | Status: invoiced | Invoice: YES (281721) | Created: 2025-05-28 09:35:24
+  - Odoo ID: 136628 | Name: FBA402-2315884-3610715 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (283124) | Created: 2025-05-27 17:35:28
+
+Amazon Order ID: 306-2389908-6829964
+  Duplicate count: 2
+  - Odoo ID: 138319 | Name: FBA306-2389908-6829964 | Amount: EUR 51.66 | Status: invoiced | Invoice: YES (289354) | Created: 2025-06-02 01:27:50
+  - Odoo ID: 138318 | Name: FBA306-2389908-6829964 | Amount: EUR 51.68 | Status: invoiced | Invoice: YES (288672) | Created: 2025-06-02 01:27:50
+
+Amazon Order ID: 407-0948810-0621903
+  Duplicate count: 2
+  - Odoo ID: 138872 | Name: FBA407-0948810-0621903 | Amount: EUR 23.90 | Status: invoiced | Invoice: YES (291181) | Created: 2025-06-04 09:28:29
+  - Odoo ID: 137988 | Name: FBA407-0948810-0621903 | Amount: EUR 71.69 | Status: to invoice | Invoice: NO | Created: 2025-05-30 17:32:58
+
+Amazon Order ID: 302-8129951-0447518
+  Duplicate count: 2
+  - Odoo ID: 140630 | Name: FBA302-8129951-0447518 | Amount: EUR 26.38 | Status: to invoice | Invoice: NO | Created: 2025-06-12 01:37:16
+  - Odoo ID: 140400 | Name: FBA302-8129951-0447518 | Amount: EUR 33.27 | Status: invoiced | Invoice: YES (289575) | Created: 2025-06-11 09:28:38
+
+Amazon Order ID: 304-5424861-0609139
+  Duplicate count: 2
+  - Odoo ID: 140942 | Name: FBA304-5424861-0609139 | Amount: EUR 103.33 | Status: to invoice | Invoice: YES (288381) | Created: 2025-06-13 01:38:28
+  - Odoo ID: 140941 | Name: FBA304-5424861-0609139 | Amount: EUR 51.68 | Status: to invoice | Invoice: YES (288760) | Created: 2025-06-13 01:38:28
+
+Amazon Order ID: 403-4722617-9551543
+  Duplicate count: 2
+  - Odoo ID: 141160 | Name: FBA403-4722617-9551543 | Amount: EUR 106.73 | Status: to invoice | Invoice: YES (290208) | Created: 2025-06-14 01:27:15
+  - Odoo ID: 140996 | Name: FBA403-4722617-9551543 | Amount: EUR 33.27 | Status: to invoice | Invoice: YES (290118) | Created: 2025-06-13 01:39:21
+
+Amazon Order ID: 303-9779113-2271528
+  Duplicate count: 2
+  - Odoo ID: 141461 | Name: FBA303-9779113-2271528 | Amount: EUR 30.98 | Status: to invoice | Invoice: NO | Created: 2025-06-16 09:27:35
+  - Odoo ID: 141419 | Name: FBA303-9779113-2271528 | Amount: EUR 33.27 | Status: invoiced | Invoice: YES (289377) | Created: 2025-06-16 01:32:54
+
+Amazon Order ID: 028-3518374-2065902
+  Duplicate count: 2
+  - Odoo ID: 141705 | Name: FBA028-3518374-2065902 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (290417) | Created: 2025-06-17 01:35:35
+  - Odoo ID: 141471 | Name: FBA028-3518374-2065902 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (289061) | Created: 2025-06-16 09:35:58
+
+Amazon Order ID: 304-8046249-4611537
+  Duplicate count: 2
+  - Odoo ID: 141803 | Name: FBA304-8046249-4611537 | Amount: EUR 51.68 | Status: to invoice | Invoice: YES (303411) | Created: 2025-06-17 09:37:57
+  - Odoo ID: 141802 | Name: FBA304-8046249-4611537 | Amount: EUR 51.66 | Status: to invoice | Invoice: YES (303410,288702,290426) | Created: 2025-06-17 09:37:57
+
+Amazon Order ID: 302-7321861-8871552
+  Duplicate count: 2
+  - Odoo ID: 141986 | Name: FBA302-7321861-8871552 | Amount: EUR 33.27 | Status: invoiced | Invoice: YES (288861) | Created: 2025-06-18 01:37:47
+  - Odoo ID: 141985 | Name: FBA302-7321861-8871552 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (290482) | Created: 2025-06-18 01:37:47
+
+Amazon Order ID: 171-2766156-7130700
+  Duplicate count: 2
+  - Odoo ID: 142050 | Name: FBA171-2766156-7130700 | Amount: EUR 72.42 | Status: to invoice | Invoice: YES (290348) | Created: 2025-06-18 01:38:48
+  - Odoo ID: 141598 | Name: FBA171-2766156-7130700 | Amount: EUR 96.56 | Status: to invoice | Invoice: YES (290351,290364,290354) | Created: 2025-06-16 17:25:12
+
+Amazon Order ID: 405-1594604-7322759
+  Duplicate count: 2
+  - Odoo ID: 142640 | Name: FBA405-1594604-7322759 | Amount: EUR 31.94 | Status: invoiced | Invoice: YES (291201) | Created: 2025-06-20 10:14:43
+  - Odoo ID: 142358 | Name: FBA405-1594604-7322759 | Amount: EUR 33.95 | Status: invoiced | Invoice: YES (291198) | Created: 2025-06-19 09:47:05
+
+Amazon Order ID: 302-5999101-1953167
+  Duplicate count: 2
+  - Odoo ID: 143051 | Name: FBA302-5999101-1953167 | Amount: EUR 30.99 | Status: to invoice | Invoice: YES (288858) | Created: 2025-06-23 01:25:18
+  - Odoo ID: 142954 | Name: FBA302-5999101-1953167 | Amount: EUR 30.96 | Status: to invoice | Invoice: YES (289131) | Created: 2025-06-22 09:27:32
+
+Amazon Order ID: 302-0532564-8893123
+  Duplicate count: 2
+  - Odoo ID: 143064 | Name: FBA302-0532564-8893123 | Amount: EUR 57.37 | Status: invoiced | Invoice: YES (289450) | Created: 2025-06-23 01:34:15
+  - Odoo ID: 142895 | Name: FBA302-0532564-8893123 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (290730) | Created: 2025-06-21 17:27:57
+
+Amazon Order ID: 304-5956180-5013160
+  Duplicate count: 2
+  - Odoo ID: 143330 | Name: FBA304-5956180-5013160 | Amount: EUR 33.27 | Status: invoiced | Invoice: YES (289497) | Created: 2025-06-24 01:33:55
+  - Odoo ID: 143329 | Name: FBA304-5956180-5013160 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (290780) | Created: 2025-06-24 01:33:55
+
+Amazon Order ID: 304-4795551-4104304
+  Duplicate count: 2
+  - Odoo ID: 143581 | Name: FBA304-4795551-4104304 | Amount: EUR 172.06 | Status: to invoice | Invoice: YES (289506) | Created: 2025-06-24 17:41:49
+  - Odoo ID: 143301 | Name: FBA304-4795551-4104304 | Amount: EUR 544.94 | Status: to invoice | Invoice: YES (289490,289491,289507,290766) | Created: 2025-06-24 01:25:27
+
+Amazon Order ID: 302-6657514-3910765
+  Duplicate count: 2
+  - Odoo ID: 144534 | Name: FBA302-6657514-3910765 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (291030) | Created: 2025-06-28 01:39:14
+  - Odoo ID: 144112 | Name: FBA302-6657514-3910765 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (289673) | Created: 2025-06-27 01:25:38
+
+Amazon Order ID: 406-2774640-2364353
+  Duplicate count: 3
+  - Odoo ID: 144697 | Name: FBA406-2774640-2364353 | Amount: EUR 28.98 | Status: invoiced | Invoice: YES (290080) | Created: 2025-06-28 17:28:41
+  - Odoo ID: 144498 | Name: FBA406-2774640-2364353 | Amount: EUR 31.45 | Status: to invoice | Invoice: NO | Created: 2025-06-28 01:38:33
+  - Odoo ID: 144497 | Name: FBA406-2774640-2364353 | Amount: EUR 28.98 | Status: invoiced | Invoice: YES (290062) | Created: 2025-06-28 01:38:33
+
+Amazon Order ID: 305-4170320-3146765
+  Duplicate count: 2
+  - Odoo ID: 144984 | Name: FBA305-4170320-3146765 | Amount: EUR 38.97 | Status: to invoice | Invoice: NO | Created: 2025-06-30 01:36:53
+  - Odoo ID: 144983 | Name: FBA305-4170320-3146765 | Amount: EUR 20.63 | Status: invoiced | Invoice: YES (290000) | Created: 2025-06-30 01:36:53
+
+Amazon Order ID: 302-9961351-2105939
+  Duplicate count: 2
+  - Odoo ID: 145107 | Name: FBA302-9961351-2105939 | Amount: EUR 42.41 | Status: to invoice | Invoice: YES (303428) | Created: 2025-06-30 09:57:03
+  - Odoo ID: 144949 | Name: FBA302-9961351-2105939 | Amount: EUR 346.76 | Status: to invoice | Invoice: YES (303427,291179) | Created: 2025-06-30 01:36:16
+
+Amazon Order ID: 302-8473887-8005144
+  Duplicate count: 2
+  - Odoo ID: 145741 | Name: FBA302-8473887-8005144 | Amount: EUR 30.99 | Status: invoiced | Invoice: YES (296425) | Created: 2025-07-02 01:42:45
+  - Odoo ID: 145480 | Name: FBA302-8473887-8005144 | Amount: EUR 30.96 | Status: invoiced | Invoice: YES (300306) | Created: 2025-07-01 10:01:48
+
+Amazon Order ID: 028-3269120-3967565
+  Duplicate count: 2
+  - Odoo ID: 146342 | Name: FBA028-3269120-3967565 | Amount: EUR 22.93 | Status: to invoice | Invoice: NO | Created: 2025-07-04 01:34:27
+  - Odoo ID: 146341 | Name: FBA028-3269120-3967565 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (296732) | Created: 2025-07-04 01:34:27
+
+Amazon Order ID: 302-1743044-4262747
+  Duplicate count: 2
+  - Odoo ID: 146385 | Name: FBA302-1743044-4262747 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (302019) | Created: 2025-07-04 01:35:13
+  - Odoo ID: 142800 | Name: FBA302-1743044-4262747 | Amount: EUR 33.27 | Status: invoiced | Invoice: YES (289121) | Created: 2025-06-21 01:38:50
+
+Amazon Order ID: 306-7220062-7078765
+  Duplicate count: 2
+  - Odoo ID: 146395 | Name: FBA306-7220062-7078765 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-07-04 01:35:24
+  - Odoo ID: 146394 | Name: FBA306-7220062-7078765 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (302263) | Created: 2025-07-04 01:35:24
+
+Amazon Order ID: 304-0733778-3025113
+  Duplicate count: 2
+  - Odoo ID: 146435 | Name: FBA304-0733778-3025113 | Amount: EUR 33.27 | Status: to invoice | Invoice: NO | Created: 2025-07-04 01:36:10
+  - Odoo ID: 146434 | Name: FBA304-0733778-3025113 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (296563) | Created: 2025-07-04 01:36:10
+
+Amazon Order ID: 305-9568449-3467563
+  Duplicate count: 2
+  - Odoo ID: 154305 | Name: FBA305-9568449-3467563 | Amount: EUR 22.93 | Status: to invoice | Invoice: NO | Created: 2025-08-18 08:42:24
+  - Odoo ID: 154304 | Name: FBA305-9568449-3467563 | Amount: EUR 25.23 | Status: to invoice | Invoice: YES (318742) | Created: 2025-08-18 08:42:24
+
+Amazon Order ID: 304-9668786-9293136
+  Duplicate count: 2
+  - Odoo ID: 154467 | Name: FBA304-9668786-9293136 | Amount: EUR 50.46 | Status: to invoice | Invoice: NO | Created: 2025-08-18 09:31:09
+  - Odoo ID: 154466 | Name: FBA304-9668786-9293136 | Amount: EUR 57.37 | Status: invoiced | Invoice: YES (316588) | Created: 2025-08-18 09:31:09
+
+Amazon Order ID: 306-0049962-8505905
+  Duplicate count: 2
+  - Odoo ID: 154637 | Name: FBA306-0049962-8505905 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-18 10:15:33
+  - Odoo ID: 154636 | Name: FBA306-0049962-8505905 | Amount: EUR 57.37 | Status: invoiced | Invoice: YES (319146,319071) | Created: 2025-08-18 10:15:33
+
+Amazon Order ID: 305-3874549-3449910
+  Duplicate count: 2
+  - Odoo ID: 155345 | Name: FBA305-3874549-3449910 | Amount: EUR 29.84 | Status: invoiced | Invoice: YES (318908) | Created: 2025-08-19 11:01:57
+  - Odoo ID: 154259 | Name: FBA305-3874549-3449910 | Amount: EUR 29.81 | Status: invoiced | Invoice: YES (322014) | Created: 2025-08-18 08:41:27
+
+Amazon Order ID: 304-3799133-0764369
+  Duplicate count: 2
+  - Odoo ID: 155509 | Name: FBA304-3799133-0764369 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317657) | Created: 2025-08-19 11:46:08
+  - Odoo ID: 155508 | Name: FBA304-3799133-0764369 | Amount: EUR 59.66 | Status: invoiced | Invoice: YES (320672,320613) | Created: 2025-08-19 11:46:08
+
+Amazon Order ID: 305-2863653-0904316
+  Duplicate count: 2
+  - Odoo ID: 155527 | Name: FBA305-2863653-0904316 | Amount: EUR 22.93 | Status: to invoice | Invoice: NO | Created: 2025-08-19 11:55:08
+  - Odoo ID: 155526 | Name: FBA305-2863653-0904316 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317713) | Created: 2025-08-19 11:55:08
+
+Amazon Order ID: 302-4929337-5442718
+  Duplicate count: 2
+  - Odoo ID: 155844 | Name: FBA302-4929337-5442718 | Amount: EUR 29.83 | Status: invoiced | Invoice: YES (317156) | Created: 2025-08-19 12:47:10
+  - Odoo ID: 155409 | Name: FBA302-4929337-5442718 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (316057) | Created: 2025-08-19 11:27:21
+
+Amazon Order ID: 305-9312701-0020344
+  Duplicate count: 2
+  - Odoo ID: 155914 | Name: FBA305-9312701-0020344 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (316324) | Created: 2025-08-19 13:27:48
+  - Odoo ID: 155913 | Name: FBA305-9312701-0020344 | Amount: EUR 57.37 | Status: to invoice | Invoice: YES (320528) | Created: 2025-08-19 13:27:48
+
+Amazon Order ID: 028-3531747-9863542
+  Duplicate count: 2
+  - Odoo ID: 155974 | Name: FBA028-3531747-9863542 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 13:29:13
+  - Odoo ID: 155973 | Name: FBA028-3531747-9863542 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (316195) | Created: 2025-08-19 13:29:13
+
+Amazon Order ID: 305-4459799-9653125
+  Duplicate count: 2
+  - Odoo ID: 155989 | Name: FBA305-4459799-9653125 | Amount: EUR 25.23 | Status: to invoice | Invoice: NO | Created: 2025-08-19 13:29:28
+  - Odoo ID: 155988 | Name: FBA305-4459799-9653125 | Amount: EUR 29.83 | Status: invoiced | Invoice: YES (316371) | Created: 2025-08-19 13:29:28
+
+Amazon Order ID: 028-2354504-2770702
+  Duplicate count: 2
+  - Odoo ID: 156185 | Name: FBA028-2354504-2770702 | Amount: EUR 57.35 | Status: to invoice | Invoice: NO | Created: 2025-08-19 14:49:11
+  - Odoo ID: 156184 | Name: FBA028-2354504-2770702 | Amount: EUR 28.69 | Status: invoiced | Invoice: YES (316367) | Created: 2025-08-19 14:49:11
+
+Amazon Order ID: 303-0328412-5756332
+  Duplicate count: 2
+  - Odoo ID: 156226 | Name: FBA303-0328412-5756332 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 15:03:24
+  - Odoo ID: 156225 | Name: FBA303-0328412-5756332 | Amount: EUR 25.23 | Status: to invoice | Invoice: YES (316925) | Created: 2025-08-19 15:03:24
+
+Amazon Order ID: 304-2543067-3839552
+  Duplicate count: 2
+  - Odoo ID: 156256 | Name: FBA304-2543067-3839552 | Amount: EUR 25.23 | Status: to invoice | Invoice: NO | Created: 2025-08-19 15:04:05
+  - Odoo ID: 156255 | Name: FBA304-2543067-3839552 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317087) | Created: 2025-08-19 15:04:05
+
+Amazon Order ID: 303-0762492-4377160
+  Duplicate count: 2
+  - Odoo ID: 156276 | Name: FBA303-0762492-4377160 | Amount: EUR 22.93 | Status: to invoice | Invoice: NO | Created: 2025-08-19 15:04:36
+  - Odoo ID: 156275 | Name: FBA303-0762492-4377160 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (316824) | Created: 2025-08-19 15:04:36
+
+Amazon Order ID: 303-5654460-2869133
+  Duplicate count: 2
+  - Odoo ID: 156393 | Name: FBA303-5654460-2869133 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (319954) | Created: 2025-08-19 15:21:06
+  - Odoo ID: 154165 | Name: FBA303-5654460-2869133 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (315988) | Created: 2025-08-18 08:39:05
+
+Amazon Order ID: 303-7682757-3099552
+  Duplicate count: 2
+  - Odoo ID: 156579 | Name: FBA303-7682757-3099552 | Amount: EUR 57.37 | Status: to invoice | Invoice: NO | Created: 2025-08-19 16:04:56
+  - Odoo ID: 156578 | Name: FBA303-7682757-3099552 | Amount: EUR 45.86 | Status: to invoice | Invoice: YES (316962,317015) | Created: 2025-08-19 16:04:56
+
+Amazon Order ID: 303-5019804-4460329
+  Duplicate count: 2
+  - Odoo ID: 156730 | Name: FBA303-5019804-4460329 | Amount: EUR 25.23 | Status: to invoice | Invoice: NO | Created: 2025-08-19 16:32:14
+  - Odoo ID: 156729 | Name: FBA303-5019804-4460329 | Amount: EUR 57.37 | Status: invoiced | Invoice: YES (316182) | Created: 2025-08-19 16:32:14
+
+Amazon Order ID: 303-9005955-9422721
+  Duplicate count: 2
+  - Odoo ID: 156756 | Name: FBA303-9005955-9422721 | Amount: EUR 57.37 | Status: to invoice | Invoice: YES (316750) | Created: 2025-08-19 16:54:34
+  - Odoo ID: 156299 | Name: FBA303-9005955-9422721 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (319994) | Created: 2025-08-19 15:05:12
+
+Amazon Order ID: 306-1004185-0755502
+  Duplicate count: 2
+  - Odoo ID: 156763 | Name: FBA306-1004185-0755502 | Amount: EUR 24.10 | Status: to invoice | Invoice: NO | Created: 2025-08-19 16:54:46
+  - Odoo ID: 156279 | Name: FBA306-1004185-0755502 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (319613) | Created: 2025-08-19 15:04:36
+
+Amazon Order ID: 302-9231726-2697936
+  Duplicate count: 2
+  - Odoo ID: 156780 | Name: FBA302-9231726-2697936 | Amount: EUR 25.23 | Status: to invoice | Invoice: NO | Created: 2025-08-19 16:54:59
+  - Odoo ID: 155649 | Name: FBA302-9231726-2697936 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (317034) | Created: 2025-08-19 12:15:09
+
+Amazon Order ID: 305-1031445-8829124
+  Duplicate count: 2
+  - Odoo ID: 156809 | Name: FBA305-1031445-8829124 | Amount: EUR 30.98 | Status: to invoice | Invoice: YES (317037) | Created: 2025-08-19 16:55:40
+  - Odoo ID: 156808 | Name: FBA305-1031445-8829124 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (319535) | Created: 2025-08-19 16:55:40
+
+Amazon Order ID: 406-8249564-6004320
+  Duplicate count: 2
+  - Odoo ID: 156918 | Name: FBA406-8249564-6004320 | Amount: EUR 74.85 | Status: to invoice | Invoice: YES (321809) | Created: 2025-08-19 17:22:23
+  - Odoo ID: 155775 | Name: FBA406-8249564-6004320 | Amount: EUR 174.65 | Status: to invoice | Invoice: YES (321807) | Created: 2025-08-19 12:33:24
+
+Amazon Order ID: 302-6511463-2772361
+  Duplicate count: 2
+  - Odoo ID: 156947 | Name: FBA302-6511463-2772361 | Amount: EUR 25.23 | Status: to invoice | Invoice: NO | Created: 2025-08-19 17:23:18
+  - Odoo ID: 156946 | Name: FBA302-6511463-2772361 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (317233) | Created: 2025-08-19 17:23:18
+
+Amazon Order ID: 305-3530847-4177162
+  Duplicate count: 2
+  - Odoo ID: 157116 | Name: FBA305-3530847-4177162 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 18:24:14
+  - Odoo ID: 157115 | Name: FBA305-3530847-4177162 | Amount: EUR 29.83 | Status: invoiced | Invoice: YES (319854) | Created: 2025-08-19 18:24:14
+
+Amazon Order ID: 028-4464774-6426724
+  Duplicate count: 2
+  - Odoo ID: 157138 | Name: FBA028-4464774-6426724 | Amount: EUR 45.86 | Status: to invoice | Invoice: YES (316935) | Created: 2025-08-19 18:24:29
+  - Odoo ID: 157137 | Name: FBA028-4464774-6426724 | Amount: EUR 28.69 | Status: invoiced | Invoice: YES (319049) | Created: 2025-08-19 18:24:29
+
+Amazon Order ID: 303-8305542-4833950
+  Duplicate count: 2
+  - Odoo ID: 157312 | Name: FBA303-8305542-4833950 | Amount: EUR 29.83 | Status: invoiced | Invoice: YES (319792) | Created: 2025-08-19 19:21:19
+  - Odoo ID: 156240 | Name: FBA303-8305542-4833950 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (316608) | Created: 2025-08-19 15:03:37
+
+Amazon Order ID: 304-6420591-6667566
+  Duplicate count: 2
+  - Odoo ID: 157417 | Name: FBA304-6420591-6667566 | Amount: EUR 31.70 | Status: to invoice | Invoice: NO | Created: 2025-08-19 19:42:23
+  - Odoo ID: 157416 | Name: FBA304-6420591-6667566 | Amount: EUR 27.12 | Status: to invoice | Invoice: YES (314845) | Created: 2025-08-19 19:42:23
+
+Amazon Order ID: 303-1170293-5869905
+  Duplicate count: 2
+  - Odoo ID: 157509 | Name: FBA303-1170293-5869905 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (316317) | Created: 2025-08-19 19:56:23
+  - Odoo ID: 157508 | Name: FBA303-1170293-5869905 | Amount: EUR 14.88 | Status: invoiced | Invoice: YES (320323) | Created: 2025-08-19 19:56:23
+
+Amazon Order ID: 028-5802679-7877906
+  Duplicate count: 2
+  - Odoo ID: 157605 | Name: FBA028-5802679-7877906 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 20:23:18
+  - Odoo ID: 157604 | Name: FBA028-5802679-7877906 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (316310) | Created: 2025-08-19 20:23:18
+
+Amazon Order ID: 304-9837286-7630747
+  Duplicate count: 2
+  - Odoo ID: 157769 | Name: FBA304-9837286-7630747 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 21:12:42
+  - Odoo ID: 157768 | Name: FBA304-9837286-7630747 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (316044) | Created: 2025-08-19 21:12:42
+
+Amazon Order ID: 304-9087674-9077119
+  Duplicate count: 2
+  - Odoo ID: 158101 | Name: FBA304-9087674-9077119 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (316756) | Created: 2025-08-19 22:35:44
+  - Odoo ID: 158100 | Name: FBA304-9087674-9077119 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (319930) | Created: 2025-08-19 22:35:44
+
+Amazon Order ID: 306-4803230-9656343
+  Duplicate count: 2
+  - Odoo ID: 158292 | Name: FBA306-4803230-9656343 | Amount: EUR 29.83 | Status: invoiced | Invoice: YES (317513) | Created: 2025-08-19 23:19:23
+  - Odoo ID: 155821 | Name: FBA306-4803230-9656343 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317436) | Created: 2025-08-19 12:46:34
+
+Amazon Order ID: 028-7315451-2021127
+  Duplicate count: 2
+  - Odoo ID: 158509 | Name: FBA028-7315451-2021127 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (316880) | Created: 2025-08-20 00:07:26
+  - Odoo ID: 157529 | Name: FBA028-7315451-2021127 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (320484) | Created: 2025-08-19 19:56:53
+
+Amazon Order ID: 402-6847339-4194746
+  Duplicate count: 2
+  - Odoo ID: 158506 | Name: FBA402-6847339-4194746 | Amount: EUR 31.40 | Status: invoiced | Invoice: YES (322279) | Created: 2025-08-20 00:07:26
+  - Odoo ID: 157526 | Name: FBA402-6847339-4194746 | Amount: EUR 21.72 | Status: invoiced | Invoice: YES (322530) | Created: 2025-08-19 19:56:53
+
+Amazon Order ID: 304-2693401-0398725
+  Duplicate count: 2
+  - Odoo ID: 158762 | Name: FBA304-2693401-0398725 | Amount: EUR 86.03 | Status: invoiced | Invoice: YES (316911) | Created: 2025-08-20 01:12:49
+  - Odoo ID: 158761 | Name: FBA304-2693401-0398725 | Amount: EUR 28.69 | Status: invoiced | Invoice: YES (319392) | Created: 2025-08-20 01:12:49
+
+Amazon Order ID: 402-6887886-0343545
+  Duplicate count: 2
+  - Odoo ID: 158877 | Name: FBA402-6887886-0343545 | Amount: EUR 32.61 | Status: invoiced | Invoice: YES (322762) | Created: 2025-08-20 01:31:07
+  - Odoo ID: 155742 | Name: FBA402-6887886-0343545 | Amount: EUR 31.40 | Status: invoiced | Invoice: YES (315208) | Created: 2025-08-19 12:32:11
+
+Amazon Order ID: 306-1954132-7002746
+  Duplicate count: 2
+  - Odoo ID: 158896 | Name: FBA306-1954132-7002746 | Amount: EUR 28.69 | Status: invoiced | Invoice: YES (317803) | Created: 2025-08-20 02:55:27
+  - Odoo ID: 158196 | Name: FBA306-1954132-7002746 | Amount: EUR 28.66 | Status: invoiced | Invoice: YES (315994) | Created: 2025-08-19 23:04:59
+
+Amazon Order ID: 407-9823144-7251568
+  Duplicate count: 2
+  - Odoo ID: 159340 | Name: FBA407-9823144-7251568 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (322388) | Created: 2025-08-20 10:21:33
+  - Odoo ID: 159227 | Name: FBA407-9823144-7251568 | Amount: EUR 30.19 | Status: invoiced | Invoice: YES (322674) | Created: 2025-08-20 04:20:14
+
+Amazon Order ID: 302-4416015-8525938
+  Duplicate count: 2
+  - Odoo ID: 160156 | Name: FBA302-4416015-8525938 | Amount: EUR 29.00 | Status: to invoice | Invoice: YES (320340) | Created: 2025-08-21 18:47:17
+  - Odoo ID: 159879 | Name: FBA302-4416015-8525938 | Amount: EUR 26.04 | Status: to invoice | Invoice: NO | Created: 2025-08-21 11:16:58
+
+Amazon Order ID: 403-1851592-9427545
+  Duplicate count: 2
+  - Odoo ID: 161313 | Name: FBA403-1851592-9427545 | Amount: EUR 27.77 | Status: invoiced | Invoice: YES (322149) | Created: 2025-08-24 17:57:36
+  - Odoo ID: 160826 | Name: FBA403-1851592-9427545 | Amount: EUR 31.40 | Status: invoiced | Invoice: YES (314996) | Created: 2025-08-23 02:00:10
+
+Amazon Order ID: 303-3394849-0909956
+  Duplicate count: 2
+  - Odoo ID: 161923 | Name: FBA303-3394849-0909956 | Amount: EUR 28.69 | Status: invoiced | Invoice: YES (317919) | Created: 2025-08-25 17:38:20
+  - Odoo ID: 160795 | Name: FBA303-3394849-0909956 | Amount: EUR 22.87 | Status: invoiced | Invoice: YES (321856) | Created: 2025-08-23 01:59:27
+
+Amazon Order ID: 408-1153632-2437963
+  Duplicate count: 3
+  - Odoo ID: 162283 | Name: FBA408-1153632-2437963 | Amount: EUR 24.14 | Status: to invoice | Invoice: NO | Created: 2025-08-26 09:57:18
+  - Odoo ID: 162282 | Name: FBA408-1153632-2437963 | Amount: EUR 32.61 | Status: to invoice | Invoice: NO | Created: 2025-08-26 09:57:18
+  - Odoo ID: 162158 | Name: FBA408-1153632-2437963 | Amount: EUR 65.22 | Status: invoiced | Invoice: YES (315053) | Created: 2025-08-26 01:55:35
+
+Amazon Order ID: 403-8377281-4121116
+  Duplicate count: 3
+  - Odoo ID: 162326 | Name: FBA403-8377281-4121116 | Amount: EUR 33.82 | Status: invoiced | Invoice: YES (315923) | Created: 2025-08-26 09:58:46
+  - Odoo ID: 161698 | Name: FBA403-8377281-4121116 | Amount: EUR 26.56 | Status: to invoice | Invoice: NO | Created: 2025-08-25 11:00:28
+  - Odoo ID: 161177 | Name: FBA403-8377281-4121116 | Amount: EUR 33.82 | Status: invoiced | Invoice: YES (322514) | Created: 2025-08-24 09:57:55
+
+Amazon Order ID: 304-2002058-6712330
+  Duplicate count: 2
+  - Odoo ID: 162597 | Name: FBA304-2002058-6712330 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (318408) | Created: 2025-08-26 18:01:07
+  - Odoo ID: 161900 | Name: FBA304-2002058-6712330 | Amount: EUR 19.48 | Status: to invoice | Invoice: YES (321910) | Created: 2025-08-25 17:37:55
+
+Amazon Order ID: 402-6970331-1253152
+  Duplicate count: 2
+  - Odoo ID: 163374 | Name: FBA402-6970331-1253152 | Amount: EUR 21.72 | Status: invoiced | Invoice: YES (322501) | Created: 2025-08-27 23:36:37
+  - Odoo ID: 162274 | Name: FBA402-6970331-1253152 | Amount: EUR 28.98 | Status: invoiced | Invoice: YES (322266) | Created: 2025-08-26 09:56:59
+
+Amazon Order ID: 028-4664531-8066725
+  Duplicate count: 2
+  - Odoo ID: 166154 | Name: FBA028-4664531-8066725 | Amount: EUR 30.98 | Status: to invoice | Invoice: NO | Created: 2025-09-03 12:28:15
+  - Odoo ID: 162586 | Name: FBA028-4664531-8066725 | Amount: EUR 28.68 | Status: no | Invoice: YES (333003,321905) | Created: 2025-08-26 18:00:53
+
+Amazon Order ID: 304-1163529-8781917
+  Duplicate count: 2
+  - Odoo ID: 166239 | Name: FBA304-1163529-8781917 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (318548) | Created: 2025-09-03 12:35:06
+  - Odoo ID: 163474 | Name: FBA304-1163529-8781917 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (317882) | Created: 2025-08-28 00:34:07
+
+Amazon Order ID: 306-1951731-9129933
+  Duplicate count: 2
+  - Odoo ID: 166306 | Name: FBA306-1951731-9129933 | Amount: EUR 19.48 | Status: to invoice | Invoice: NO | Created: 2025-09-03 12:38:57
+  - Odoo ID: 166257 | Name: FBA306-1951731-9129933 | Amount: EUR 28.68 | Status: no | Invoice: YES (318566,318682) | Created: 2025-09-03 12:35:12
+
+Amazon Order ID: 304-7931343-6092353
+  Duplicate count: 2
+  - Odoo ID: 167163 | Name: FBA304-7931343-6092353 | Amount: EUR 29.83 | Status: invoiced | Invoice: YES (330695) | Created: 2025-09-03 18:40:54
+  - Odoo ID: 167081 | Name: FBA304-7931343-6092353 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (332926) | Created: 2025-09-03 18:11:02
+
+Amazon Order ID: 402-5977887-8719559
+  Duplicate count: 2
+  - Odoo ID: 167311 | Name: FBA402-5977887-8719559 | Amount: EUR 26.16 | Status: to invoice | Invoice: NO | Created: 2025-09-03 19:40:26
+  - Odoo ID: 167310 | Name: FBA402-5977887-8719559 | Amount: EUR 27.18 | Status: invoiced | Invoice: YES (329977) | Created: 2025-09-03 19:40:26
+
+Amazon Order ID: 303-4790363-1071563
+  Duplicate count: 2
+  - Odoo ID: 167456 | Name: FBA303-4790363-1071563 | Amount: EUR 14.88 | Status: to invoice | Invoice: NO | Created: 2025-09-03 20:11:11
+  - Odoo ID: 167455 | Name: FBA303-4790363-1071563 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (330130) | Created: 2025-09-03 20:11:11
+
+Amazon Order ID: 302-2444688-2684345
+  Duplicate count: 2
+  - Odoo ID: 167837 | Name: FBA302-2444688-2684345 | Amount: EUR 51.67 | Status: to invoice | Invoice: NO | Created: 2025-09-03 22:40:38
+  - Odoo ID: 167309 | Name: FBA302-2444688-2684345 | Amount: EUR 42.47 | Status: invoiced | Invoice: YES (329752) | Created: 2025-09-03 19:40:26
+
+Amazon Order ID: 408-4528102-6190720
+  Duplicate count: 2
+  - Odoo ID: 168990 | Name: FBA408-4528102-6190720 | Amount: EUR 28.98 | Status: to invoice | Invoice: NO | Created: 2025-09-05 05:40:21
+  - Odoo ID: 168968 | Name: FBA408-4528102-6190720 | Amount: EUR 21.72 | Status: invoiced | Invoice: YES (332694) | Created: 2025-09-05 05:11:15
+
+Amazon Order ID: 028-2221267-3757968
+  Duplicate count: 2
+  - Odoo ID: 171952 | Name: FBA028-2221267-3757968 | Amount: EUR 137.60 | Status: invoiced | Invoice: YES (329145) | Created: 2025-09-10 20:40:44
+  - Odoo ID: 171525 | Name: FBA028-2221267-3757968 | Amount: EUR 68.79 | Status: invoiced | Invoice: YES (329596) | Created: 2025-09-10 05:10:38
+
+Amazon Order ID: 305-7253492-7866755
+  Duplicate count: 2
+  - Odoo ID: 172587 | Name: FBA305-7253492-7866755 | Amount: EUR 57.37 | Status: to invoice | Invoice: YES (333537) | Created: 2025-09-12 04:41:17
+  - Odoo ID: 172457 | Name: FBA305-7253492-7866755 | Amount: EUR 57.35 | Status: to invoice | Invoice: YES (333485) | Created: 2025-09-11 20:40:46
+
+Amazon Order ID: 028-5133767-6877912
+  Duplicate count: 2
+  - Odoo ID: 172868 | Name: FBA028-5133767-6877912 | Amount: EUR 77.81 | Status: invoiced | Invoice: YES (329609) | Created: 2025-09-12 20:40:53
+  - Odoo ID: 172720 | Name: FBA028-5133767-6877912 | Amount: EUR 116.72 | Status: to invoice | Invoice: YES (329905) | Created: 2025-09-12 12:40:50
+
+Amazon Order ID: 303-3548160-5577111
+  Duplicate count: 2
+  - Odoo ID: 173442 | Name: FBA303-3548160-5577111 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (333825) | Created: 2025-09-15 04:40:21
+  - Odoo ID: 173194 | Name: FBA303-3548160-5577111 | Amount: EUR 29.83 | Status: no | Invoice: YES (328759,328764) | Created: 2025-09-14 04:40:09
+
+Amazon Order ID: 305-7719602-8719536
+  Duplicate count: 2
+  - Odoo ID: 174063 | Name: FBA305-7719602-8719536 | Amount: EUR 150.11 | Status: to invoice | Invoice: YES (328900) | Created: 2025-09-16 12:40:59
+  - Odoo ID: 173931 | Name: FBA305-7719602-8719536 | Amount: EUR 100.08 | Status: to invoice | Invoice: YES (329436) | Created: 2025-09-16 04:41:04
+
+Amazon Order ID: 403-1369103-0588303
+  Duplicate count: 2
+  - Odoo ID: 174227 | Name: FBA403-1369103-0588303 | Amount: EUR 71.32 | Status: to invoice | Invoice: NO | Created: 2025-09-16 20:40:22
+  - Odoo ID: 174226 | Name: FBA403-1369103-0588303 | Amount: EUR 106.98 | Status: invoiced | Invoice: YES (333121) | Created: 2025-09-16 20:40:22
+
+Amazon Order ID: 306-1702290-9738735
+  Duplicate count: 2
+  - Odoo ID: 174975 | Name: FBA306-1702290-9738735 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (331707) | Created: 2025-09-18 12:41:12
+  - Odoo ID: 174070 | Name: FBA306-1702290-9738735 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (328859) | Created: 2025-09-16 12:41:03
+
+Amazon Order ID: 305-8822360-5344313
+  Duplicate count: 2
+  - Odoo ID: 175323 | Name: FBA305-8822360-5344313 | Amount: EUR 29.83 | Status: invoiced | Invoice: YES (330289) | Created: 2025-09-19 12:40:50
+  - Odoo ID: 174965 | Name: FBA305-8822360-5344313 | Amount: EUR 27.53 | Status: invoiced | Invoice: YES (329096) | Created: 2025-09-18 12:41:03
+
+Amazon Order ID: 303-8242179-8890711
+  Duplicate count: 2
+  - Odoo ID: 175578 | Name: FBA303-8242179-8890711 | Amount: EUR 31.86 | Status: to invoice | Invoice: YES (331537) | Created: 2025-09-20 12:40:20
+  - Odoo ID: 175577 | Name: FBA303-8242179-8890711 | Amount: EUR 27.00 | Status: to invoice | Invoice: NO | Created: 2025-09-20 12:40:20
+
+Amazon Order ID: 407-5802760-3321967
+  Duplicate count: 2
+  - Odoo ID: 178975 | Name: FBA407-5802760-3321967 | Amount: EUR 77.21 | Status: to invoice | Invoice: YES (341910) | Created: 2025-10-02 04:40:43
+  - Odoo ID: 178894 | Name: FBA407-5802760-3321967 | Amount: EUR 25.74 | Status: invoiced | Invoice: YES (341909) | Created: 2025-10-01 20:40:38
+
+Amazon Order ID: 404-4862606-5257135
+  Duplicate count: 3
+  - Odoo ID: 180164 | Name: FBA404-4862606-5257135 | Amount: EUR 28.98 | Status: invoiced | Invoice: YES (343386) | Created: 2025-10-06 20:40:12
+  - Odoo ID: 180163 | Name: FBA404-4862606-5257135 | Amount: EUR 86.94 | Status: to invoice | Invoice: NO | Created: 2025-10-06 20:40:12
+  - Odoo ID: 179477 | Name: FBA404-4862606-5257135 | Amount: EUR 28.98 | Status: to invoice | Invoice: YES (343394,343390) | Created: 2025-10-04 04:40:59
+
+Amazon Order ID: 028-4079040-6911569
+  Duplicate count: 2
+  - Odoo ID: 180689 | Name: FBA028-4079040-6911569 | Amount: EUR 29.84 | Status: invoiced | Invoice: YES (343141) | Created: 2025-10-08 12:40:49
+  - Odoo ID: 180576 | Name: FBA028-4079040-6911569 | Amount: EUR 29.81 | Status: no | Invoice: YES (341025,343142,341026) | Created: 2025-10-08 04:40:38
+
+Amazon Order ID: 303-6245560-3973967
+  Duplicate count: 2
+  - Odoo ID: 181165 | Name: FBA303-6245560-3973967 | Amount: EUR 80.28 | Status: invoiced | Invoice: YES (341072,341070) | Created: 2025-10-10 04:40:57
+  - Odoo ID: 181084 | Name: FBA303-6245560-3973967 | Amount: EUR 46.22 | Status: no | Invoice: NO | Created: 2025-10-09 20:40:46
+
+Amazon Order ID: 306-3158532-3101140
+  Duplicate count: 2
+  - Odoo ID: 182816 | Name: FBA306-3158532-3101140 | Amount: EUR 26.66 | Status: to invoice | Invoice: YES (342608) | Created: 2025-10-17 04:40:10
+  - Odoo ID: 182602 | Name: FBA306-3158532-3101140 | Amount: EUR 26.67 | Status: to invoice | Invoice: YES (342032) | Created: 2025-10-16 04:40:59
+
+Amazon Order ID: 407-7315844-7265912
+  Duplicate count: 2
+  - Odoo ID: 183836 | Name: FBA407-7315844-7265912 | Amount: EUR 195.66 | Status: to invoice | Invoice: YES (342946) | Created: 2025-10-21 12:40:10
+  - Odoo ID: 183700 | Name: FBA407-7315844-7265912 | Amount: EUR 293.49 | Status: to invoice | Invoice: YES (343302,343303) | Created: 2025-10-21 04:40:48
+
+Amazon Order ID: 028-6855614-1025963
+  Duplicate count: 2
+  - Odoo ID: 185479 | Name: FBA028-6855614-1025963 | Amount: EUR 44.43 | Status: invoiced | Invoice: YES (341765) | Created: 2025-10-27 20:40:39
+  - Odoo ID: 185341 | Name: FBA028-6855614-1025963 | Amount: EUR 22.19 | Status: invoiced | Invoice: YES (342434) | Created: 2025-10-27 12:40:50
+
+Amazon Order ID: 306-1555196-2273112
+  Duplicate count: 2
+  - Odoo ID: 187129 | Name: FBA306-1555196-2273112 | Amount: EUR 31.71 | Status: to invoice | Invoice: YES (348440) | Created: 2025-11-03 20:40:36
+  - Odoo ID: 186739 | Name: FBA306-1555196-2273112 | Amount: EUR 31.69 | Status: to invoice | Invoice: YES (351153) | Created: 2025-11-02 12:40:13
+
+Amazon Order ID: 402-3175896-1619557
+  Duplicate count: 2
+  - Odoo ID: 188450 | Name: FBA402-3175896-1619557 | Amount: EUR 311.17 | Status: to invoice | Invoice: YES (349381) | Created: 2025-11-07 21:10:20
+  - Odoo ID: 188449 | Name: FBA402-3175896-1619557 | Amount: EUR 194.50 | Status: to invoice | Invoice: YES (349189) | Created: 2025-11-07 21:10:20
+
+Amazon Order ID: 407-8845531-3980311
+  Duplicate count: 2
+  - Odoo ID: 189361 | Name: FBA407-8845531-3980311 | Amount: EUR 25.54 | Status: to invoice | Invoice: YES (350345) | Created: 2025-11-11 20:40:06
+  - Odoo ID: 188727 | Name: FBA407-8845531-3980311 | Amount: EUR 102.20 | Status: to invoice | Invoice: YES (349907,351108) | Created: 2025-11-09 12:40:06
+
+Amazon Order ID: 402-7704019-3889968
+  Duplicate count: 2
+  - Odoo ID: 189373 | Name: FBA402-7704019-3889968 | Amount: EUR 23.55 | Status: to invoice | Invoice: NO | Created: 2025-11-11 20:40:38
+  - Odoo ID: 189144 | Name: FBA402-7704019-3889968 | Amount: EUR 25.74 | Status: to invoice | Invoice: NO | Created: 2025-11-11 04:40:38
+
+Amazon Order ID: 028-8155643-7790746
+  Duplicate count: 2
+  - Odoo ID: 189434 | Name: FBA028-8155643-7790746 | Amount: EUR 11.10 | Status: to invoice | Invoice: YES (350279) | Created: 2025-11-12 04:40:00
+  - Odoo ID: 189362 | Name: FBA028-8155643-7790746 | Amount: EUR 33.21 | Status: to invoice | Invoice: YES (347693,347695,347690,350281,347699,347698,347696) | Created: 2025-11-11 20:40:35
+
+Amazon Order ID: 403-8258123-6903555
+  Duplicate count: 2
+  - Odoo ID: 190219 | Name: FBA403-8258123-6903555 | Amount: EUR 21.78 | Status: invoiced | Invoice: YES (350485) | Created: 2025-11-14 12:40:37
+  - Odoo ID: 190218 | Name: FBA403-8258123-6903555 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (349227) | Created: 2025-11-14 12:40:37
+
+Amazon Order ID: 306-4577341-4206710
+  Duplicate count: 2
+  - Odoo ID: 190752 | Name: FBA306-4577341-4206710 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-11-17 04:40:20
+  - Odoo ID: 190715 | Name: FBA306-4577341-4206710 | Amount: EUR 27.53 | Status: invoiced | Invoice: YES (351668) | Created: 2025-11-16 20:40:05
+
+Amazon Order ID: 302-9733209-2672369
+  Duplicate count: 2
+  - Odoo ID: 192105 | Name: FBA302-9733209-2672369 | Amount: EUR 29.83 | Status: invoiced | Invoice: YES (351423) | Created: 2025-11-20 20:40:54
+  - Odoo ID: 191360 | Name: FBA302-9733209-2672369 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (349676) | Created: 2025-11-18 20:40:12
+
+Amazon Order ID: 404-2817326-2669110
+  Duplicate count: 2
+  - Odoo ID: 194719 | Name: FBA404-2817326-2669110 | Amount: EUR 27.31 | Status: invoiced | Invoice: YES (352234) | Created: 2025-11-28 20:40:40
+  - Odoo ID: 193759 | Name: FBA404-2817326-2669110 | Amount: EUR 22.76 | Status: to invoice | Invoice: NO | Created: 2025-11-26 12:40:54
+
+Amazon Order ID: 028-9483459-8654759
+  Duplicate count: 2
+  - Odoo ID: 194853 | Name: FBA028-9483459-8654759 | Amount: EUR 80.39 | Status: to invoice | Invoice: YES (357086) | Created: 2025-11-29 04:40:45
+  - Odoo ID: 194539 | Name: FBA028-9483459-8654759 | Amount: EUR 80.42 | Status: to invoice | Invoice: YES (350561,347938) | Created: 2025-11-28 12:40:56
+
+Amazon Order ID: 028-0430669-0296337
+  Duplicate count: 2
+  - Odoo ID: 195294 | Name: FBA028-0430669-0296337 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (351486) | Created: 2025-11-30 20:40:57
+  - Odoo ID: 194172 | Name: FBA028-0430669-0296337 | Amount: EUR 23.99 | Status: no | Invoice: NO | Created: 2025-11-27 12:41:22
+
+Amazon Order ID: 306-0083754-7315501
+  Duplicate count: 2
+  - Odoo ID: 195866 | Name: FBA306-0083754-7315501 | Amount: EUR 29.83 | Status: to invoice | Invoice: NO | Created: 2025-12-02 04:41:01
+  - Odoo ID: 195865 | Name: FBA306-0083754-7315501 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (354155) | Created: 2025-12-02 04:41:01
+
+Amazon Order ID: 302-3733782-9613967
+  Duplicate count: 2
+  - Odoo ID: 196184 | Name: FBA302-3733782-9613967 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-12-02 20:41:20
+  - Odoo ID: 195785 | Name: FBA302-3733782-9613967 | Amount: EUR 19.48 | Status: invoiced | Invoice: YES (354033) | Created: 2025-12-01 20:41:01
+
+Amazon Order ID: 171-1446702-0353908
+  Duplicate count: 2
+  - Odoo ID: 196504 | Name: FBA171-1446702-0353908 | Amount: EUR 79.69 | Status: to invoice | Invoice: YES (356077) | Created: 2025-12-03 20:41:59
+  - Odoo ID: 196230 | Name: FBA171-1446702-0353908 | Amount: EUR 159.36 | Status: to invoice | Invoice: NO | Created: 2025-12-03 04:40:47
+
+Amazon Order ID: 028-6803661-0326727
+  Duplicate count: 2
+  - Odoo ID: 196730 | Name: FBA028-6803661-0326727 | Amount: EUR 13.06 | Status: invoiced | Invoice: YES (354141) | Created: 2025-12-04 12:44:05
+  - Odoo ID: 195831 | Name: FBA028-6803661-0326727 | Amount: EUR 13.03 | Status: to invoice | Invoice: NO | Created: 2025-12-02 04:40:20
+
+Amazon Order ID: 302-2101787-0764357
+  Duplicate count: 2
+  - Odoo ID: 197312 | Name: FBA302-2101787-0764357 | Amount: EUR 22.93 | Status: to invoice | Invoice: NO | Created: 2025-12-06 04:40:16
+  - Odoo ID: 197232 | Name: FBA302-2101787-0764357 | Amount: EUR 58.50 | Status: invoiced | Invoice: YES (354474) | Created: 2025-12-05 20:41:14
+
+Amazon Order ID: 171-6162320-1030714
+  Duplicate count: 2
+  - Odoo ID: 197960 | Name: FBA171-6162320-1030714 | Amount: EUR 66.74 | Status: invoiced | Invoice: YES (356267) | Created: 2025-12-08 12:41:18
+  - Odoo ID: 197804 | Name: FBA171-6162320-1030714 | Amount: EUR 133.46 | Status: to invoice | Invoice: NO | Created: 2025-12-08 04:40:55
+
+Amazon Order ID: 408-2603266-8275526
+  Duplicate count: 2
+  - Odoo ID: 198998 | Name: FBA408-2603266-8275526 | Amount: EUR 118.46 | Status: invoiced | Invoice: YES (356266) | Created: 2025-12-10 20:40:23
+  - Odoo ID: 198868 | Name: FBA408-2603266-8275526 | Amount: EUR 59.23 | Status: to invoice | Invoice: NO | Created: 2025-12-10 12:45:04
+
+Amazon Order ID: 306-9521905-0047533
+  Duplicate count: 2
+  - Odoo ID: 199375 | Name: FBA306-9521905-0047533 | Amount: EUR 86.94 | Status: invoiced | Invoice: YES (355216) | Created: 2025-12-11 20:40:59
+  - Odoo ID: 199374 | Name: FBA306-9521905-0047533 | Amount: EUR 28.98 | Status: to invoice | Invoice: NO | Created: 2025-12-11 20:40:59
+
+Amazon Order ID: 302-5095086-4027529
+  Duplicate count: 2
+  - Odoo ID: 199443 | Name: FBA302-5095086-4027529 | Amount: EUR 13.73 | Status: invoiced | Invoice: YES (355246) | Created: 2025-12-12 04:40:48
+  - Odoo ID: 199442 | Name: FBA302-5095086-4027529 | Amount: EUR 11.44 | Status: to invoice | Invoice: NO | Created: 2025-12-12 04:40:48
+
+Amazon Order ID: 306-8525194-9408330
+  Duplicate count: 2
+  - Odoo ID: 200975 | Name: FBA306-8525194-9408330 | Amount: EUR 21.78 | Status: invoiced | Invoice: YES (353834) | Created: 2025-12-17 04:40:20
+  - Odoo ID: 200893 | Name: FBA306-8525194-9408330 | Amount: EUR 22.93 | Status: to invoice | Invoice: NO | Created: 2025-12-16 20:40:12
+
+Amazon Order ID: 302-5061501-9172306
+  Duplicate count: 2
+  - Odoo ID: 201901 | Name: FBA302-5061501-9172306 | Amount: EUR 22.93 | Status: to invoice | Invoice: NO | Created: 2025-12-19 20:40:51
+  - Odoo ID: 198702 | Name: FBA302-5061501-9172306 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (354939) | Created: 2025-12-10 04:40:41
+
+Amazon Order ID: 306-3249520-8729964
+  Duplicate count: 2
+  - Odoo ID: 202164 | Name: FBA306-3249520-8729964 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-12-21 04:40:37
+  - Odoo ID: 191762 | Name: FBA306-3249520-8729964 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (348023) | Created: 2025-11-19 20:40:40
+
+Amazon Order ID: 305-2501197-5144368
+  Duplicate count: 2
+  - Odoo ID: 202507 | Name: FBA305-2501197-5144368 | Amount: EUR 20.28 | Status: to invoice | Invoice: YES (358053) | Created: 2025-12-22 12:40:49
+  - Odoo ID: 202295 | Name: FBA305-2501197-5144368 | Amount: EUR 40.56 | Status: to invoice | Invoice: NO | Created: 2025-12-21 20:40:40
+
+Amazon Order ID: 306-0825923-2865132
+  Duplicate count: 2
+  - Odoo ID: 202655 | Name: FBA306-0825923-2865132 | Amount: EUR 55.55 | Status: to invoice | Invoice: NO | Created: 2025-12-22 20:40:55
+  - Odoo ID: 184866 | Name: FBA306-0825923-2865132 | Amount: EUR 14.41 | Status: to invoice | Invoice: YES (341259) | Created: 2025-10-24 20:40:42
+
+Amazon Order ID: 303-9642954-3735529
+  Duplicate count: 2
+  - Odoo ID: 202732 | Name: FBA303-9642954-3735529 | Amount: EUR 159.32 | Status: invoiced | Invoice: YES (358062) | Created: 2025-12-23 04:40:09
+  - Odoo ID: 202731 | Name: FBA303-9642954-3735529 | Amount: EUR 26.38 | Status: to invoice | Invoice: NO | Created: 2025-12-23 04:40:09
+
+Amazon Order ID: 407-4016096-5817920
+  Duplicate count: 3
+  - Odoo ID: 202807 | Name: FBA407-4016096-5817920 | Amount: EUR 31.40 | Status: to invoice | Invoice: NO | Created: 2025-12-23 04:41:05
+  - Odoo ID: 196885 | Name: FBA407-4016096-5817920 | Amount: EUR 65.22 | Status: to invoice | Invoice: YES (356853) | Created: 2025-12-04 20:41:01
+  - Odoo ID: 188881 | Name: FBA407-4016096-5817920 | Amount: EUR 31.40 | Status: invoiced | Invoice: YES (351154) | Created: 2025-11-10 04:40:50
+
+Amazon Order ID: 305-6585905-1774741
+  Duplicate count: 2
+  - Odoo ID: 202937 | Name: FBA305-6585905-1774741 | Amount: EUR 28.98 | Status: to invoice | Invoice: NO | Created: 2025-12-23 20:40:05
+  - Odoo ID: 202880 | Name: FBA305-6585905-1774741 | Amount: EUR 30.19 | Status: invoiced | Invoice: YES (359394) | Created: 2025-12-23 13:11:07
+
+Amazon Order ID: 402-6080861-3621918
+  Duplicate count: 2
+  - Odoo ID: 203356 | Name: FBA402-6080861-3621918 | Amount: EUR 41.94 | Status: no | Invoice: YES (358999) | Created: 2025-12-26 20:29:40
+  - Odoo ID: 203372 | Name: FBA402-6080861-3621918 | Amount: EUR 42.29 | Status: to invoice | Invoice: NO | Created: 2025-12-26 20:40:15
+
+Amazon Order ID: 171-0730141-7775519
+  Duplicate count: 2
+  - Odoo ID: 203359 | Name: FBA171-0730141-7775519 | Amount: EUR 41.94 | Status: no | Invoice: YES (359056) | Created: 2025-12-26 20:29:48
+  - Odoo ID: 203381 | Name: FBA171-0730141-7775519 | Amount: EUR 42.29 | Status: to invoice | Invoice: NO | Created: 2025-12-26 20:40:43
+
+Amazon Order ID: 402-4594907-7090723
+  Duplicate count: 2
+  - Odoo ID: 203360 | Name: FBA402-4594907-7090723 | Amount: EUR 29.94 | Status: no | Invoice: YES (359057) | Created: 2025-12-26 20:29:50
+  - Odoo ID: 203378 | Name: FBA402-4594907-7090723 | Amount: EUR 30.19 | Status: to invoice | Invoice: NO | Created: 2025-12-26 20:40:15
+
+Amazon Order ID: 171-7011105-5790754
+  Duplicate count: 2
+  - Odoo ID: 203363 | Name: FBA171-7011105-5790754 | Amount: EUR 63.32 | Status: no | Invoice: YES (359123) | Created: 2025-12-26 20:29:56
+  - Odoo ID: 203373 | Name: FBA171-7011105-5790754 | Amount: EUR 62.80 | Status: to invoice | Invoice: NO | Created: 2025-12-26 20:40:15
+
+Amazon Order ID: 305-7059980-7167513
+  Duplicate count: 2
+  - Odoo ID: 203365 | Name: FBA305-7059980-7167513 | Amount: EUR 29.69 | Status: no | Invoice: YES (359029) | Created: 2025-12-26 20:30:00
+  - Odoo ID: 203371 | Name: FBA305-7059980-7167513 | Amount: EUR 30.19 | Status: to invoice | Invoice: NO | Created: 2025-12-26 20:40:15
+
+Amazon Order ID: 404-4249374-4725910
+  Duplicate count: 2
+  - Odoo ID: 203366 | Name: FBA404-4249374-4725910 | Amount: EUR 51.54 | Status: no | Invoice: YES (359329) | Created: 2025-12-26 20:30:02
+  - Odoo ID: 203379 | Name: FBA404-4249374-4725910 | Amount: EUR 51.97 | Status: to invoice | Invoice: NO | Created: 2025-12-26 20:40:15
+
+Amazon Order ID: 305-5441953-3374718
+  Duplicate count: 2
+  - Odoo ID: 203368 | Name: FBA305-5441953-3374718 | Amount: EUR 29.69 | Status: no | Invoice: YES (359743) | Created: 2025-12-26 20:30:06
+  - Odoo ID: 203375 | Name: FBA305-5441953-3374718 | Amount: EUR 30.19 | Status: to invoice | Invoice: NO | Created: 2025-12-26 20:40:15
+
+Amazon Order ID: 402-3394787-4841132
+  Duplicate count: 2
+  - Odoo ID: 203799 | Name: S14711 | Amount: EUR 21.15 | Status: invoiced | Invoice: YES (360258) | Created: 2025-12-28 19:55:00
+  - Odoo ID: 203407 | Name: FBM402-3394787-4841132 | Amount: EUR 35.94 | Status: no | Invoice: NO | Created: 2025-12-26 23:19:11
+
+Amazon Order ID: 305-8668363-1064334
+  Duplicate count: 2
+  - Odoo ID: 203800 | Name: S14712 | Amount: EUR 12.15 | Status: no | Invoice: NO | Created: 2025-12-28 19:55:01
+  - Odoo ID: 203456 | Name: FBM305-8668363-1064334 | Amount: EUR 21.36 | Status: no | Invoice: NO | Created: 2025-12-27 07:57:21
+
+Amazon Order ID: 403-4696052-1501900
+  Duplicate count: 2
+  - Odoo ID: 203801 | Name: S14713 | Amount: EUR 21.15 | Status: invoiced | Invoice: YES (360262) | Created: 2025-12-28 19:55:02
+  - Odoo ID: 203458 | Name: FBM403-4696052-1501900 | Amount: EUR 35.94 | Status: no | Invoice: NO | Created: 2025-12-27 08:11:52
+
+Amazon Order ID: 303-1130017-4553116
+  Duplicate count: 2
+  - Odoo ID: 203802 | Name: S14714 | Amount: EUR 2.60 | Status: to invoice | Invoice: NO | Created: 2025-12-28 19:55:04
+  - Odoo ID: 203466 | Name: FBM303-1130017-4553116 | Amount: EUR 11.84 | Status: no | Invoice: NO | Created: 2025-12-27 09:01:38
+
+Amazon Order ID: 303-0765400-2643525
+  Duplicate count: 2
+  - Odoo ID: 203803 | Name: S14715 | Amount: EUR 1.26 | Status: to invoice | Invoice: NO | Created: 2025-12-28 19:55:05
+  - Odoo ID: 203520 | Name: FBM303-0765400-2643525 | Amount: EUR 7.08 | Status: no | Invoice: NO | Created: 2025-12-27 13:09:04
+
+Amazon Order ID: 405-7031124-1753168
+  Duplicate count: 2
+  - Odoo ID: 203804 | Name: S14716 | Amount: EUR 41.02 | Status: invoiced | Invoice: YES (360103) | Created: 2025-12-28 19:55:06
+  - Odoo ID: 203527 | Name: FBM405-7031124-1753168 | Amount: EUR 148.76 | Status: no | Invoice: NO | Created: 2025-12-27 13:35:33
+
+Amazon Order ID: 404-3134498-6558767
+  Duplicate count: 2
+  - Odoo ID: 203806 | Name: S14718 | Amount: EUR 10.59 | Status: invoiced | Invoice: YES (360255) | Created: 2025-12-28 19:55:09
+  - Odoo ID: 203615 | Name: FBM404-3134498-6558767 | Amount: EUR 32.61 | Status: no | Invoice: NO | Created: 2025-12-28 00:29:27
+
+Amazon Order ID: 028-9277173-6169969
+  Duplicate count: 2
+  - Odoo ID: 203807 | Name: S14719 | Amount: EUR 7.90 | Status: to invoice | Invoice: NO | Created: 2025-12-28 19:55:11
+  - Odoo ID: 203613 | Name: FBM028-9277173-6169969 | Amount: EUR 29.69 | Status: no | Invoice: NO | Created: 2025-12-28 00:29:23
+
+Amazon Order ID: 402-1160083-6363529
+  Duplicate count: 2
+  - Odoo ID: 203808 | Name: S14720 | Amount: EUR 108.57 | Status: invoiced | Invoice: YES (360101) | Created: 2025-12-28 19:55:13
+  - Odoo ID: 203612 | Name: FBM402-1160083-6363529 | Amount: EUR 136.69 | Status: no | Invoice: NO | Created: 2025-12-28 00:29:21
+
+Amazon Order ID: 407-6214261-6623568
+  Duplicate count: 2
+  - Odoo ID: 203810 | Name: S14722 | Amount: EUR 10.59 | Status: invoiced | Invoice: YES (360254) | Created: 2025-12-28 19:55:15
+  - Odoo ID: 203669 | Name: FBM407-6214261-6623568 | Amount: EUR 32.61 | Status: no | Invoice: NO | Created: 2025-12-28 10:11:40
+
+Amazon Order ID: 304-7633953-4241165
+  Duplicate count: 2
+  - Odoo ID: 203811 | Name: S14723 | Amount: EUR 10.77 | Status: to invoice | Invoice: NO | Created: 2025-12-28 19:55:16
+  - Odoo ID: 203678 | Name: FBM304-7633953-4241165 | Amount: EUR 29.69 | Status: no | Invoice: NO | Created: 2025-12-28 10:53:42
+
+Amazon Order ID: 403-4652236-2349159
+  Duplicate count: 2
+  - Odoo ID: 203812 | Name: S14724 | Amount: EUR 16.31 | Status: invoiced | Invoice: YES (360264) | Created: 2025-12-28 19:55:18
+  - Odoo ID: 203689 | Name: FBM403-4652236-2349159 | Amount: EUR 145.14 | Status: no | Invoice: NO | Created: 2025-12-28 11:08:42
+
+Amazon Order ID: 302-8623071-9598760
+  Duplicate count: 2
+  - Odoo ID: 203813 | Name: S14725 | Amount: EUR 60.20 | Status: to invoice | Invoice: NO | Created: 2025-12-28 19:55:19
+  - Odoo ID: 203706 | Name: FBM302-8623071-9598760 | Amount: EUR 89.19 | Status: no | Invoice: NO | Created: 2025-12-28 12:08:43
+
+Amazon Order ID: 408-7203120-7093146
+  Duplicate count: 2
+  - Odoo ID: 203814 | Name: S14726 | Amount: EUR 21.15 | Status: invoiced | Invoice: YES (360261) | Created: 2025-12-28 19:55:20
+  - Odoo ID: 203708 | Name: FBM408-7203120-7093146 | Amount: EUR 35.94 | Status: no | Invoice: NO | Created: 2025-12-28 12:23:42
+
+Amazon Order ID: 304-8142092-4939539
+  Duplicate count: 2
+  - Odoo ID: 203815 | Name: S14727 | Amount: EUR 18.13 | Status: to invoice | Invoice: NO | Created: 2025-12-28 19:55:22
+  - Odoo ID: 203710 | Name: FBM304-8142092-4939539 | Amount: EUR 29.69 | Status: no | Invoice: NO | Created: 2025-12-28 12:35:44
+
+Amazon Order ID: 304-6050180-1129148
+  Duplicate count: 2
+  - Odoo ID: 205076 | Name: S14961 | Amount: EUR 21.72 | Status: to invoice | Invoice: NO | Created: 2026-01-02 09:12:17
+  - Odoo ID: 203568 | Name: FBM304-6050180-1129148 | Amount: EUR 21.36 | Status: no | Invoice: NO | Created: 2025-12-27 15:42:07
+
+Amazon Order ID: 306-7429754-6881169
+  Duplicate count: 2
+  - Odoo ID: 205077 | Name: S14962 | Amount: EUR 21.72 | Status: to invoice | Invoice: NO | Created: 2026-01-02 09:12:20
+  - Odoo ID: 203653 | Name: FBM306-7429754-6881169 | Amount: EUR 21.36 | Status: no | Invoice: NO | Created: 2025-12-28 08:41:40
+
+=== DUPLICATES WITH SAME AMOUNT ===
+
+Amazon Order ID: 404-4785055-5581104
+  Duplicate count: 2
+  - Odoo ID: 30487 | Name: FBA404-4785055-5581104 | Amount: EUR 21.95 | Status: to invoice | Invoice: NO | Created: 2024-05-03 01:31:27
+  - Odoo ID: 30400 | Name: FBA404-4785055-5581104 | Amount: EUR 21.95 | Status: to invoice | Invoice: YES (183303,183260) | Created: 2024-05-02 17:31:43
+
+Amazon Order ID: 404-9046811-3257101
+  Duplicate count: 2
+  - Odoo ID: 32374 | Name: FBA404-9046811-3257101 | Amount: EUR 19.95 | Status: to invoice | Invoice: NO | Created: 2024-05-10 17:33:04
+  - Odoo ID: 32243 | Name: FBA404-9046811-3257101 | Amount: EUR 19.95 | Status: to invoice | Invoice: YES (182737,182782) | Created: 2024-05-10 09:26:52
+
+Amazon Order ID: 408-6136327-9005915
+  Duplicate count: 2
+  - Odoo ID: 33260 | Name: FBA408-6136327-9005915 | Amount: EUR 19.95 | Status: to invoice | Invoice: NO | Created: 2024-05-15 01:31:55
+  - Odoo ID: 33259 | Name: FBA408-6136327-9005915 | Amount: EUR 19.95 | Status: to invoice | Invoice: YES (183338,182622) | Created: 2024-05-15 01:31:55
+
+Amazon Order ID: 304-5837880-3447512
+  Duplicate count: 2
+  - Odoo ID: 36465 | Name: FBA304-5837880-3447512 | Amount: EUR 21.95 | Status: to invoice | Invoice: NO | Created: 2024-05-28 01:27:34
+  - Odoo ID: 36464 | Name: FBA304-5837880-3447512 | Amount: EUR 21.95 | Status: invoiced | Invoice: YES (181593) | Created: 2024-05-28 01:27:34
+
+Amazon Order ID: 302-5028201-3007520
+  Duplicate count: 2
+  - Odoo ID: 38181 | Name: FBA302-5028201-3007520 | Amount: EUR 22.95 | Status: to invoice | Invoice: NO | Created: 2024-06-03 01:29:18
+  - Odoo ID: 38180 | Name: FBA302-5028201-3007520 | Amount: EUR 22.95 | Status: invoiced | Invoice: YES (184213) | Created: 2024-06-03 01:29:18
+
+Amazon Order ID: 306-9918877-2158711
+  Duplicate count: 2
+  - Odoo ID: 38656 | Name: FBA306-9918877-2158711 | Amount: EUR 114.75 | Status: to invoice | Invoice: NO | Created: 2024-06-04 09:31:15
+  - Odoo ID: 38536 | Name: FBA306-9918877-2158711 | Amount: EUR 114.75 | Status: to invoice | Invoice: YES (184089) | Created: 2024-06-04 01:25:52
+
+Amazon Order ID: 404-7478353-1174764
+  Duplicate count: 2
+  - Odoo ID: 49721 | Name: FBA404-7478353-1174764 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-07-09 09:31:36
+  - Odoo ID: 49305 | Name: FBA404-7478353-1174764 | Amount: EUR 24.95 | Status: to invoice | Invoice: YES (191368,191567) | Created: 2024-07-08 01:30:19
+
+Amazon Order ID: 406-1090596-4237156
+  Duplicate count: 2
+  - Odoo ID: 51739 | Name: FBA406-1090596-4237156 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-07-18 09:27:35
+  - Odoo ID: 51577 | Name: FBA406-1090596-4237156 | Amount: EUR 24.95 | Status: to invoice | Invoice: YES (199052,191269) | Created: 2024-07-17 17:30:39
+
+Amazon Order ID: 304-7150276-7592315
+  Duplicate count: 2
+  - Odoo ID: 52579 | Name: FBA304-7150276-7592315 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-07-23 01:30:16
+  - Odoo ID: 52281 | Name: FBA304-7150276-7592315 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (199526) | Created: 2024-07-22 01:27:20
+
+Amazon Order ID: 404-2089502-8037118
+  Duplicate count: 2
+  - Odoo ID: 54918 | Name: FBA404-2089502-8037118 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-08-03 09:29:29
+  - Odoo ID: 54872 | Name: FBA404-2089502-8037118 | Amount: EUR 24.95 | Status: to invoice | Invoice: YES (209494,202718) | Created: 2024-08-03 01:30:20
+
+Amazon Order ID: 028-5976887-6020343
+  Duplicate count: 2
+  - Odoo ID: 55515 | Name: FBA028-5976887-6020343 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-08-06 01:27:12
+  - Odoo ID: 55514 | Name: FBA028-5976887-6020343 | Amount: EUR 23.95 | Status: to invoice | Invoice: YES (211887,209571) | Created: 2024-08-06 01:27:12
+
+Amazon Order ID: 405-7567784-1265120
+  Duplicate count: 2
+  - Odoo ID: 58225 | Name: FBA405-7567784-1265120 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-08-16 17:33:29
+  - Odoo ID: 58018 | Name: FBA405-7567784-1265120 | Amount: EUR 24.95 | Status: to invoice | Invoice: YES (209088,209085) | Created: 2024-08-16 09:29:03
+
+Amazon Order ID: 304-3756897-4762750
+  Duplicate count: 2
+  - Odoo ID: 58375 | Name: FBA304-3756897-4762750 | Amount: EUR 22.95 | Status: to invoice | Invoice: NO | Created: 2024-08-17 09:31:09
+  - Odoo ID: 57613 | Name: FBA304-3756897-4762750 | Amount: EUR 22.95 | Status: to invoice | Invoice: YES (211038,209591) | Created: 2024-08-15 01:30:47
+
+Amazon Order ID: 304-8548163-5390752
+  Duplicate count: 2
+  - Odoo ID: 60175 | Name: FBA304-8548163-5390752 | Amount: EUR 22.95 | Status: to invoice | Invoice: NO | Created: 2024-08-21 09:27:34
+  - Odoo ID: 59986 | Name: FBA304-8548163-5390752 | Amount: EUR 22.95 | Status: invoiced | Invoice: YES (209355) | Created: 2024-08-21 01:29:15
+
+Amazon Order ID: 404-6383242-3964342
+  Duplicate count: 2
+  - Odoo ID: 60912 | Name: FBA404-6383242-3964342 | Amount: EUR 30.15 | Status: to invoice | Invoice: NO | Created: 2024-08-22 17:37:38
+  - Odoo ID: 60043 | Name: FBA404-6383242-3964342 | Amount: EUR 30.15 | Status: to invoice | Invoice: YES (209419,209153) | Created: 2024-08-21 01:36:10
+
+Amazon Order ID: 302-0819431-3237153
+  Duplicate count: 2
+  - Odoo ID: 67190 | Name: FBA302-0819431-3237153 | Amount: EUR 57.96 | Status: to invoice | Invoice: NO | Created: 2024-09-03 01:38:04
+  - Odoo ID: 66578 | Name: FBA302-0819431-3237153 | Amount: EUR 57.96 | Status: to invoice | Invoice: YES (218538) | Created: 2024-09-02 09:38:25
+
+Amazon Order ID: 404-7855039-4530743
+  Duplicate count: 2
+  - Odoo ID: 69756 | Name: FBA404-7855039-4530743 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-09-07 01:36:00
+  - Odoo ID: 69669 | Name: FBA404-7855039-4530743 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (217317) | Created: 2024-09-06 17:37:42
+
+Amazon Order ID: 408-4418486-6435551
+  Duplicate count: 2
+  - Odoo ID: 75849 | Name: FBA408-4418486-6435551 | Amount: EUR 18.95 | Status: invoiced | Invoice: YES (267917) | Created: 2024-09-20 09:35:13
+  - Odoo ID: 75298 | Name: FBA408-4418486-6435551 | Amount: EUR 18.95 | Status: invoiced | Invoice: YES (217760) | Created: 2024-09-18 17:30:49
+
+Amazon Order ID: 306-5819443-5931568
+  Duplicate count: 2
+  - Odoo ID: 76223 | Name: FBA306-5819443-5931568 | Amount: EUR 9.95 | Status: to invoice | Invoice: YES (230233) | Created: 2024-09-21 17:26:56
+  - Odoo ID: 74907 | Name: FBA306-5819443-5931568 | Amount: EUR 9.95 | Status: invoiced | Invoice: YES (217293) | Created: 2024-09-17 17:34:18
+
+Amazon Order ID: 302-9979426-9146711
+  Duplicate count: 2
+  - Odoo ID: 76428 | Name: FBA302-9979426-9146711 | Amount: EUR 24.95 | Status: no | Invoice: NO | Created: 2024-09-22 17:28:08
+  - Odoo ID: 76112 | Name: FBA302-9979426-9146711 | Amount: EUR 24.95 | Status: no | Invoice: NO | Created: 2024-09-21 09:29:03
+
+Amazon Order ID: 304-9771985-3469118
+  Duplicate count: 2
+  - Odoo ID: 80773 | Name: FBA304-9771985-3469118 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-10-04 01:37:36
+  - Odoo ID: 80669 | Name: FBA304-9771985-3469118 | Amount: EUR 23.95 | Status: to invoice | Invoice: YES (226893,226847) | Created: 2024-10-03 17:30:24
+
+Amazon Order ID: 407-7977232-3148356
+  Duplicate count: 2
+  - Odoo ID: 82247 | Name: FBA407-7977232-3148356 | Amount: EUR 23.95 | Status: to invoice | Invoice: NO | Created: 2024-10-08 09:32:54
+  - Odoo ID: 82081 | Name: FBA407-7977232-3148356 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (228073) | Created: 2024-10-08 01:40:02
+
+Amazon Order ID: 305-7570023-5675521
+  Duplicate count: 2
+  - Odoo ID: 85466 | Name: FBA305-7570023-5675521 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-10-16 01:51:00
+  - Odoo ID: 85302 | Name: FBA305-7570023-5675521 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (227946) | Created: 2024-10-15 17:39:49
+
+Amazon Order ID: 171-7513890-3002741
+  Duplicate count: 2
+  - Odoo ID: 86423 | Name: FBA171-7513890-3002741 | Amount: EUR 45.95 | Status: to invoice | Invoice: NO | Created: 2024-10-19 01:36:04
+  - Odoo ID: 86422 | Name: FBA171-7513890-3002741 | Amount: EUR 45.95 | Status: invoiced | Invoice: YES (229024) | Created: 2024-10-19 01:36:04
+
+Amazon Order ID: 028-1489993-8361166
+  Duplicate count: 2
+  - Odoo ID: 87880 | Name: FBA028-1489993-8361166 | Amount: EUR 24.95 | Status: to invoice | Invoice: NO | Created: 2024-10-24 01:35:49
+  - Odoo ID: 87683 | Name: FBA028-1489993-8361166 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (227023) | Created: 2024-10-23 09:36:37
+
+Amazon Order ID: 408-4612761-8905119
+  Duplicate count: 2
+  - Odoo ID: 92872 | Name: FBA408-4612761-8905119 | Amount: EUR 55.60 | Status: no | Invoice: NO | Created: 2024-11-09 01:05:42
+  - Odoo ID: 104229 | Name: FBA408-4612761-8905119 | Amount: EUR 55.60 | Status: invoiced | Invoice: YES (236136) | Created: 2024-12-25 17:38:09
+
+Amazon Order ID: 403-2732315-9551524
+  Duplicate count: 2
+  - Odoo ID: 93452 | Name: FBA403-2732315-9551524 | Amount: EUR 108.72 | Status: no | Invoice: NO | Created: 2024-11-11 17:06:13
+  - Odoo ID: 104147 | Name: FBA403-2732315-9551524 | Amount: EUR 108.72 | Status: to invoice | Invoice: YES (248111) | Created: 2024-12-25 10:20:43
+
+Amazon Order ID: 302-2405463-4161125
+  Duplicate count: 2
+  - Odoo ID: 94196 | Name: FBA302-2405463-4161125 | Amount: EUR 60.38 | Status: no | Invoice: NO | Created: 2024-11-13 17:04:22
+  - Odoo ID: 104263 | Name: FBA302-2405463-4161125 | Amount: EUR 60.38 | Status: invoiced | Invoice: YES (236025) | Created: 2024-12-25 17:39:15
+
+Amazon Order ID: 405-8375719-1428347
+  Duplicate count: 2
+  - Odoo ID: 94212 | Name: FBA405-8375719-1428347 | Amount: EUR 26.73 | Status: no | Invoice: NO | Created: 2024-11-13 17:05:28
+  - Odoo ID: 104265 | Name: FBA405-8375719-1428347 | Amount: EUR 26.73 | Status: invoiced | Invoice: YES (240458) | Created: 2024-12-25 17:39:15
+
+Amazon Order ID: 405-1182845-0970726
+  Duplicate count: 2
+  - Odoo ID: 94221 | Name: FBA405-1182845-0970726 | Amount: EUR 17.80 | Status: no | Invoice: NO | Created: 2024-11-13 17:06:10
+  - Odoo ID: 104250 | Name: FBA405-1182845-0970726 | Amount: EUR 17.80 | Status: invoiced | Invoice: YES (237280) | Created: 2024-12-25 17:38:50
+
+Amazon Order ID: 303-7691336-4474705
+  Duplicate count: 2
+  - Odoo ID: 94393 | Name: FBA303-7691336-4474705 | Amount: EUR 24.36 | Status: no | Invoice: NO | Created: 2024-11-14 17:01:36
+  - Odoo ID: 104224 | Name: FBA303-7691336-4474705 | Amount: EUR 24.36 | Status: invoiced | Invoice: YES (237028) | Created: 2024-12-25 17:38:04
+
+Amazon Order ID: 305-4789007-8652326
+  Duplicate count: 2
+  - Odoo ID: 94423 | Name: FBA305-4789007-8652326 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-14 17:03:15
+  - Odoo ID: 104179 | Name: FBA305-4789007-8652326 | Amount: EUR 28.98 | Status: invoiced | Invoice: YES (236013) | Created: 2024-12-25 10:22:27
+
+Amazon Order ID: 303-0043746-4939525
+  Duplicate count: 2
+  - Odoo ID: 94535 | Name: FBA303-0043746-4939525 | Amount: EUR 18.14 | Status: no | Invoice: NO | Created: 2024-11-15 09:07:04
+  - Odoo ID: 104143 | Name: FBA303-0043746-4939525 | Amount: EUR 18.14 | Status: invoiced | Invoice: YES (236575) | Created: 2024-12-25 10:20:24
+
+Amazon Order ID: 028-4755315-6869104
+  Duplicate count: 2
+  - Odoo ID: 94598 | Name: FBA028-4755315-6869104 | Amount: EUR 30.19 | Status: to invoice | Invoice: YES (241505) | Created: 2024-11-15 17:06:36
+  - Odoo ID: 104160 | Name: FBA028-4755315-6869104 | Amount: EUR 30.19 | Status: invoiced | Invoice: YES (236069) | Created: 2024-12-25 10:21:28
+
+Amazon Order ID: 406-8338572-5847514
+  Duplicate count: 2
+  - Odoo ID: 94604 | Name: FBA406-8338572-5847514 | Amount: EUR 24.95 | Status: no | Invoice: NO | Created: 2024-11-15 17:07:29
+  - Odoo ID: 104144 | Name: FBA406-8338572-5847514 | Amount: EUR 24.95 | Status: invoiced | Invoice: YES (237293) | Created: 2024-12-25 10:20:43
+
+Amazon Order ID: 408-1769071-4117132
+  Duplicate count: 2
+  - Odoo ID: 94756 | Name: FBA408-1769071-4117132 | Amount: EUR 35.03 | Status: no | Invoice: NO | Created: 2024-11-16 17:08:01
+  - Odoo ID: 104136 | Name: FBA408-1769071-4117132 | Amount: EUR 35.03 | Status: invoiced | Invoice: YES (236610) | Created: 2024-12-25 10:20:17
+
+Amazon Order ID: 302-6510871-4422722
+  Duplicate count: 2
+  - Odoo ID: 95213 | Name: FBA302-6510871-4422722 | Amount: EUR 86.94 | Status: no | Invoice: NO | Created: 2024-11-18 17:13:10
+  - Odoo ID: 104075 | Name: FBA302-6510871-4422722 | Amount: EUR 86.94 | Status: invoiced | Invoice: YES (240791) | Created: 2024-12-25 10:18:18
+
+Amazon Order ID: 404-0346978-3396351
+  Duplicate count: 2
+  - Odoo ID: 95237 | Name: FBA404-0346978-3396351 | Amount: EUR 33.67 | Status: no | Invoice: NO | Created: 2024-11-18 17:33:09
+  - Odoo ID: 104046 | Name: FBA404-0346978-3396351 | Amount: EUR 33.67 | Status: invoiced | Invoice: YES (240202) | Created: 2024-12-25 10:16:59
+
+Amazon Order ID: 403-0748862-7743541
+  Duplicate count: 2
+  - Odoo ID: 95420 | Name: FBA403-0748862-7743541 | Amount: EUR 26.73 | Status: no | Invoice: NO | Created: 2024-11-19 17:09:20
+  - Odoo ID: 103992 | Name: FBA403-0748862-7743541 | Amount: EUR 26.73 | Status: invoiced | Invoice: YES (240203) | Created: 2024-12-25 10:15:22
+
+Amazon Order ID: 406-1608093-5963556
+  Duplicate count: 2
+  - Odoo ID: 95584 | Name: FBA406-1608093-5963556 | Amount: EUR 26.73 | Status: no | Invoice: NO | Created: 2024-11-20 09:09:34
+  - Odoo ID: 103925 | Name: FBA406-1608093-5963556 | Amount: EUR 26.73 | Status: invoiced | Invoice: YES (240206) | Created: 2024-12-25 09:43:01
+
+Amazon Order ID: 402-6430535-7106738
+  Duplicate count: 2
+  - Odoo ID: 95693 | Name: FBA402-6430535-7106738 | Amount: EUR 29.18 | Status: invoiced | Invoice: YES (357853) | Created: 2024-11-20 17:31:28
+  - Odoo ID: 103977 | Name: FBA402-6430535-7106738 | Amount: EUR 29.18 | Status: to invoice | Invoice: NO | Created: 2024-12-25 10:14:51
+
+Amazon Order ID: 306-4923203-3943548
+  Duplicate count: 2
+  - Odoo ID: 95697 | Name: FBA306-4923203-3943548 | Amount: EUR 28.98 | Status: no | Invoice: NO | Created: 2024-11-20 17:34:06
+  - Odoo ID: 103974 | Name: FBA306-4923203-3943548 | Amount: EUR 28.98 | Status: invoiced | Invoice: YES (240771) | Created: 2024-12-25 10:14:51
+
+Amazon Order ID: 408-6034877-7316339
+  Duplicate count: 2
+  - Odoo ID: 95707 | Name: FBA408-6034877-7316339 | Amount: EUR 26.73 | Status: no | Invoice: NO | Created: 2024-11-20 17:38:24
+  - Odoo ID: 103970 | Name: FBA408-6034877-7316339 | Amount: EUR 26.73 | Status: invoiced | Invoice: YES (240369) | Created: 2024-12-25 10:14:38
+
+Amazon Order ID: 303-8010612-4951537
+  Duplicate count: 2
+  - Odoo ID: 106303 | Name: FBA303-8010612-4951537 | Amount: EUR 18.95 | Status: to invoice | Invoice: NO | Created: 2025-01-06 09:27:03
+  - Odoo ID: 106302 | Name: FBA303-8010612-4951537 | Amount: EUR 18.95 | Status: invoiced | Invoice: YES (251911) | Created: 2025-01-06 09:27:03
+
+Amazon Order ID: 403-1268429-9026728
+  Duplicate count: 2
+  - Odoo ID: 111595 | Name: FBA403-1268429-9026728 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (270594) | Created: 2025-01-27 17:27:48
+  - Odoo ID: 111228 | Name: FBA403-1268429-9026728 | Amount: EUR 23.95 | Status: invoiced | Invoice: YES (258999) | Created: 2025-01-26 01:25:31
+
+Amazon Order ID: 305-6909830-4310761
+  Duplicate count: 2
+  - Odoo ID: 113618 | Name: FBA305-6909830-4310761 | Amount: EUR 9.95 | Status: invoiced | Invoice: YES (260249) | Created: 2025-02-05 01:25:38
+  - Odoo ID: 113617 | Name: FBA305-6909830-4310761 | Amount: EUR 9.95 | Status: invoiced | Invoice: YES (260874) | Created: 2025-02-05 01:25:38
+
+Amazon Order ID: 407-9459592-9328303
+  Duplicate count: 2
+  - Odoo ID: 121035 | Name: FBA407-9459592-9328303 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (266378) | Created: 2025-03-15 09:29:33
+  - Odoo ID: 120954 | Name: FBA407-9459592-9328303 | Amount: EUR 35.95 | Status: invoiced | Invoice: YES (266164) | Created: 2025-03-14 17:25:18
+
+Amazon Order ID: 304-4715504-4065105
+  Duplicate count: 2
+  - Odoo ID: 123352 | Name: FBA304-4715504-4065105 | Amount: EUR 30.19 | Status: invoiced | Invoice: YES (266012) | Created: 2025-03-22 01:30:28
+  - Odoo ID: 123163 | Name: FBA304-4715504-4065105 | Amount: EUR 30.19 | Status: invoiced | Invoice: YES (266924) | Created: 2025-03-21 01:30:42
+
+Amazon Order ID: 403-6962297-6565108
+  Duplicate count: 2
+  - Odoo ID: 124634 | Name: FBA403-6962297-6565108 | Amount: EUR 30.19 | Status: invoiced | Invoice: YES (266385) | Created: 2025-03-28 01:30:17
+  - Odoo ID: 124633 | Name: FBA403-6962297-6565108 | Amount: EUR 30.19 | Status: no | Invoice: NO | Created: 2025-03-28 01:30:17
+
+Amazon Order ID: 028-6432569-5249941
+  Duplicate count: 2
+  - Odoo ID: 130685 | Name: FBA028-6432569-5249941 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (273855) | Created: 2025-04-28 17:32:15
+  - Odoo ID: 130577 | Name: FBA028-6432569-5249941 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (273973) | Created: 2025-04-28 09:34:45
+
+Amazon Order ID: 403-1867223-9584314
+  Duplicate count: 2
+  - Odoo ID: 133370 | Name: FBA403-1867223-9584314 | Amount: EUR 33.27 | Status: invoiced | Invoice: YES (283032) | Created: 2025-05-12 17:31:27
+  - Odoo ID: 133193 | Name: FBA403-1867223-9584314 | Amount: EUR 33.27 | Status: invoiced | Invoice: YES (283063) | Created: 2025-05-12 09:27:25
+
+Amazon Order ID: 408-8353241-4756359
+  Duplicate count: 2
+  - Odoo ID: 138011 | Name: FBA408-8353241-4756359 | Amount: EUR 24.08 | Status: invoiced | Invoice: YES (283109) | Created: 2025-05-30 17:33:20
+  - Odoo ID: 138010 | Name: FBA408-8353241-4756359 | Amount: EUR 24.08 | Status: invoiced | Invoice: YES (283098) | Created: 2025-05-30 17:33:20
+
+Amazon Order ID: 028-8351753-9905936
+  Duplicate count: 2
+  - Odoo ID: 138403 | Name: FBA028-8351753-9905936 | Amount: EUR 19.48 | Status: invoiced | Invoice: YES (289353) | Created: 2025-06-02 09:35:04
+  - Odoo ID: 138402 | Name: FBA028-8351753-9905936 | Amount: EUR 19.48 | Status: invoiced | Invoice: YES (288545) | Created: 2025-06-02 09:35:04
+
+Amazon Order ID: 402-8120124-9118759
+  Duplicate count: 2
+  - Odoo ID: 140645 | Name: FBA402-8120124-9118759 | Amount: EUR 56.27 | Status: invoiced | Invoice: YES (291675) | Created: 2025-06-12 01:37:28
+  - Odoo ID: 140408 | Name: FBA402-8120124-9118759 | Amount: EUR 56.27 | Status: invoiced | Invoice: YES (290221) | Created: 2025-06-11 09:38:38
+
+Amazon Order ID: 303-5598620-2793929
+  Duplicate count: 2
+  - Odoo ID: 141422 | Name: FBA303-5598620-2793929 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (289406) | Created: 2025-06-16 01:32:54
+  - Odoo ID: 141205 | Name: FBA303-5598620-2793929 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (288727) | Created: 2025-06-14 09:27:28
+
+Amazon Order ID: 302-8004173-5201148
+  Duplicate count: 2
+  - Odoo ID: 141808 | Name: FBA302-8004173-5201148 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (288642) | Created: 2025-06-17 09:37:57
+  - Odoo ID: 141487 | Name: FBA302-8004173-5201148 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (289412) | Created: 2025-06-16 09:36:09
+
+Amazon Order ID: 302-6794086-6695546
+  Duplicate count: 2
+  - Odoo ID: 142131 | Name: FBA302-6794086-6695546 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (288901) | Created: 2025-06-18 09:43:10
+  - Odoo ID: 141970 | Name: FBA302-6794086-6695546 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (289001) | Created: 2025-06-18 01:27:13
+
+Amazon Order ID: 302-1027930-2125956
+  Duplicate count: 2
+  - Odoo ID: 142141 | Name: FBA302-1027930-2125956 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (288883) | Created: 2025-06-18 09:43:20
+  - Odoo ID: 141989 | Name: FBA302-1027930-2125956 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (288715) | Created: 2025-06-18 01:37:47
+
+Amazon Order ID: 304-7943052-1218738
+  Duplicate count: 2
+  - Odoo ID: 145383 | Name: FBA304-7943052-1218738 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (290033) | Created: 2025-07-01 01:40:38
+  - Odoo ID: 145072 | Name: FBA304-7943052-1218738 | Amount: EUR 30.98 | Status: invoiced | Invoice: YES (290002) | Created: 2025-06-30 09:56:24
+
+Amazon Order ID: 306-8256880-1657901
+  Duplicate count: 2
+  - Odoo ID: 154262 | Name: FBA306-8256880-1657901 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (318710) | Created: 2025-08-18 08:41:27
+  - Odoo ID: 154261 | Name: FBA306-8256880-1657901 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (322096) | Created: 2025-08-18 08:41:27
+
+Amazon Order ID: 028-6470478-1358752
+  Duplicate count: 2
+  - Odoo ID: 154301 | Name: FBA028-6470478-1358752 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-18 08:42:24
+  - Odoo ID: 154300 | Name: FBA028-6470478-1358752 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (318784) | Created: 2025-08-18 08:42:24
+
+Amazon Order ID: 306-3978259-8716345
+  Duplicate count: 2
+  - Odoo ID: 154601 | Name: FBA306-3978259-8716345 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-18 10:14:51
+  - Odoo ID: 154600 | Name: FBA306-3978259-8716345 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (319171) | Created: 2025-08-18 10:14:51
+
+Amazon Order ID: 303-9522558-8544357
+  Duplicate count: 2
+  - Odoo ID: 154623 | Name: FBA303-9522558-8544357 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (316597) | Created: 2025-08-18 10:15:19
+  - Odoo ID: 154622 | Name: FBA303-9522558-8544357 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (319132) | Created: 2025-08-18 10:15:19
+
+Amazon Order ID: 404-1629243-7773942
+  Duplicate count: 2
+  - Odoo ID: 154918 | Name: FBA404-1629243-7773942 | Amount: EUR 30.19 | Status: to invoice | Invoice: NO | Created: 2025-08-19 07:16:18
+  - Odoo ID: 154917 | Name: FBA404-1629243-7773942 | Amount: EUR 30.19 | Status: invoiced | Invoice: YES (298997) | Created: 2025-08-19 07:16:18
+
+Amazon Order ID: 302-3141834-5012328
+  Duplicate count: 2
+  - Odoo ID: 155233 | Name: FBA302-3141834-5012328 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (319317) | Created: 2025-08-19 09:35:01
+  - Odoo ID: 154168 | Name: FBA302-3141834-5012328 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (318803) | Created: 2025-08-18 08:39:05
+
+Amazon Order ID: 305-7424532-2447506
+  Duplicate count: 2
+  - Odoo ID: 155726 | Name: FBA305-7424532-2447506 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 12:31:44
+  - Odoo ID: 155725 | Name: FBA305-7424532-2447506 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317266) | Created: 2025-08-19 12:31:44
+
+Amazon Order ID: 305-8799263-5440357
+  Duplicate count: 2
+  - Odoo ID: 156189 | Name: FBA305-8799263-5440357 | Amount: EUR 25.23 | Status: to invoice | Invoice: NO | Created: 2025-08-19 14:49:11
+  - Odoo ID: 156188 | Name: FBA305-8799263-5440357 | Amount: EUR 25.23 | Status: invoiced | Invoice: YES (316992) | Created: 2025-08-19 14:49:11
+
+Amazon Order ID: 028-0207704-9153939
+  Duplicate count: 2
+  - Odoo ID: 156222 | Name: FBA028-0207704-9153939 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (319724) | Created: 2025-08-19 15:03:24
+  - Odoo ID: 155096 | Name: FBA028-0207704-9153939 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (316275) | Created: 2025-08-19 08:38:37
+
+Amazon Order ID: 028-1973384-7060324
+  Duplicate count: 2
+  - Odoo ID: 156703 | Name: FBA028-1973384-7060324 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 16:31:49
+  - Odoo ID: 156702 | Name: FBA028-1973384-7060324 | Amount: EUR 28.68 | Status: no | Invoice: YES (320249,320026) | Created: 2025-08-19 16:31:49
+
+Amazon Order ID: 305-8877608-2281139
+  Duplicate count: 2
+  - Odoo ID: 157381 | Name: FBA305-8877608-2281139 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 19:41:33
+  - Odoo ID: 157380 | Name: FBA305-8877608-2281139 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (316669) | Created: 2025-08-19 19:41:33
+
+Amazon Order ID: 304-2828435-1344338
+  Duplicate count: 2
+  - Odoo ID: 157385 | Name: FBA304-2828435-1344338 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 19:41:45
+  - Odoo ID: 157384 | Name: FBA304-2828435-1344338 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (316892) | Created: 2025-08-19 19:41:45
+
+Amazon Order ID: 305-0925679-0728368
+  Duplicate count: 2
+  - Odoo ID: 157461 | Name: FBA305-0925679-0728368 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 19:55:15
+  - Odoo ID: 157460 | Name: FBA305-0925679-0728368 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (316516) | Created: 2025-08-19 19:55:15
+
+Amazon Order ID: 304-7914453-5087534
+  Duplicate count: 2
+  - Odoo ID: 157865 | Name: FBA304-7914453-5087534 | Amount: EUR 28.68 | Status: to invoice | Invoice: YES (317819) | Created: 2025-08-19 21:26:34
+  - Odoo ID: 157864 | Name: FBA304-7914453-5087534 | Amount: EUR 28.68 | Status: no | Invoice: YES (321099,321230) | Created: 2025-08-19 21:26:34
+
+Amazon Order ID: 304-4905739-2594762
+  Duplicate count: 2
+  - Odoo ID: 157937 | Name: FBA304-4905739-2594762 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (320915) | Created: 2025-08-19 22:11:21
+  - Odoo ID: 155518 | Name: FBA304-4905739-2594762 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317658) | Created: 2025-08-19 11:54:49
+
+Amazon Order ID: 302-3241617-2545906
+  Duplicate count: 2
+  - Odoo ID: 157984 | Name: FBA302-3241617-2545906 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 22:12:10
+  - Odoo ID: 155695 | Name: FBA302-3241617-2545906 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317606) | Created: 2025-08-19 12:16:53
+
+Amazon Order ID: 304-0793720-9467545
+  Duplicate count: 2
+  - Odoo ID: 157976 | Name: FBA304-0793720-9467545 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-08-19 22:12:10
+  - Odoo ID: 157975 | Name: FBA304-0793720-9467545 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317835) | Created: 2025-08-19 22:12:10
+
+Amazon Order ID: 028-0680031-3460316
+  Duplicate count: 2
+  - Odoo ID: 158051 | Name: FBA028-0680031-3460316 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317701) | Created: 2025-08-19 22:25:12
+  - Odoo ID: 155729 | Name: FBA028-0680031-3460316 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317259) | Created: 2025-08-19 12:31:44
+
+Amazon Order ID: 171-0677876-0641142
+  Duplicate count: 2
+  - Odoo ID: 158053 | Name: FBA171-0677876-0641142 | Amount: EUR 28.98 | Status: invoiced | Invoice: YES (322287) | Created: 2025-08-19 22:25:12
+  - Odoo ID: 156916 | Name: FBA171-0677876-0641142 | Amount: EUR 28.98 | Status: invoiced | Invoice: YES (322248) | Created: 2025-08-19 17:22:23
+
+Amazon Order ID: 028-8424945-8147527
+  Duplicate count: 2
+  - Odoo ID: 158646 | Name: FBA028-8424945-8147527 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (320330) | Created: 2025-08-20 00:33:10
+  - Odoo ID: 158104 | Name: FBA028-8424945-8147527 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317799) | Created: 2025-08-19 22:35:44
+
+Amazon Order ID: 305-2789583-7993127
+  Duplicate count: 2
+  - Odoo ID: 159103 | Name: FBA305-2789583-7993127 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317716) | Created: 2025-08-20 03:37:54
+  - Odoo ID: 159002 | Name: FBA305-2789583-7993127 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (321081) | Created: 2025-08-20 03:18:32
+
+Amazon Order ID: 405-2107161-1985115
+  Duplicate count: 2
+  - Odoo ID: 159342 | Name: FBA405-2107161-1985115 | Amount: EUR 59.23 | Status: to invoice | Invoice: NO | Created: 2025-08-20 10:21:33
+  - Odoo ID: 159341 | Name: FBA405-2107161-1985115 | Amount: EUR 59.23 | Status: invoiced | Invoice: YES (322387) | Created: 2025-08-20 10:21:33
+
+Amazon Order ID: 405-9734608-4704361
+  Duplicate count: 2
+  - Odoo ID: 159566 | Name: FBA405-9734608-4704361 | Amount: EUR 32.61 | Status: invoiced | Invoice: YES (322818) | Created: 2025-08-20 18:23:16
+  - Odoo ID: 159348 | Name: FBA405-9734608-4704361 | Amount: EUR 32.61 | Status: invoiced | Invoice: YES (315909) | Created: 2025-08-20 10:21:49
+
+Amazon Order ID: 302-4962364-2497122
+  Duplicate count: 2
+  - Odoo ID: 160298 | Name: FBA302-4962364-2497122 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (320551) | Created: 2025-08-22 01:43:24
+  - Odoo ID: 159723 | Name: FBA302-4962364-2497122 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (316339) | Created: 2025-08-21 01:41:29
+
+Amazon Order ID: 303-2733410-2625107
+  Duplicate count: 2
+  - Odoo ID: 160451 | Name: FBA303-2733410-2625107 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (321817) | Created: 2025-08-22 09:58:42
+  - Odoo ID: 159074 | Name: FBA303-2733410-2625107 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317493) | Created: 2025-08-20 03:37:28
+
+Amazon Order ID: 305-9627293-9645132
+  Duplicate count: 2
+  - Odoo ID: 160742 | Name: FBA305-9627293-9645132 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (320685) | Created: 2025-08-23 01:43:45
+  - Odoo ID: 158889 | Name: FBA305-9627293-9645132 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (317881) | Created: 2025-08-20 02:10:12
+
+Amazon Order ID: 302-1754197-5006725
+  Duplicate count: 2
+  - Odoo ID: 166670 | Name: FBA302-1754197-5006725 | Amount: EUR 39.02 | Status: invoiced | Invoice: YES (318402) | Created: 2025-09-03 14:41:14
+  - Odoo ID: 166626 | Name: FBA302-1754197-5006725 | Amount: EUR 39.02 | Status: invoiced | Invoice: YES (321545) | Created: 2025-09-03 14:10:47
+
+Amazon Order ID: 302-5157911-7018721
+  Duplicate count: 2
+  - Odoo ID: 167596 | Name: FBA302-5157911-7018721 | Amount: EUR 28.68 | Status: to invoice | Invoice: NO | Created: 2025-09-03 21:11:14
+  - Odoo ID: 167418 | Name: FBA302-5157911-7018721 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (330007) | Created: 2025-09-03 20:10:37
+
+Amazon Order ID: 302-3291142-0820325
+  Duplicate count: 2
+  - Odoo ID: 168789 | Name: FBA302-3291142-0820325 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (333471) | Created: 2025-09-05 04:40:51
+  - Odoo ID: 168751 | Name: FBA302-3291142-0820325 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (328803) | Created: 2025-09-04 20:41:08
+
+Amazon Order ID: 404-2751749-0119545
+  Duplicate count: 2
+  - Odoo ID: 187552 | Name: FBA404-2751749-0119545 | Amount: EUR 19.78 | Status: to invoice | Invoice: NO | Created: 2025-11-05 04:40:11
+  - Odoo ID: 187135 | Name: FBA404-2751749-0119545 | Amount: EUR 19.78 | Status: to invoice | Invoice: NO | Created: 2025-11-03 20:40:39
+
+Amazon Order ID: 306-7679582-6019565
+  Duplicate count: 2
+  - Odoo ID: 188494 | Name: FBA306-7679582-6019565 | Amount: EUR 40.17 | Status: to invoice | Invoice: YES (348453) | Created: 2025-11-08 04:40:20
+  - Odoo ID: 188030 | Name: FBA306-7679582-6019565 | Amount: EUR 40.17 | Status: to invoice | Invoice: YES (349745) | Created: 2025-11-06 12:40:47
+
+Amazon Order ID: 304-9197229-4367520
+  Duplicate count: 2
+  - Odoo ID: 190786 | Name: FBA304-9197229-4367520 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (351665) | Created: 2025-11-17 04:40:57
+  - Odoo ID: 190723 | Name: FBA304-9197229-4367520 | Amount: EUR 22.93 | Status: invoiced | Invoice: YES (351629) | Created: 2025-11-16 20:40:34
+
+Amazon Order ID: 303-9083132-7198733
+  Duplicate count: 2
+  - Odoo ID: 191952 | Name: FBA303-9083132-7198733 | Amount: EUR 44.42 | Status: invoiced | Invoice: YES (348141) | Created: 2025-11-20 12:40:21
+  - Odoo ID: 191462 | Name: FBA303-9083132-7198733 | Amount: EUR 44.42 | Status: invoiced | Invoice: YES (350387) | Created: 2025-11-19 04:40:11
+
+Amazon Order ID: 303-5086106-1269949
+  Duplicate count: 2
+  - Odoo ID: 191960 | Name: FBA303-5086106-1269949 | Amount: EUR 72.36 | Status: invoiced | Invoice: YES (351691) | Created: 2025-11-20 12:40:52
+  - Odoo ID: 191819 | Name: FBA303-5086106-1269949 | Amount: EUR 72.36 | Status: invoiced | Invoice: YES (348126) | Created: 2025-11-20 04:40:09
+
+Amazon Order ID: 306-6337272-6929150
+  Duplicate count: 2
+  - Odoo ID: 192874 | Name: FBA306-6337272-6929150 | Amount: EUR 29.83 | Status: invoiced | Invoice: YES (349521) | Created: 2025-11-24 04:40:54
+  - Odoo ID: 192268 | Name: FBA306-6337272-6929150 | Amount: EUR 29.83 | Status: invoiced | Invoice: YES (350160) | Created: 2025-11-21 12:40:22
+
+Amazon Order ID: 305-3191545-0496301
+  Duplicate count: 2
+  - Odoo ID: 192987 | Name: FBA305-3191545-0496301 | Amount: EUR 40.17 | Status: invoiced | Invoice: YES (347655) | Created: 2025-11-24 12:40:19
+  - Odoo ID: 191219 | Name: FBA305-3191545-0496301 | Amount: EUR 40.17 | Status: invoiced | Invoice: YES (349853) | Created: 2025-11-18 12:40:44
+
+Amazon Order ID: 306-1607327-1583524
+  Duplicate count: 2
+  - Odoo ID: 193612 | Name: FBA306-1607327-1583524 | Amount: EUR 26.38 | Status: to invoice | Invoice: NO | Created: 2025-11-26 04:40:53
+  - Odoo ID: 193611 | Name: FBA306-1607327-1583524 | Amount: EUR 26.38 | Status: invoiced | Invoice: YES (349570) | Created: 2025-11-26 04:40:53
+
+Amazon Order ID: 303-8740956-6452336
+  Duplicate count: 2
+  - Odoo ID: 202308 | Name: FBA303-8740956-6452336 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (360375) | Created: 2025-12-21 20:40:44
+  - Odoo ID: 193150 | Name: FBA303-8740956-6452336 | Amount: EUR 28.68 | Status: invoiced | Invoice: YES (347675) | Created: 2025-11-24 20:40:38
+
+Amazon Order ID: 028-1729683-1336307
+  Duplicate count: 2
+  - Odoo ID: 202401 | Name: FBA028-1729683-1336307 | Amount: EUR 24.14 | Status: invoiced | Invoice: YES (358010) | Created: 2025-12-22 04:40:59
+  - Odoo ID: 202118 | Name: FBA028-1729683-1336307 | Amount: EUR 24.14 | Status: to invoice | Invoice: NO | Created: 2025-12-20 20:40:56
+
+=== SUMMARY ===
+Total Amazon Marketplace orders: 65119
+Unique Amazon Order IDs: 64580
+Amazon Order IDs with duplicates: 531
+  - Same amount: 98
+  - Different amounts: 433
+Total extra (duplicate) orders: 539
+
+=== CREATION DATE ANALYSIS ===
+  2024-02-28: 1 duplicate entries
+  2024-02-29: 1 duplicate entries
+  2024-03-04: 2 duplicate entries
+  2024-04-26: 2 duplicate entries
+  2024-05-02: 1 duplicate entries
+  2024-05-03: 3 duplicate entries
+  2024-05-10: 2 duplicate entries
+  2024-05-15: 2 duplicate entries
+  2024-05-23: 2 duplicate entries
+  2024-05-28: 2 duplicate entries
+  2024-06-01: 2 duplicate entries
+  2024-06-03: 4 duplicate entries
+  2024-06-04: 2 duplicate entries
+  2024-06-17: 1 duplicate entries
+  2024-06-18: 4 duplicate entries
+  2024-06-19: 1 duplicate entries
+  2024-06-24: 3 duplicate entries
+  2024-06-26: 1 duplicate entries
+  2024-06-28: 1 duplicate entries
+  2024-06-29: 1 duplicate entries
+  2024-07-07: 1 duplicate entries
+  2024-07-08: 5 duplicate entries
+  2024-07-09: 3 duplicate entries
+  2024-07-10: 1 duplicate entries
+  2024-07-17: 1 duplicate entries
+  2024-07-18: 1 duplicate entries
+  2024-07-22: 1 duplicate entries
+  2024-07-23: 3 duplicate entries
+  2024-07-26: 1 duplicate entries
+  2024-07-27: 1 duplicate entries
+  2024-07-29: 1 duplicate entries
+  2024-08-01: 1 duplicate entries
+  2024-08-03: 2 duplicate entries
+  2024-08-05: 1 duplicate entries
+  2024-08-06: 3 duplicate entries
+  2024-08-09: 1 duplicate entries
+  2024-08-14: 1 duplicate entries
+  2024-08-15: 1 duplicate entries
+  2024-08-16: 3 duplicate entries
+  2024-08-17: 2 duplicate entries
+  2024-08-21: 3 duplicate entries
+  2024-08-22: 1 duplicate entries
+  2024-08-23: 2 duplicate entries
+  2024-08-30: 1 duplicate entries
+  2024-08-31: 1 duplicate entries
+  2024-09-02: 1 duplicate entries
+  2024-09-03: 1 duplicate entries
+  2024-09-04: 11 duplicate entries
+  2024-09-05: 4 duplicate entries
+  2024-09-06: 2 duplicate entries
+  2024-09-07: 1 duplicate entries
+  2024-09-08: 1 duplicate entries
+  2024-09-13: 1 duplicate entries
+  2024-09-17: 1 duplicate entries
+  2024-09-18: 2 duplicate entries
+  2024-09-20: 2 duplicate entries
+  2024-09-21: 2 duplicate entries
+  2024-09-22: 1 duplicate entries
+  2024-09-23: 1 duplicate entries
+  2024-09-28: 2 duplicate entries
+  2024-10-03: 1 duplicate entries
+  2024-10-04: 1 duplicate entries
+  2024-10-05: 1 duplicate entries
+  2024-10-07: 1 duplicate entries
+  2024-10-08: 2 duplicate entries
+  2024-10-10: 1 duplicate entries
+  2024-10-13: 2 duplicate entries
+  2024-10-15: 6 duplicate entries
+  2024-10-16: 3 duplicate entries
+  2024-10-19: 2 duplicate entries
+  2024-10-21: 2 duplicate entries
+  2024-10-22: 1 duplicate entries
+  2024-10-23: 6 duplicate entries
+  2024-10-24: 1 duplicate entries
+  2024-10-25: 4 duplicate entries
+  2024-10-28: 1 duplicate entries
+  2024-10-29: 2 duplicate entries
+  2024-10-30: 5 duplicate entries
+  2024-10-31: 1 duplicate entries
+  2024-11-01: 3 duplicate entries
+  2024-11-07: 1 duplicate entries
+  2024-11-09: 2 duplicate entries
+  2024-11-11: 4 duplicate entries
+  2024-11-12: 5 duplicate entries
+  2024-11-13: 14 duplicate entries
+  2024-11-14: 17 duplicate entries
+  2024-11-15: 28 duplicate entries
+  2024-11-16: 20 duplicate entries
+  2024-11-17: 24 duplicate entries
+  2024-11-18: 31 duplicate entries
+  2024-11-19: 31 duplicate entries
+  2024-11-20: 25 duplicate entries
+  2024-11-21: 3 duplicate entries
+  2024-12-24: 16 duplicate entries
+  2024-12-25: 210 duplicate entries
+  2024-12-27: 1 duplicate entries
+  2024-12-28: 1 duplicate entries
+  2024-12-29: 1 duplicate entries
+  2024-12-30: 1 duplicate entries
+  2025-01-03: 1 duplicate entries
+  2025-01-04: 1 duplicate entries
+  2025-01-06: 2 duplicate entries
+  2025-01-14: 2 duplicate entries
+  2025-01-15: 2 duplicate entries
+  2025-01-19: 1 duplicate entries
+  2025-01-21: 1 duplicate entries
+  2025-01-22: 2 duplicate entries
+  2025-01-24: 2 duplicate entries
+  2025-01-25: 2 duplicate entries
+  2025-01-26: 2 duplicate entries
+  2025-01-27: 3 duplicate entries
+  2025-01-28: 1 duplicate entries
+  2025-02-05: 2 duplicate entries
+  2025-02-09: 1 duplicate entries
+  2025-02-10: 2 duplicate entries
+  2025-02-11: 1 duplicate entries
+  2025-02-12: 3 duplicate entries
+  2025-02-13: 1 duplicate entries
+  2025-02-18: 1 duplicate entries
+  2025-03-11: 2 duplicate entries
+  2025-03-14: 3 duplicate entries
+  2025-03-15: 1 duplicate entries
+  2025-03-21: 1 duplicate entries
+  2025-03-22: 1 duplicate entries
+  2025-03-26: 1 duplicate entries
+  2025-03-28: 3 duplicate entries
+  2025-04-02: 2 duplicate entries
+  2025-04-03: 2 duplicate entries
+  2025-04-07: 2 duplicate entries
+  2025-04-12: 1 duplicate entries
+  2025-04-14: 2 duplicate entries
+  2025-04-15: 3 duplicate entries
+  2025-04-22: 3 duplicate entries
+  2025-04-23: 2 duplicate entries
+  2025-04-24: 3 duplicate entries
+  2025-04-28: 4 duplicate entries
+  2025-05-07: 4 duplicate entries
+  2025-05-08: 1 duplicate entries
+  2025-05-09: 3 duplicate entries
+  2025-05-12: 2 duplicate entries
+  2025-05-15: 2 duplicate entries
+  2025-05-18: 1 duplicate entries
+  2025-05-20: 1 duplicate entries
+  2025-05-23: 2 duplicate entries
+  2025-05-27: 1 duplicate entries
+  2025-05-28: 1 duplicate entries
+  2025-05-30: 3 duplicate entries
+  2025-06-02: 4 duplicate entries
+  2025-06-04: 1 duplicate entries
+  2025-06-11: 2 duplicate entries
+  2025-06-12: 2 duplicate entries
+  2025-06-13: 3 duplicate entries
+  2025-06-14: 2 duplicate entries
+  2025-06-16: 6 duplicate entries
+  2025-06-17: 4 duplicate entries
+  2025-06-18: 7 duplicate entries
+  2025-06-19: 1 duplicate entries
+  2025-06-20: 1 duplicate entries
+  2025-06-21: 2 duplicate entries
+  2025-06-22: 1 duplicate entries
+  2025-06-23: 2 duplicate entries
+  2025-06-24: 4 duplicate entries
+  2025-06-27: 1 duplicate entries
+  2025-06-28: 4 duplicate entries
+  2025-06-30: 5 duplicate entries
+  2025-07-01: 2 duplicate entries
+  2025-07-02: 1 duplicate entries
+  2025-07-04: 7 duplicate entries
+  2025-08-18: 17 duplicate entries
+  2025-08-19: 90 duplicate entries
+  2025-08-20: 17 duplicate entries
+  2025-08-21: 3 duplicate entries
+  2025-08-22: 2 duplicate entries
+  2025-08-23: 3 duplicate entries
+  2025-08-24: 2 duplicate entries
+  2025-08-25: 3 duplicate entries
+  2025-08-26: 7 duplicate entries
+  2025-08-27: 1 duplicate entries
+  2025-08-28: 1 duplicate entries
+  2025-09-03: 16 duplicate entries
+  2025-09-04: 1 duplicate entries
+  2025-09-05: 3 duplicate entries
+  2025-09-10: 2 duplicate entries
+  2025-09-11: 1 duplicate entries
+  2025-09-12: 3 duplicate entries
+  2025-09-14: 1 duplicate entries
+  2025-09-15: 1 duplicate entries
+  2025-09-16: 5 duplicate entries
+  2025-09-18: 2 duplicate entries
+  2025-09-19: 1 duplicate entries
+  2025-09-20: 2 duplicate entries
+  2025-10-01: 1 duplicate entries
+  2025-10-02: 1 duplicate entries
+  2025-10-04: 1 duplicate entries
+  2025-10-06: 2 duplicate entries
+  2025-10-08: 2 duplicate entries
+  2025-10-09: 1 duplicate entries
+  2025-10-10: 1 duplicate entries
+  2025-10-16: 1 duplicate entries
+  2025-10-17: 1 duplicate entries
+  2025-10-21: 2 duplicate entries
+  2025-10-24: 1 duplicate entries
+  2025-10-27: 2 duplicate entries
+  2025-11-02: 1 duplicate entries
+  2025-11-03: 2 duplicate entries
+  2025-11-05: 1 duplicate entries
+  2025-11-06: 1 duplicate entries
+  2025-11-07: 2 duplicate entries
+  2025-11-08: 1 duplicate entries
+  2025-11-09: 1 duplicate entries
+  2025-11-10: 1 duplicate entries
+  2025-11-11: 4 duplicate entries
+  2025-11-12: 1 duplicate entries
+  2025-11-14: 2 duplicate entries
+  2025-11-16: 2 duplicate entries
+  2025-11-17: 2 duplicate entries
+  2025-11-18: 2 duplicate entries
+  2025-11-19: 2 duplicate entries
+  2025-11-20: 4 duplicate entries
+  2025-11-21: 1 duplicate entries
+  2025-11-24: 3 duplicate entries
+  2025-11-26: 3 duplicate entries
+  2025-11-27: 1 duplicate entries
+  2025-11-28: 2 duplicate entries
+  2025-11-29: 1 duplicate entries
+  2025-11-30: 1 duplicate entries
+  2025-12-01: 1 duplicate entries
+  2025-12-02: 4 duplicate entries
+  2025-12-03: 2 duplicate entries
+  2025-12-04: 2 duplicate entries
+  2025-12-05: 1 duplicate entries
+  2025-12-06: 1 duplicate entries
+  2025-12-08: 2 duplicate entries
+  2025-12-10: 3 duplicate entries
+  2025-12-11: 2 duplicate entries
+  2025-12-12: 2 duplicate entries
+  2025-12-16: 1 duplicate entries
+  2025-12-17: 1 duplicate entries
+  2025-12-19: 1 duplicate entries
+  2025-12-20: 1 duplicate entries
+  2025-12-21: 3 duplicate entries
+  2025-12-22: 3 duplicate entries
+  2025-12-23: 5 duplicate entries
+  2025-12-26: 15 duplicate entries
+  2025-12-27: 6 duplicate entries
+  2025-12-28: 25 duplicate entries
+  2026-01-02: 2 duplicate entries
