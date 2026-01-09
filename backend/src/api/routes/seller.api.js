@@ -270,11 +270,31 @@ router.post('/orders/create-pending', async (req, res) => {
 /**
  * @route POST /api/seller/orders/create-fba
  * @desc Create Odoo orders for FBA orders only (uses generic customers)
+ *
+ * DEPRECATED: FBA orders should only be created when VCS file is uploaded.
+ * This endpoint is kept for backward compatibility but will show a deprecation warning.
+ * Use POST /api/amazon-vcs/upload to create FBA orders with correct tax data.
+ *
  * @body limit - Optional: max orders to process (default 100)
  * @body dryRun - Optional: simulate without creating (default false)
+ * @body force - Optional: set to true to bypass deprecation warning (default false)
  */
 router.post('/orders/create-fba', async (req, res) => {
   try {
+    // Deprecation warning
+    if (!req.body.force) {
+      console.warn('[SellerAPI] DEPRECATION WARNING: /orders/create-fba is deprecated. FBA orders should be created via VCS upload.');
+      return res.status(400).json({
+        success: false,
+        error: 'DEPRECATED: FBA orders should only be created when VCS file is uploaded. This ensures correct tax rates and VAT numbers.',
+        message: 'Use POST /api/amazon-vcs/upload to create FBA orders with correct tax data from Amazon.',
+        hint: 'If you need to force creation anyway, add { "force": true } to the request body.',
+        deprecatedSince: '2025-01-09'
+      });
+    }
+
+    console.warn('[SellerAPI] DEPRECATION: Creating FBA orders directly (forced). This may result in incorrect tax data.');
+
     const creator = await getCreator();
 
     const results = await creator.createFbaOrders({
@@ -284,6 +304,7 @@ router.post('/orders/create-fba', async (req, res) => {
 
     res.json({
       success: true,
+      warning: 'DEPRECATED: This endpoint creates FBA orders without VCS tax data. Tax rates may be incorrect.',
       ...results
     });
   } catch (error) {
@@ -292,14 +313,89 @@ router.post('/orders/create-fba', async (req, res) => {
   }
 });
 
-// ==================== FBM TSV IMPORT ====================
+// ==================== FBM TSV IMPORT (Two-Step Flow) ====================
 
 /**
  * @route POST /api/seller/orders/import-fbm
  * @desc Import FBM orders from Amazon "Unshipped Orders" TSV file
+ *
+ * TWO-STEP FLOW:
+ * 1. Parse TSV and store to unified_orders (with AI address cleaning)
+ * 2. Create Odoo orders with correct fiscal position and journal
+ *
  * @body file - TSV file with customer names and addresses
+ * @body createOdoo - Optional: create Odoo orders immediately (default true)
  */
 router.post('/orders/import-fbm', uploadFbm.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const { getFbmOrderImporter } = require('../../services/amazon/seller/FbmOrderImporter');
+    const { getSellerOrderCreator } = require('../../services/amazon/seller/SellerOrderCreator');
+
+    const importer = await getFbmOrderImporter();
+    const tsvContent = req.file.buffer.toString('utf-8');
+    const fileName = req.file.originalname;
+
+    // Step 1: Parse TSV → unified_orders
+    console.log(`[SellerAPI] Step 1: Importing TSV to unified_orders...`);
+    const importResult = await importer.importToUnifiedOrders(tsvContent, { fileName });
+
+    // Step 2: Create Odoo orders (unless explicitly disabled)
+    const shouldCreateOdoo = req.body.createOdoo !== false && req.body.createOdoo !== 'false';
+    let odooResult = null;
+
+    if (shouldCreateOdoo && importResult.orderIds.length > 0) {
+      console.log(`[SellerAPI] Step 2: Creating Odoo orders for ${importResult.orderIds.length} orders...`);
+      const creator = await getSellerOrderCreator();
+      odooResult = await creator.createOrdersFromUnified(importResult.orderIds, {
+        autoConfirm: true
+      });
+    }
+
+    res.json({
+      success: true,
+      filename: fileName,
+      // Step 1 results
+      import: {
+        parsed: importResult.parsed,
+        imported: importResult.imported,
+        updated: importResult.updated,
+        errors: importResult.errors
+      },
+      // Step 2 results (if executed)
+      odoo: odooResult ? {
+        processed: odooResult.processed,
+        created: odooResult.created,
+        skipped: odooResult.skipped,
+        errors: odooResult.errors,
+        orders: odooResult.orders
+      } : null,
+      // Summary
+      summary: {
+        totalParsed: importResult.parsed,
+        storedToDb: importResult.imported + importResult.updated,
+        odooCreated: odooResult?.created || 0,
+        odooSkipped: odooResult?.skipped || 0,
+        totalErrors: importResult.errors.length + (odooResult?.errors.length || 0)
+      }
+    });
+  } catch (error) {
+    console.error('[SellerAPI] POST /orders/import-fbm error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/seller/orders/import-fbm-unified
+ * @desc Step 1 only: Parse TSV and store to unified_orders without creating Odoo orders
+ * Useful when you want to review data before creating Odoo orders
+ *
+ * @body file - TSV file
+ */
+router.post('/orders/import-fbm-unified', uploadFbm.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -309,15 +405,100 @@ router.post('/orders/import-fbm', uploadFbm.single('file'), async (req, res) => 
     const importer = await getFbmOrderImporter();
 
     const tsvContent = req.file.buffer.toString('utf-8');
-    const results = await importer.importFromTsv(tsvContent);
+    const fileName = req.file.originalname;
+
+    const result = await importer.importToUnifiedOrders(tsvContent, { fileName });
 
     res.json({
       success: true,
-      filename: req.file.originalname,
-      ...results
+      filename: fileName,
+      ...result,
+      message: `${result.imported} new orders imported, ${result.updated} updated. Use /orders/create-fbm-from-unified to create Odoo orders.`
     });
   } catch (error) {
-    console.error('[SellerAPI] POST /orders/import-fbm error:', error);
+    console.error('[SellerAPI] POST /orders/import-fbm-unified error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/seller/orders/create-fbm-from-unified
+ * @desc Step 2: Create Odoo orders from unified_orders that were imported via TSV
+ *
+ * @body orderIds - Optional: specific order IDs to create (default: all pending)
+ * @body limit - Optional: max orders to process (default 100)
+ */
+router.post('/orders/create-fbm-from-unified', async (req, res) => {
+  try {
+    const { getSellerOrderCreator } = require('../../services/amazon/seller/SellerOrderCreator');
+    const { getFbmOrderImporter } = require('../../services/amazon/seller/FbmOrderImporter');
+
+    const creator = await getSellerOrderCreator();
+
+    let orderIds = req.body.orderIds;
+
+    // If no specific orderIds provided, get all pending FBM orders from unified_orders
+    if (!orderIds || orderIds.length === 0) {
+      const importer = await getFbmOrderImporter();
+      const pendingOrders = await importer.getOrdersPendingOdooCreation();
+      orderIds = pendingOrders.map(o => o.sourceIds.amazonOrderId);
+
+      if (req.body.limit) {
+        orderIds = orderIds.slice(0, parseInt(req.body.limit));
+      }
+    }
+
+    if (orderIds.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending FBM orders found',
+        processed: 0,
+        created: 0,
+        skipped: 0
+      });
+    }
+
+    const result = await creator.createOrdersFromUnified(orderIds, {
+      autoConfirm: true
+    });
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[SellerAPI] POST /orders/create-fbm-from-unified error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/seller/orders/fbm-pending-odoo
+ * @desc Get FBM orders that are in unified_orders but not yet created in Odoo
+ */
+router.get('/orders/fbm-pending-odoo', async (req, res) => {
+  try {
+    const { getFbmOrderImporter } = require('../../services/amazon/seller/FbmOrderImporter');
+    const importer = await getFbmOrderImporter();
+
+    const pendingOrders = await importer.getOrdersPendingOdooCreation();
+
+    res.json({
+      success: true,
+      count: pendingOrders.length,
+      orders: pendingOrders.map(o => ({
+        amazonOrderId: o.sourceIds?.amazonOrderId,
+        customer: o.customer?.name || o.shippingAddress?.name,
+        country: o.shippingAddress?.countryCode,
+        isBusinessOrder: o.isBusinessOrder,
+        itemCount: o.items?.length || 0,
+        total: o.totals?.total,
+        importedAt: o.tsvImport?.importedAt,
+        fileName: o.tsvImport?.fileName
+      }))
+    });
+  } catch (error) {
+    console.error('[SellerAPI] GET /orders/fbm-pending-odoo error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -347,48 +528,23 @@ router.post('/orders/preview-fbm', uploadFbm.single('file'), async (req, res) =>
       orders: orderList.map(o => ({
         orderId: o.orderId,
         customer: o.recipientName,
+        buyerCompanyName: o.buyerCompanyName,
+        isBusinessOrder: o.isBusinessOrder,
         city: o.city,
         country: o.country,
+        salesChannel: o.salesChannel,
         itemCount: o.items.length,
         items: o.items.map(i => ({
           sku: i.sku,
           resolvedSku: i.resolvedSku,
-          quantity: i.quantity
+          quantity: i.quantity,
+          price: i.itemPrice,
+          isPromotion: i.isPromotion
         }))
       }))
     });
   } catch (error) {
     console.error('[SellerAPI] POST /orders/preview-fbm error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * @route POST /api/seller/orders/retry-fbm
- * @desc Retry importing a single FBM order with corrected SKU mapping
- * @body orderData - Full order data from failed import
- * @body skuMappings - Object mapping original SKU to corrected Odoo SKU
- */
-router.post('/orders/retry-fbm', async (req, res) => {
-  try {
-    const { orderData, skuMappings } = req.body;
-
-    if (!orderData || !orderData.orderId) {
-      return res.status(400).json({ success: false, error: 'Missing orderData' });
-    }
-
-    if (!skuMappings || Object.keys(skuMappings).length === 0) {
-      return res.status(400).json({ success: false, error: 'Missing skuMappings' });
-    }
-
-    const { getFbmOrderImporter } = require('../../services/amazon/seller/FbmOrderImporter');
-    const importer = await getFbmOrderImporter();
-
-    const result = await importer.retryOrderWithSku(orderData, skuMappings);
-
-    res.json(result);
-  } catch (error) {
-    console.error('[SellerAPI] POST /orders/retry-fbm error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

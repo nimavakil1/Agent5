@@ -157,6 +157,19 @@ function transformSellerOrder(sellerOrder) {
     customer,
     shippingAddress,
 
+    // Billing address (separate from shipping - populated from TSV import)
+    billingAddress: null,
+
+    // AI-cleaned address data (populated by AddressCleanerAI during TSV import)
+    addressCleaningResult: null,
+
+    // B2B order indicators (extracted from TSV or API)
+    isBusinessOrder: sellerOrder.isBusinessOrder || amazonSeller.isBusinessOrder || false,
+    buyerCompanyName: sellerOrder.buyerCompanyName || null,
+
+    // TSV import tracking (populated when imported via TSV)
+    tsvImport: sellerOrder.tsvImport || null,
+
     totals: {
       subtotal: subtotal || totalAmount,
       tax: taxTotal,
@@ -286,6 +299,19 @@ function transformAmazonApiOrder(amazonOrder, orderItems = []) {
 
     customer,
     shippingAddress,
+
+    // Billing address (separate from shipping - populated from TSV import)
+    billingAddress: null,
+
+    // AI-cleaned address data (populated by AddressCleanerAI during TSV import)
+    addressCleaningResult: null,
+
+    // B2B order indicators (extracted from TSV or API)
+    isBusinessOrder: amazonOrder.IsBusinessOrder || false,
+    buyerCompanyName: null,
+
+    // TSV import tracking (populated when imported via TSV)
+    tsvImport: null,
 
     totals: {
       subtotal: subtotal || totalAmount,

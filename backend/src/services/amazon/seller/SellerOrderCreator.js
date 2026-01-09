@@ -92,9 +92,101 @@ function cleanDuplicateName(name) {
 const PAYMENT_TERM_21_DAYS = 2; // Adjust if different in your Odoo
 
 /**
- * Amazon Seller sales team ID
+ * Amazon Seller sales team ID (default)
  */
 const AMAZON_SELLER_TEAM_ID = 11;
+
+/**
+ * FBM Warehouse ID - Belgium (CW)
+ * FBM orders always ship from Belgium warehouse
+ */
+const FBM_WAREHOUSE_ID = 1;
+
+/**
+ * Marketplace to Sales Team ID mapping
+ * Based on sales-channel from Amazon TSV (e.g., "Amazon.de" → DE → 17)
+ */
+const MARKETPLACE_SALES_TEAMS = {
+  'DE': 17,  // Amazon DE (Marketplace)
+  'FR': 19,  // Amazon FR (Marketplace)
+  'IT': 20,  // Amazon IT (Marketplace)
+  'ES': 18,  // Amazon ES (Marketplace)
+  'NL': 21,  // Amazon NL (Marketplace)
+  'PL': 22,  // Amazon PL (Marketplace)
+  'BE': 16,  // Amazon BE (Marketplace)
+  'SE': 24,  // Amazon SE (Marketplace)
+  'GB': 25,  // Amazon UK (Marketplace)
+  'UK': 25,  // Alias for GB
+};
+
+/**
+ * OSS Fiscal Position IDs by destination country
+ * These set the correct VAT rates for B2C sales
+ * Used for FBM orders (FBA orders use VCS for tax correction)
+ */
+const OSS_FISCAL_POSITIONS = {
+  'AT': 6,   // AT*OSS | B2C Austria
+  'BE': 35,  // BE*OSS | B2C Belgium
+  'BG': 7,   // BG*OSS | B2C Bulgaria
+  'CY': 9,   // CY*OSS | B2C Cyprus
+  'CZ': 10,  // CZ*OSS | B2C Czech Republic
+  'DE': 15,  // DE*OSS | B2C Germany
+  'DK': 11,  // DK*OSS | B2C Denmark
+  'EE': 12,  // EE*OSS | B2C Estonia
+  'ES': 30,  // ES*OSS | B2C Spain
+  'FI': 13,  // FI*OSS | B2C Finland
+  'FR': 14,  // FR*OSS | B2C France
+  'GR': 16,  // GR*OSS | B2C Greece
+  'HR': 8,   // HR*OSS | B2C Croatia
+  'HU': 17,  // HU*OSS | B2C Hungary
+  'IE': 18,  // IE*OSS | B2C Ireland
+  'IT': 19,  // IT*OSS | B2C Italy
+  'LT': 21,  // LT*OSS | B2C Lithuania
+  'LU': 22,  // LU*OSS | B2C Luxembourg
+  'LV': 20,  // LV*OSS | B2C Latvia
+  'MT': 23,  // MT*OSS | B2C Malta
+  'NL': 24,  // NL*OSS | B2C Netherlands
+  'PL': 25,  // PL*OSS | B2C Poland
+  'PT': 26,  // PT*OSS | B2C Portugal
+  'RO': 27,  // RO*OSS | B2C Romania
+  'SE': 31,  // SE*OSS | B2C Sweden
+  'SI': 29,  // SI*OSS | B2C Slovenia
+  'SK': 28,  // SK*OSS | B2C Slovakia
+};
+
+/**
+ * Intra-Community (IC) Fiscal Positions for B2B reverse charge
+ * Used when is-business-order = true (buyer has VAT number)
+ * These apply 0% VAT with reverse charge mechanism
+ * Used for FBM orders only (FBA uses VCS)
+ */
+const IC_B2B_FISCAL_POSITIONS = {
+  'BE': 4,   // BE*VAT | Régime Intra-Communautaire
+  'DE': 52,  // DE*VAT | Régime Intra-Communautaire
+  'FR': 37,  // FR*VAT | Régime Intra-Communautaire
+  'CZ': 69,  // CZ*VAT | Régime Intra-Communautaire
+  'PL': 70,  // PL*VAT | Régime Intra-Communautaire
+  // Fallback - use BE*VAT for other EU B2B (applies reverse charge)
+  'DEFAULT': 4
+};
+
+/**
+ * Journal configuration for FBM orders by destination country
+ * FBM always ships from Belgium (CW warehouse)
+ */
+const FBM_JOURNALS = {
+  // Specific country journals (for major markets)
+  'BE': 1,   // VBE - Domestic Belgium
+  'DE': 15,  // VDE - Germany
+  'FR': 14,  // VFR - France
+  'NL': 16,  // VNL - Netherlands
+  'IT': 40,  // VIT - Italy
+  'ES': 12,  // VOS - Spain (uses OSS journal)
+  // Fallbacks
+  'OSS': 12,     // VOS - EU cross-border OSS
+  'EXPORT': 52,  // VEX - Non-EU export
+  'GB': 41,      // VGB - UK (post-Brexit)
+};
 
 /**
  * Journal configuration for Amazon Seller orders
@@ -339,27 +431,50 @@ class SellerOrderCreator {
 
   /**
    * Create orders for all pending eligible orders
+   *
+   * NOTE: As of 2025-01-09, this method only processes FBM orders.
+   * FBA orders should be created via VCS upload for correct tax data.
+   *
    * @param {Object} options - Creation options
    */
   async createPendingOrders(options = {}) {
     await this.init();
 
     const limit = options.limit || 50;
-    const pendingOrders = await this.importer.getPendingOdooOrders(limit);
+
+    // Only get FBM orders pending Odoo creation
+    // FBA orders should be created via VCS upload
+    const pendingOrders = await this.collection.find({
+      channel: CHANNELS.AMAZON_SELLER,
+      'sourceIds.odooSaleOrderId': null,
+      'amazonSeller.autoImportEligible': true,
+      'amazonSeller.fulfillmentChannel': 'MFN', // FBM only - FBA uses VCS
+      'status.source': { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
+      'amazonSeller.itemsFetched': true,
+      // Must have address data
+      'shippingAddress.name': { $ne: null }
+    })
+      .sort({ orderDate: -1 })
+      .limit(limit)
+      .toArray();
 
     const results = {
       processed: 0,
       created: 0,
       skipped: 0,
       errors: [],
-      orders: []
+      orders: [],
+      note: 'Only FBM orders are processed. FBA orders require VCS upload.'
     };
+
+    console.log(`[SellerOrderCreator] Processing ${pendingOrders.length} pending FBM orders`);
 
     for (const order of pendingOrders) {
       results.processed++;
+      const amazonOrderId = order.sourceIds?.amazonOrderId;
 
       try {
-        const result = await this.createOrder(order.amazonOrderId, {
+        const result = await this.createOrder(amazonOrderId, {
           dryRun: options.dryRun,
           autoConfirm: options.autoConfirm !== false
         });
@@ -371,13 +486,13 @@ class SellerOrderCreator {
         }
 
         results.orders.push({
-          amazonOrderId: order.amazonOrderId,
+          amazonOrderId,
           ...result
         });
 
       } catch (error) {
         results.errors.push({
-          amazonOrderId: order.amazonOrderId,
+          amazonOrderId,
           error: error.message
         });
       }
@@ -420,9 +535,30 @@ class SellerOrderCreator {
 
   /**
    * Create orders for FBA orders only (uses generic customers)
+   *
+   * DEPRECATED: FBA orders should only be created when VCS file is uploaded.
+   * This ensures correct tax rates and VAT numbers from Amazon's tax service.
+   * Use VcsOdooInvoicer.createOdooOrdersFromVcs() instead.
+   *
    * @param {Object} options - Creation options
+   * @deprecated since 2025-01-09 - Use VCS upload for FBA orders
    */
   async createFbaOrders(options = {}) {
+    console.warn('[SellerOrderCreator] DEPRECATION WARNING: createFbaOrders() is deprecated.');
+    console.warn('[SellerOrderCreator] FBA orders should only be created via VCS upload for correct tax data.');
+
+    if (!options.force) {
+      console.warn('[SellerOrderCreator] Skipping FBA order creation. Use { force: true } to override.');
+      return {
+        processed: 0,
+        created: 0,
+        skipped: 0,
+        errors: [],
+        orders: [],
+        warning: 'DEPRECATED: FBA orders should be created via VCS upload. Use { force: true } to override.'
+      };
+    }
+
     await this.init();
 
     const limit = options.limit || 100;
@@ -445,10 +581,11 @@ class SellerOrderCreator {
       created: 0,
       skipped: 0,
       errors: [],
-      orders: []
+      orders: [],
+      warning: 'DEPRECATED: This method creates FBA orders without VCS tax data. Tax rates may be incorrect.'
     };
 
-    console.log(`[SellerOrderCreator] Processing ${pendingOrders.length} FBA orders`);
+    console.log(`[SellerOrderCreator] Processing ${pendingOrders.length} FBA orders (DEPRECATED)`);
 
     for (const order of pendingOrders) {
       results.processed++;
@@ -1041,6 +1178,560 @@ class SellerOrderCreator {
     }
 
     return updated;
+  }
+
+  // ============================================
+  // FBM Order Creation (from TSV import)
+  // ============================================
+
+  /**
+   * Determine journal and fiscal position for FBM order based on destination country
+   * FBM always ships from Belgium (BE)
+   *
+   * NOTE: This is a preliminary determination. When VCS invoice is imported later,
+   * it will correct the tax rates based on Amazon's actual VAT calculation.
+   *
+   * @param {string} destCountry - Destination country code
+   * @param {boolean} isBusinessOrder - True if Amazon flagged as B2B order
+   * @returns {object} { journalId, fiscalPositionId, journalType }
+   */
+  determineJournalAndFiscalPosition(destCountry, isBusinessOrder = false) {
+    const country = (destCountry || '').toUpperCase();
+
+    // Non-EU destination = Export (no fiscal position needed)
+    if (!EU_COUNTRIES.includes(country)) {
+      return {
+        journalId: FBM_JOURNALS['EXPORT'],
+        fiscalPositionId: null,
+        journalType: 'export'
+      };
+    }
+
+    // Get country-specific journal, fallback to OSS journal for other EU countries
+    const journalId = FBM_JOURNALS[country] || FBM_JOURNALS['OSS'];
+
+    // B2B order (intra-EU) = Reverse charge (0% VAT)
+    // The customer handles VAT in their country
+    if (isBusinessOrder && country !== 'BE') {
+      const icFiscalPosition = IC_B2B_FISCAL_POSITIONS[country] || IC_B2B_FISCAL_POSITIONS['DEFAULT'];
+      return {
+        journalId,
+        fiscalPositionId: icFiscalPosition,
+        journalType: 'b2b-ic'
+      };
+    }
+
+    // B2C order = OSS fiscal position for correct VAT rates
+    // Or domestic Belgium = standard VAT
+    const fiscalPositionId = OSS_FISCAL_POSITIONS[country] || null;
+
+    return {
+      journalId,
+      fiscalPositionId,
+      journalType: country === 'BE' ? 'domestic' : 'oss'
+    };
+  }
+
+  /**
+   * Get sales team ID based on Amazon sales channel
+   * @param {string} salesChannel - e.g., "Amazon.de", "Amazon.fr", "Non-Amazon"
+   * @returns {number} Odoo sales team ID
+   */
+  getSalesTeamFromSalesChannel(salesChannel) {
+    if (!salesChannel) {
+      return AMAZON_SELLER_TEAM_ID;
+    }
+
+    // Extract country code from sales channel (e.g., "Amazon.de" → "DE")
+    const match = salesChannel.match(/amazon\.(\w{2})/i);
+    if (match) {
+      const countryCode = match[1].toUpperCase();
+      return MARKETPLACE_SALES_TEAMS[countryCode] || AMAZON_SELLER_TEAM_ID;
+    }
+
+    return AMAZON_SELLER_TEAM_ID;
+  }
+
+  /**
+   * Find or create customer with support for AI-cleaned address and separate billing address
+   * Enhanced version for TSV-imported orders
+   *
+   * @param {Object} order - Unified order document
+   * @returns {Object} { customerId, shippingAddressId, invoiceAddressId }
+   */
+  async findOrCreateCustomerWithBilling(order) {
+    const address = order.shippingAddress;
+    const billingAddress = order.billingAddress;
+    const cleanedAddress = order.addressCleaningResult;
+    const amazonOrderId = order.sourceIds?.amazonOrderId;
+
+    // If no address data at all, use generic customer
+    if (!address) {
+      console.warn(`[SellerOrderCreator] No shipping address for ${amazonOrderId}, using generic customer`);
+      const genericCustomerId = await this.findOrCreateGenericCustomer('DE');
+      return { customerId: genericCustomerId, shippingAddressId: genericCustomerId, invoiceAddressId: genericCustomerId };
+    }
+
+    // Use AI-cleaned address data if available
+    const isCompany = cleanedAddress?.isCompany || order.isBusinessOrder || false;
+
+    // Build customer name - priority: AI company > AI name > buyerCompanyName > customer.name > recipientName
+    let customerName;
+    if (cleanedAddress?.company) {
+      customerName = cleanedAddress.company;
+    } else if (cleanedAddress?.name) {
+      customerName = cleanedAddress.name;
+    } else if (order.buyerCompanyName) {
+      customerName = order.buyerCompanyName;
+    } else if (order.customer?.name) {
+      customerName = cleanDuplicateName(order.customer.name);
+    } else {
+      customerName = cleanDuplicateName(address.name);
+    }
+
+    // If still no name, create location-based customer
+    if (!customerName) {
+      const city = address.city || 'Unknown';
+      const postalCode = address.postalCode || '';
+      const countryCode = address.countryCode || 'DE';
+      customerName = `Amazon Customer (${city}${postalCode ? ' ' + postalCode : ''}, ${countryCode})`;
+      console.log(`[SellerOrderCreator] Using location-based customer name for ${amazonOrderId}: ${customerName}`);
+    }
+
+    const countryId = this.countryCache[address.countryCode] || null;
+    const buyerEmail = order.customer?.email;
+
+    // Check cache for customer
+    const customerCacheKey = `customer|${customerName}|${address.countryCode}`;
+    let customerId = this.partnerCache[customerCacheKey];
+
+    if (!customerId) {
+      // Try to find existing customer by name and country
+      const existingCustomer = await this.odoo.searchRead('res.partner',
+        [
+          ['name', '=', customerName],
+          ['country_id', '=', countryId],
+          ['parent_id', '=', false],
+          ['customer_rank', '>', 0]
+        ],
+        ['id']
+      );
+
+      if (existingCustomer.length > 0) {
+        customerId = existingCustomer[0].id;
+      } else {
+        // Create new customer
+        customerId = await this.odoo.create('res.partner', {
+          name: customerName,
+          company_type: isCompany ? 'company' : 'person',
+          is_company: isCompany,
+          customer_rank: 1,
+          country_id: countryId,
+          email: buyerEmail || null,
+          comment: `Amazon customer - created from FBM order ${amazonOrderId}`
+        });
+        console.log(`[SellerOrderCreator] Created customer: ${customerName} (ID: ${customerId}, company: ${isCompany})`);
+      }
+
+      this.partnerCache[customerCacheKey] = customerId;
+    }
+
+    // Create/find shipping address (child contact)
+    // Use AI-cleaned street if available
+    const shippingStreet = cleanedAddress?.street || address.street || address.addressLine1;
+    const shippingStreet2 = cleanedAddress?.street2 || address.street2 || address.addressLine2;
+    const shippingCity = cleanedAddress?.city || address.city;
+    const shippingZip = cleanedAddress?.zip || address.postalCode;
+
+    // For B2B with company: use person name for delivery contact
+    let deliveryName;
+    if (isCompany && cleanedAddress?.company && cleanedAddress?.name) {
+      deliveryName = cleanedAddress.name; // Person name under company
+    } else {
+      deliveryName = cleanDuplicateName(address.name) || customerName;
+    }
+
+    const addressCacheKey = `shipping|${customerId}|${shippingZip || 'no-zip'}|${shippingCity || 'no-city'}`;
+    let shippingAddressId = this.partnerCache[addressCacheKey];
+
+    if (!shippingAddressId) {
+      // Try to find existing shipping address
+      const searchCriteria = [
+        ['parent_id', '=', customerId],
+        ['type', '=', 'delivery']
+      ];
+      if (shippingZip) searchCriteria.push(['zip', '=', shippingZip]);
+      if (shippingCity) searchCriteria.push(['city', '=', shippingCity]);
+
+      const existingAddress = await this.odoo.searchRead('res.partner', searchCriteria, ['id']);
+
+      if (existingAddress.length > 0) {
+        shippingAddressId = existingAddress[0].id;
+      } else {
+        // Create new shipping address
+        shippingAddressId = await this.odoo.create('res.partner', {
+          parent_id: customerId,
+          type: 'delivery',
+          name: deliveryName,
+          street: shippingStreet || null,
+          street2: shippingStreet2 || null,
+          city: shippingCity || null,
+          zip: shippingZip || null,
+          country_id: countryId,
+          phone: address.phone || null,
+          email: buyerEmail || null,
+          comment: `Shipping address from Amazon FBM order ${amazonOrderId}`
+        });
+        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (ID: ${shippingAddressId})`);
+      }
+
+      this.partnerCache[addressCacheKey] = shippingAddressId;
+    }
+
+    // Check if billing address is different from shipping
+    let invoiceAddressId = shippingAddressId;
+
+    if (billingAddress && billingAddress.name && billingAddress.street) {
+      const billingIsDifferent =
+        billingAddress.name !== address.name ||
+        billingAddress.street !== address.street ||
+        billingAddress.postalCode !== address.postalCode;
+
+      if (billingIsDifferent) {
+        const billingCountryId = this.countryCache[billingAddress.countryCode || address.countryCode] || countryId;
+        const billingCacheKey = `invoice|${customerId}|${billingAddress.postalCode || 'no-zip'}|${billingAddress.city || 'no-city'}`;
+
+        invoiceAddressId = this.partnerCache[billingCacheKey];
+
+        if (!invoiceAddressId) {
+          // Try to find existing billing address
+          const searchCriteria = [
+            ['parent_id', '=', customerId],
+            ['type', '=', 'invoice']
+          ];
+          if (billingAddress.postalCode) searchCriteria.push(['zip', '=', billingAddress.postalCode]);
+          if (billingAddress.city) searchCriteria.push(['city', '=', billingAddress.city]);
+
+          const existingBilling = await this.odoo.searchRead('res.partner', searchCriteria, ['id']);
+
+          if (existingBilling.length > 0) {
+            invoiceAddressId = existingBilling[0].id;
+          } else {
+            // Create new billing address
+            invoiceAddressId = await this.odoo.create('res.partner', {
+              parent_id: customerId,
+              type: 'invoice',
+              name: billingAddress.name,
+              street: billingAddress.street || null,
+              street2: billingAddress.street2 || null,
+              city: billingAddress.city || null,
+              zip: billingAddress.postalCode || null,
+              country_id: billingCountryId,
+              phone: billingAddress.phone || null,
+              comment: `Billing address from Amazon FBM order ${amazonOrderId}`
+            });
+            console.log(`[SellerOrderCreator] Created billing address: ${billingAddress.name} (ID: ${invoiceAddressId})`);
+          }
+
+          this.partnerCache[billingCacheKey] = invoiceAddressId;
+        }
+      }
+    }
+
+    return { customerId, shippingAddressId, invoiceAddressId };
+  }
+
+  /**
+   * Create Odoo orders from unified_orders that were imported via TSV
+   * This is the main entry point for creating FBM orders after TSV import
+   *
+   * @param {string[]} orderIds - Amazon Order IDs to create
+   * @param {Object} options - Creation options
+   * @returns {Object} Results with created/skipped/error counts
+   */
+  async createOrdersFromUnified(orderIds, options = {}) {
+    await this.init();
+
+    const results = {
+      processed: 0,
+      created: 0,
+      skipped: 0,
+      errors: [],
+      orders: []
+    };
+
+    for (const amazonOrderId of orderIds) {
+      results.processed++;
+
+      try {
+        // Get order from unified_orders
+        const unifiedOrderId = `${CHANNELS.AMAZON_SELLER}:${amazonOrderId}`;
+        const order = await this.collection.findOne({ unifiedOrderId });
+
+        if (!order) {
+          results.errors.push({ amazonOrderId, error: 'Order not found in unified_orders' });
+          continue;
+        }
+
+        // Check if already has Odoo order
+        if (order.sourceIds?.odooSaleOrderId) {
+          results.skipped++;
+          results.orders.push({
+            amazonOrderId,
+            status: 'skipped',
+            reason: 'Already exists in Odoo',
+            odooOrderName: order.sourceIds.odooSaleOrderName
+          });
+          continue;
+        }
+
+        // Check if order already exists in Odoo by client_order_ref
+        const existingOrder = await this.findExistingOrder(amazonOrderId);
+        if (existingOrder) {
+          // Update unified_orders with existing Odoo info
+          await this.collection.updateOne(
+            { unifiedOrderId },
+            {
+              $set: {
+                'sourceIds.odooSaleOrderId': existingOrder.id,
+                'sourceIds.odooSaleOrderName': existingOrder.name,
+                'customer.odooPartnerId': existingOrder.partner_id?.[0] || null,
+                updatedAt: new Date()
+              }
+            }
+          );
+
+          results.skipped++;
+          results.orders.push({
+            amazonOrderId,
+            status: 'skipped',
+            reason: `Found existing order ${existingOrder.name}`,
+            odooOrderId: existingOrder.id,
+            odooOrderName: existingOrder.name
+          });
+          continue;
+        }
+
+        // Create the FBM order
+        const result = await this.createFbmOrder(order, options);
+
+        if (result.success) {
+          results.created++;
+          results.orders.push({
+            amazonOrderId,
+            status: 'created',
+            odooOrderId: result.odooOrderId,
+            odooOrderName: result.odooOrderName
+          });
+        } else {
+          results.errors.push({
+            amazonOrderId,
+            error: result.error
+          });
+        }
+
+      } catch (error) {
+        results.errors.push({
+          amazonOrderId,
+          error: error.message
+        });
+      }
+    }
+
+    console.log(`[SellerOrderCreator] createOrdersFromUnified complete: ${results.created} created, ${results.skipped} skipped, ${results.errors.length} errors`);
+
+    return results;
+  }
+
+  /**
+   * Create a single FBM order in Odoo from unified_orders document
+   *
+   * @param {Object} order - Unified order document
+   * @param {Object} options - Creation options
+   * @returns {Object} { success, odooOrderId, odooOrderName, error }
+   */
+  async createFbmOrder(order, options = {}) {
+    const amazonOrderId = order.sourceIds?.amazonOrderId;
+
+    try {
+      // Validate order has items
+      if (!order.items || order.items.length === 0) {
+        return { success: false, error: 'Order has no items' };
+      }
+
+      // Find/create customer with billing address support
+      const { customerId, shippingAddressId, invoiceAddressId } = await this.findOrCreateCustomerWithBilling(order);
+
+      // Resolve order lines
+      const orderLines = await this.resolveFbmOrderLines(order);
+      if (orderLines.lines.length === 0) {
+        return {
+          success: false,
+          error: 'No valid products found',
+          productErrors: orderLines.errors
+        };
+      }
+
+      // Determine sales team from sales channel
+      const salesChannel = order.tsvImport?.salesChannel || order.amazonSeller?.salesChannel;
+      const salesTeamId = this.getSalesTeamFromSalesChannel(salesChannel);
+
+      // Determine destination country
+      const destCountry = order.shippingAddress?.countryCode || 'DE';
+
+      // Determine journal and fiscal position (FBM-specific)
+      const { journalId, fiscalPositionId, journalType } = this.determineJournalAndFiscalPosition(
+        destCountry,
+        order.isBusinessOrder
+      );
+
+      // Build order data
+      const orderName = `FBM${amazonOrderId}`;
+      const orderDate = order.orderDate instanceof Date
+        ? order.orderDate.toISOString().split('T')[0]
+        : new Date(order.orderDate).toISOString().split('T')[0];
+
+      const odooLines = orderLines.lines.map(line => [0, 0, line]);
+
+      const orderData = {
+        name: orderName,
+        partner_id: customerId,
+        partner_invoice_id: invoiceAddressId,
+        partner_shipping_id: shippingAddressId,
+        client_order_ref: amazonOrderId,
+        date_order: orderDate,
+        warehouse_id: FBM_WAREHOUSE_ID,
+        order_line: odooLines,
+        payment_term_id: PAYMENT_TERM_21_DAYS,
+        team_id: salesTeamId
+      };
+
+      // Set fiscal position for correct taxes (FBM only - FBA uses VCS)
+      if (fiscalPositionId) {
+        orderData.fiscal_position_id = fiscalPositionId;
+      }
+
+      // Create the order
+      const orderId = await this.odoo.create('sale.order', orderData);
+
+      console.log(`[SellerOrderCreator] Created FBM order ${orderName} (ID: ${orderId}) | Team: ${salesTeamId}, Journal type: ${journalType}, Fiscal Position: ${fiscalPositionId || 'none'}`);
+
+      // Auto-confirm if requested
+      let confirmed = false;
+      if (options.autoConfirm !== false) {
+        try {
+          await this.confirmOrder(orderId);
+          confirmed = true;
+        } catch (confirmError) {
+          console.warn(`[SellerOrderCreator] Order ${orderName} created but confirmation failed: ${confirmError.message}`);
+        }
+      }
+
+      // Update unified_orders with Odoo info
+      const unifiedOrderId = `${CHANNELS.AMAZON_SELLER}:${amazonOrderId}`;
+      await this.collection.updateOne(
+        { unifiedOrderId },
+        {
+          $set: {
+            'sourceIds.odooSaleOrderId': orderId,
+            'sourceIds.odooSaleOrderName': orderName,
+            'customer.odooPartnerId': customerId,
+            'odoo.saleOrderId': orderId,
+            'odoo.saleOrderName': orderName,
+            'odoo.partnerId': customerId,
+            'odoo.warehouseId': FBM_WAREHOUSE_ID,
+            'odoo.fiscalPositionId': fiscalPositionId,
+            'odoo.journalType': journalType,
+            'odoo.syncedAt': new Date(),
+            updatedAt: new Date()
+          }
+        }
+      );
+
+      return {
+        success: true,
+        odooOrderId: orderId,
+        odooOrderName: orderName,
+        confirmed
+      };
+
+    } catch (error) {
+      console.error(`[SellerOrderCreator] Error creating FBM order ${amazonOrderId}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Resolve order lines for FBM orders from unified_orders format
+   * Handles the item structure from TSV import
+   *
+   * @param {Object} order - Unified order document
+   * @returns {Object} { lines, errors }
+   */
+  async resolveFbmOrderLines(order) {
+    const lines = [];
+    const errors = [];
+
+    for (const item of order.items) {
+      try {
+        const amazonSku = item.sellerSku || item.sku;
+        const quantity = item.quantity || 1;
+
+        // Check if this is a promotion item
+        if (item.isPromotion || amazonSku === 'PROMOTION DISCOUNT') {
+          const promoPrice = item.unitPrice || item.lineTotal || 0;
+          console.log(`[SellerOrderCreator] Adding promotion item: price=${promoPrice}`);
+          lines.push({
+            product_id: SPECIAL_PRODUCTS.PROMOTION_DISCOUNT.id,
+            product_uom_qty: 1,
+            price_unit: promoPrice,
+            name: item.name || item.title || 'Promotion Discount'
+          });
+          continue;
+        }
+
+        // Skip items with zero quantity
+        if (quantity === 0) {
+          console.log(`[SellerOrderCreator] Skipping zero-qty item: SKU=${amazonSku}`);
+          continue;
+        }
+
+        // Use SKU from unified order (already resolved by FbmOrderImporter)
+        const transformedSku = item.sku || amazonSku;
+
+        // Find product in Odoo
+        const productId = await this.findProduct(transformedSku, amazonSku);
+        if (!productId) {
+          errors.push({
+            sku: amazonSku,
+            resolvedSku: transformedSku,
+            error: 'Product not found'
+          });
+          continue;
+        }
+
+        // Calculate unit price
+        const priceUnit = item.unitPrice || (item.lineTotal ? item.lineTotal / quantity : 0);
+
+        // Ensure we always have a valid name
+        const lineName = item.name || item.title || transformedSku || amazonSku || `Product ID ${productId}`;
+
+        lines.push({
+          product_id: productId,
+          product_uom_qty: quantity,
+          price_unit: priceUnit,
+          name: lineName
+        });
+
+      } catch (error) {
+        errors.push({
+          sku: item.sellerSku || item.sku,
+          error: error.message
+        });
+      }
+    }
+
+    return { lines, errors };
   }
 }
 

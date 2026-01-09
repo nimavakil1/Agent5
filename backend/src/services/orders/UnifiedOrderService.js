@@ -133,7 +133,14 @@ class UnifiedOrderService {
 
       // Ship-by deadline queries (for ship-by overview)
       { key: { shippingDeadline: 1 }, sparse: true },
-      { key: { channel: 1, subChannel: 1, shippingDeadline: 1 }, sparse: true }
+      { key: { channel: 1, subChannel: 1, shippingDeadline: 1 }, sparse: true },
+
+      // B2B order queries
+      { key: { isBusinessOrder: 1 }, sparse: true },
+
+      // TSV import tracking
+      { key: { 'tsvImport.importedAt': -1 }, sparse: true },
+      { key: { 'tsvImport.fileName': 1 }, sparse: true }
     ];
 
     for (const index of indexes) {
@@ -279,6 +286,54 @@ class UnifiedOrderService {
   }
 
   /**
+   * Update TSV-specific data for an order
+   * Used when importing orders via TSV file
+   * @param {string} unifiedOrderId - Unified order ID
+   * @param {Object} tsvData - TSV-specific data to update
+   * @param {Object} tsvData.billingAddress - Billing address from TSV
+   * @param {Object} tsvData.addressCleaningResult - AI-cleaned address data
+   * @param {boolean} tsvData.isBusinessOrder - B2B order indicator
+   * @param {string} tsvData.buyerCompanyName - Company name for B2B orders
+   * @param {Object} tsvData.tsvImport - TSV import tracking data
+   */
+  async updateTsvData(unifiedOrderId, tsvData) {
+    await this.init();
+
+    const update = {
+      $set: {
+        updatedAt: new Date()
+      }
+    };
+
+    if (tsvData.billingAddress !== undefined) {
+      update.$set.billingAddress = tsvData.billingAddress;
+    }
+
+    if (tsvData.addressCleaningResult !== undefined) {
+      update.$set.addressCleaningResult = tsvData.addressCleaningResult;
+    }
+
+    if (tsvData.isBusinessOrder !== undefined) {
+      update.$set.isBusinessOrder = tsvData.isBusinessOrder;
+    }
+
+    if (tsvData.buyerCompanyName !== undefined) {
+      update.$set.buyerCompanyName = tsvData.buyerCompanyName;
+    }
+
+    if (tsvData.tsvImport !== undefined) {
+      update.$set.tsvImport = tsvData.tsvImport;
+    }
+
+    const result = await this.collection.updateOne(
+      { unifiedOrderId },
+      update
+    );
+
+    return result.modifiedCount > 0;
+  }
+
+  /**
    * Update status for an order
    */
   async updateStatus(unifiedOrderId, sourceStatus, odooState = null) {
@@ -407,6 +462,25 @@ class UnifiedOrderService {
         { 'sourceIds.bolOrderId': { $regex: filters.search, $options: 'i' } },
         { 'customer.name': { $regex: filters.search, $options: 'i' } }
       ];
+    }
+
+    // B2B order filter
+    if (filters.isBusinessOrder !== undefined) {
+      query.isBusinessOrder = filters.isBusinessOrder;
+    }
+
+    // TSV import filter
+    if (filters.hasTsvImport !== undefined) {
+      if (filters.hasTsvImport) {
+        query['tsvImport.importedAt'] = { $ne: null };
+      } else {
+        query['tsvImport.importedAt'] = null;
+      }
+    }
+
+    // TSV file name filter
+    if (filters.tsvFileName) {
+      query['tsvImport.fileName'] = filters.tsvFileName;
     }
 
     return query;
