@@ -203,29 +203,56 @@ class SellerOrderImporter {
 
     const rawItems = await this.client.getAllOrderItems(amazonOrderId);
 
-    // Transform items to unified format
+    // Transform items to unified format, filtering out promotion/discount items
     // @type {import('./SellerOrderSchema').AmazonOrderItem[]}
     // IMPORTANT: Use 'quantity' field (not 'quantityOrdered') - see SellerOrderSchema.js
-    const items = rawItems.map(item => {
-      const itemPrice = parseFloat(item.ItemPrice?.Amount) || 0;
-      const itemTax = parseFloat(item.ItemTax?.Amount) || 0;
-      const qty = item.QuantityOrdered || 1;
+    const items = rawItems
+      .filter(item => {
+        // Skip promotion/discount items
+        const sku = item.SellerSKU || '';
+        const qty = item.QuantityOrdered || 0;
+        const price = parseFloat(item.ItemPrice?.Amount) || 0;
 
-      return {
-        sku: item.SellerSKU,
-        sellerSku: item.SellerSKU, // Alias for compatibility
-        asin: item.ASIN,
-        ean: null,
-        name: item.Title,
-        title: item.Title, // Alias for compatibility
-        quantity: qty, // ALWAYS use 'quantity', never 'quantityOrdered'
-        quantityShipped: item.QuantityShipped || 0,
-        unitPrice: itemPrice / qty,
-        lineTotal: itemPrice,
-        tax: itemTax,
-        orderItemId: item.OrderItemId
-      };
-    });
+        // Skip items with zero quantity
+        if (qty === 0) {
+          console.log(`[SellerOrderImporter] Skipping zero-qty item: SKU=${sku}`);
+          return false;
+        }
+
+        // Skip items that look like promotion codes (alphanumeric, 5-10 chars, ends with letter, has letters and numbers)
+        const isAlphanumericOnly = /^[A-Z0-9]+$/i.test(sku);
+        const hasNoDashes = !sku.includes('-') && !sku.includes('_');
+        const length5to10 = sku.length >= 5 && sku.length <= 10;
+        const endsWithLetter = /[A-Za-z]$/.test(sku);
+        const hasLettersAndNumbers = /[A-Za-z]/.test(sku) && /[0-9]/.test(sku);
+
+        if (isAlphanumericOnly && hasNoDashes && length5to10 && endsWithLetter && hasLettersAndNumbers && price <= 0) {
+          console.log(`[SellerOrderImporter] Skipping promotion item: SKU=${sku}, price=${price}`);
+          return false;
+        }
+
+        return true;
+      })
+      .map(item => {
+        const itemPrice = parseFloat(item.ItemPrice?.Amount) || 0;
+        const itemTax = parseFloat(item.ItemTax?.Amount) || 0;
+        const qty = item.QuantityOrdered || 1;
+
+        return {
+          sku: item.SellerSKU,
+          sellerSku: item.SellerSKU, // Alias for compatibility
+          asin: item.ASIN,
+          ean: null,
+          name: item.Title,
+          title: item.Title, // Alias for compatibility
+          quantity: qty, // ALWAYS use 'quantity', never 'quantityOrdered'
+          quantityShipped: item.QuantityShipped || 0,
+          unitPrice: itemPrice / qty,
+          lineTotal: itemPrice,
+          tax: itemTax,
+          orderItemId: item.OrderItemId
+        };
+      });
 
     // Calculate totals
     let subtotal = 0;

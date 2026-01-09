@@ -228,10 +228,21 @@ class FbmOrderImporter {
       const shippingPriceStr = cols[headerIndex['shipping-price']]?.trim() || '0';
       const shippingPrice = parseFloat(shippingPriceStr.replace(/[^0-9.-]/g, '')) || 0;
 
+      // Parse quantity
+      const quantity = parseInt(cols[headerIndex['quantity-to-ship']]?.trim() || '1');
+
+      // Skip promotion/discount items - they appear in TSV as separate line items
+      // Indicators: price <= 0, qty = 0, or SKU looks like promotion code (alphanumeric, no dashes, 5-10 chars)
+      const isPromotionItem = this.isPromotionSku(sku, itemPrice, quantity);
+      if (isPromotionItem) {
+        console.log(`[FbmOrderImporter] Skipping promotion item: SKU=${sku}, price=${itemPrice}, qty=${quantity}`);
+        continue;
+      }
+
       orderGroups[orderId].items.push({
         sku: sku,
         resolvedSku: resolved.odooSku,
-        quantity: parseInt(cols[headerIndex['quantity-to-ship']]?.trim() || '1'),
+        quantity: quantity,
         productName: cols[headerIndex['product-name']]?.trim() || sku,
         itemPrice: itemPrice,
         shippingPrice: shippingPrice
@@ -271,6 +282,55 @@ class FbmOrderImporter {
     if (/^[0-9]{1,4}$/.test(sku)) sku = sku.padStart(5, '0');
 
     return { odooSku: sku, originalSku: original };
+  }
+
+  /**
+   * Check if a SKU is a promotion/discount item that should be skipped
+   * Amazon TSV files include promotion items as separate line items with:
+   * - SKU that looks like a promotion code (alphanumeric, no dashes, 5-10 chars like "595771C")
+   * - Price of 0 or negative (for discounts)
+   * - Quantity of 0
+   *
+   * @param {string} sku - The SKU to check
+   * @param {number} price - The item price
+   * @param {number} quantity - The quantity
+   * @returns {boolean} True if this is a promotion item to skip
+   */
+  isPromotionSku(sku, price, quantity) {
+    if (!sku) return true; // Skip empty SKUs
+
+    // Skip items with zero or negative price and zero quantity
+    if (price <= 0 && quantity === 0) {
+      return true;
+    }
+
+    // Skip items with zero quantity (likely cancelled/promotional)
+    if (quantity === 0) {
+      return true;
+    }
+
+    // Check if SKU looks like a promotion code:
+    // - All alphanumeric (no dashes, no underscores)
+    // - 5-10 characters
+    // - Contains mix of letters and numbers (real SKUs are usually numeric or have dashes)
+    // - Ends with a letter (many promotion codes do, like "595771C")
+    const isAlphanumericOnly = /^[A-Z0-9]+$/i.test(sku);
+    const hasNoDashes = !sku.includes('-') && !sku.includes('_');
+    const length5to10 = sku.length >= 5 && sku.length <= 10;
+    const endsWithLetter = /[A-Za-z]$/.test(sku);
+    const hasLettersAndNumbers = /[A-Za-z]/.test(sku) && /[0-9]/.test(sku);
+
+    // Pattern: alphanumeric only, 5-10 chars, ends with letter, has both letters and numbers
+    // This matches patterns like "595771C", "ABC123D" but NOT "10060K-FBM" or "12345"
+    if (isAlphanumericOnly && hasNoDashes && length5to10 && endsWithLetter && hasLettersAndNumbers) {
+      // Additional check: if it doesn't look like a product code (which often end in K)
+      // and the price is 0 or very low, it's likely a promotion
+      if (price <= 0) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**

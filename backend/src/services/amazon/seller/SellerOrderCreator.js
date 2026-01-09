@@ -721,6 +721,13 @@ class SellerOrderCreator {
     for (const item of order.items) {
       try {
         const amazonSku = item.sellerSku;
+        const quantity = getItemQuantity(item);
+
+        // Skip items with zero quantity (promotional/cancelled items)
+        if (quantity === 0) {
+          console.log(`[SellerOrderCreator] Skipping zero-qty item: SKU=${amazonSku}`);
+          continue;
+        }
 
         // Use SKU resolver to transform
         const resolved = skuResolver.resolve(amazonSku);
@@ -735,7 +742,6 @@ class SellerOrderCreator {
 
         // Calculate price (Amazon gives total, we need unit price)
         // @see SellerOrderSchema.js for field definitions
-        const quantity = getItemQuantity(item);
         const itemPrice = parseFloat(item.itemPrice?.amount || 0);
         const priceUnit = itemPrice / quantity;
 
