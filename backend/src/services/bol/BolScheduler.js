@@ -74,7 +74,7 @@ async function runNightlySync() {
     // Step 2: Create Odoo orders for new Bol orders
     console.log('[BolScheduler] Creating Odoo orders for pending Bol orders...');
     const orderCreator = await getBolOrderCreator();
-    const orderResults = await orderCreator.createPendingOrders({ limit: 100 });
+    const orderResults = await orderCreator.createPendingOrders({ limit: 500 }); // Increased from 100
     console.log('[BolScheduler] Order creation complete:', orderResults);
 
     // Step 3: Book any new vendor bills (Bol charges to us) to Odoo
@@ -84,12 +84,27 @@ async function runNightlySync() {
 
     // Step 4: Sync FBB delivery status (mark shipped FBB orders as delivered in Odoo)
     console.log('[BolScheduler] Syncing FBB delivery status to Odoo...');
-    const fbbDeliveryResults = await runFBBDeliverySync({ limit: 200 });
+    const fbbDeliveryResults = await runFBBDeliverySync({ limit: 1000 }); // Increased from 200
     console.log('[BolScheduler] FBB delivery sync complete:', fbbDeliveryResults);
 
     // Step 5: Create and post customer invoices for fully delivered orders
+    // Process ALL ready invoices in batches of 500 until done
     console.log('[BolScheduler] Creating sales invoices for delivered orders...');
-    const invoicingResults = await runBolSalesInvoicing({ limit: 100 });
+    let totalPosted = 0;
+    let totalProcessed = 0;
+    let batchNum = 0;
+    let invoicingResults;
+
+    do {
+      batchNum++;
+      console.log(`[BolScheduler] Invoice batch ${batchNum}...`);
+      invoicingResults = await runBolSalesInvoicing({ limit: 500 });
+      totalPosted += invoicingResults.posted || 0;
+      totalProcessed += invoicingResults.processed || 0;
+      console.log(`[BolScheduler] Batch ${batchNum}: ${invoicingResults.posted || 0} posted (total: ${totalPosted})`);
+    } while (invoicingResults.posted > 0 && batchNum < 20); // Max 20 batches = 10,000 invoices
+
+    invoicingResults = { processed: totalProcessed, posted: totalPosted, batches: batchNum };
     console.log('[BolScheduler] Sales invoicing complete:', invoicingResults);
 
     await timer.success(
