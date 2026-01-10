@@ -56,7 +56,8 @@ function transformBolOrder(bolOrder) {
 
   // Build shipping address from shipmentDetails
   const ship = bolOrder.shipmentDetails || {};
-  const fullName = [ship.salutation, ship.firstName, ship.surname].filter(Boolean).join(' ');
+  // Note: ship.salutation contains gender (MALE/FEMALE), not a salutation - exclude it from name
+  const fullName = [ship.firstName, ship.surname].filter(Boolean).join(' ');
   const street = [ship.streetName, ship.houseNumber, ship.houseNumberExtension].filter(Boolean).join(' ');
 
   const shippingAddress = {
@@ -74,7 +75,8 @@ function transformBolOrder(bolOrder) {
 
   // Build customer info
   const bill = bolOrder.billingDetails || {};
-  const customerName = [bill.salutation, bill.firstName, bill.surname].filter(Boolean).join(' ');
+  // Note: bill.salutation contains gender (MALE/FEMALE), not a salutation - exclude it from name
+  const customerName = [bill.firstName, bill.surname].filter(Boolean).join(' ');
   const companyName = bill.company || ship.company || null;
 
   const customer = {
@@ -262,7 +264,8 @@ function transformBolApiOrder(bolApiOrder) {
 
   // Shipping address
   const ship = bolApiOrder.shipmentDetails || {};
-  const fullName = [ship.salutation, ship.firstName, ship.surname].filter(Boolean).join(' ');
+  // Note: ship.salutation contains gender (MALE/FEMALE), not a salutation - exclude it from name
+  const fullName = [ship.firstName, ship.surname].filter(Boolean).join(' ');
   const street = [ship.streetName, ship.houseNumber, ship.houseNumberExtension].filter(Boolean).join(' ');
 
   const shippingAddress = {
@@ -280,7 +283,8 @@ function transformBolApiOrder(bolApiOrder) {
 
   // Customer info from billing
   const bill = bolApiOrder.billingDetails || {};
-  const customerName = [bill.salutation, bill.firstName, bill.surname].filter(Boolean).join(' ');
+  // Note: bill.salutation contains gender (MALE/FEMALE), not a salutation - exclude it from name
+  const customerName = [bill.firstName, bill.surname].filter(Boolean).join(' ');
   const customerCompany = bill.company || ship.company || null;
 
   // Unified shipping deadline (for cross-channel queries)
