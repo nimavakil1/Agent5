@@ -286,10 +286,10 @@ class BolSalesInvoicer {
   async createInvoiceFromOrder(orderId) {
     await this.init();
 
-    // Get order details including warehouse_id for tax logic
+    // Get order details including warehouse_id for tax logic and team_id for invoice
     const [order] = await this.odoo.searchRead('sale.order',
       [['id', '=', orderId]],
-      ['name', 'partner_id', 'order_line', 'warehouse_id']
+      ['name', 'partner_id', 'order_line', 'warehouse_id', 'team_id']
     );
 
     if (!order) {
@@ -343,6 +343,11 @@ class BolSalesInvoicer {
       invoice_origin: order.name,
       invoice_line_ids: invoiceLines,
     };
+
+    // Copy team_id from sale order to invoice
+    if (order.team_id) {
+      invoiceData.team_id = order.team_id[0];
+    }
 
     // Add fiscal position if determined
     if (fiscalPositionId) {
