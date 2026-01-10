@@ -442,17 +442,18 @@ class SellerOrderCreator {
 
     const limit = options.limit || 50;
 
-    // Only get FBM orders pending Odoo creation
-    // FBA orders should be created via VCS upload
+    // IMPORTANT: Only process FBM orders that were imported via TSV file
+    // API-imported orders don't have complete address data (PII restrictions)
+    // FBA orders should be created via VCS upload, not here
     const pendingOrders = await this.collection.find({
       channel: CHANNELS.AMAZON_SELLER,
       'sourceIds.odooSaleOrderId': null,
-      'amazonSeller.autoImportEligible': true,
       'amazonSeller.fulfillmentChannel': 'MFN', // FBM only - FBA uses VCS
-      'status.source': { $in: ['Unshipped', 'Shipped', 'PartiallyShipped'] },
-      'amazonSeller.itemsFetched': true,
-      // Must have address data
-      'shippingAddress.name': { $ne: null }
+      // CRITICAL: Must have been imported via TSV (has complete address data)
+      'tsvImport.importedAt': { $exists: true, $ne: null },
+      // Must have address data from TSV
+      'shippingAddress.name': { $ne: null },
+      'shippingAddress.street': { $ne: null }
     })
       .sort({ orderDate: -1 })
       .limit(limit)
@@ -464,7 +465,7 @@ class SellerOrderCreator {
       skipped: 0,
       errors: [],
       orders: [],
-      note: 'Only FBM orders are processed. FBA orders require VCS upload.'
+      note: 'Only FBM orders imported via TSV are processed. API orders are skipped (no PII). FBA orders require VCS upload.'
     };
 
     console.log(`[SellerOrderCreator] Processing ${pendingOrders.length} pending FBM orders`);
