@@ -53,6 +53,18 @@ class FbmOrderImporter {
     console.log(`[FbmOrderImporter] Price-related headers found: ${JSON.stringify(priceHeaders)}`);
     console.log(`[FbmOrderImporter] 'item-price' column index: ${headerIndex['item-price']}`);
 
+    // Log quantity-related headers for debugging
+    const qtyHeaders = headers.filter(h => h.toLowerCase().includes('quantity') || h.toLowerCase().includes('qty'));
+    console.log(`[FbmOrderImporter] Quantity-related headers found: ${JSON.stringify(qtyHeaders)}`);
+
+    // Determine the quantity column - Amazon uses different names in different reports
+    const quantityColumn = headerIndex['quantity-to-ship'] !== undefined ? 'quantity-to-ship'
+      : headerIndex['quantity-purchased'] !== undefined ? 'quantity-purchased'
+      : headerIndex['quantity'] !== undefined ? 'quantity'
+      : headerIndex['qty'] !== undefined ? 'qty'
+      : null;
+    console.log(`[FbmOrderImporter] Using quantity column: ${quantityColumn} (index: ${headerIndex[quantityColumn]})`);
+
     // Determine which report type based on columns
     const hasRecipientName = 'recipient-name' in headerIndex;
     const hasShipAddress = 'ship-address-1' in headerIndex;
@@ -123,8 +135,14 @@ class FbmOrderImporter {
       const shippingPriceStr = cols[headerIndex['shipping-price']]?.trim() || '0';
       const shippingPrice = parseFloat(shippingPriceStr.replace(/[^0-9.-]/g, '')) || 0;
 
-      // Parse quantity
-      const quantity = parseInt(cols[headerIndex['quantity-to-ship']]?.trim() || '1');
+      // Parse quantity - use the detected column name
+      const quantityRaw = quantityColumn ? cols[headerIndex[quantityColumn]]?.trim() : null;
+      const quantity = parseInt(quantityRaw || '1');
+
+      // Debug log for first item
+      if (i === 1) {
+        console.log(`[FbmOrderImporter] Quantity debug - column: ${quantityColumn}, raw: "${quantityRaw}", parsed: ${quantity}`);
+      }
 
       // Check if this is a promotion/discount item
       // Promotion items appear in TSV as separate line items with price <= 0 or qty = 0
