@@ -286,10 +286,10 @@ class BolSalesInvoicer {
   async createInvoiceFromOrder(orderId) {
     await this.init();
 
-    // Get order details including warehouse_id for tax logic and team_id for invoice
+    // Get order details including warehouse_id for tax logic, team_id for invoice, and client_order_ref for BOL order number
     const [order] = await this.odoo.searchRead('sale.order',
       [['id', '=', orderId]],
-      ['name', 'partner_id', 'order_line', 'warehouse_id', 'team_id']
+      ['name', 'partner_id', 'order_line', 'warehouse_id', 'team_id', 'client_order_ref']
     );
 
     if (!order) {
@@ -347,6 +347,15 @@ class BolSalesInvoicer {
     // Copy team_id from sale order to invoice
     if (order.team_id) {
       invoiceData.team_id = order.team_id[0];
+    }
+
+    // Add BOL order number to reference fields
+    // client_order_ref contains the original BOL order number (e.g., "1356977420")
+    if (order.client_order_ref) {
+      const bolOrderNumber = order.client_order_ref;
+      invoiceData.payment_reference = bolOrderNumber;  // Payment Reference
+      invoiceData.ref = bolOrderNumber;                // Customer Reference / End User References
+      console.log(`[BolSalesInvoicer] Setting reference fields to BOL order: ${bolOrderNumber}`);
     }
 
     // Add fiscal position if determined
