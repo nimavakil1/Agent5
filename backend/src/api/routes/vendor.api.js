@@ -223,8 +223,8 @@ router.get('/orders/consolidate', async (req, res) => {
     // and orders where top-level shipmentStatus is 'fully_shipped'
     const shipmentStatusFilter = req.query.shipmentStatus || 'not_shipped';
     const query = {
-      // Exclude orders already fully shipped
-      shipmentStatus: { $ne: 'fully_shipped' },
+      // Exclude orders already fully shipped or cancelled
+      shipmentStatus: { $nin: ['fully_shipped', 'cancelled'] },
       // Exclude orders already delivered in Odoo
       'odoo.deliveryStatus': { $ne: 'full' },
       // Match shipment status filter
