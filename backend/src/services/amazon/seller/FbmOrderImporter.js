@@ -502,7 +502,20 @@ class FbmOrderImporter {
           };
 
           // Upsert to unified_orders
+          // Debug: log key fields being upserted for existing orders
+          if (existing) {
+            console.log(`[FbmOrderImporter] Updating existing order ${orderId}: name="${unifiedOrder.shippingAddress?.name}", street="${unifiedOrder.shippingAddress?.street}", tsvFile="${unifiedOrder.tsvImport?.fileName}"`);
+          }
+
           const upsertResult = await this.unifiedService.upsert(unifiedOrderId, unifiedOrder);
+
+          // Debug: verify the update actually worked
+          if (existing && !upsertResult.upserted) {
+            const afterUpdate = await this.unifiedService.getByAmazonOrderId(orderId);
+            if (!afterUpdate?.shippingAddress?.name || !afterUpdate?.tsvImport?.fileName) {
+              console.error(`[FbmOrderImporter] WARNING: Update may have failed for ${orderId}! After update: name="${afterUpdate?.shippingAddress?.name}", tsvFile="${afterUpdate?.tsvImport?.fileName}"`);
+            }
+          }
 
           if (upsertResult.upserted) {
             results.imported++;

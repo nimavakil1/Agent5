@@ -237,6 +237,12 @@ class UnifiedOrderService {
     // to avoid MongoDB $set/$setOnInsert conflict
     const { createdAt, updatedAt, ...dataWithoutTimestamps } = orderData;
 
+    // Debug: log key fields being set
+    const amazonOrderId = orderData.sourceIds?.amazonOrderId;
+    if (amazonOrderId) {
+      console.log(`[UnifiedOrderService] Upsert ${amazonOrderId}: shippingName="${dataWithoutTimestamps.shippingAddress?.name}", tsvFile="${dataWithoutTimestamps.tsvImport?.fileName}"`);
+    }
+
     const update = {
       $set: {
         ...dataWithoutTimestamps,
@@ -253,6 +259,11 @@ class UnifiedOrderService {
       update,
       { upsert: true }
     );
+
+    // Debug: log result
+    if (amazonOrderId && result.modifiedCount === 0 && result.upsertedCount === 0) {
+      console.warn(`[UnifiedOrderService] Upsert ${amazonOrderId}: NO CHANGES (matched=${result.matchedCount})`);
+    }
 
     return {
       unifiedOrderId,
