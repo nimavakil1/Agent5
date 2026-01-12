@@ -737,6 +737,17 @@ class VendorOrderCreator {
         }
       }
 
+      // Step 5: Handle delivery pickings - update quantities directly instead of letting Odoo create returns
+      if (result.linesUpdated > 0) {
+        try {
+          await this.syncDeliveryPickingQuantities(odooOrderId, po.items || [], existingLineMap);
+          console.log(`[VendorOrderCreator] Synced delivery picking quantities for ${odooOrderName}`);
+        } catch (pickingError) {
+          result.warnings.push(`Could not sync delivery picking: ${pickingError.message}`);
+          console.error(`[VendorOrderCreator] Error syncing delivery picking for ${odooOrderName}:`, pickingError);
+        }
+      }
+
       result.success = true;
       result.updated = result.linesUpdated > 0;
 
@@ -747,6 +758,114 @@ class VendorOrderCreator {
       result.errors.push(error.message);
       console.error(`[VendorOrderCreator] Error updating order for PO ${poNumber}:`, error);
       return result;
+    }
+  }
+
+  /**
+   * Sync delivery picking quantities when SO line quantities change
+   * This prevents Odoo from creating return pickings when quantities are reduced
+   *
+   * @param {number} odooOrderId - Odoo sale.order ID
+   * @param {Array} items - PO items with acknowledgeQty
+   * @param {Object} existingLineMap - Map of product_id -> SO line
+   */
+  async syncDeliveryPickingQuantities(odooOrderId, items, existingLineMap) {
+    // Get the sale order with picking IDs
+    const saleOrder = await this.odoo.searchRead('sale.order',
+      [['id', '=', odooOrderId]],
+      ['picking_ids']
+    );
+
+    if (!saleOrder.length || !saleOrder[0].picking_ids?.length) {
+      return; // No pickings to update
+    }
+
+    const pickingIds = saleOrder[0].picking_ids;
+
+    // Get all pickings for this order
+    const pickings = await this.odoo.searchRead('stock.picking',
+      [['id', 'in', pickingIds]],
+      ['id', 'name', 'state', 'picking_type_id', 'move_ids_without_package']
+    );
+
+    // Separate delivery pickings from return pickings
+    const deliveryPickings = [];
+    const returnPickings = [];
+
+    for (const picking of pickings) {
+      const typeName = picking.picking_type_id?.[1] || '';
+      if (typeName.toLowerCase().includes('return')) {
+        returnPickings.push(picking);
+      } else if (typeName.toLowerCase().includes('delivery') || typeName.toLowerCase().includes('out')) {
+        deliveryPickings.push(picking);
+      }
+    }
+
+    // Cancel any return pickings that were auto-created (only if in draft/waiting/assigned state)
+    for (const returnPicking of returnPickings) {
+      if (['draft', 'waiting', 'confirmed', 'assigned'].includes(returnPicking.state)) {
+        try {
+          await this.odoo.execute('stock.picking', 'action_cancel', [[returnPicking.id]]);
+          console.log(`[VendorOrderCreator] Cancelled auto-created return picking ${returnPicking.name}`);
+        } catch (cancelError) {
+          console.warn(`[VendorOrderCreator] Could not cancel return ${returnPicking.name}: ${cancelError.message}`);
+        }
+      }
+    }
+
+    // Update delivery picking move quantities
+    for (const deliveryPicking of deliveryPickings) {
+      if (!['draft', 'waiting', 'confirmed', 'assigned'].includes(deliveryPicking.state)) {
+        continue; // Don't modify done/cancelled pickings
+      }
+
+      const moveIds = deliveryPicking.move_ids_without_package || [];
+      if (!moveIds.length) continue;
+
+      // Get moves for this picking
+      const moves = await this.odoo.searchRead('stock.move',
+        [['id', 'in', moveIds]],
+        ['id', 'product_id', 'product_uom_qty', 'state']
+      );
+
+      for (const move of moves) {
+        if (!['draft', 'waiting', 'confirmed', 'assigned'].includes(move.state)) {
+          continue; // Don't modify done/cancelled moves
+        }
+
+        const productId = move.product_id?.[0];
+        if (!productId) continue;
+
+        // Find the corresponding item to get the new quantity
+        const soLine = existingLineMap[productId];
+        if (!soLine) continue;
+
+        // Find the item with this product
+        let newQty = null;
+        for (const item of items) {
+          if (item.odooProductId === productId) {
+            newQty = item.acknowledgeQty ?? (item.quantity || item.orderedQuantity?.amount || 0);
+            break;
+          }
+        }
+
+        if (newQty === null) continue;
+
+        // Update move quantity if different
+        if (move.product_uom_qty !== newQty) {
+          await this.odoo.write('stock.move', [move.id], { product_uom_qty: newQty });
+          console.log(`[VendorOrderCreator] Updated move for product ${productId}: ${move.product_uom_qty} -> ${newQty}`);
+
+          // Re-check availability if picking is in assigned state
+          if (deliveryPicking.state === 'assigned') {
+            try {
+              await this.odoo.execute('stock.picking', 'action_assign', [[deliveryPicking.id]]);
+            } catch (assignError) {
+              // Ignore - picking might already be fully assigned
+            }
+          }
+        }
+      }
     }
   }
 
