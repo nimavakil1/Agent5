@@ -182,34 +182,61 @@ class GLSClient {
     const today = shippingDate || new Date().toISOString().split('T')[0];
 
     // Build name fields for GLS (max 39 chars each for Name1, Name2, Name3)
-    // If company exists: combine "Company Name" in Name1, overflow to Name2
-    // If no company: just use name, overflow to Name2 if needed
+    // GLS expects: Name1 = Company name, Name2 = Contact person name
+    // If no company: Name1 = Contact name (split if > 39 chars)
     const buildNameFields = (address) => {
       const GLS_NAME_LIMIT = 39;
-      let fullName = '';
+      let name1 = '';
+      let name2 = '';
 
       if (address.company && address.company.trim()) {
-        // Company exists: combine "Company + Name"
-        fullName = address.company.trim();
+        // Company exists: Name1 = Company, Name2 = Contact person
+        name1 = address.company.trim().substring(0, GLS_NAME_LIMIT);
         if (address.name && address.name.trim()) {
-          fullName += ' ' + address.name.trim();
+          name2 = address.name.trim().substring(0, GLS_NAME_LIMIT);
         }
       } else {
-        // No company: just use name
-        fullName = (address.name || '').trim();
+        // No company: just use name, overflow to Name2 if needed
+        const fullName = (address.name || '').trim();
+        name1 = fullName.substring(0, GLS_NAME_LIMIT);
+        name2 = fullName.length > GLS_NAME_LIMIT
+          ? fullName.substring(GLS_NAME_LIMIT, GLS_NAME_LIMIT * 2)
+          : '';
       }
-
-      // Split into Name1 and Name2 (39 chars each)
-      const name1 = fullName.substring(0, GLS_NAME_LIMIT);
-      const name2 = fullName.length > GLS_NAME_LIMIT
-        ? fullName.substring(GLS_NAME_LIMIT, GLS_NAME_LIMIT * 2)
-        : '';
 
       return { name1, name2 };
     };
 
+    // Split street and street number properly
+    // Handles cases where street already contains the number (e.g., "Ganglgutstraße 13")
+    const buildStreetFields = (address) => {
+      let street = (address.street || '').trim();
+      let streetNumber = (address.streetNumber || '').trim();
+
+      // If streetNumber is already provided separately, use as-is
+      if (streetNumber) {
+        // Check if street already ends with the same number - avoid duplication
+        if (street.endsWith(streetNumber)) {
+          street = street.slice(0, -streetNumber.length).trim();
+        }
+        return { street, streetNumber };
+      }
+
+      // If no streetNumber provided, try to extract from street
+      // Match patterns like "Street Name 123" or "Street Name 123a" or "Street Name 12-14"
+      const match = street.match(/^(.+?)\s+(\d+[\w\-\/]*)\s*$/);
+      if (match) {
+        street = match[1].trim();
+        streetNumber = match[2].trim();
+      }
+
+      return { street, streetNumber };
+    };
+
     const senderNames = buildNameFields(sender);
     const receiverNames = buildNameFields(receiver);
+    const senderStreet = buildStreetFields(sender);
+    const receiverStreet = buildStreetFields(receiver);
     const senderName1 = senderNames.name1;
     const senderName2 = senderNames.name2;
     const receiverName1 = receiverNames.name1;
@@ -236,8 +263,8 @@ class GLSClient {
         <Identifier></Identifier>
         <Product>${product}</Product>
         <Consignee>
-          <ConsigneeID xmlns="http://fpcs.gls-group.eu/v1/Common">${receiver.id || ''}</ConsigneeID>
-          <CostCenter xmlns="http://fpcs.gls-group.eu/v1/Common">${receiver.id || ''}</CostCenter>
+          <ConsigneeID xmlns="http://fpcs.gls-group.eu/v1/Common"></ConsigneeID>
+          <CostCenter xmlns="http://fpcs.gls-group.eu/v1/Common"></CostCenter>
           <Address xmlns="http://fpcs.gls-group.eu/v1/Common">
             <Name1>${this.escapeXml(receiverName1)}</Name1>
             <Name2>${this.escapeXml(receiverName2)}</Name2>
@@ -246,10 +273,10 @@ class GLSClient {
             <Province>${receiver.province || ''}</Province>
             <ZIPCode>${receiver.zipCode || ''}</ZIPCode>
             <City>${this.escapeXml(receiver.city || '')}</City>
-            <Street>${this.escapeXml(receiver.street || '')}</Street>
-            <StreetNumber>${this.escapeXml(receiver.streetNumber || '')}</StreetNumber>
+            <Street>${this.escapeXml(receiverStreet.street)}</Street>
+            <StreetNumber>${this.escapeXml(receiverStreet.streetNumber)}</StreetNumber>
             <eMail>${receiver.email || ''}</eMail>
-            <ContactPerson>${this.escapeXml(receiverName1)}</ContactPerson>
+            <ContactPerson>${this.escapeXml(receiver.name || receiverName1)}</ContactPerson>
             <FixedLinePhonenumber></FixedLinePhonenumber>
             <MobilePhoneNumber>${receiver.phone || ''}</MobilePhoneNumber>
           </Address>
@@ -264,10 +291,10 @@ class GLSClient {
             <Province>${sender.province || ''}</Province>
             <ZIPCode>${sender.zipCode || ''}</ZIPCode>
             <City>${this.escapeXml(sender.city || '')}</City>
-            <Street>${this.escapeXml((sender.street || '') + ' ' + (sender.streetNumber || ''))}</Street>
-            <StreetNumber></StreetNumber>
+            <Street>${this.escapeXml(senderStreet.street)}</Street>
+            <StreetNumber>${this.escapeXml(senderStreet.streetNumber)}</StreetNumber>
             <eMail>${sender.email || ''}</eMail>
-            <ContactPerson>${this.escapeXml(senderName1)}</ContactPerson>
+            <ContactPerson>${this.escapeXml(sender.name || senderName1)}</ContactPerson>
             <FixedLinePhonenumber></FixedLinePhonenumber>
             <MobilePhoneNumber>${sender.phone || ''}</MobilePhoneNumber>
           </AlternativeShipperAddress>
