@@ -4,7 +4,7 @@
  * Updates existing BOL invoices to include the correct BOL order number in:
  * - payment_reference (Payment Reference)
  * - ref (Customer Reference)
- * - x_end_user_reference (End User References - custom field)
+ * - x_end_user_references (End User References - custom field)
  *
  * The BOL order number is the order name WITHOUT the FBB/FBR/BOL prefix.
  * Example: Order name "FBBA000DD78MR" → BOL order number "A000DD78MR"
@@ -27,7 +27,7 @@ async function main() {
       ['invoice_origin', 'like', 'FBR%'],
       ['invoice_origin', 'like', 'BOL%']
     ],
-    ['id', 'name', 'invoice_origin', 'payment_reference', 'ref', 'x_end_user_reference'],
+    ['id', 'name', 'invoice_origin', 'payment_reference', 'ref', 'x_end_user_references'],
     { limit: 10000, order: 'id desc' }
   );
 
@@ -58,7 +58,7 @@ async function main() {
       // Check if already correct
       if (invoice.payment_reference === bolOrderNumber &&
           invoice.ref === bolOrderNumber &&
-          invoice.x_end_user_reference === bolOrderNumber) {
+          invoice.x_end_user_references === bolOrderNumber) {
         skipped++;
         continue;
       }
@@ -67,7 +67,7 @@ async function main() {
       await odoo.execute('account.move', 'write', [[invoice.id], {
         payment_reference: bolOrderNumber,
         ref: bolOrderNumber,
-        x_end_user_reference: bolOrderNumber
+        x_end_user_references: bolOrderNumber
       }]);
 
       console.log(`  + ${invoice.name} <- ${bolOrderNumber} (was: ${invoice.payment_reference || 'empty'})`);

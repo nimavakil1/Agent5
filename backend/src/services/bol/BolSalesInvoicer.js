@@ -357,7 +357,7 @@ class BolSalesInvoicer {
       const bolOrderNumber = order.name.replace(/^(FBB|FBR|BOL)/, '');
       invoiceData.payment_reference = bolOrderNumber;       // Payment Reference
       invoiceData.ref = bolOrderNumber;                     // Customer Reference
-      invoiceData.x_end_user_reference = bolOrderNumber;    // End User References (custom field)
+      invoiceData.x_end_user_references = bolOrderNumber;   // End User References (custom field)
       console.log(`[BolSalesInvoicer] Setting reference fields to BOL order: ${bolOrderNumber} (from ${order.name})`);
     }
 
