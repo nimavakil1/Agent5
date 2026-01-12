@@ -223,14 +223,12 @@ router.get('/orders/consolidate', async (req, res) => {
     // IMPORTANT: Exclude orders already shipped in Odoo (deliveryStatus = 'full')
     const shipmentStatusFilter = req.query.shipmentStatus || 'not_shipped';
     const query = {
-      // Only vendor orders
-      channel: 'amazon_vendor',
-      // Exclude orders already fully shipped or cancelled
-      'amazonVendor.shipmentStatus': { $nin: ['fully_shipped', 'cancelled'] },
+      // Only vendor orders (note: hyphen not underscore)
+      channel: 'amazon-vendor',
+      // Match shipment status filter and exclude shipped/cancelled
+      'amazonVendor.shipmentStatus': shipmentStatusFilter,
       // Exclude orders already delivered in Odoo
-      'odoo.deliveryStatus': { $ne: 'full' },
-      // Match shipment status filter
-      'amazonVendor.shipmentStatus': shipmentStatusFilter
+      'odoo.deliveryStatus': { $ne: 'full' }
     };
 
     // State filter - default to both New and Acknowledged (using unified schema)
