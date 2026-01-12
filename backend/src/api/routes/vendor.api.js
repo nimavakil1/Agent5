@@ -432,7 +432,8 @@ router.post('/orders/consolidation/restore', async (req, res) => {
 router.get('/orders/consolidate/:groupId', async (req, res) => {
   try {
     const db = getDb();
-    const collection = db.collection('vendor_purchase_orders');
+    // Use unified_orders collection (same as VendorPOImporter)
+    const collection = db.collection('unified_orders');
 
     const groupId = req.params.groupId;
     let query;
@@ -449,19 +450,11 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       dateStr = lastUnderscoreIndex > 0 ? baseGroupId.substring(lastUnderscoreIndex + 1) : 'nodate';
 
       query = {
-        purchaseOrderNumber: poNumber,
+        channel: 'amazon-vendor',
+        'sourceIds.amazonVendorPONumber': poNumber,
         consolidationOverride: true,
-        $or: [
-          { 'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] } },
-          { purchaseOrderState: { $in: ['New', 'Acknowledged'] }, 'amazonVendor.purchaseOrderState': { $exists: false } }
-        ],
-        // Support both unified and legacy schema for shipment status
-        $and: [
-          { $or: [
-            { 'amazonVendor.shipmentStatus': 'not_shipped' },
-            { shipmentStatus: 'not_shipped', 'amazonVendor.shipmentStatus': { $exists: false } }
-          ]}
-        ]
+        'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
+        'amazonVendor.shipmentStatus': 'not_shipped'
       };
 
       console.log('[VendorAPI] Consolidate detail (SEPARATE) - groupId:', groupId, 'poNumber:', poNumber);
@@ -475,23 +468,13 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid group ID' });
       }
 
-      // Build query - include both New and Acknowledged states, exclude overridden orders
-      // Support both unified (amazonVendor.*) and legacy schema
+      // Build query using unified schema field paths
       query = {
-        'shipToParty.partyId': fcPartyId,
+        channel: 'amazon-vendor',
+        'amazonVendor.shipToParty.partyId': fcPartyId,
         consolidationOverride: { $ne: true }, // Exclude orders that were removed from consolidation
-        // PO state: check both unified and legacy fields
-        $or: [
-          { 'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] } },
-          { purchaseOrderState: { $in: ['New', 'Acknowledged'] }, 'amazonVendor.purchaseOrderState': { $exists: false } }
-        ],
-        // Shipment status: check both unified and legacy fields
-        $and: [
-          { $or: [
-            { 'amazonVendor.shipmentStatus': 'not_shipped' },
-            { shipmentStatus: 'not_shipped', 'amazonVendor.shipmentStatus': { $exists: false } }
-          ]}
-        ]
+        'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
+        'amazonVendor.shipmentStatus': 'not_shipped'
       };
 
       console.log('[VendorAPI] Consolidate detail - groupId:', groupId, 'fcPartyId:', fcPartyId, 'dateStr:', dateStr);
@@ -511,13 +494,13 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
       const endOfDay = new Date(dateStr + 'T00:00:00.000Z');
       endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
-      query['deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
+      query['amazonVendor.deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
     }
 
     console.log('[VendorAPI] Consolidate detail query:', JSON.stringify(query));
-    console.log('[VendorAPI] Date range:', dateStr, '- startOfDay:', query['deliveryWindow.endDate']?.$gte, 'endOfDay:', query['deliveryWindow.endDate']?.$lt);
+    console.log('[VendorAPI] Date range:', dateStr, '- startOfDay:', query['amazonVendor.deliveryWindow.endDate']?.$gte, 'endOfDay:', query['amazonVendor.deliveryWindow.endDate']?.$lt);
     const orders = await collection.find(query)
-      .sort({ purchaseOrderNumber: 1 })
+      .sort({ 'sourceIds.amazonVendorPONumber': 1 })
       .toArray();
 
     if (orders.length === 0) {
@@ -572,10 +555,10 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
           consolidatedItems.push(itemMap[key]);
         }
 
-        const qty = item.orderedQuantity?.amount || 0;
+        const qty = item.orderedQuantity?.amount || item.quantity || 0;
         itemMap[key].totalQty += qty;
         itemMap[key].orders.push({
-          purchaseOrderNumber: order.purchaseOrderNumber,
+          purchaseOrderNumber: order.sourceIds?.amazonVendorPONumber || order.purchaseOrderNumber,
           qty,
           itemSequenceNumber: item.itemSequenceNumber
         });
@@ -591,14 +574,14 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       success: true,
       groupId: req.params.groupId,
       fcPartyId,
-      fcName: getFCName(fcPartyId, firstOrder.shipToParty?.address),
-      fcAddress: firstOrder.shipToParty?.address,
-      deliveryWindow: firstOrder.deliveryWindow,
+      fcName: getFCName(fcPartyId, firstOrder.amazonVendor?.shipToParty?.address),
+      fcAddress: firstOrder.amazonVendor?.shipToParty?.address,
+      deliveryWindow: firstOrder.amazonVendor?.deliveryWindow,
       orderCount: orders.length,
       orders: orders.map(o => ({
-        purchaseOrderNumber: o.purchaseOrderNumber,
-        purchaseOrderDate: o.purchaseOrderDate,
-        marketplaceId: o.marketplaceId,
+        purchaseOrderNumber: o.sourceIds?.amazonVendorPONumber || o.purchaseOrderNumber,
+        purchaseOrderDate: o.orderDate || o.purchaseOrderDate,
+        marketplaceId: o.marketplace?.code || o.marketplaceId,
         itemCount: o.items?.length || 0,
         totals: o.totals,
         odoo: o.odoo
