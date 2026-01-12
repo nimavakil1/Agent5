@@ -214,35 +214,34 @@ router.get('/orders', async (req, res) => {
 router.get('/orders/consolidate', async (req, res) => {
   try {
     const db = getDb();
-    const collection = db.collection('vendor_purchase_orders');
+    // IMPORTANT: Use unified_orders collection (same as VendorPOImporter)
+    const collection = db.collection('unified_orders');
 
     // Build filter - default to orders ready to ship
     // Include both New and Acknowledged states for consolidation
     // Filter for not_shipped status - exclude fully_shipped and cancelled
     // IMPORTANT: Exclude orders already shipped in Odoo (deliveryStatus = 'full')
-    // and orders where top-level shipmentStatus is 'fully_shipped'
     const shipmentStatusFilter = req.query.shipmentStatus || 'not_shipped';
     const query = {
+      // Only vendor orders
+      channel: 'amazon_vendor',
       // Exclude orders already fully shipped or cancelled
-      shipmentStatus: { $nin: ['fully_shipped', 'cancelled'] },
+      'amazonVendor.shipmentStatus': { $nin: ['fully_shipped', 'cancelled'] },
       // Exclude orders already delivered in Odoo
       'odoo.deliveryStatus': { $ne: 'full' },
       // Match shipment status filter
-      $or: [
-        { 'amazonVendor.shipmentStatus': shipmentStatusFilter },
-        { shipmentStatus: shipmentStatusFilter, 'amazonVendor.shipmentStatus': { $exists: false } }
-      ]
+      'amazonVendor.shipmentStatus': shipmentStatusFilter
     };
 
-    // State filter - default to both New and Acknowledged
+    // State filter - default to both New and Acknowledged (using unified schema)
     if (req.query.state) {
-      query.purchaseOrderState = req.query.state;
+      query['amazonVendor.purchaseOrderState'] = req.query.state;
     } else {
-      query.purchaseOrderState = { $in: ['New', 'Acknowledged'] };
+      query['amazonVendor.purchaseOrderState'] = { $in: ['New', 'Acknowledged'] };
     }
 
     if (req.query.marketplace) {
-      query.marketplaceId = req.query.marketplace.toUpperCase();
+      query['marketplace.code'] = req.query.marketplace.toUpperCase();
     }
 
     // CRITICAL: Isolate test data from production data
@@ -255,7 +254,7 @@ router.get('/orders/consolidate', async (req, res) => {
     // Get orders
     console.log('[VendorAPI] Consolidate query:', JSON.stringify(query));
     const orders = await collection.find(query)
-      .sort({ 'deliveryWindow.endDate': 1, 'shipToParty.partyId': 1 })
+      .sort({ 'amazonVendor.deliveryWindow.endDate': 1, 'amazonVendor.shipToParty.partyId': 1 })
       .toArray();
     console.log('[VendorAPI] Found', orders.length, 'orders for consolidation');
 
@@ -263,21 +262,23 @@ router.get('/orders/consolidate', async (req, res) => {
     const groups = {};
 
     for (const order of orders) {
-      const partyId = order.shipToParty?.partyId || 'UNKNOWN';
-      const deliveryEnd = order.deliveryWindow?.endDate;
+      // Use unified schema field paths
+      const poNumber = order.sourceIds?.amazonVendorPONumber || order.purchaseOrderNumber;
+      const partyId = order.amazonVendor?.shipToParty?.partyId || 'UNKNOWN';
+      const deliveryEnd = order.amazonVendor?.deliveryWindow?.endDate;
       // If order has a consolidationOverride, it gets its own separate group
       const groupId = order.consolidationOverride
-        ? `${createConsolidationGroupId(partyId, deliveryEnd)}_SEP_${order.purchaseOrderNumber}`
+        ? `${createConsolidationGroupId(partyId, deliveryEnd)}_SEP_${poNumber}`
         : createConsolidationGroupId(partyId, deliveryEnd);
 
       if (!groups[groupId]) {
         groups[groupId] = {
           groupId,
           fcPartyId: partyId,
-          fcName: getFCName(partyId, order.shipToParty?.address),
-          fcAddress: order.shipToParty?.address || null,
-          deliveryWindow: order.deliveryWindow,
-          marketplace: order.marketplaceId,
+          fcName: getFCName(partyId, order.amazonVendor?.shipToParty?.address),
+          fcAddress: order.amazonVendor?.shipToParty?.address || null,
+          deliveryWindow: order.amazonVendor?.deliveryWindow,
+          marketplace: order.marketplace?.code,
           orders: [],
           totalItems: 0,
           totalUnits: 0,
@@ -288,8 +289,8 @@ router.get('/orders/consolidate', async (req, res) => {
 
       const group = groups[groupId];
       group.orders.push({
-        purchaseOrderNumber: order.purchaseOrderNumber,
-        purchaseOrderDate: order.purchaseOrderDate,
+        purchaseOrderNumber: poNumber,
+        purchaseOrderDate: order.orderDate,
         itemCount: order.items?.length || 0,
         totals: order.totals,
         odoo: order.odoo
