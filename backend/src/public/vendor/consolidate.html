@@ -378,8 +378,8 @@
       `).join('');
 
       const itemsHtml = data.consolidatedItems.map((item, idx) => {
-        // Only show SKU if it's different from EAN
-        const sku = item.odooSku && item.odooSku !== item.vendorProductIdentifier ? item.odooSku : '-';
+        // Show SKU if available (don't hide even if same as vendorProductIdentifier)
+        const sku = item.odooSku || '-';
         // Use odooBarcode (real EAN from Odoo) if available, otherwise vendorProductIdentifier
         const ean = item.odooBarcode || item.vendorProductIdentifier || '-';
         const description = item.odooProductName || '-';
