@@ -788,10 +788,15 @@ class SellerOrderCreator {
         // Use customerName as delivery contact name if address.name is missing
         // Clean the name to remove duplicates like "John Smith, SMITH John"
         const deliveryName = cleanDuplicateName(address.name) || customerName;
+
+        // Get company name from buyerCompanyName (Amazon B2B field)
+        const deliveryCompanyName = buyerCompanyName || null;
+
         shippingAddressId = await this.odoo.create('res.partner', {
           parent_id: customerId,
           type: 'delivery',
           name: deliveryName,
+          company_name: deliveryCompanyName,  // Company name for GLS labels
           street: address.addressLine1 || null,  // May be null if PII not available
           street2: address.addressLine2 || null,
           city: address.city || null,
@@ -801,7 +806,7 @@ class SellerOrderCreator {
           email: buyerEmail || null,  // Email for carrier notifications (GLS, etc.)
           comment: `Shipping address from Amazon order ${amazonOrderId}${!address.name ? ' (PII limited by Amazon)' : ''}`
         });
-        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (ID: ${shippingAddressId})`);
+        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (company: ${deliveryCompanyName || 'none'}) (ID: ${shippingAddressId})`);
       }
 
       this.partnerCache[addressCacheKey] = shippingAddressId;
@@ -1369,11 +1374,16 @@ class SellerOrderCreator {
       if (existingAddress.length > 0) {
         shippingAddressId = existingAddress[0].id;
       } else {
+        // Determine company_name for the delivery address
+        // Use AI-cleaned company name or buyerCompanyName from Amazon
+        const deliveryCompanyName = cleanedAddress?.company || order.buyerCompanyName || null;
+
         // Create new shipping address
         shippingAddressId = await this.odoo.create('res.partner', {
           parent_id: customerId,
           type: 'delivery',
           name: deliveryName,
+          company_name: deliveryCompanyName,  // Company name for GLS labels
           street: shippingStreet || null,
           street2: shippingStreet2 || null,
           city: shippingCity || null,
@@ -1383,7 +1393,7 @@ class SellerOrderCreator {
           email: buyerEmail || null,
           comment: `Shipping address from Amazon FBM order ${amazonOrderId}`
         });
-        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (ID: ${shippingAddressId})`);
+        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (company: ${deliveryCompanyName || 'none'}) (ID: ${shippingAddressId})`);
       }
 
       this.partnerCache[addressCacheKey] = shippingAddressId;
@@ -1418,11 +1428,15 @@ class SellerOrderCreator {
           if (existingBilling.length > 0) {
             invoiceAddressId = existingBilling[0].id;
           } else {
+            // Get company name for billing address
+            const billingCompanyName = cleanedAddress?.company || order.buyerCompanyName || null;
+
             // Create new billing address
             invoiceAddressId = await this.odoo.create('res.partner', {
               parent_id: customerId,
               type: 'invoice',
               name: billingAddress.name,
+              company_name: billingCompanyName,  // Company name for invoices
               street: billingAddress.street || null,
               street2: billingAddress.street2 || null,
               city: billingAddress.city || null,
@@ -1431,7 +1445,7 @@ class SellerOrderCreator {
               phone: billingAddress.phone || null,
               comment: `Billing address from Amazon FBM order ${amazonOrderId}`
             });
-            console.log(`[SellerOrderCreator] Created billing address: ${billingAddress.name} (ID: ${invoiceAddressId})`);
+            console.log(`[SellerOrderCreator] Created billing address: ${billingAddress.name} (company: ${billingCompanyName || 'none'}) (ID: ${invoiceAddressId})`);
           }
 
           this.partnerCache[billingCacheKey] = invoiceAddressId;
