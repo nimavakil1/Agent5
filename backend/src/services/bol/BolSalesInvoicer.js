@@ -350,12 +350,15 @@ class BolSalesInvoicer {
     }
 
     // Add BOL order number to reference fields
-    // client_order_ref contains the original BOL order number (e.g., "1356977420")
-    if (order.client_order_ref) {
-      const bolOrderNumber = order.client_order_ref;
-      invoiceData.payment_reference = bolOrderNumber;  // Payment Reference
-      invoiceData.ref = bolOrderNumber;                // Customer Reference / End User References
-      console.log(`[BolSalesInvoicer] Setting reference fields to BOL order: ${bolOrderNumber}`);
+    // The order name has FBB/FBR/BOL prefix (e.g., "FBBA000DD78MR")
+    // The actual BOL order number is without the prefix (e.g., "A000DD78MR")
+    if (order.name) {
+      // Strip FBB, FBR, or BOL prefix to get actual BOL order number
+      const bolOrderNumber = order.name.replace(/^(FBB|FBR|BOL)/, '');
+      invoiceData.payment_reference = bolOrderNumber;       // Payment Reference
+      invoiceData.ref = bolOrderNumber;                     // Customer Reference
+      invoiceData.x_end_user_reference = bolOrderNumber;    // End User References (custom field)
+      console.log(`[BolSalesInvoicer] Setting reference fields to BOL order: ${bolOrderNumber} (from ${order.name})`);
     }
 
     // Add fiscal position if determined
