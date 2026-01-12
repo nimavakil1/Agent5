@@ -297,8 +297,12 @@ router.get('/orders/consolidate', async (req, res) => {
       });
 
       group.totalItems += order.items?.length || 0;
-      group.totalUnits += order.totals?.totalUnits || 0;
-      group.totalAmount += order.totals?.totalAmount || 0;
+      // Calculate units from items (sum of quantities)
+      const orderUnits = (order.items || []).reduce((sum, item) =>
+        sum + (item.orderedQuantity?.amount || item.quantity || 0), 0);
+      group.totalUnits += orderUnits;
+      // Use totals.total or totals.subtotal for amount
+      group.totalAmount += order.totals?.total || order.totals?.subtotal || order.totals?.totalAmount || 0;
       if (order.totals?.currency) group.currency = order.totals.currency;
     }
 
