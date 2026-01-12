@@ -20,6 +20,7 @@ class FbmOrderImporter {
   constructor() {
     this.unifiedService = null;
     this.addressCleaner = null;
+    this.validSkus = null; // Cache of valid product SKUs from database
   }
 
   async init() {
@@ -31,6 +32,28 @@ class FbmOrderImporter {
 
     // Initialize AI address cleaner
     this.addressCleaner = getAddressCleanerAI();
+
+    // Load valid SKUs from products collection
+    await this.loadValidSkus();
+  }
+
+  /**
+   * Load valid product SKUs from the products collection
+   * Used to distinguish real products from promotion codes
+   */
+  async loadValidSkus() {
+    const db = getDb();
+    const products = await db.collection('products').find({}, { projection: { sku: 1 } }).toArray();
+    this.validSkus = new Set(products.map(p => p.sku).filter(Boolean));
+    console.log(`[FbmOrderImporter] Loaded ${this.validSkus.size} valid SKUs from products collection`);
+  }
+
+  /**
+   * Check if a SKU exists in the products database
+   */
+  isValidProductSku(sku) {
+    if (!sku || !this.validSkus) return false;
+    return this.validSkus.has(sku);
   }
 
   /**
@@ -210,18 +233,28 @@ class FbmOrderImporter {
 
   /**
    * Check if a SKU is a promotion/discount item
+   *
+   * IMPORTANT: First checks if SKU exists in product database - if it does, it's NOT a promotion.
+   * Only applies promotion heuristics if the SKU is NOT found in the database.
+   *
    * Amazon TSV files include promotion items as separate line items with:
    * - SKU that looks like a promotion code (alphanumeric, no dashes, 5-10 chars like "595771C")
    * - Price of 0 or negative (for discounts)
    * - Quantity of 0
    *
-   * @param {string} sku - The SKU to check
+   * @param {string} sku - The SKU to check (should be resolved SKU)
    * @param {number} price - The item price
    * @param {number} quantity - The quantity
    * @returns {boolean} True if this is a promotion item
    */
   isPromotionSku(sku, price, quantity) {
     if (!sku) return true; // Skip empty SKUs
+
+    // FIRST: Check if SKU exists in products database
+    // If it's a valid product, it's NOT a promotion regardless of price/pattern
+    if (this.isValidProductSku(sku)) {
+      return false;
+    }
 
     // Skip items with zero or negative price and zero quantity
     if (price <= 0 && quantity === 0) {

@@ -1574,6 +1574,24 @@ class SellerOrderCreator {
         return { success: false, error: 'Order has no items' };
       }
 
+      // Validate order has complete address data (from TSV import)
+      // API-imported orders don't have PII (name/street) due to Amazon restrictions
+      const address = order.shippingAddress;
+      if (!address || !address.name || !address.street) {
+        const missingFields = [];
+        if (!address) missingFields.push('shippingAddress');
+        else {
+          if (!address.name) missingFields.push('name');
+          if (!address.street) missingFields.push('street');
+        }
+        console.warn(`[SellerOrderCreator] Order ${amazonOrderId} missing address data: ${missingFields.join(', ')} - requires TSV import`);
+        return {
+          success: false,
+          error: `Missing address data (${missingFields.join(', ')}). This order was likely imported via API which doesn't provide PII. Please import via TSV file to get complete address data.`,
+          requiresTsvImport: true
+        };
+      }
+
       // Find/create customer with billing address support
       const { customerId, shippingAddressId, invoiceAddressId } = await this.findOrCreateCustomerWithBilling(order);
 
