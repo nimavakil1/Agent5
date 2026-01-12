@@ -146,10 +146,11 @@ class FbmOrderImporter {
 
       // Check if this is a promotion/discount item
       // Promotion items appear in TSV as separate line items with price <= 0 or qty = 0
-      const isPromotionItem = this.isPromotionSku(sku, itemPrice, quantity);
+      // IMPORTANT: Check using RESOLVED SKU, not original - "18011A" resolves to "18011" (real product)
+      const isPromotionItem = this.isPromotionSku(resolved.odooSku || sku, itemPrice, quantity);
       if (isPromotionItem) {
         // Mark as promotion item - will use PROMOTION_DISCOUNT product in Odoo
-        console.log(`[FbmOrderImporter] Detected promotion item: SKU=${sku}, price=${itemPrice}, qty=${quantity}`);
+        console.log(`[FbmOrderImporter] Detected promotion item: SKU=${sku}, resolved=${resolved.odooSku}, price=${itemPrice}, qty=${quantity}`);
         orderGroups[orderId].items.push({
           sku: 'PROMOTION DISCOUNT',
           resolvedSku: 'PROMOTION DISCOUNT',
