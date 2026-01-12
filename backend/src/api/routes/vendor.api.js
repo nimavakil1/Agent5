@@ -213,6 +213,16 @@ router.get('/orders', async (req, res) => {
  */
 router.get('/orders/consolidate', async (req, res) => {
   try {
+    // Sync shipment status from Odoo before loading consolidation data
+    // This ensures we show accurate delivery status (takes ~600-1000ms)
+    try {
+      const importer = await getVendorPOImporter();
+      await importer.syncShipmentStatusFromOdoo({ limit: 100 });
+    } catch (syncError) {
+      console.warn('[VendorAPI] Consolidate sync warning:', syncError.message);
+      // Continue even if sync fails - show potentially stale data
+    }
+
     const db = getDb();
     // IMPORTANT: Use unified_orders collection (same as VendorPOImporter)
     const collection = db.collection('unified_orders');
