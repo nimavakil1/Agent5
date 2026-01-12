@@ -247,6 +247,8 @@ router.get('/orders/consolidate', async (req, res) => {
       query._testData = true; // In test mode, ONLY show test data
     } else {
       query._testData = { $ne: true }; // In production, exclude test data
+      // Also exclude TST orders by PO number pattern (some may have _testData: undefined)
+      query['sourceIds.amazonVendorPONumber'] = { $not: /^TST/ };
     }
 
     // Get orders
@@ -485,6 +487,8 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       query._testData = true; // In test mode, ONLY show test data
     } else {
       query._testData = { $ne: true }; // In production, exclude test data
+      // Also exclude TST orders by PO number pattern (some may have _testData: undefined)
+      query['sourceIds.amazonVendorPONumber'] = { $not: /^TST/ };
     }
 
     // Add date filter if present - use UTC to match database dates
@@ -537,15 +541,20 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
 
         if (!itemMap[key]) {
           // Get weight: first from item, then from products collection, then default to 0
-          const sku = item.odooSku;
+          const sku = item.odooSku || item.sku || item.vendorProductIdentifier;
           const weight = item.weight || (sku && productWeights[sku]) || 0;
+
+          // Fallbacks for SKU and product name when odoo data is not available
+          const displaySku = item.odooSku || item.sku || item.vendorProductIdentifier || '-';
+          const displayName = item.odooProductName || item.name || item.title ||
+            (item.vendorProductIdentifier ? `Product ${item.vendorProductIdentifier}` : '-');
 
           itemMap[key] = {
             vendorProductIdentifier: item.vendorProductIdentifier,
             amazonProductIdentifier: item.amazonProductIdentifier,
             odooProductId: item.odooProductId,
-            odooProductName: item.odooProductName,
-            odooSku: item.odooSku,
+            odooProductName: displayName,
+            odooSku: displaySku,
             odooBarcode: item.odooBarcode, // Real EAN from Odoo
             totalQty: 0,
             weight, // Unit weight from item, products collection, or 0
