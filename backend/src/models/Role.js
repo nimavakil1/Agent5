@@ -12,7 +12,8 @@ const AVAILABLE_MODULES = [
   'accounting',
   'analytics',
   'settings',
-  'fulfillment'
+  'fulfillment',
+  'monitoring'
 ];
 
 const roleSchema = new mongoose.Schema(
