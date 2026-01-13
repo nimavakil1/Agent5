@@ -4632,4 +4632,25 @@ router.get('/it-fba/invoice/:orderId', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/amazon/it-fba/invoice-existing
+ * Create invoices for IT FBA orders that already have Odoo orders but no invoice
+ */
+router.post('/it-fba/invoice-existing', async (req, res) => {
+  try {
+    const limit = parseInt(req.body.limit) || 50;
+
+    const invoicer = getItalyFbaInvoicer();
+    const results = await invoicer.processOrdersNeedingInvoice({ limit });
+
+    res.json({
+      success: true,
+      results
+    });
+  } catch (error) {
+    console.error('[IT-FBA] Invoice existing error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

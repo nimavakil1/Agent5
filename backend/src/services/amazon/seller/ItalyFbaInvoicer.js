@@ -143,6 +143,98 @@ class ItalyFbaInvoicer {
   }
 
   /**
+   * Get IT FBA orders that have Odoo orders but no invoice recorded in MongoDB
+   * @param {Object} options - Query options
+   * @returns {Array} Orders needing invoice creation
+   */
+  async getOrdersNeedingInvoice(options = {}) {
+    await this.init();
+
+    const limit = options.limit || 50;
+
+    const query = {
+      channel: CHANNELS.AMAZON_SELLER,
+      'amazonSeller.fulfillmentChannel': 'AFN',
+      'marketplace.code': 'IT',
+      'sourceIds.odooSaleOrderId': { $ne: null },  // HAS Odoo order
+      'odoo.invoiceId': null,  // But NO invoice recorded
+      'status.unified': { $in: ['shipped', 'confirmed'] }
+    };
+
+    const orders = await this.db.collection('unified_orders')
+      .find(query)
+      .sort({ orderDate: -1 })
+      .limit(limit)
+      .toArray();
+
+    return orders;
+  }
+
+  /**
+   * Process orders that have Odoo orders but need invoices
+   */
+  async processOrdersNeedingInvoice(options = {}) {
+    await this.init();
+
+    const limit = options.limit || 50;
+    const orders = await this.getOrdersNeedingInvoice({ limit });
+
+    const results = {
+      total: orders.length,
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      orders: []
+    };
+
+    for (const order of orders) {
+      const amazonOrderId = order.sourceIds?.amazonOrderId;
+      const odooOrderId = order.sourceIds?.odooSaleOrderId;
+      results.processed++;
+
+      try {
+        // Create invoice for existing Odoo order
+        const invoiceResult = await this.createInvoice(odooOrderId);
+
+        // Update MongoDB with invoice reference
+        if (invoiceResult.success) {
+          await this.db.collection('unified_orders').updateOne(
+            { 'sourceIds.amazonOrderId': amazonOrderId },
+            {
+              $set: {
+                'odoo.invoiceId': invoiceResult.invoiceId,
+                'odoo.invoiceName': invoiceResult.invoiceName,
+                'odoo.invoiceState': invoiceResult.state,
+                updatedAt: new Date()
+              }
+            }
+          );
+          results.succeeded++;
+        } else {
+          results.failed++;
+        }
+
+        results.orders.push({
+          amazonOrderId,
+          odooOrderId,
+          success: invoiceResult.success,
+          invoice: invoiceResult
+        });
+      } catch (error) {
+        results.failed++;
+        results.orders.push({
+          amazonOrderId,
+          odooOrderId,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
    * Resolve SKU to Odoo product using proper SKU transformation
    */
   async resolveProduct(sku) {
