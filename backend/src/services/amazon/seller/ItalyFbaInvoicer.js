@@ -212,8 +212,10 @@ class ItalyFbaInvoicer {
       // If item has no price, use order total distributed by quantity
       if ((!unitPrice || unitPrice <= 0 || isNaN(unitPrice)) && orderTotal > 0 && !hasItemPrices) {
         // Distribute order total proportionally by quantity
-        unitPrice = orderTotal / totalItemQty;
-        console.log(`[ItalyFbaInvoicer] No item prices, using order total: ${orderTotal} / ${totalItemQty} items = ${unitPrice.toFixed(2)} per unit`);
+        // Amazon prices include VAT (22% for Italy), extract net price for Odoo
+        const vatInclusivePrice = orderTotal / totalItemQty;
+        unitPrice = vatInclusivePrice / 1.22;  // Extract net price (without 22% VAT)
+        console.log(`[ItalyFbaInvoicer] No item prices, using order total: ${orderTotal} / ${totalItemQty} = ${vatInclusivePrice.toFixed(2)} gross, ${unitPrice.toFixed(2)} net per unit`);
       }
 
       // Final fallback: use Odoo product's list price
