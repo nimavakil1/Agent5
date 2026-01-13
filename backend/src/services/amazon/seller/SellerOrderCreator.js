@@ -755,7 +755,8 @@ class SellerOrderCreator {
 
     // Now create/find the shipping address as a child contact
     // Use available data for cache key (some orders may not have street address from Amazon)
-    const streetKey = address.addressLine1 || address.city || 'no-street';
+    // Note: unified schema uses 'street', legacy uses 'addressLine1'
+    const streetKey = address.street || address.addressLine1 || address.city || 'no-street';
     const addressCacheKey = `shipping|${customerId}|${address.postalCode || 'no-zip'}|${streetKey}`;
     let shippingAddressId = this.partnerCache[addressCacheKey];
 
@@ -791,15 +792,25 @@ class SellerOrderCreator {
         const deliveryName = cleanDuplicateName(address.name) || customerName;
 
         // Get company name from buyerCompanyName (Amazon B2B field)
-        const deliveryCompanyName = buyerCompanyName || null;
+        // IMPORTANT: company_name must be set for GLS labels (NS Infosystems reads this field)
+        let deliveryCompanyName = buyerCompanyName || null;
+
+        // If no specific company name but parent is a company, use parent name
+        if (!deliveryCompanyName && isBusinessOrder) {
+          deliveryCompanyName = customerName;
+        }
+
+        // Use unified schema field names: 'street' not 'addressLine1'
+        const streetValue = address.street || address.addressLine1 || null;
+        const street2Value = address.street2 || address.addressLine2 || null;
 
         shippingAddressId = await this.odoo.create('res.partner', {
           parent_id: customerId,
           type: 'delivery',
           name: deliveryName,
           company_name: deliveryCompanyName,  // Company name for GLS labels
-          street: address.addressLine1 || null,  // May be null if PII not available
-          street2: address.addressLine2 || null,
+          street: streetValue,  // May be null if PII not available
+          street2: street2Value,
           city: address.city || null,
           zip: address.postalCode || null,
           country_id: countryId,
