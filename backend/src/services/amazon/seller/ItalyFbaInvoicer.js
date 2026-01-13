@@ -42,7 +42,9 @@ const SKU_TRANSFORMATIONS = [
 
 // Return SKU pattern: amzn.gr.[base-sku]-[random-string]
 // Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM → 10050K
-const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
+// Example: amzn.gr.B42056R4-h3lB_uOM6o2MKLVE45Y--VG → B42056R4
+// The random part can contain underscores and dashes
+const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9_-]{8,}/;
 
 /**
  * Transform Amazon SKU to base Odoo SKU
