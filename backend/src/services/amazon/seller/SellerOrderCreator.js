@@ -93,8 +93,9 @@ const PAYMENT_TERM_21_DAYS = 2; // Adjust if different in your Odoo
 
 /**
  * Amazon Seller sales team ID (default)
+ * Uses AMZ-FBR team (ID: 12) for FBM orders
  */
-const AMAZON_SELLER_TEAM_ID = 11;
+const AMAZON_SELLER_TEAM_ID = 12;
 
 /**
  * FBM Warehouse ID - Belgium (CW)
