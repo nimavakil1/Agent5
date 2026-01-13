@@ -49,20 +49,17 @@ function registerOdooHealth(OdooDirectClient) {
   health.register('odoo', async () => {
     try {
       const client = new OdooDirectClient();
+      await client.authenticate();
 
-      // Authenticate returns uid if successful
-      const authResult = await client.authenticate();
-      const uid = authResult || client.client?.uid;
-
-      if (!uid) {
-        return { status: 'unhealthy', details: 'Authentication failed - no uid available' };
+      if (!client.authenticated) {
+        return { status: 'unhealthy', details: 'Authentication failed' };
       }
 
       // Simple read to verify connectivity - just check if we can read partners
       const result = await client.searchRead('res.partner', [], ['id', 'name'], { limit: 1 });
 
       if (result && result.length > 0) {
-        return { status: 'healthy', details: { connected: true, uid } };
+        return { status: 'healthy', details: { connected: true, partners: result.length } };
       }
       return { status: 'degraded', details: 'Authenticated but no partners found' };
     } catch (error) {
