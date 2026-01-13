@@ -167,6 +167,14 @@ class ItalyFbaInvoicer {
 
     if (existing.length > 0) {
       console.log(`[ItalyFbaInvoicer] Order ${amazonOrderId} already exists in Odoo: ${existing[0].name}`);
+
+      // If order is in draft, confirm it
+      if (existing[0].state === 'draft') {
+        console.log(`[ItalyFbaInvoicer] Confirming draft order ${existing[0].name}...`);
+        await this.odoo.execute('sale.order', 'action_confirm', [[existing[0].id]]);
+        existing[0].state = 'sale';
+      }
+
       return {
         success: true,
         alreadyExists: true,
