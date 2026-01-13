@@ -26,7 +26,7 @@ const IT_CONFIG = {
   journalId: 40,           // INV*IT/ Invoices
   salesTeamId: 20,         // Amazon IT (Marketplace)
   warehouseId: 13,         // FBA Amazon.it
-  countryId: 110,          // Italy
+  countryId: 109,          // Italy
   genericCustomerName: 'Amazon Customer Italy (FBA)',
   orderPrefix: 'FBA-IT'
 };
@@ -73,7 +73,6 @@ class ItalyFbaInvoicer {
       customer_rank: 1,
       country_id: IT_CONFIG.countryId,
       property_account_position_id: IT_CONFIG.fiscalPositionId,
-      lang: 'it_IT',
       comment: 'Generic customer for Amazon Italy FBA B2C orders. Created automatically.'
     });
 
