@@ -227,7 +227,7 @@ class ItalyFbaInvoicer {
     console.log(`[ItalyFbaInvoicer] Created sale order ${orderName} (ID: ${orderId})`);
 
     // Confirm the order
-    await this.odoo.callMethod('sale.order', 'action_confirm', [[orderId]]);
+    await this.odoo.execute('sale.order', 'action_confirm', [[orderId]]);
     console.log(`[ItalyFbaInvoicer] Confirmed order ${orderName}`);
 
     return {
@@ -249,7 +249,7 @@ class ItalyFbaInvoicer {
     // Get the sale order
     const orders = await this.odoo.searchRead('sale.order',
       [['id', '=', saleOrderId]],
-      ['id', 'name', 'state', 'invoice_status', 'invoice_ids']
+      ['id', 'name', 'state', 'invoice_status', 'invoice_ids', 'date_order']
     );
 
     if (orders.length === 0) {
@@ -282,39 +282,66 @@ class ItalyFbaInvoicer {
       throw new Error(`Order ${saleOrder.name} is not confirmed (state: ${saleOrder.state})`);
     }
 
-    // Create invoice using Odoo's built-in method
-    // This creates a wizard and then executes it
-    const wizardId = await this.odoo.create('sale.advance.payment.inv', {
-      advance_payment_method: 'delivered'  // Invoice all delivered quantities
-    });
-
-    // Execute the wizard in context of the sale order
-    await this.odoo.callMethod('sale.advance.payment.inv', 'create_invoices', [[wizardId]], {
-      context: {
-        active_ids: [saleOrderId],
-        active_model: 'sale.order'
-      }
-    });
-
-    // Get the created invoice
-    const updatedOrder = await this.odoo.searchRead('sale.order',
-      [['id', '=', saleOrderId]],
-      ['invoice_ids']
+    // Get order lines with product info
+    const orderLines = await this.odoo.searchRead('sale.order.line',
+      [['order_id', '=', saleOrderId]],
+      ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'tax_id', 'qty_delivered']
     );
 
-    if (!updatedOrder[0].invoice_ids || updatedOrder[0].invoice_ids.length === 0) {
+    // Update qty_delivered for FBA orders (Amazon has delivered these)
+    console.log(`[ItalyFbaInvoicer] Updating qty_delivered for FBA order ${saleOrder.name}...`);
+    for (const line of orderLines) {
+      if (line.qty_delivered < line.product_uom_qty) {
+        await this.odoo.execute('sale.order.line', 'write', [[line.id], {
+          qty_delivered: line.product_uom_qty
+        }]);
+        line.qty_delivered = line.product_uom_qty;
+      }
+    }
+
+    // Build invoice lines from order lines, linking them with sale_line_ids
+    const invoiceLines = [];
+    for (const line of orderLines) {
+      if (!line.product_id) continue;
+
+      const qty = line.qty_delivered > 0 ? line.qty_delivered : line.product_uom_qty;
+
+      invoiceLines.push([0, 0, {
+        product_id: line.product_id[0],
+        name: line.name,
+        quantity: qty,
+        price_unit: line.price_unit,
+        tax_ids: line.tax_id ? [[6, 0, line.tax_id]] : false,
+        sale_line_ids: [[4, line.id]], // Link to sale order line
+      }]);
+    }
+
+    if (invoiceLines.length === 0) {
+      throw new Error(`No invoice lines could be created for ${saleOrder.name}`);
+    }
+
+    // Create invoice directly (same approach as VcsOdooInvoicer)
+    console.log(`[ItalyFbaInvoicer] Creating invoice for order ${saleOrder.name}...`);
+    const invoiceId = await this.odoo.create('account.move', {
+      move_type: 'out_invoice',
+      partner_id: this.genericCustomerId,
+      invoice_date: saleOrder.date_order,
+      invoice_origin: saleOrder.name,
+      journal_id: IT_CONFIG.journalId,
+      fiscal_position_id: IT_CONFIG.fiscalPositionId,
+      team_id: IT_CONFIG.salesTeamId,
+      invoice_line_ids: invoiceLines,
+      narration: `Amazon Italy FBA Order\nCreated automatically for manual invoice provision.`
+    });
+
+    if (!invoiceId) {
       throw new Error(`Failed to create invoice for ${saleOrder.name}`);
     }
 
-    const invoiceId = updatedOrder[0].invoice_ids[updatedOrder[0].invoice_ids.length - 1];
-
-    // Update invoice with IT journal
-    await this.odoo.write('account.move', [invoiceId], {
-      journal_id: IT_CONFIG.journalId
-    });
+    console.log(`[ItalyFbaInvoicer] Invoice created with ID ${invoiceId}, posting...`);
 
     // Post the invoice
-    await this.odoo.callMethod('account.move', 'action_post', [[invoiceId]]);
+    await this.odoo.execute('account.move', 'action_post', [[invoiceId]]);
 
     // Get invoice details
     const invoices = await this.odoo.searchRead('account.move',
@@ -323,12 +350,13 @@ class ItalyFbaInvoicer {
     );
 
     const invoice = invoices[0];
-    console.log(`[ItalyFbaInvoicer] Created and posted invoice ${invoice.name} (ID: ${invoice.id})`);
+    const invoiceName = invoice.name === '/' ? `Draft #${invoiceId}` : invoice.name;
+    console.log(`[ItalyFbaInvoicer] Created and posted invoice ${invoiceName} (ID: ${invoice.id})`);
 
     return {
       success: true,
       invoiceId: invoice.id,
-      invoiceName: invoice.name,
+      invoiceName: invoiceName,
       state: invoice.state,
       amountTotal: invoice.amount_total,
       amountTax: invoice.amount_tax
