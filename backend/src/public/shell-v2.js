@@ -439,6 +439,57 @@
           justify-content: center;
         }
 
+        .shell-monitoring {
+          position: relative;
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
+          background: var(--shell-hover);
+          border: 1px solid var(--shell-border);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: var(--shell-muted);
+          transition: all 0.15s;
+          text-decoration: none;
+        }
+
+        .shell-monitoring:hover {
+          background: var(--shell-active);
+          color: #ef4444;
+          border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .shell-monitoring .material-symbols-outlined {
+          font-size: 22px;
+        }
+
+        .shell-monitoring-badge {
+          position: absolute;
+          top: -4px;
+          right: -4px;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 5px;
+          background: #ef4444;
+          color: white;
+          font-size: 11px;
+          font-weight: 600;
+          border-radius: 9px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .shell-monitoring-badge.healthy {
+          background: #22c55e;
+        }
+
+        .shell-monitoring-badge.warning {
+          background: #f59e0b;
+        }
+
         .shell-user-menu {
           position: relative;
         }
@@ -940,6 +991,13 @@
             <span class="material-symbols-outlined">notifications</span>
           </div>
 
+          ${accessibleModuleIds.includes('monitoring') ? `
+          <a href="/monitoring/" class="shell-monitoring" id="shell-monitoring" title="System Monitoring">
+            <span class="material-symbols-outlined">monitoring</span>
+            <span class="shell-monitoring-badge" id="shell-monitoring-badge" style="display: none;">0</span>
+          </a>
+          ` : ''}
+
           <div class="shell-user-menu">
             <div class="shell-user-btn" id="shell-user-btn">
               <div class="shell-avatar" id="shell-avatar">${me && me.avatar
@@ -1097,6 +1155,12 @@
 
     injectShell(u);
 
+    // Load monitoring stats if user has access
+    if (hasModuleAccess('monitoring')) {
+      loadMonitoringStats();
+      setInterval(loadMonitoringStats, 60000); // Refresh every minute
+    }
+
     // Check test mode status for vendor pages
     if (location.pathname.startsWith('/vendor')) {
       checkTestModeStatus();
@@ -1138,6 +1202,38 @@
 
   // Expose for child pages
   window.updateTestModeIndicator = updateTestModeIndicator;
+
+  // Load monitoring stats and update badge
+  async function loadMonitoringStats() {
+    const badge = document.getElementById('shell-monitoring-badge');
+    if (!badge) return;
+
+    try {
+      const res = await fetch('/ops/operations/stats', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+
+      // Count recent failures (last hour)
+      const recentFailures = data.recentFailures || 0;
+      const unhealthyChecks = data.unhealthyChecks || 0;
+      const totalIssues = recentFailures + unhealthyChecks;
+
+      if (totalIssues > 0) {
+        badge.textContent = totalIssues > 99 ? '99+' : totalIssues;
+        badge.style.display = 'flex';
+        badge.className = 'shell-monitoring-badge'; // Red (default)
+      } else {
+        // Show green checkmark if all healthy
+        badge.textContent = '';
+        badge.innerHTML = '<span class="material-symbols-outlined" style="font-size: 12px;">check</span>';
+        badge.style.display = 'flex';
+        badge.className = 'shell-monitoring-badge healthy';
+      }
+    } catch (e) {
+      // Hide badge on error
+      badge.style.display = 'none';
+    }
+  }
 
   // Show toast notification
   function showToast(message, type = 'info', duration = 4000) {

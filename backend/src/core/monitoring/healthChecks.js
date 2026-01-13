@@ -177,10 +177,37 @@ function createHealthRouter() {
     res.json(metrics.getJsonMetrics());
   });
 
-  // Operation statistics
-  router.get('/operations/stats', (req, res) => {
+  // Operation statistics (with failure counts for shell badge)
+  router.get('/operations/stats', async (req, res) => {
     const tracker = getOperationTracker();
-    res.json(tracker.getStats());
+    const stats = tracker.getStats();
+
+    // Count recent failures (last hour)
+    const now = Date.now();
+    const oneHourAgo = now - 3600000;
+    const recentOps = tracker.getRecentOperations({ limit: 200 });
+    const recentFailures = recentOps.filter(
+      op => op.status === 'failure' && new Date(op.startedAt).getTime() > oneHourAgo
+    ).length;
+
+    // Count unhealthy checks
+    let unhealthyChecks = 0;
+    try {
+      const healthResult = await health.check();
+      if (healthResult.checks) {
+        unhealthyChecks = Object.values(healthResult.checks).filter(
+          c => c.status === 'unhealthy'
+        ).length;
+      }
+    } catch (e) {
+      // Ignore health check errors
+    }
+
+    res.json({
+      ...stats,
+      recentFailures,
+      unhealthyChecks,
+    });
   });
 
   // Operation dashboard summary
