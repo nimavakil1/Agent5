@@ -878,6 +878,13 @@ class SellerOrderCreator {
         const amazonSku = item.sellerSku;
         const quantity = getItemQuantity(item);
 
+        // CRITICAL: Validate SKU exists before lookup
+        // Without this, null/undefined SKU matches products with default_code=false in Odoo
+        if (!amazonSku || amazonSku.trim() === '') {
+          errors.push(`Missing SKU for item: ${item.title || item.name || 'Unknown product'}`);
+          continue;
+        }
+
         // Check if this is a promotion item (marked by SellerOrderImporter or FbmOrderImporter)
         // Promotion items use the PROMOTION_DISCOUNT product in Odoo
         if (item.isPromotion || amazonSku === 'PROMOTION DISCOUNT') {
@@ -978,44 +985,60 @@ class SellerOrderCreator {
    * Find product by SKU
    */
   async findProduct(transformedSku, originalSku) {
+    // Defense-in-depth: Never search with null/undefined/empty SKU
+    // This would match products with default_code=false in Odoo!
+    if (!transformedSku && !originalSku) {
+      console.error('[SellerOrderCreator] findProduct called with empty SKUs - rejecting');
+      return null;
+    }
+
     const cacheKey = `${transformedSku}|${originalSku}`;
     if (this.productCache[cacheKey]) {
       return this.productCache[cacheKey];
     }
 
-    // Try transformed SKU
-    let products = await this.odoo.searchRead('product.product',
-      [['default_code', '=', transformedSku]],
-      ['id']
-    );
-
-    if (products.length > 0) {
-      this.productCache[cacheKey] = products[0].id;
-      return products[0].id;
-    }
-
-    // Try original SKU
-    products = await this.odoo.searchRead('product.product',
-      [['default_code', '=', originalSku]],
-      ['id']
-    );
-
-    if (products.length > 0) {
-      this.productCache[cacheKey] = products[0].id;
-      return products[0].id;
-    }
-
-    // Try stripping suffixes (e.g., -DE, -NL, -FBM, -FBA, etc.)
-    const strippedSku = transformedSku.replace(/-[A-Z]{1,4}$/i, '');
-    if (strippedSku !== transformedSku) {
-      products = await this.odoo.searchRead('product.product',
-        [['default_code', '=', strippedSku]],
+    // Skip search if SKU is empty/null
+    if (!transformedSku || transformedSku.trim() === '') {
+      // Fall through to originalSku check
+    } else {
+      // Try transformed SKU
+      let products = await this.odoo.searchRead('product.product',
+        [['default_code', '=', transformedSku]],
         ['id']
       );
 
       if (products.length > 0) {
         this.productCache[cacheKey] = products[0].id;
         return products[0].id;
+      }
+    }
+
+    // Try original SKU (only if valid and different from transformed)
+    if (originalSku && originalSku.trim() !== '' && originalSku !== transformedSku) {
+      let products = await this.odoo.searchRead('product.product',
+        [['default_code', '=', originalSku]],
+        ['id']
+      );
+
+      if (products.length > 0) {
+        this.productCache[cacheKey] = products[0].id;
+        return products[0].id;
+      }
+    }
+
+    // Try stripping suffixes (e.g., -DE, -NL, -FBM, -FBA, etc.)
+    if (transformedSku && transformedSku.trim() !== '') {
+      const strippedSku = transformedSku.replace(/-[A-Z]{1,4}$/i, '');
+      if (strippedSku !== transformedSku) {
+        let products = await this.odoo.searchRead('product.product',
+          [['default_code', '=', strippedSku]],
+          ['id']
+        );
+
+        if (products.length > 0) {
+          this.productCache[cacheKey] = products[0].id;
+          return products[0].id;
+        }
       }
     }
 
@@ -1739,6 +1762,17 @@ class SellerOrderCreator {
       try {
         const amazonSku = item.sellerSku || item.sku;
         const quantity = item.quantity || 1;
+
+        // CRITICAL: Validate SKU exists before lookup
+        // Without this, null/undefined SKU matches products with default_code=false in Odoo
+        if (!amazonSku || amazonSku.trim() === '') {
+          errors.push({
+            sku: amazonSku,
+            resolvedSku: null,
+            error: `Missing SKU for item: ${item.name || item.title || 'Unknown product'}`
+          });
+          continue;
+        }
 
         // Check if this is a promotion item
         if (item.isPromotion || amazonSku === 'PROMOTION DISCOUNT') {
