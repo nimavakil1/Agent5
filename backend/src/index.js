@@ -186,14 +186,16 @@ if (process.env.NODE_ENV !== 'test') {
     try {
       const { getDb } = require('./db');
       const { OdooDirectClient } = require('./core/agents/integrations/OdooMCP');
-      const { AmazonSellerClient } = require('./services/amazon/seller/AmazonSellerClient');
+      const { SellerClient } = require('./services/amazon/seller');
+      const { BolClient } = require('./core/agents/integrations/BolMCP');
 
       await registerAllHealthChecks({
         getDb,
         OdooDirectClient,
-        AmazonSellerClient,
+        SellerClient,
+        BolClient,
       });
-      console.log('Health checks registered for MongoDB, Odoo, and Amazon APIs');
+      console.log('Health checks registered for MongoDB, Odoo, Amazon, and Bol.com APIs');
     } catch (e) {
       console.warn('Health check registration skipped:', e.message);
     }

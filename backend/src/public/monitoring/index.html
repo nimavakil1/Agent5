@@ -150,6 +150,16 @@
           </div>
           <div class="health-details" id="health-amazon-details">--</div>
         </div>
+        <div class="health-card">
+          <div class="health-card-header">
+            <div class="health-card-title">
+              <span class="material-symbols-outlined">shopping_bag</span>
+              Bol.com API
+            </div>
+            <span class="health-status unknown" id="health-bol">Loading...</span>
+          </div>
+          <div class="health-details" id="health-bol-details">--</div>
+        </div>
       </div>
     </div>
 
@@ -266,6 +276,9 @@
 
         // Update Amazon
         updateHealthCard('amazon', data.checks?.amazon_seller);
+
+        // Update Bol.com
+        updateHealthCard('bol', data.checks?.bol);
 
       } catch (error) {
         console.error('Failed to fetch health:', error);

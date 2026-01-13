@@ -69,22 +69,15 @@ function registerOdooHealth(OdooDirectClient) {
 /**
  * Register Amazon Seller API health check
  */
-function registerAmazonSellerHealth(AmazonSellerClient) {
+function registerAmazonSellerHealth(SellerClient) {
   const health = getHealth();
 
   health.register('amazon_seller', async () => {
     try {
-      const client = new AmazonSellerClient();
-
-      // Check token status
-      const tokenValid = client.isTokenValid();
-      if (!tokenValid) {
-        // Try to refresh
-        await client.refreshToken();
-      }
+      const client = new SellerClient();
+      await client.init();
 
       // Simple API call to verify connectivity
-      // Use getMarketplaceParticipations which is lightweight
       const participations = await client.getMarketplaceParticipations();
 
       if (participations && participations.length > 0) {
@@ -92,7 +85,6 @@ function registerAmazonSellerHealth(AmazonSellerClient) {
           status: 'healthy',
           details: {
             marketplaces: participations.length,
-            tokenExpiresIn: client.getTokenExpiresIn(),
           },
         };
       }
@@ -110,6 +102,38 @@ function registerAmazonSellerHealth(AmazonSellerClient) {
 }
 
 /**
+ * Register Bol.com API health check
+ */
+function registerBolHealth(BolClient) {
+  const health = getHealth();
+
+  health.register('bol', async () => {
+    try {
+      const client = new BolClient();
+      await client.authenticate();
+
+      // Simple API call to verify connectivity - get orders
+      const result = await client.searchOrders({ status: 'SHIPPED' }, 1, 1);
+
+      return {
+        status: 'healthy',
+        details: {
+          authenticated: true,
+          ordersAccessible: result !== null,
+        },
+      };
+    } catch (error) {
+      if (error.message?.includes('rate limit') || error.message?.includes('429')) {
+        return { status: 'degraded', details: 'Rate limited: ' + error.message };
+      }
+      return { status: 'unhealthy', details: error.message };
+    }
+  }, { critical: false, timeout: 15000 });
+
+  logger.info('Registered Bol.com API health check');
+}
+
+/**
  * Register all health checks
  * Call this during application startup
  */
@@ -117,7 +141,8 @@ async function registerAllHealthChecks(dependencies = {}) {
   const {
     getDb,
     OdooDirectClient,
-    AmazonSellerClient,
+    SellerClient,
+    BolClient,
   } = dependencies;
 
   if (getDb) {
@@ -128,8 +153,12 @@ async function registerAllHealthChecks(dependencies = {}) {
     registerOdooHealth(OdooDirectClient);
   }
 
-  if (AmazonSellerClient) {
-    registerAmazonSellerHealth(AmazonSellerClient);
+  if (SellerClient) {
+    registerAmazonSellerHealth(SellerClient);
+  }
+
+  if (BolClient) {
+    registerBolHealth(BolClient);
   }
 
   logger.info('All health checks registered');
@@ -245,6 +274,7 @@ module.exports = {
   registerMongoHealth,
   registerOdooHealth,
   registerAmazonSellerHealth,
+  registerBolHealth,
   registerAllHealthChecks,
   createHealthRouter,
 };
