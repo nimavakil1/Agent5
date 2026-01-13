@@ -31,6 +31,39 @@ const IT_CONFIG = {
   orderPrefix: 'FBA-IT'
 };
 
+// SKU transformation patterns - same as VcsOdooInvoicer
+const SKU_TRANSFORMATIONS = [
+  { pattern: /-FBM$/, replacement: '' },
+  { pattern: /-FBMA$/, replacement: '' },
+  { pattern: /-FBA$/, replacement: '' },
+  { pattern: /-stickerless$/, replacement: '' },
+  { pattern: /-stickerles$/, replacement: '' },
+];
+
+// Return SKU pattern: amzn.gr.[base-sku]-[random-string]
+// Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM → 10050K
+const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
+
+/**
+ * Transform Amazon SKU to base Odoo SKU
+ */
+function transformSku(amazonSku) {
+  if (!amazonSku) return amazonSku;
+  let sku = amazonSku;
+
+  // First, check for return SKU pattern
+  const returnMatch = sku.match(RETURN_SKU_PATTERN);
+  if (returnMatch) {
+    sku = returnMatch[1];
+  }
+
+  // Then apply regular transformations
+  for (const transform of SKU_TRANSFORMATIONS) {
+    sku = sku.replace(transform.pattern, transform.replacement);
+  }
+  return sku;
+}
+
 class ItalyFbaInvoicer {
   constructor() {
     this.odoo = null;
@@ -108,7 +141,7 @@ class ItalyFbaInvoicer {
   }
 
   /**
-   * Resolve SKU to Odoo product
+   * Resolve SKU to Odoo product using proper SKU transformation
    */
   async resolveProduct(sku) {
     if (!sku) return null;
@@ -118,9 +151,13 @@ class ItalyFbaInvoicer {
       return this.productCache[sku];
     }
 
-    // Search by default_code
-    const products = await this.odoo.searchRead('product.product',
-      [['default_code', '=', sku]],
+    // Transform SKU (handles amzn.gr.* returns, -FBM, -stickerless, etc.)
+    const transformedSku = transformSku(sku);
+    console.log(`[ItalyFbaInvoicer] Resolving SKU: ${sku} → ${transformedSku}`);
+
+    // Try transformed SKU first
+    let products = await this.odoo.searchRead('product.product',
+      [['default_code', '=', transformedSku]],
       ['id', 'name', 'default_code', 'list_price']
     );
 
@@ -129,18 +166,29 @@ class ItalyFbaInvoicer {
       return products[0];
     }
 
-    // Try without suffix
-    const baseSku = sku.replace(/-FBM$|-FBMA$|-FBA$/i, '');
-    if (baseSku !== sku) {
-      const baseProducts = await this.odoo.searchRead('product.product',
-        [['default_code', '=', baseSku]],
+    // Try original SKU if different
+    if (transformedSku !== sku) {
+      products = await this.odoo.searchRead('product.product',
+        [['default_code', '=', sku]],
         ['id', 'name', 'default_code', 'list_price']
       );
 
-      if (baseProducts.length > 0) {
-        this.productCache[sku] = baseProducts[0];
-        return baseProducts[0];
+      if (products.length > 0) {
+        this.productCache[sku] = products[0];
+        return products[0];
       }
+    }
+
+    // Try ilike search as last resort
+    products = await this.odoo.searchRead('product.product',
+      [['default_code', 'ilike', transformedSku]],
+      ['id', 'name', 'default_code', 'list_price'],
+      { limit: 1 }
+    );
+
+    if (products.length > 0) {
+      this.productCache[sku] = products[0];
+      return products[0];
     }
 
     return null;
