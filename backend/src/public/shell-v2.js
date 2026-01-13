@@ -991,7 +991,7 @@
             <span class="material-symbols-outlined">notifications</span>
           </div>
 
-          ${accessibleModuleIds.includes('monitoring') ? `
+          ${accessibleModules.includes('monitoring') ? `
           <a href="/monitoring/" class="shell-monitoring" id="shell-monitoring" title="System Monitoring">
             <span class="material-symbols-outlined">monitoring</span>
             <span class="shell-monitoring-badge" id="shell-monitoring-badge" style="display: none;">0</span>
