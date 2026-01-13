@@ -138,6 +138,14 @@
         { id: 'profile', path: '/settings/profile.html', name: 'Profile', icon: 'person' }
       ],
       adminOnly: true
+    },
+    'monitoring': {
+      id: 'monitoring', name: 'Monitoring', icon: 'monitoring', color: '#ef4444',
+      basePath: '/monitoring',
+      pages: [
+        { id: 'dashboard', path: '/monitoring/', name: 'Dashboard', icon: 'dashboard' }
+      ],
+      adminOnly: true
     }
   };
 

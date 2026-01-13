@@ -19,6 +19,8 @@
 const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { CHANNELS } = require('../../orders/UnifiedOrderService');
+const { transformSku } = require('../../../core/shared/SkuTransformer');
+const { getOperationTracker, OPERATION_TYPES } = require('../../../core/monitoring');
 
 // Italy-specific Odoo configuration
 const IT_CONFIG = {
@@ -30,41 +32,6 @@ const IT_CONFIG = {
   genericCustomerName: 'Amazon Customer Italy (FBA)',
   orderPrefix: 'FBA-IT'
 };
-
-// SKU transformation patterns - same as VcsOdooInvoicer
-const SKU_TRANSFORMATIONS = [
-  { pattern: /-FBM$/, replacement: '' },
-  { pattern: /-FBMA$/, replacement: '' },
-  { pattern: /-FBA$/, replacement: '' },
-  { pattern: /-stickerless$/, replacement: '' },
-  { pattern: /-stickerles$/, replacement: '' },
-];
-
-// Return SKU pattern: amzn.gr.[base-sku]-[random-string]
-// Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM → 10050K
-// Example: amzn.gr.B42056R4-h3lB_uOM6o2MKLVE45Y--VG → B42056R4
-// The random part can contain underscores and dashes
-const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9_-]{8,}/;
-
-/**
- * Transform Amazon SKU to base Odoo SKU
- */
-function transformSku(amazonSku) {
-  if (!amazonSku) return amazonSku;
-  let sku = amazonSku;
-
-  // First, check for return SKU pattern
-  const returnMatch = sku.match(RETURN_SKU_PATTERN);
-  if (returnMatch) {
-    sku = returnMatch[1];
-  }
-
-  // Then apply regular transformations
-  for (const transform of SKU_TRANSFORMATIONS) {
-    sku = sku.replace(transform.pattern, transform.replacement);
-  }
-  return sku;
-}
 
 class ItalyFbaInvoicer {
   constructor() {
@@ -422,37 +389,45 @@ class ItalyFbaInvoicer {
    */
   async createInvoice(saleOrderId) {
     await this.init();
+    const tracker = getOperationTracker();
+    const op = tracker.start(OPERATION_TYPES.INVOICE_CREATION, {
+      saleOrderId,
+      marketplace: 'IT',
+      type: 'FBA'
+    });
 
-    // Get the sale order
-    const orders = await this.odoo.searchRead('sale.order',
-      [['id', '=', saleOrderId]],
-      ['id', 'name', 'state', 'invoice_status', 'invoice_ids', 'date_order']
-    );
-
-    if (orders.length === 0) {
-      throw new Error(`Sale order ${saleOrderId} not found`);
-    }
-
-    const saleOrder = orders[0];
-
-    // Check if invoice already exists
-    if (saleOrder.invoice_ids && saleOrder.invoice_ids.length > 0) {
-      const invoices = await this.odoo.searchRead('account.move',
-        [['id', 'in', saleOrder.invoice_ids]],
-        ['id', 'name', 'state', 'payment_state']
+    try {
+      // Get the sale order
+      const orders = await this.odoo.searchRead('sale.order',
+        [['id', '=', saleOrderId]],
+        ['id', 'name', 'state', 'invoice_status', 'invoice_ids', 'date_order']
       );
 
-      if (invoices.length > 0) {
-        console.log(`[ItalyFbaInvoicer] Invoice already exists for ${saleOrder.name}: ${invoices[0].name}`);
-        return {
-          success: true,
-          alreadyExists: true,
-          invoiceId: invoices[0].id,
-          invoiceName: invoices[0].name,
-          state: invoices[0].state
-        };
+      if (orders.length === 0) {
+        throw new Error(`Sale order ${saleOrderId} not found`);
       }
-    }
+
+      const saleOrder = orders[0];
+
+      // Check if invoice already exists
+      if (saleOrder.invoice_ids && saleOrder.invoice_ids.length > 0) {
+        const invoices = await this.odoo.searchRead('account.move',
+          [['id', 'in', saleOrder.invoice_ids]],
+          ['id', 'name', 'state', 'payment_state']
+        );
+
+        if (invoices.length > 0) {
+          console.log(`[ItalyFbaInvoicer] Invoice already exists for ${saleOrder.name}: ${invoices[0].name}`);
+          op.skip('Invoice already exists');
+          return {
+            success: true,
+            alreadyExists: true,
+            invoiceId: invoices[0].id,
+            invoiceName: invoices[0].name,
+            state: invoices[0].state
+          };
+        }
+      }
 
     // Check order state
     if (saleOrder.state !== 'sale') {
@@ -526,18 +501,23 @@ class ItalyFbaInvoicer {
       ['id', 'name', 'state', 'amount_total', 'amount_tax']
     );
 
-    const invoice = invoices[0];
-    const invoiceName = invoice.name === '/' ? `Draft #${invoiceId}` : invoice.name;
-    console.log(`[ItalyFbaInvoicer] Created and posted invoice ${invoiceName} (ID: ${invoice.id})`);
+      const invoice = invoices[0];
+      const invoiceName = invoice.name === '/' ? `Draft #${invoiceId}` : invoice.name;
+      console.log(`[ItalyFbaInvoicer] Created and posted invoice ${invoiceName} (ID: ${invoice.id})`);
 
-    return {
-      success: true,
-      invoiceId: invoice.id,
-      invoiceName: invoiceName,
-      state: invoice.state,
-      amountTotal: invoice.amount_total,
-      amountTax: invoice.amount_tax
-    };
+      op.complete({ invoiceId: invoice.id, invoiceName, amountTotal: invoice.amount_total });
+      return {
+        success: true,
+        invoiceId: invoice.id,
+        invoiceName: invoiceName,
+        state: invoice.state,
+        amountTotal: invoice.amount_total,
+        amountTax: invoice.amount_tax
+      };
+    } catch (error) {
+      op.fail(error);
+      throw error;
+    }
   }
 
   /**

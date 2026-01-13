@@ -64,6 +64,7 @@ const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
 const validateEnv = require('./config/validateEnv');
+const { createHealthRouter, registerAllHealthChecks } = require('./core/monitoring');
 const ensureAdmin = require('./util/ensureAdmin');
 const { ensureDefaultRoles } = require('./util/ensureRoles');
 const _auth = require('./middleware/auth');
@@ -180,6 +181,22 @@ if (process.env.NODE_ENV !== 'test') {
     } catch (e) {
       console.warn('Odoo Mirror scheduler initialization skipped:', e.message);
     }
+
+    // Register health checks for all integrations (Phase 2 monitoring)
+    try {
+      const { getDb } = require('./db');
+      const { OdooDirectClient } = require('./core/agents/integrations/OdooMCP');
+      const { AmazonSellerClient } = require('./services/amazon/seller/AmazonSellerClient');
+
+      await registerAllHealthChecks({
+        getDb,
+        OdooDirectClient,
+        AmazonSellerClient,
+      });
+      console.log('Health checks registered for MongoDB, Odoo, and Amazon APIs');
+    } catch (e) {
+      console.warn('Health check registration skipped:', e.message);
+    }
   });
 }
 
@@ -245,9 +262,13 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Basic health endpoints (legacy)
 app.get('/healthz', (req, res) => res.status(200).send('ok'));
 app.get('/readyz', (req, res) => res.status(200).json({ ready: true }));
 app.get('/version', (req, res) => res.status(200).json({ commit: COMMIT_SHA || null, startedAt: STARTED_AT }));
+
+// Enhanced health/metrics endpoints (Phase 2 monitoring)
+app.use('/ops', createHealthRouter());
 
 const recordingsDir = path.join(__dirname, 'recordings');
 const crypto = require('crypto');
@@ -287,7 +308,7 @@ app.get('/login', (req, res) => {
 });
 
 // New platform UI (v2) - protected sections
-const protectedSections = ['vendor', 'settings', 'seller', 'inventory', 'accounting', 'analytics', 'ai', 'calls', 'bol', 'fulfillment', 'assistant'];
+const protectedSections = ['vendor', 'settings', 'seller', 'inventory', 'accounting', 'analytics', 'ai', 'calls', 'bol', 'fulfillment', 'assistant', 'monitoring'];
 protectedSections.forEach(section => {
   app.use(`/${section}`, requireSession, express.static(path.join(__dirname, 'public', section), {
     etag: false,

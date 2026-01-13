@@ -14,6 +14,7 @@ const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP'
 const { getSellerClient } = require('./SellerClient');
 const { getMarketplaceIdByCountry } = require('./SellerMarketplaceConfig');
 const { getItemQuantity } = require('./SellerOrderSchema');
+const { getOperationTracker, OPERATION_TYPES } = require('../../../core/monitoring');
 
 // Collection name - unified_orders is the single source of truth
 const UNIFIED_ORDERS_COLLECTION = 'unified_orders';
@@ -264,10 +265,17 @@ class SellerTrackingPusher {
    */
   async pushPickingTracking(order, picking) {
     const result = { pushed: false, skipped: false };
+    const tracker = getOperationTracker();
+    const op = tracker.start(OPERATION_TYPES.TRACKING_PUSH, {
+      amazonOrderId: order.amazonOrderId,
+      pickingName: picking.name,
+      marketplace: order.marketplace?.code || 'unknown'
+    });
 
     const trackingNumber = picking.carrier_tracking_ref;
     if (!trackingNumber) {
       result.skipped = true;
+      op.skip('No tracking number');
       return result;
     }
 
@@ -317,6 +325,7 @@ class SellerTrackingPusher {
         );
 
         result.pushed = true;
+        op.complete({ trackingNumber, carrierName });
         console.log(`[SellerTrackingPusher] Successfully pushed tracking for ${order.amazonOrderId}`);
       } else {
         throw new Error(confirmResult.error || 'Unknown error');
@@ -346,10 +355,12 @@ class SellerTrackingPusher {
           }
         );
         result.pushed = true;
+        op.complete({ reason: 'already_shipped' });
         return result;
       }
 
       console.error(`[SellerTrackingPusher] Error confirming shipment for ${order.amazonOrderId}:`, error.message);
+      op.fail(error);
       throw error;
     }
 

@@ -19,6 +19,8 @@
 
 const { getDb } = require('../../db');
 const { ObjectId } = require('mongodb');
+const { transformSku, SKU_TRANSFORMATIONS } = require('../../core/shared/SkuTransformer');
+const { getOperationTracker, OPERATION_TYPES } = require('../../core/monitoring');
 
 // Retry configuration for MongoDB operations
 const RETRY_CONFIG = {
@@ -64,19 +66,7 @@ async function withRetry(operation, operationName = 'operation', config = RETRY_
   throw lastError;
 }
 
-// SKU transformation patterns - used to match VCS SKU to Odoo order line
-const SKU_TRANSFORMATIONS = [
-  // Strip -FBM suffix (Fulfilled by Merchant)
-  { pattern: /-FBM$/, replacement: '' },
-  // Strip -stickerless suffix
-  { pattern: /-stickerless$/, replacement: '' },
-  // Strip -stickerles suffix (typo variant)
-  { pattern: /-stickerles$/, replacement: '' },
-];
-
-// Return SKU pattern: amzn.gr.[base-sku]-[random-string]
-// Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM → 10050K
-const RETURN_SKU_PATTERN = /^amzn\.gr\.(.+?)-[A-Za-z0-9]{8,}/;
+// SKU_TRANSFORMATIONS is now imported from SkuTransformer (shared utility)
 
 // VAT cut-off date - invoices cannot be created in closed VAT periods
 // This is dynamically loaded from Odoo's tax_lock_date on res.company
@@ -988,24 +978,12 @@ class VcsOdooInvoicer {
 
   /**
    * Transform Amazon SKU to base Odoo SKU
+   * Delegates to shared SkuTransformer utility
    * @param {string} amazonSku - The SKU from Amazon VCS
    * @returns {string} The transformed SKU
    */
   transformSku(amazonSku) {
-    let sku = amazonSku;
-
-    // First, check for return SKU pattern: amzn.gr.[base-sku]-[random-string]
-    // Example: amzn.gr.10050K-FBM-6sC9nyZuQGExqXIpf9-VG → 10050K-FBM
-    const returnMatch = sku.match(RETURN_SKU_PATTERN);
-    if (returnMatch) {
-      sku = returnMatch[1]; // Extract base SKU from return pattern
-    }
-
-    // Then apply regular transformations (-FBM, -stickerless, etc.)
-    for (const transform of SKU_TRANSFORMATIONS) {
-      sku = sku.replace(transform.pattern, transform.replacement);
-    }
-    return sku;
+    return transformSku(amazonSku);
   }
 
   /**
@@ -2083,9 +2061,18 @@ class VcsOdooInvoicer {
    * @returns {object}
    */
   async createInvoice(order, partnerId, saleOrder, orderLines) {
-    // Step 1: Create invoice from sale order using the wizard approach
-    // This properly links the invoice to the order and updates qty_invoiced
-    console.log(`[VcsOdooInvoicer] Creating invoice from order ${saleOrder.name}...`);
+    const tracker = getOperationTracker();
+    const op = tracker.start(OPERATION_TYPES.INVOICE_CREATION, {
+      amazonOrderId: order.orderId,
+      marketplace: order.marketplace,
+      transactionType: order.transactionType,
+      type: 'VCS'
+    });
+
+    try {
+      // Step 1: Create invoice from sale order using the wizard approach
+      // This properly links the invoice to the order and updates qty_invoiced
+      console.log(`[VcsOdooInvoicer] Creating invoice from order ${saleOrder.name}...`);
 
     // Create invoice directly by copying from sale order lines
     // This links the invoice to the order via sale_line_ids
@@ -2158,17 +2145,22 @@ class VcsOdooInvoicer {
     // Draft invoices have name "/", show ID instead for UI
     const invoiceName = invoice[0]?.name === '/' ? `Draft #${invoiceId}` : invoice[0]?.name;
 
-    console.log(`[VcsOdooInvoicer] Invoice ${invoiceName} (ID: ${invoiceId}) updated. Total: ${invoice[0]?.amount_total}, Tax: ${invoice[0]?.amount_tax}`);
+      console.log(`[VcsOdooInvoicer] Invoice ${invoiceName} (ID: ${invoiceId}) updated. Total: ${invoice[0]?.amount_total}, Tax: ${invoice[0]?.amount_tax}`);
 
-    return {
-      id: invoiceId,
-      name: invoiceName || `Draft #${invoiceId}`,
-      amountTotal: invoice[0]?.amount_total,
-      amountTax: invoice[0]?.amount_tax,
-      orderId: order.orderId,
-      saleOrderName: saleOrder.name,
-      saleOrderId: saleOrder.id,
-    };
+      op.complete({ invoiceId, invoiceName, amountTotal: invoice[0]?.amount_total });
+      return {
+        id: invoiceId,
+        name: invoiceName || `Draft #${invoiceId}`,
+        amountTotal: invoice[0]?.amount_total,
+        amountTax: invoice[0]?.amount_tax,
+        orderId: order.orderId,
+        saleOrderName: saleOrder.name,
+        saleOrderId: saleOrder.id,
+      };
+    } catch (error) {
+      op.fail(error);
+      throw error;
+    }
   }
 
   /**
