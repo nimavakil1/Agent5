@@ -12,7 +12,7 @@
 const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { getSellerClient } = require('./SellerClient');
-const { getMarketplaceConfig: _getMarketplaceConfig } = require('./SellerMarketplaceConfig');
+const { getMarketplaceIdByCountry } = require('./SellerMarketplaceConfig');
 const { getItemQuantity } = require('./SellerOrderSchema');
 
 // Collection name - unified_orders is the single source of truth
@@ -178,10 +178,17 @@ class SellerTrackingPusher {
 
           // Adapt unified_orders structure to expected format
           // unified_orders stores amazonOrderId in sourceIds, marketplaceId in amazonSeller
+          // If marketplaceId is missing, derive from country code
+          let marketplaceId = mongoOrder.amazonSeller?.marketplaceId || mongoOrder.marketplace?.id;
+          if (!marketplaceId && mongoOrder.marketplace?.code) {
+            marketplaceId = getMarketplaceIdByCountry(mongoOrder.marketplace.code);
+            console.log(`[SellerTrackingPusher] Resolved marketplaceId from code ${mongoOrder.marketplace.code}: ${marketplaceId}`);
+          }
+
           mongoOrder = {
             ...mongoOrder,
             amazonOrderId: mongoOrder.sourceIds?.amazonOrderId,
-            marketplaceId: mongoOrder.amazonSeller?.marketplaceId || mongoOrder.marketplace?.id
+            marketplaceId
           };
 
           // Push tracking
@@ -374,11 +381,51 @@ class SellerTrackingPusher {
 
     const marketplaceId = order.marketplaceId;
 
+    // Validate marketplaceId
+    if (!marketplaceId) {
+      return { success: false, error: 'Missing marketplaceId - cannot push tracking' };
+    }
+
     // Get order items for the shipment
-    const orderItemIds = order.items?.map(item => item.orderItemId) || [];
+    let orderItemIds = order.items?.map(item => item.orderItemId).filter(id => id) || [];
+
+    // If no orderItemIds, try to fetch from Amazon API
+    if (orderItemIds.length === 0) {
+      console.log(`[SellerTrackingPusher] No orderItemIds for ${order.amazonOrderId}, fetching from Amazon...`);
+      try {
+        const response = await this.client.getOrderItems(order.amazonOrderId);
+        const fetchedItems = response?.OrderItems || [];
+        if (fetchedItems.length > 0) {
+          orderItemIds = fetchedItems.map(item => item.OrderItemId).filter(id => id);
+
+          // Update MongoDB with fetched orderItemIds
+          if (orderItemIds.length > 0) {
+            const updateItems = order.items?.map((item, idx) => ({
+              ...item,
+              orderItemId: fetchedItems[idx]?.OrderItemId || item.orderItemId
+            })) || fetchedItems.map(item => ({
+              orderItemId: item.OrderItemId,
+              sku: item.SellerSKU,
+              quantity: item.QuantityOrdered
+            }));
+
+            await this.collection.updateOne(
+              { 'sourceIds.amazonOrderId': order.amazonOrderId },
+              { $set: { items: updateItems } }
+            );
+            console.log(`[SellerTrackingPusher] Updated ${orderItemIds.length} orderItemIds for ${order.amazonOrderId}`);
+
+            // Update local order object
+            order.items = updateItems;
+          }
+        }
+      } catch (fetchError) {
+        console.error(`[SellerTrackingPusher] Failed to fetch orderItemIds for ${order.amazonOrderId}:`, fetchError.message);
+      }
+    }
 
     if (orderItemIds.length === 0) {
-      return { success: false, error: 'No order items found' };
+      return { success: false, error: 'No order items found and could not fetch from Amazon' };
     }
 
     // Build package details per Amazon API spec
