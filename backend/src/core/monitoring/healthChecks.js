@@ -49,13 +49,17 @@ function registerOdooHealth(OdooDirectClient) {
   health.register('odoo', async () => {
     try {
       const client = new OdooDirectClient();
-      await client.authenticate();
+      const uid = await client.authenticate();
 
-      // Simple read to verify connectivity
-      const result = await client.searchRead('res.users', [['id', '=', client.uid]], ['id', 'name'], { limit: 1 });
+      if (!uid) {
+        return { status: 'unhealthy', details: 'Authentication failed - no uid returned' };
+      }
+
+      // Simple read to verify connectivity - get current user
+      const result = await client.searchRead('res.users', [['id', '=', uid]], ['id', 'name'], { limit: 1 });
 
       if (result && result.length > 0) {
-        return { status: 'healthy', details: { user: result[0].name, uid: client.uid } };
+        return { status: 'healthy', details: { user: result[0].name, uid } };
       }
       return { status: 'degraded', details: 'Authenticated but user lookup failed' };
     } catch (error) {
@@ -77,18 +81,18 @@ function registerAmazonSellerHealth(SellerClient) {
       const client = new SellerClient();
       await client.init();
 
-      // Simple API call to verify connectivity
-      const participations = await client.getMarketplaceParticipations();
+      // Use testConnection which does a minimal API call
+      const result = await client.testConnection();
 
-      if (participations && participations.length > 0) {
+      if (result.success) {
         return {
           status: 'healthy',
           details: {
-            marketplaces: participations.length,
+            ordersFound: result.ordersFound || 0,
           },
         };
       }
-      return { status: 'degraded', details: 'No marketplace participations found' };
+      return { status: 'degraded', details: result.error || 'Connection test failed' };
     } catch (error) {
       // Check for specific error types
       if (error.message?.includes('rate limit') || error.message?.includes('throttl')) {
@@ -112,8 +116,8 @@ function registerBolHealth(BolClient) {
       const client = new BolClient();
       await client.authenticate();
 
-      // Simple API call to verify connectivity - get orders
-      const result = await client.searchOrders({ status: 'SHIPPED' }, 1, 1);
+      // Simple API call to verify connectivity - get recent orders
+      const result = await client.getOrders({ page: 1 });
 
       return {
         status: 'healthy',
