@@ -197,7 +197,17 @@ class ItalyFbaInvoicer {
 
       // Calculate unit price (tax-inclusive price from Amazon)
       // Amazon prices include VAT, Odoo will handle tax based on fiscal position
-      const unitPrice = item.unitPrice || (item.lineTotal / (item.quantity || 1));
+      let unitPrice = item.unitPrice || 0;
+      if (!unitPrice && item.lineTotal) {
+        unitPrice = item.lineTotal / (item.quantity || 1);
+      }
+      // Fallback: use Odoo product's list price if no price data available
+      if (!unitPrice || isNaN(unitPrice)) {
+        unitPrice = product.list_price || 0;
+        console.log(`[ItalyFbaInvoicer] No price data for SKU ${item.sku}, using product list price: ${unitPrice}`);
+      }
+
+      console.log(`[ItalyFbaInvoicer] Item ${item.sku}: unitPrice=${unitPrice}, qty=${item.quantity}, lineTotal=${item.lineTotal}`);
 
       orderLines.push([0, 0, {
         product_id: product.id,
