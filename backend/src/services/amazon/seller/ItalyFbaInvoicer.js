@@ -187,7 +187,14 @@ class ItalyFbaInvoicer {
 
     // Build order lines
     const orderLines = [];
-    for (const item of (order.items || [])) {
+    const items = order.items || [];
+    const orderTotal = order.totals?.total || 0;
+    const totalItemQty = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+
+    // Check if we have item-level prices
+    const hasItemPrices = items.some(item => item.unitPrice > 0 || item.lineTotal > 0);
+
+    for (const item of items) {
       const product = await this.resolveProduct(item.sku);
 
       if (!product) {
@@ -198,16 +205,24 @@ class ItalyFbaInvoicer {
       // Calculate unit price (tax-inclusive price from Amazon)
       // Amazon prices include VAT, Odoo will handle tax based on fiscal position
       let unitPrice = item.unitPrice || 0;
-      if (!unitPrice && item.lineTotal) {
+      if (!unitPrice && item.lineTotal > 0) {
         unitPrice = item.lineTotal / (item.quantity || 1);
       }
-      // Fallback: use Odoo product's list price if no price data available
-      if (!unitPrice || isNaN(unitPrice)) {
-        unitPrice = product.list_price || 0;
-        console.log(`[ItalyFbaInvoicer] No price data for SKU ${item.sku}, using product list price: ${unitPrice}`);
+
+      // If item has no price, use order total distributed by quantity
+      if ((!unitPrice || unitPrice <= 0 || isNaN(unitPrice)) && orderTotal > 0 && !hasItemPrices) {
+        // Distribute order total proportionally by quantity
+        unitPrice = orderTotal / totalItemQty;
+        console.log(`[ItalyFbaInvoicer] No item prices, using order total: ${orderTotal} / ${totalItemQty} items = ${unitPrice.toFixed(2)} per unit`);
       }
 
-      console.log(`[ItalyFbaInvoicer] Item ${item.sku}: unitPrice=${unitPrice}, qty=${item.quantity}, lineTotal=${item.lineTotal}`);
+      // Final fallback: use Odoo product's list price
+      if (!unitPrice || unitPrice <= 0 || isNaN(unitPrice)) {
+        unitPrice = product.list_price || 0;
+        console.log(`[ItalyFbaInvoicer] Using product list price for SKU ${item.sku}: ${unitPrice}`);
+      }
+
+      console.log(`[ItalyFbaInvoicer] Item ${item.sku}: unitPrice=${unitPrice.toFixed(2)}, qty=${item.quantity}`);
 
       orderLines.push([0, 0, {
         product_id: product.id,
