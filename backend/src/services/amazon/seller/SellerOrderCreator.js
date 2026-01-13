@@ -1244,19 +1244,25 @@ class SellerOrderCreator {
    * @param {string} salesChannel - e.g., "Amazon.de", "Amazon.fr", "Non-Amazon"
    * @returns {number} Odoo sales team ID
    */
-  getSalesTeamFromSalesChannel(salesChannel) {
-    if (!salesChannel) {
-      return AMAZON_SELLER_TEAM_ID;
+  getSalesTeamFromSalesChannel(salesChannel, destCountryCode = null) {
+    // First try to extract from sales channel (e.g., "Amazon.de" → "DE")
+    if (salesChannel) {
+      const match = salesChannel.match(/amazon\.(\w{2})/i);
+      if (match) {
+        const countryCode = match[1].toUpperCase();
+        const teamId = MARKETPLACE_SALES_TEAMS[countryCode];
+        if (teamId) return teamId;
+      }
     }
 
-    // Extract country code from sales channel (e.g., "Amazon.de" → "DE")
-    const match = salesChannel.match(/amazon\.(\w{2})/i);
-    if (match) {
-      const countryCode = match[1].toUpperCase();
-      return MARKETPLACE_SALES_TEAMS[countryCode] || AMAZON_SELLER_TEAM_ID;
+    // Fallback: use destination country from shipping address
+    if (destCountryCode) {
+      const teamId = MARKETPLACE_SALES_TEAMS[destCountryCode.toUpperCase()];
+      if (teamId) return teamId;
     }
 
-    return AMAZON_SELLER_TEAM_ID;
+    // Last resort: default to DE team
+    return MARKETPLACE_SALES_TEAMS['DE'] || AMAZON_SELLER_TEAM_ID;
   }
 
   /**
@@ -1606,12 +1612,12 @@ class SellerOrderCreator {
         };
       }
 
-      // Determine sales team from sales channel
-      const salesChannel = order.tsvImport?.salesChannel || order.amazonSeller?.salesChannel;
-      const salesTeamId = this.getSalesTeamFromSalesChannel(salesChannel);
-
       // Determine destination country
       const destCountry = order.shippingAddress?.countryCode || 'DE';
+
+      // Determine sales team from sales channel (with fallback to destination country)
+      const salesChannel = order.tsvImport?.salesChannel || order.amazonSeller?.salesChannel;
+      const salesTeamId = this.getSalesTeamFromSalesChannel(salesChannel, destCountry);
 
       // Determine journal and fiscal position (FBM-specific)
       const { journalId, fiscalPositionId, journalType } = this.determineJournalAndFiscalPosition(
