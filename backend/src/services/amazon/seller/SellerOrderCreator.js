@@ -1382,15 +1382,21 @@ class SellerOrderCreator {
         shippingAddressId = existingAddress[0].id;
       } else {
         // Determine company_name for the delivery address
-        // Use AI-cleaned company name or buyerCompanyName from Amazon
-        const deliveryCompanyName = cleanedAddress?.company || order.buyerCompanyName || null;
+        // Priority: AI-cleaned company > buyerCompanyName > parent company name (if B2B)
+        // IMPORTANT: company_name must be set for GLS labels (NS Infosystems reads this field)
+        let deliveryCompanyName = cleanedAddress?.company || order.buyerCompanyName || null;
+
+        // If no specific company name but parent is a company, use parent name
+        if (!deliveryCompanyName && isCompany) {
+          deliveryCompanyName = customerName;
+        }
 
         // Create new shipping address
         shippingAddressId = await this.odoo.create('res.partner', {
           parent_id: customerId,
           type: 'delivery',
           name: deliveryName,
-          company_name: deliveryCompanyName,  // Company name for GLS labels
+          company_name: deliveryCompanyName,  // Company name for GLS labels (NS Infosystems)
           street: shippingStreet || null,
           street2: shippingStreet2 || null,
           city: shippingCity || null,
@@ -1436,7 +1442,13 @@ class SellerOrderCreator {
             invoiceAddressId = existingBilling[0].id;
           } else {
             // Get company name for billing address
-            const billingCompanyName = cleanedAddress?.company || order.buyerCompanyName || null;
+            // IMPORTANT: company_name must be set for invoices (same as delivery)
+            let billingCompanyName = cleanedAddress?.company || order.buyerCompanyName || null;
+
+            // If no specific company name but parent is a company, use parent name
+            if (!billingCompanyName && isCompany) {
+              billingCompanyName = customerName;
+            }
 
             // Create new billing address
             invoiceAddressId = await this.odoo.create('res.partner', {
