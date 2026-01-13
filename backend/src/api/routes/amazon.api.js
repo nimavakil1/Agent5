@@ -27,6 +27,7 @@ const { FbaInventoryReportParser } = require('../../services/amazon/FbaInventory
 const { ReturnsReportParser } = require('../../services/amazon/ReturnsReportParser');
 const { VcsOdooInvoicer } = require('../../services/amazon/VcsOdooInvoicer');
 const { VcsOrderCreator } = require('../../services/amazon/VcsOrderCreator');
+const { getItalyFbaInvoicer } = require('../../services/amazon/seller/ItalyFbaInvoicer');
 const { SettlementReportParser } = require('../../services/amazon/SettlementReportParser');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 
@@ -4513,5 +4514,122 @@ function aggregateSettlementOrders(transactions) {
 
   return ordersByMarketplace;
 }
+
+// =============================================================================
+// ITALY FBA INVOICING (Manual workaround while VCS is unavailable for IT)
+// =============================================================================
+
+/**
+ * GET /api/amazon/it-fba/summary
+ * Get summary of Italian FBA orders and invoices
+ */
+router.get('/it-fba/summary', async (req, res) => {
+  try {
+    const invoicer = getItalyFbaInvoicer();
+    const summary = await invoicer.getSummary();
+
+    res.json({
+      success: true,
+      summary,
+      note: 'Italian FBA orders require manual invoice creation since VCS is unavailable'
+    });
+  } catch (error) {
+    console.error('[IT-FBA] Summary error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/amazon/it-fba/pending
+ * Get pending IT FBA orders that need invoices
+ */
+router.get('/it-fba/pending', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const invoicer = getItalyFbaInvoicer();
+    const orders = await invoicer.getPendingOrders({ limit });
+
+    res.json({
+      success: true,
+      count: orders.length,
+      orders: orders.map(o => ({
+        amazonOrderId: o.sourceIds?.amazonOrderId,
+        orderDate: o.orderDate,
+        customer: o.customer?.name,
+        total: o.totals?.total,
+        currency: o.totals?.currency,
+        items: o.items?.length || 0,
+        status: o.status?.unified
+      }))
+    });
+  } catch (error) {
+    console.error('[IT-FBA] Pending error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/amazon/it-fba/process
+ * Process pending IT FBA orders - create Odoo orders and invoices
+ */
+router.post('/it-fba/process', async (req, res) => {
+  try {
+    const limit = parseInt(req.body.limit) || 20;
+    const dryRun = req.body.dryRun === true;
+
+    const invoicer = getItalyFbaInvoicer();
+    const results = await invoicer.processPendingOrders({ limit, dryRun });
+
+    res.json({
+      success: true,
+      results
+    });
+  } catch (error) {
+    console.error('[IT-FBA] Process error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/amazon/it-fba/process/:orderId
+ * Process a single IT FBA order
+ */
+router.post('/it-fba/process/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const invoicer = getItalyFbaInvoicer();
+    const result = await invoicer.processOrder(orderId);
+
+    res.json({
+      success: result.success,
+      result
+    });
+  } catch (error) {
+    console.error('[IT-FBA] Process order error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/amazon/it-fba/invoice/:orderId
+ * Get invoice information for an IT FBA order
+ */
+router.get('/it-fba/invoice/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const invoicer = getItalyFbaInvoicer();
+    const invoice = await invoicer.getInvoiceForOrder(orderId);
+
+    res.json({
+      success: true,
+      invoice
+    });
+  } catch (error) {
+    console.error('[IT-FBA] Get invoice error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 module.exports = router;
