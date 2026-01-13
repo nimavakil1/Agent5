@@ -49,10 +49,13 @@ function registerOdooHealth(OdooDirectClient) {
   health.register('odoo', async () => {
     try {
       const client = new OdooDirectClient();
-      const uid = await client.authenticate();
+      await client.authenticate();
+
+      // Get uid from client after authentication
+      const uid = client.client?.uid;
 
       if (!uid) {
-        return { status: 'unhealthy', details: 'Authentication failed - no uid returned' };
+        return { status: 'unhealthy', details: 'Authentication failed - no uid available' };
       }
 
       // Simple read to verify connectivity - get current user
