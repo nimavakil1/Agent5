@@ -11,9 +11,9 @@
 
 const { getDb } = require('../../db');
 const {
-  getUnifiedOrderService,
+  getUnifiedOrderService: _getUnifiedOrderService,
   CHANNELS,
-  UNIFIED_STATUS
+  UNIFIED_STATUS: _UNIFIED_STATUS
 } = require('../orders/UnifiedOrderService');
 const { transformBolApiOrder } = require('../orders/transformers/BolOrderTransformer');
 

@@ -18,9 +18,9 @@ const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP'
 const { isTestMode } = require('./TestMode');
 const { getAmazonProductMapper } = require('../AmazonProductMapper');
 const {
-  getUnifiedOrderService,
+  getUnifiedOrderService: _getUnifiedOrderService,
   CHANNELS,
-  SUB_CHANNELS,
+  SUB_CHANNELS: _SUB_CHANNELS,
   UNIFIED_STATUS
 } = require('../../orders/UnifiedOrderService');
 const { transformAmazonVendorApiOrder } = require('../../orders/transformers/VendorOrderTransformer');
@@ -202,8 +202,8 @@ class VendorPOImporter {
 
     if (existing) {
       // Preserve existing Odoo data and acknowledgment state
-      const preservedOdoo = existing.odoo || null;
-      const preservedAck = existing.amazonVendor?.acknowledgment || unified.amazonVendor.acknowledgment;
+      const _preservedOdoo = existing.odoo || null;
+      const _preservedAck = existing.amazonVendor?.acknowledgment || unified.amazonVendor.acknowledgment;
 
       // Merge items: preserve Odoo enrichment data (odooSku, odooProductId, etc.)
       // Create a map of existing items by vendorProductIdentifier (EAN)

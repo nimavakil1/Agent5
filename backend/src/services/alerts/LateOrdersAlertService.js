@@ -12,7 +12,7 @@
  * @module LateOrdersAlertService
  */
 
-const { MongoClient } = require('mongodb');
+const { MongoClient: _MongoClient } = require('mongodb');
 const ExcelJS = require('exceljs');
 const { TeamsNotificationService } = require('../../core/agents/services/TeamsNotificationService');
 const { MicrosoftDirectClient } = require('../../core/agents/integrations/MicrosoftMCP');
@@ -453,7 +453,7 @@ class LateOrdersAlertService {
     const service = new TeamsNotificationService({ webhookUrl: targetWebhook });
 
     // Gather data
-    const { orders, channelStats, today } = await this.gatherOrderData();
+    const { orders: _orders, channelStats, today } = await this.gatherOrderData();
 
     // Build card
     const card = this.buildTeamsCard(channelStats, today);

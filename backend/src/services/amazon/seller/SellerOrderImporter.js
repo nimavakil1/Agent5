@@ -13,15 +13,15 @@
 const { getDb } = require('../../../db');
 const { getSellerClient } = require('./SellerClient');
 const {
-  getMarketplaceConfig,
-  getCountryFromMarketplace,
+  getMarketplaceConfig: _getMarketplaceConfig,
+  getCountryFromMarketplace: _getCountryFromMarketplace,
   getWarehouseId: _getWarehouseId,
   getOrderPrefix: _getOrderPrefix,
   FULFILLMENT_CHANNELS: _FULFILLMENT_CHANNELS,
   getAllMarketplaceIds
 } = require('./SellerMarketplaceConfig');
-const { getUnifiedOrderService, CHANNELS, SUB_CHANNELS } = require('../../orders/UnifiedOrderService');
-const { transformAmazonApiOrder, getMarketplaceCountry } = require('../../orders/transformers/SellerOrderTransformer');
+const { getUnifiedOrderService, CHANNELS, SUB_CHANNELS: _SUB_CHANNELS } = require('../../orders/UnifiedOrderService');
+const { transformAmazonApiOrder, getMarketplaceCountry: _getMarketplaceCountry } = require('../../orders/transformers/SellerOrderTransformer');
 
 // Collection name - uses unified_orders now
 const COLLECTION_NAME = 'unified_orders';

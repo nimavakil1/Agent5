@@ -1643,7 +1643,7 @@ class SellerOrderCreator {
       const salesTeamId = this.getSalesTeamFromSalesChannel(salesChannel, destCountry);
 
       // Determine journal and fiscal position (FBM-specific)
-      const { journalId, fiscalPositionId, journalType } = this.determineJournalAndFiscalPosition(
+      const { journalId: _journalId, fiscalPositionId, journalType } = this.determineJournalAndFiscalPosition(
         destCountry,
         order.isBusinessOrder
       );

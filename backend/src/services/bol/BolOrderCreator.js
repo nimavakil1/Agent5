@@ -17,7 +17,7 @@
  */
 
 const { getDb } = require('../../db');
-const { CHANNELS, SUB_CHANNELS } = require('../orders/UnifiedOrderService');
+const { CHANNELS, SUB_CHANNELS: _SUB_CHANNELS } = require('../orders/UnifiedOrderService');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const { getAddressCleaner } = require('../amazon/seller/AddressCleaner');
 

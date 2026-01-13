@@ -637,7 +637,7 @@ class VendorOrderCreator {
    * @param {object} options - Update options
    * @returns {object} Result with success status and details
    */
-  async updateOrder(poNumber, options = {}) {
+  async updateOrder(poNumber, _options = {}) {
     const result = {
       success: false,
       purchaseOrderNumber: poNumber,

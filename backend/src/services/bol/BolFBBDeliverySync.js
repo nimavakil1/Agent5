@@ -11,7 +11,7 @@
  */
 
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
-const { getDb } = require('../../db');
+const { getDb: _getDb } = require('../../db');
 const BolShipment = require('../../models/BolShipment');
 const { getModuleLogger } = require('../logging/ModuleLogger');
 

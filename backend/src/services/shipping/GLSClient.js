@@ -224,7 +224,7 @@ class GLSClient {
 
       // If no streetNumber provided, try to extract from street
       // Match patterns like "Street Name 123" or "Street Name 123a" or "Street Name 12-14"
-      const match = street.match(/^(.+?)\s+(\d+[\w\-\/]*)\s*$/);
+      const match = street.match(/^(.+?)\s+(\d+[\w\-/]*)\s*$/);
       if (match) {
         street = match[1].trim();
         streetNumber = match[2].trim();

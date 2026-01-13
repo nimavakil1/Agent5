@@ -8,6 +8,8 @@
   "scripts": {
     "start": "node src/index.js",
     "test": "jest",
+    "lint": "eslint src/ --ext .js",
+    "lint:fix": "eslint src/ --ext .js --fix",
     "seed-admin": "node scripts/seedAdmin.js",
     "fix-admin": "node scripts/fix-admin.js",
     "clear-contacts": "node scripts/clearContacts.js",

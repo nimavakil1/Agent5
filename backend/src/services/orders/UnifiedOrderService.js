@@ -235,7 +235,7 @@ class UnifiedOrderService {
 
     // Remove timestamp fields from data - we handle these separately
     // to avoid MongoDB $set/$setOnInsert conflict
-    const { createdAt, updatedAt, ...dataWithoutTimestamps } = orderData;
+    const { createdAt, updatedAt: _updatedAt, ...dataWithoutTimestamps } = orderData;
 
     // Debug: log key fields being set
     const amazonOrderId = orderData.sourceIds?.amazonOrderId;

@@ -10,7 +10,7 @@ const express = require('express');
 const router = express.Router();
 const { getLateOrdersAlertService } = require('../../services/alerts/LateOrdersAlertService');
 const { getMarketplaceDashboardService } = require('../../services/alerts/MarketplaceDashboardService');
-const { getTrackingAlertService, runTrackingHealthCheck, SYNC_STATUS } = require('../../services/alerts/TrackingAlertService');
+const { getTrackingAlertService, runTrackingHealthCheck, SYNC_STATUS: _SYNC_STATUS } = require('../../services/alerts/TrackingAlertService');
 
 /**
  * GET /api/alerts/late-orders/status

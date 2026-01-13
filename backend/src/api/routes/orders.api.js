@@ -136,7 +136,7 @@ router.get('/daily-stats', async (req, res) => {
 router.get('/ship-by-overview', async (req, res) => {
   try {
     const service = getUnifiedOrderService();
-    const db = service.collection.s.db;
+    const _db = service.collection.s.db;
     const collection = service.collection;
 
     // Date boundaries
