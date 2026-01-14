@@ -49,6 +49,9 @@
     .group-fc-name { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
     .group-fc-code { font-size: 12px; color: #71717a; background: #252532; padding: 2px 8px; border-radius: 4px; }
     .separate-badge { font-size: 11px; color: #fbbf24; background: #fbbf2420; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+    .vendor-group-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+    .vendor-group-badge.eu { color: #60a5fa; background: #3b82f620; }
+    .vendor-group-badge.fr { color: #f97316; background: #f9731620; }
     .group-meta { display: flex; gap: 20px; font-size: 13px; color: #a1a1aa; margin-top: 8px; flex-wrap: wrap; }
     .group-meta-item { display: flex; align-items: center; gap: 4px; }
     .group-meta-item .material-symbols-outlined { font-size: 16px; color: #71717a; }
@@ -275,6 +278,7 @@
               <div class="group-fc-name">
                 ${group.fcName}
                 <span class="group-fc-code">${group.fcPartyId}</span>
+                ${group.vendorGroupName ? `<span class="vendor-group-badge ${group.vendorGroup?.toLowerCase() || ''}">${group.vendorGroupName}</span>` : ''}
                 ${isSeparate ? `<span class="separate-badge">Separate Shipment</span>` : ''}
               </div>
               <div class="group-meta">

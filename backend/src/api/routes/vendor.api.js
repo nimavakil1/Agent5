@@ -59,6 +59,52 @@ const {
   cleanupTestData
 } = require('../../services/amazon/vendor/TestMode');
 
+/**
+ * Vendor Groups Configuration
+ *
+ * Orders can only be consolidated within the same vendor group.
+ * This is because each vendor account must submit its own ASN to Amazon.
+ *
+ * Group 'EU': NL + DE accounts (Pan-EU fulfillment)
+ * Group 'FR': FR account only (France-specific)
+ */
+const VENDOR_GROUPS = {
+  EU: {
+    name: 'Pan-EU (NL/DE)',
+    marketplaces: ['NL', 'DE'],
+    vendorCodes: ['HN6VB', '5O6JS'] // NL and DE vendor codes
+  },
+  FR: {
+    name: 'France',
+    marketplaces: ['FR'],
+    vendorCodes: ['C86K8'] // FR vendor code
+  }
+};
+
+/**
+ * Get vendor group for a marketplace code
+ * @param {string} marketplaceCode - e.g., 'NL', 'DE', 'FR'
+ * @returns {string} Vendor group code ('EU' or 'FR')
+ */
+function getVendorGroup(marketplaceCode) {
+  for (const [groupCode, group] of Object.entries(VENDOR_GROUPS)) {
+    if (group.marketplaces.includes(marketplaceCode)) {
+      return groupCode;
+    }
+  }
+  // Default to marketplace code if not in a group
+  return marketplaceCode || 'UNKNOWN';
+}
+
+/**
+ * Get vendor group name for display
+ * @param {string} groupCode - e.g., 'EU', 'FR'
+ * @returns {string} Human-readable group name
+ */
+function getVendorGroupName(groupCode) {
+  return VENDOR_GROUPS[groupCode]?.name || groupCode;
+}
+
 // ==================== PRODUCT PACKAGING ====================
 
 /**
@@ -268,7 +314,9 @@ router.get('/orders/consolidate', async (req, res) => {
       .toArray();
     console.log('[VendorAPI] Found', orders.length, 'orders for consolidation');
 
-    // Group by FC + delivery window end date
+    // Group by VENDOR GROUP + FC + delivery window end date
+    // CRITICAL: Orders from different vendor groups cannot be consolidated
+    // because each vendor account must submit its own ASN to Amazon
     const groups = {};
 
     for (const order of orders) {
@@ -276,14 +324,19 @@ router.get('/orders/consolidate', async (req, res) => {
       const poNumber = order.sourceIds?.amazonVendorPONumber || order.purchaseOrderNumber;
       const partyId = order.amazonVendor?.shipToParty?.partyId || 'UNKNOWN';
       const deliveryEnd = order.amazonVendor?.deliveryWindow?.endDate;
+      const marketplaceCode = order.marketplace?.code || 'UNKNOWN';
+      const vendorGroup = getVendorGroup(marketplaceCode);
+
       // If order has a consolidationOverride, it gets its own separate group
       const groupId = order.consolidationOverride
-        ? `${createConsolidationGroupId(partyId, deliveryEnd)}_SEP_${poNumber}`
-        : createConsolidationGroupId(partyId, deliveryEnd);
+        ? `${createConsolidationGroupId(vendorGroup, partyId, deliveryEnd)}_SEP_${poNumber}`
+        : createConsolidationGroupId(vendorGroup, partyId, deliveryEnd);
 
       if (!groups[groupId]) {
         groups[groupId] = {
           groupId,
+          vendorGroup,
+          vendorGroupName: getVendorGroupName(vendorGroup),
           fcPartyId: partyId,
           fcName: getFCName(partyId, order.amazonVendor?.shipToParty?.address),
           fcAddress: order.amazonVendor?.shipToParty?.address || null,
@@ -463,35 +516,26 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
 
     const groupId = req.params.groupId;
     let query;
-    let fcPartyId, dateStr;
 
-    // Check if this is a separate/override group (contains _SEP_)
-    if (groupId.includes('_SEP_')) {
-      // Format: FC_DATE_SEP_PONUMBER - query for that specific PO
-      const sepIndex = groupId.indexOf('_SEP_');
-      const poNumber = groupId.substring(sepIndex + 5); // After "_SEP_"
-      const baseGroupId = groupId.substring(0, sepIndex);
-      const lastUnderscoreIndex = baseGroupId.lastIndexOf('_');
-      fcPartyId = lastUnderscoreIndex > 0 ? baseGroupId.substring(0, lastUnderscoreIndex) : baseGroupId;
-      dateStr = lastUnderscoreIndex > 0 ? baseGroupId.substring(lastUnderscoreIndex + 1) : 'nodate';
+    // Parse the group ID to extract components
+    const parsed = parseConsolidationGroupId(groupId);
+    const { vendorGroup, fcPartyId, dateStr, isSeparate, poNumber } = parsed;
 
-      // CRITICAL: Use SAME filters as main consolidation list for consistency
+    console.log('[VendorAPI] Consolidate detail - parsed:', JSON.stringify(parsed));
+
+    if (isSeparate) {
+      // Separate/override group - query for that specific PO
       query = {
         channel: 'amazon-vendor',
         'sourceIds.amazonVendorPONumber': poNumber,
         consolidationOverride: true,
         'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
         'amazonVendor.shipmentStatus': 'not_shipped',
-        'odoo.deliveryStatus': { $ne: 'full' } // Match list endpoint filter
+        'odoo.deliveryStatus': { $ne: 'full' }
       };
 
       console.log('[VendorAPI] Consolidate detail (SEPARATE) - groupId:', groupId, 'poNumber:', poNumber);
     } else {
-      // Normal group: parse FC and date
-      const lastUnderscoreIndex = groupId.lastIndexOf('_');
-      fcPartyId = lastUnderscoreIndex > 0 ? groupId.substring(0, lastUnderscoreIndex) : groupId;
-      dateStr = lastUnderscoreIndex > 0 ? groupId.substring(lastUnderscoreIndex + 1) : 'nodate';
-
       if (!fcPartyId) {
         return res.status(400).json({ success: false, error: 'Invalid group ID' });
       }
@@ -501,28 +545,31 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       query = {
         channel: 'amazon-vendor',
         'amazonVendor.shipToParty.partyId': fcPartyId,
-        consolidationOverride: { $ne: true }, // Exclude orders that were removed from consolidation
+        consolidationOverride: { $ne: true },
         'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
         'amazonVendor.shipmentStatus': 'not_shipped',
-        'odoo.deliveryStatus': { $ne: 'full' } // Match list endpoint filter
+        'odoo.deliveryStatus': { $ne: 'full' }
       };
 
-      console.log('[VendorAPI] Consolidate detail - groupId:', groupId, 'fcPartyId:', fcPartyId, 'dateStr:', dateStr);
+      // CRITICAL: Filter by vendor group to ensure only orders from same group are shown
+      // Orders from different vendor groups cannot be consolidated (different ASNs)
+      if (vendorGroup && VENDOR_GROUPS[vendorGroup]) {
+        query['marketplace.code'] = { $in: VENDOR_GROUPS[vendorGroup].marketplaces };
+      }
+
+      console.log('[VendorAPI] Consolidate detail - groupId:', groupId, 'vendorGroup:', vendorGroup, 'fcPartyId:', fcPartyId, 'dateStr:', dateStr);
     }
 
     // CRITICAL: Isolate test data from production data
     if (isTestMode()) {
-      query._testData = true; // In test mode, ONLY show test data
+      query._testData = true;
     } else {
-      query._testData = { $ne: true }; // In production, exclude test data
-      // Also exclude TST orders by PO number pattern (some may have _testData: undefined)
+      query._testData = { $ne: true };
       query['sourceIds.amazonVendorPONumber'] = { $not: /^TST/ };
     }
 
     // Add date filter if present - use UTC to match database dates
-    // Skip date filter for _SEP_ groups since we already filter by PO number
-    if (!groupId.includes('_SEP_') && dateStr && dateStr !== 'nodate') {
-      // Parse as UTC to avoid timezone issues
+    if (!isSeparate && dateStr && dateStr !== 'nodate') {
       const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
       const endOfDay = new Date(dateStr + 'T00:00:00.000Z');
       endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
@@ -606,10 +653,13 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
     consolidatedItems.sort((a, b) => b.totalQty - a.totalQty);
 
     const firstOrder = orders[0];
+    const actualVendorGroup = vendorGroup || getVendorGroup(firstOrder.marketplace?.code);
 
     res.json({
       success: true,
       groupId: req.params.groupId,
+      vendorGroup: actualVendorGroup,
+      vendorGroupName: getVendorGroupName(actualVendorGroup),
       fcPartyId,
       fcName: getFCName(fcPartyId, firstOrder.amazonVendor?.shipToParty?.address),
       fcAddress: firstOrder.amazonVendor?.shipToParty?.address,
@@ -1342,14 +1392,58 @@ function getFCName(partyId, address = null) {
 }
 
 /**
- * Create a group ID from FC party ID and delivery window
+ * Create a group ID from vendor group, FC party ID and delivery window
+ * Format: {vendorGroup}_{fcCode}_{date}
+ * Example: EU_CDG7_2026-01-19, FR_CDG7_2026-01-19
  */
-function createConsolidationGroupId(partyId, deliveryWindowEnd) {
+function createConsolidationGroupId(vendorGroup, partyId, deliveryWindowEnd) {
+  const vg = vendorGroup || 'UNKNOWN';
   const fcCode = partyId?.toUpperCase() || 'UNKNOWN';
   const dateStr = deliveryWindowEnd
     ? new Date(deliveryWindowEnd).toISOString().split('T')[0]
     : 'nodate';
-  return `${fcCode}_${dateStr}`;
+  return `${vg}_${fcCode}_${dateStr}`;
+}
+
+/**
+ * Parse a consolidation group ID to extract components
+ * @param {string} groupId - e.g., 'EU_CDG7_2026-01-19' or 'FR_CDG7_2026-01-19_SEP_PONUM'
+ * @returns {Object} { vendorGroup, fcPartyId, dateStr, isSeparate, poNumber }
+ */
+function parseConsolidationGroupId(groupId) {
+  // Check for _SEP_ (separated order)
+  const isSeparate = groupId.includes('_SEP_');
+  let baseGroupId = groupId;
+  let poNumber = null;
+
+  if (isSeparate) {
+    const sepIndex = groupId.indexOf('_SEP_');
+    poNumber = groupId.substring(sepIndex + 5);
+    baseGroupId = groupId.substring(0, sepIndex);
+  }
+
+  // Parse: vendorGroup_fcCode_date
+  const parts = baseGroupId.split('_');
+  if (parts.length >= 3) {
+    const vendorGroup = parts[0];
+    const dateStr = parts[parts.length - 1];
+    // FC code might contain underscores, so join middle parts
+    const fcPartyId = parts.slice(1, -1).join('_');
+    return { vendorGroup, fcPartyId, dateStr, isSeparate, poNumber };
+  }
+
+  // Fallback for old format without vendor group (fcCode_date)
+  if (parts.length === 2) {
+    return {
+      vendorGroup: null, // Will need to infer from orders
+      fcPartyId: parts[0],
+      dateStr: parts[1],
+      isSeparate,
+      poNumber
+    };
+  }
+
+  return { vendorGroup: null, fcPartyId: groupId, dateStr: 'nodate', isSeparate, poNumber };
 }
 
 /**
@@ -1363,11 +1457,12 @@ async function generatePackingList(req, res) {
     // IMPORTANT: Use unified_orders collection (same as consolidation endpoint)
     const collection = db.collection('unified_orders');
 
-    // Parse group ID (split on LAST underscore only, since partyId may contain underscores)
+    // Parse group ID using consistent parser
     const groupId = req.params.groupId;
-    const lastUnderscoreIndex = groupId.lastIndexOf('_');
-    const fcPartyId = lastUnderscoreIndex > 0 ? groupId.substring(0, lastUnderscoreIndex) : groupId;
-    const dateStr = lastUnderscoreIndex > 0 ? groupId.substring(lastUnderscoreIndex + 1) : 'nodate';
+    const parsed = parseConsolidationGroupId(groupId);
+    const { vendorGroup, fcPartyId, dateStr, isSeparate, poNumber } = parsed;
+
+    console.log('[VendorAPI] Packing list - parsed:', JSON.stringify(parsed));
 
     // CRITICAL: Build query with EXACT same filters as main consolidation endpoint
     // This ensures packing list matches what's shown in the consolidation view
@@ -1375,10 +1470,15 @@ async function generatePackingList(req, res) {
       channel: 'amazon-vendor',
       'amazonVendor.shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
       'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
-      'amazonVendor.shipmentStatus': 'not_shipped', // Match main endpoint
-      'odoo.deliveryStatus': { $ne: 'full' }, // Match main endpoint
-      consolidationOverride: { $ne: true } // Exclude separated orders
+      'amazonVendor.shipmentStatus': 'not_shipped',
+      'odoo.deliveryStatus': { $ne: 'full' },
+      consolidationOverride: { $ne: true }
     };
+
+    // CRITICAL: Filter by vendor group to ensure only orders from same group are shown
+    if (vendorGroup && VENDOR_GROUPS[vendorGroup]) {
+      query['marketplace.code'] = { $in: VENDOR_GROUPS[vendorGroup].marketplaces };
+    }
 
     // CRITICAL: Isolate test data from production data
     if (isTestMode()) {
