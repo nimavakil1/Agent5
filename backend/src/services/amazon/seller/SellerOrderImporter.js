@@ -170,7 +170,7 @@ class SellerOrderImporter {
     // Transform Amazon API order to unified format
     const unifiedOrder = transformAmazonApiOrder(amazonOrder, []);  // Items fetched separately
 
-    // Preserve existing Odoo data if updating
+    // Preserve existing data if updating
     const existing = await this.unifiedService.getByAmazonOrderId(amazonOrder.AmazonOrderId);
     if (existing) {
       // Preserve Odoo link data
@@ -186,6 +186,41 @@ class SellerOrderImporter {
       }
       // Preserve original import date
       unifiedOrder.createdAt = existing.createdAt;
+
+      // CRITICAL: Preserve TSV import data - API poll should NOT overwrite TSV data
+      // TSV data is more complete (has full address) because RDT often fails for API
+      if (existing.tsvImport) {
+        unifiedOrder.tsvImport = existing.tsvImport;
+      }
+      if (existing.addressCleaningResult) {
+        unifiedOrder.addressCleaningResult = existing.addressCleaningResult;
+      }
+      if (existing.billingAddress) {
+        unifiedOrder.billingAddress = existing.billingAddress;
+      }
+
+      // Preserve shipping address from TSV if API returns null (due to RDT failure)
+      if (existing.shippingAddress) {
+        // Only preserve TSV fields if API returned null
+        if (!unifiedOrder.shippingAddress.name && existing.shippingAddress.name) {
+          unifiedOrder.shippingAddress.name = existing.shippingAddress.name;
+        }
+        if (!unifiedOrder.shippingAddress.street && existing.shippingAddress.street) {
+          unifiedOrder.shippingAddress.street = existing.shippingAddress.street;
+        }
+        if (!unifiedOrder.shippingAddress.street2 && existing.shippingAddress.street2) {
+          unifiedOrder.shippingAddress.street2 = existing.shippingAddress.street2;
+        }
+        if (!unifiedOrder.shippingAddress.phone && existing.shippingAddress.phone) {
+          unifiedOrder.shippingAddress.phone = existing.shippingAddress.phone;
+        }
+      }
+
+      // Preserve customer name from TSV if API returns null
+      if (existing.customer?.name && !unifiedOrder.customer?.name) {
+        unifiedOrder.customer = unifiedOrder.customer || {};
+        unifiedOrder.customer.name = existing.customer.name;
+      }
     }
 
     // Upsert to unified_orders
