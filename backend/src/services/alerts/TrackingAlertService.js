@@ -606,7 +606,7 @@ class TrackingAlertService {
         {
           type: 'Action.OpenUrl',
           title: '🔍 View Tracking Dashboard',
-          url: `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/tracking-health`,
+          url: `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/warehouse`,
           style: 'positive'
         }
       ]
