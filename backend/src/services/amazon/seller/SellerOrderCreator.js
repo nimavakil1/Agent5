@@ -791,10 +791,14 @@ class SellerOrderCreator {
         // Clean the name to remove duplicates like "John Smith, SMITH John"
         const deliveryName = cleanDuplicateName(address.name) || customerName;
 
-        // NOTE: Do NOT set company_name on delivery addresses!
-        // Odoo 16+ merges company_name into the name field for non-company records,
-        // causing "Company Name Person Name" to appear in the name field.
-        // The company info is already available via parent_id (the customer record).
+        // Get company name from buyerCompanyName (Amazon B2B field)
+        // IMPORTANT: company_name must be set for GLS labels (NS Infosystems reads this field)
+        let deliveryCompanyName = buyerCompanyName || null;
+
+        // If no specific company name but parent is a company, use parent name
+        if (!deliveryCompanyName && isBusinessOrder) {
+          deliveryCompanyName = customerName;
+        }
 
         // Use unified schema field names: 'street' not 'addressLine1'
         const streetValue = address.street || address.addressLine1 || null;
@@ -804,7 +808,7 @@ class SellerOrderCreator {
           parent_id: customerId,
           type: 'delivery',
           name: deliveryName,
-          // company_name intentionally NOT set - see note above
+          company_name: deliveryCompanyName,  // Company name for GLS labels
           street: streetValue,  // May be null if PII not available
           street2: street2Value,
           city: address.city || null,
@@ -812,9 +816,9 @@ class SellerOrderCreator {
           country_id: countryId,
           phone: address.phone || null,
           email: buyerEmail || null,  // Email for carrier notifications (GLS, etc.)
-          comment: `Shipping address from Amazon order ${amazonOrderId}${!address.name ? ' (PII limited by Amazon)' : ''}${isBusinessOrder ? ' (B2B: ' + customerName + ')' : ''}`
+          comment: `Shipping address from Amazon order ${amazonOrderId}${!address.name ? ' (PII limited by Amazon)' : ''}`
         });
-        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (parent company: ${isBusinessOrder ? customerName : 'none'}) (ID: ${shippingAddressId})`);
+        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (company: ${deliveryCompanyName || 'none'}) (ID: ${shippingAddressId})`);
       }
 
       this.partnerCache[addressCacheKey] = shippingAddressId;
@@ -1411,18 +1415,22 @@ class SellerOrderCreator {
       if (existingAddress.length > 0) {
         shippingAddressId = existingAddress[0].id;
       } else {
-        // NOTE: Do NOT set company_name on delivery addresses!
-        // Odoo 16+ merges company_name into the name field for non-company records,
-        // causing "Company Name Person Name" to appear in the name field.
-        // The company info is already available via parent_id (the customer record).
-        // For GLS labels, look up the parent company name separately.
+        // Determine company_name for the delivery address
+        // Priority: AI-cleaned company > buyerCompanyName > parent company name (if B2B)
+        // IMPORTANT: company_name must be set for GLS labels (NS Infosystems reads this field)
+        let deliveryCompanyName = cleanedAddress?.company || order.buyerCompanyName || null;
+
+        // If no specific company name but parent is a company, use parent name
+        if (!deliveryCompanyName && isCompany) {
+          deliveryCompanyName = customerName;
+        }
 
         // Create new shipping address
         shippingAddressId = await this.odoo.create('res.partner', {
           parent_id: customerId,
           type: 'delivery',
           name: deliveryName,
-          // company_name intentionally NOT set - see note above
+          company_name: deliveryCompanyName,  // Company name for GLS labels (NS Infosystems)
           street: shippingStreet || null,
           street2: shippingStreet2 || null,
           city: shippingCity || null,
@@ -1430,9 +1438,9 @@ class SellerOrderCreator {
           country_id: countryId,
           phone: address.phone || null,
           email: buyerEmail || null,
-          comment: `Shipping address from Amazon FBM order ${amazonOrderId}${isCompany ? ' (B2B: ' + customerName + ')' : ''}`
+          comment: `Shipping address from Amazon FBM order ${amazonOrderId}`
         });
-        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (parent company: ${isCompany ? customerName : 'none'}) (ID: ${shippingAddressId})`);
+        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (company: ${deliveryCompanyName || 'none'}) (ID: ${shippingAddressId})`);
       }
 
       this.partnerCache[addressCacheKey] = shippingAddressId;
@@ -1467,26 +1475,30 @@ class SellerOrderCreator {
           if (existingBilling.length > 0) {
             invoiceAddressId = existingBilling[0].id;
           } else {
-            // NOTE: Do NOT set company_name on billing addresses!
-            // Odoo 16+ merges company_name into the name field for non-company records,
-            // causing "Company Name Person Name" to appear in the name field.
-            // The company info is already available via parent_id (the customer record).
+            // Get company name for billing address
+            // IMPORTANT: company_name must be set for invoices (same as delivery)
+            let billingCompanyName = cleanedAddress?.company || order.buyerCompanyName || null;
+
+            // If no specific company name but parent is a company, use parent name
+            if (!billingCompanyName && isCompany) {
+              billingCompanyName = customerName;
+            }
 
             // Create new billing address
             invoiceAddressId = await this.odoo.create('res.partner', {
               parent_id: customerId,
               type: 'invoice',
               name: billingAddress.name,
-              // company_name intentionally NOT set - see note above
+              company_name: billingCompanyName,  // Company name for invoices
               street: billingAddress.street || null,
               street2: billingAddress.street2 || null,
               city: billingAddress.city || null,
               zip: billingAddress.postalCode || null,
               country_id: billingCountryId,
               phone: billingAddress.phone || null,
-              comment: `Billing address from Amazon FBM order ${amazonOrderId}${isCompany ? ' (B2B: ' + customerName + ')' : ''}`
+              comment: `Billing address from Amazon FBM order ${amazonOrderId}`
             });
-            console.log(`[SellerOrderCreator] Created billing address: ${billingAddress.name} (parent company: ${isCompany ? customerName : 'none'}) (ID: ${invoiceAddressId})`);
+            console.log(`[SellerOrderCreator] Created billing address: ${billingAddress.name} (company: ${billingCompanyName || 'none'}) (ID: ${invoiceAddressId})`);
           }
 
           this.partnerCache[billingCacheKey] = invoiceAddressId;
