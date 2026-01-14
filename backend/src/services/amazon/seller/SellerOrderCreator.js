@@ -1384,11 +1384,22 @@ class SellerOrderCreator {
     }
 
     // Create/find shipping address (child contact)
-    // Use AI-cleaned street if available
-    const shippingStreet = cleanedAddress?.street || address.street || address.addressLine1;
-    const shippingStreet2 = cleanedAddress?.street2 || address.street2 || address.addressLine2;
-    const shippingCity = cleanedAddress?.city || address.city;
-    const shippingZip = cleanedAddress?.zip || address.postalCode;
+    // IMPORTANT: If AI cleaning was done, use ONLY the AI values - don't fall back to raw data!
+    // The AI moves street from address2 to street when needed, so falling back would duplicate it.
+    let shippingStreet, shippingStreet2, shippingCity, shippingZip;
+    if (cleanedAddress && cleanedAddress.street) {
+      // AI cleaning was done - use AI values exclusively
+      shippingStreet = cleanedAddress.street;
+      shippingStreet2 = cleanedAddress.street2 || null;  // Don't fall back to raw!
+      shippingCity = cleanedAddress.city || address.city;
+      shippingZip = cleanedAddress.zip || address.postalCode;
+    } else {
+      // No AI cleaning - use raw address data
+      shippingStreet = address.street || address.addressLine1;
+      shippingStreet2 = address.street2 || address.addressLine2;
+      shippingCity = address.city;
+      shippingZip = address.postalCode;
+    }
 
     // For B2B with company: use person name for delivery contact
     let deliveryName;
