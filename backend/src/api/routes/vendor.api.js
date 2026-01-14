@@ -3775,12 +3775,14 @@ router.get('/packing/by-group/:groupId', async (req, res) => {
 
 /**
  * @route POST /api/vendor/packing/:shipmentId/generate-labels
- * @desc Generate GLS labels and SSCC codes for all parcels in a packing shipment
+ * @desc Generate carrier labels and SSCC codes for all parcels in a packing shipment
+ * @body {carrier: 'gls'|'dachser'|'none'} - Selected carrier for label generation
  */
 router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
   try {
     const db = getDb();
     const generator = await getSSCCGenerator();
+    const { carrier = 'gls' } = req.body;
 
     const shipment = await db.collection('packing_shipments').findOne({
       shipmentId: req.params.shipmentId
@@ -3790,12 +3792,27 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Shipment not found' });
     }
 
-    // Initialize GLS client (may not be configured)
+    // Initialize carrier client based on selection
     let glsClient = null;
-    try {
-      glsClient = getGLSClient();
-    } catch (err) {
-      console.warn('[VendorAPI] GLS not configured:', err.message);
+    let dachserClient = null;
+
+    if (carrier === 'gls') {
+      try {
+        glsClient = getGLSClient();
+      } catch (err) {
+        console.warn('[VendorAPI] GLS not configured:', err.message);
+      }
+    } else if (carrier === 'dachser') {
+      try {
+        const { getDachserClient } = require('../../services/shipping/DachserClient');
+        dachserClient = getDachserClient();
+        if (!dachserClient.isConfigured()) {
+          console.warn('[VendorAPI] Dachser not configured');
+          dachserClient = null;
+        }
+      } catch (err) {
+        console.warn('[VendorAPI] Dachser not available:', err.message);
+      }
     }
 
     const results = [];
@@ -3807,6 +3824,9 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
         parcelNumber: parcel.parcelNumber,
         sscc: null,
         ssccFormatted: null,
+        carrierTrackingNumber: null,
+        carrierError: null,
+        // Keep backwards compatibility
         glsTrackingNumber: null,
         glsError: null
       };
@@ -3831,8 +3851,9 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
           parcelResult.ssccFormatted = parcel.ssccFormatted;
         }
 
-        // Generate GLS label if client is available
+        // Generate carrier label based on selected carrier
         if (glsClient && !parcel.glsTrackingNumber && shipment.fcAddress) {
+          // GLS parcel shipping
           const receiverAddress = {
             name: shipment.fcName || 'Amazon FC',
             street: shipment.fcAddress.addressLine1 || shipment.fcAddress.street || '',
@@ -3856,12 +3877,56 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
             parcel.glsTrackingNumber = glsResult.trackingNumber;
             parcel.glsParcelNumber = glsResult.parcelNumber;
             parcel.glsLabelPdf = glsResult.labelPdf ? glsResult.labelPdf.toString('base64') : null;
+            parcel.carrier = 'gls';
             parcelResult.glsTrackingNumber = glsResult.trackingNumber;
+            parcelResult.carrierTrackingNumber = glsResult.trackingNumber;
           } else {
             parcelResult.glsError = glsResult.error;
+            parcelResult.carrierError = glsResult.error;
           }
-        } else if (!glsClient) {
-          parcelResult.glsError = 'GLS not configured';
+        } else if (dachserClient && !parcel.dachserTrackingNumber && shipment.fcAddress) {
+          // Dachser freight shipping - create transport order
+          const receiverAddress = {
+            name: shipment.fcName || 'Amazon FC',
+            street: shipment.fcAddress.addressLine1 || shipment.fcAddress.street || '',
+            postalCode: shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
+            city: shipment.fcAddress.city || '',
+            countryCode: shipment.fcAddress.countryCode || 'DE',
+            phone: '',
+            email: ''
+          };
+
+          // For Dachser, we create a quotation first (freight shipments typically need quotes)
+          // Note: Full transport order creation would be done at ship time
+          const quoteResult = await dachserClient.getQuotation({
+            receiver: receiverAddress,
+            packages: [{
+              packingType: 'EU', // Euro pallet
+              quantity: 1,
+              weight: parcel.weight,
+              length: 120,
+              width: 80,
+              height: 100
+            }],
+            references: [{ type: 'SHIPMENT', value: shipment.shipmentId }]
+          });
+
+          if (quoteResult.success) {
+            parcel.dachserQuote = {
+              price: quoteResult.price,
+              currency: quoteResult.currency,
+              transitDays: quoteResult.transitDays
+            };
+            parcel.carrier = 'dachser';
+            // For Dachser, tracking number comes after actual booking
+            parcelResult.carrierTrackingNumber = `DACHSER-${shipment.shipmentId}-P${parcel.parcelNumber}`;
+            parcel.dachserReference = parcelResult.carrierTrackingNumber;
+          } else {
+            parcelResult.carrierError = quoteResult.error || 'Dachser quote failed';
+          }
+        } else if (carrier !== 'none' && !glsClient && !dachserClient) {
+          parcelResult.carrierError = `${carrier.toUpperCase()} not configured`;
+          parcelResult.glsError = carrier === 'gls' ? 'GLS not configured' : null;
         }
       } catch (err) {
         parcelResult.error = err.message;
@@ -3870,12 +3935,13 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
       results.push(parcelResult);
     }
 
-    // Update shipment
+    // Update shipment with carrier info
     await db.collection('packing_shipments').updateOne(
       { shipmentId: req.params.shipmentId },
       {
         $set: {
           parcels: updatedParcels,
+          carrier: carrier,
           status: 'labels_generated',
           labelsGeneratedAt: new Date(),
           updatedAt: new Date()
@@ -3886,8 +3952,10 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
     res.json({
       success: true,
       shipmentId: shipment.shipmentId,
+      carrier: carrier,
       parcels: results,
-      glsConfigured: !!glsClient
+      glsConfigured: !!glsClient,
+      dachserConfigured: !!dachserClient
     });
   } catch (error) {
     console.error('[VendorAPI] POST /packing/:shipmentId/generate-labels error:', error);
@@ -5000,6 +5068,60 @@ router.get('/packing/gls-status', async (req, res) => {
     });
   } catch (error) {
     console.error('[VendorAPI] GET /packing/gls-status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/vendor/packing/carrier-status
+ * @desc Check status of all configured shipping carriers
+ */
+router.get('/packing/carrier-status', async (req, res) => {
+  try {
+    const carriers = {
+      gls: { configured: false, name: 'GLS', type: 'parcel' },
+      dachser: { configured: false, name: 'Dachser', type: 'freight' }
+    };
+
+    // Check GLS
+    try {
+      const glsClient = getGLSClient();
+      carriers.gls.configured = true;
+      if (req.query.test === 'true') {
+        carriers.gls.testResult = await glsClient.testConnection();
+      }
+    } catch (err) {
+      carriers.gls.error = 'Not configured - set GLS_USER_ID and GLS_PASSWORD in .env';
+    }
+
+    // Check Dachser
+    try {
+      const { getDachserClient } = require('../../services/shipping/DachserClient');
+      const dachserClient = getDachserClient();
+      carriers.dachser.configured = dachserClient.isConfigured();
+      if (req.query.test === 'true' && carriers.dachser.configured) {
+        carriers.dachser.testResult = await dachserClient.testConnection();
+      }
+      if (!carriers.dachser.configured) {
+        carriers.dachser.error = 'Not configured - set DACHSER_API_KEY and DACHSER_CUSTOMER_ID in .env';
+      }
+    } catch (err) {
+      carriers.dachser.error = err.message;
+    }
+
+    // Determine available carriers
+    const available = Object.entries(carriers)
+      .filter(([, c]) => c.configured)
+      .map(([code, c]) => ({ code, ...c }));
+
+    res.json({
+      success: true,
+      carriers,
+      available,
+      defaultCarrier: available.length > 0 ? available[0].code : null
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /packing/carrier-status error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

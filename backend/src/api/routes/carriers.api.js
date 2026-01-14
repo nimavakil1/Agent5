@@ -329,6 +329,12 @@ router.post('/:id/test-connection', async (req, res) => {
         testResult = await glsClient.testConnection();
         break;
       }
+      case 'dachser': {
+        const { getDachserClient } = require('../../services/shipping/DachserClient');
+        const dachserClient = getDachserClient();
+        testResult = await dachserClient.testConnection();
+        break;
+      }
       // Add other providers here as they're implemented
       default:
         break;

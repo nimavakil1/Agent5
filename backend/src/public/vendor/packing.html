@@ -151,13 +151,18 @@
     .loading .material-symbols-outlined { animation: spin 1s linear infinite; margin-right: 8px; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    /* GLS Status */
-    .gls-status { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #1a1a28; border-radius: 8px; margin-bottom: 16px; }
-    .gls-status.configured { border-left: 3px solid #22c55e; }
-    .gls-status.not-configured { border-left: 3px solid #fbbf24; }
-    .gls-status .material-symbols-outlined { font-size: 20px; }
-    .gls-status.configured .material-symbols-outlined { color: #22c55e; }
-    .gls-status.not-configured .material-symbols-outlined { color: #fbbf24; }
+    /* Carrier Status */
+    .carrier-status { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #1a1a28; border-radius: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .carrier-status.configured { border-left: 3px solid #22c55e; }
+    .carrier-status.not-configured { border-left: 3px solid #fbbf24; }
+    .carrier-status .material-symbols-outlined { font-size: 20px; }
+    .carrier-status.configured .material-symbols-outlined { color: #22c55e; }
+    .carrier-status.not-configured .material-symbols-outlined { color: #fbbf24; }
+    .carrier-select { padding: 8px 12px; background: #252532; border: 1px solid #3f3f50; border-radius: 6px; color: #fff; font-size: 14px; cursor: pointer; }
+    .carrier-select:focus { outline: none; border-color: #f97316; }
+    .carrier-badge { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .carrier-badge.parcel { background: #3b82f620; color: #60a5fa; }
+    .carrier-badge.freight { background: #f9731620; color: #f97316; }
   </style>
 </head>
 <body>
@@ -194,10 +199,15 @@
       </div>
     </div>
 
-    <!-- GLS Status -->
-    <div class="gls-status" id="gls-status">
+    <!-- Carrier Status -->
+    <div class="carrier-status" id="carrier-status">
       <span class="material-symbols-outlined">local_shipping</span>
-      <span id="gls-status-text">Checking GLS integration...</span>
+      <span id="carrier-status-text">Checking carrier integrations...</span>
+      <div style="flex: 1;"></div>
+      <label style="font-size: 13px; color: #a1a1aa;">Carrier:</label>
+      <select class="carrier-select" id="carrier-select" onchange="onCarrierChange()">
+        <option value="">Loading...</option>
+      </select>
     </div>
 
     <!-- Group Info -->
@@ -350,7 +360,8 @@
     let groupData = null;
     let currentShipmentId = null;
     let parcels = [];
-    let glsConfigured = false;
+    let carriersData = null;
+    let selectedCarrier = null;
     let itemsRemaining = {}; // Track remaining qty for each item
     let currentModalParcelIndex = -1; // Which parcel we're adding items to
     let packagingCache = {}; // Cache packaging data by SKU
@@ -672,27 +683,80 @@
       }
     }
 
-    // Check GLS status
-    async function checkGLSStatus() {
+    // Check carrier status
+    async function checkCarrierStatus() {
       try {
-        const res = await fetch('/api/vendor/packing/gls-status', { credentials: 'include' });
+        const res = await fetch('/api/vendor/packing/carrier-status', { credentials: 'include' });
         const data = await res.json();
 
-        glsConfigured = data.glsConfigured;
-        const statusEl = document.getElementById('gls-status');
-        const textEl = document.getElementById('gls-status-text');
+        carriersData = data;
+        const statusEl = document.getElementById('carrier-status');
+        const textEl = document.getElementById('carrier-status-text');
+        const selectEl = document.getElementById('carrier-select');
 
-        if (data.glsConfigured) {
+        // Populate carrier dropdown
+        if (data.available && data.available.length > 0) {
+          selectEl.innerHTML = data.available.map(c =>
+            `<option value="${c.code}" data-type="${c.type}">${c.name} (${c.type})</option>`
+          ).join('');
+
+          // Add "None (SSCC only)" option
+          selectEl.innerHTML += '<option value="none">None (SSCC only)</option>';
+
+          // Select default carrier
+          selectedCarrier = data.defaultCarrier;
+          selectEl.value = selectedCarrier;
+
           statusEl.classList.add('configured');
           statusEl.classList.remove('not-configured');
-          textEl.textContent = 'GLS integration is configured - shipping labels will be generated automatically';
+          textEl.innerHTML = `<span class="carrier-badge ${data.carriers[selectedCarrier]?.type}">${data.carriers[selectedCarrier]?.type}</span> ${data.carriers[selectedCarrier]?.name} is ready`;
         } else {
+          selectEl.innerHTML = '<option value="none">None (SSCC only)</option>';
+          selectedCarrier = 'none';
+
           statusEl.classList.add('not-configured');
           statusEl.classList.remove('configured');
-          textEl.textContent = 'GLS not configured - only SSCC labels will be generated (configure GLS_USER_ID and GLS_PASSWORD in .env)';
+          textEl.textContent = 'No carriers configured - only SSCC labels will be generated';
         }
+
+        updateGenerateButtonText();
       } catch (err) {
-        console.error('Failed to check GLS status:', err);
+        console.error('Failed to check carrier status:', err);
+      }
+    }
+
+    // Handle carrier selection change
+    function onCarrierChange() {
+      const selectEl = document.getElementById('carrier-select');
+      const statusEl = document.getElementById('carrier-status');
+      const textEl = document.getElementById('carrier-status-text');
+
+      selectedCarrier = selectEl.value;
+
+      if (selectedCarrier && selectedCarrier !== 'none' && carriersData?.carriers[selectedCarrier]) {
+        const carrier = carriersData.carriers[selectedCarrier];
+        statusEl.classList.add('configured');
+        statusEl.classList.remove('not-configured');
+        textEl.innerHTML = `<span class="carrier-badge ${carrier.type}">${carrier.type}</span> ${carrier.name} selected`;
+      } else {
+        statusEl.classList.add('not-configured');
+        statusEl.classList.remove('configured');
+        textEl.textContent = 'No carrier selected - only SSCC labels will be generated';
+      }
+
+      updateGenerateButtonText();
+    }
+
+    // Update generate button text based on selected carrier
+    function updateGenerateButtonText() {
+      const btn = document.getElementById('generate-btn');
+      if (!btn) return;
+
+      if (selectedCarrier && selectedCarrier !== 'none') {
+        const carrierName = carriersData?.carriers[selectedCarrier]?.name || selectedCarrier.toUpperCase();
+        btn.innerHTML = `<span class="material-symbols-outlined">qr_code_2</span>Generate Labels (${carrierName} + SSCC)`;
+      } else {
+        btn.innerHTML = '<span class="material-symbols-outlined">qr_code_2</span>Generate SSCC Labels Only';
       }
     }
 
@@ -932,9 +996,9 @@
                 <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #252532;">
                   <div style="font-size: 11px; color: #71717a;">SSCC</div>
                   <div style="font-family: monospace; font-size: 12px; color: #4ade80;">${parcel.ssccFormatted || parcel.sscc}</div>
-                  ${parcel.glsTrackingNumber ? `
-                    <div style="font-size: 11px; color: #71717a; margin-top: 8px;">GLS Tracking</div>
-                    <div style="font-family: monospace; font-size: 12px; color: #fbbf24;">${parcel.glsTrackingNumber}</div>
+                  ${parcel.carrierTrackingNumber || parcel.glsTrackingNumber ? `
+                    <div style="font-size: 11px; color: #71717a; margin-top: 8px;">${selectedCarrier && selectedCarrier !== 'none' ? (carriersData?.carriers[selectedCarrier]?.name || 'Carrier') : 'GLS'} Tracking</div>
+                    <div style="font-family: monospace; font-size: 12px; color: #fbbf24;">${parcel.carrierTrackingNumber || parcel.glsTrackingNumber}</div>
                   ` : ''}
                 </div>
               ` : ''}
@@ -1022,7 +1086,8 @@
         const labelsRes = await fetch(`/api/vendor/packing/${currentShipmentId}/generate-labels`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include'
+          credentials: 'include',
+          body: JSON.stringify({ carrier: selectedCarrier })
         });
 
         const labelsData = await labelsRes.json();
@@ -1033,6 +1098,9 @@
           const result = labelsData.parcels[i];
           parcels[i].sscc = result.sscc;
           parcels[i].ssccFormatted = result.ssccFormatted;
+          parcels[i].carrierTrackingNumber = result.carrierTrackingNumber || result.glsTrackingNumber;
+          parcels[i].carrierError = result.carrierError || result.glsError;
+          // Keep backwards compatibility
           parcels[i].glsTrackingNumber = result.glsTrackingNumber;
           parcels[i].glsError = result.glsError;
         }
@@ -1046,15 +1114,18 @@
 
         // Render labels info
         const ssccCount = labelsData.parcels.filter(p => p.sscc).length;
-        const glsCount = labelsData.parcels.filter(p => p.glsTrackingNumber).length;
+        const carrierCount = labelsData.parcels.filter(p => p.carrierTrackingNumber || p.glsTrackingNumber).length;
+        const carrierName = selectedCarrier && selectedCarrier !== 'none'
+          ? (carriersData?.carriers[selectedCarrier]?.name || selectedCarrier.toUpperCase())
+          : 'Carrier';
         document.getElementById('labels-info').innerHTML = `
           <div class="label-stat success">
             <div class="label-stat-value">${ssccCount}/${parcels.length}</div>
             <div class="label-stat-label">SSCC Labels</div>
           </div>
-          <div class="label-stat ${glsCount === parcels.length ? 'success' : 'warning'}">
-            <div class="label-stat-value">${glsCount}/${parcels.length}</div>
-            <div class="label-stat-label">GLS Labels</div>
+          <div class="label-stat ${carrierCount === parcels.length ? 'success' : 'warning'}">
+            <div class="label-stat-value">${carrierCount}/${parcels.length}</div>
+            <div class="label-stat-label">${carrierName} Labels</div>
           </div>
           <div class="label-stat">
             <div class="label-stat-value">${currentShipmentId}</div>
@@ -1062,7 +1133,7 @@
           </div>
         `;
 
-        document.getElementById('action-status').textContent = `Labels generated: ${ssccCount} SSCC, ${glsCount} GLS`;
+        document.getElementById('action-status').textContent = `Labels generated: ${ssccCount} SSCC, ${carrierCount} ${carrierName}`;
         showToast('Labels generated successfully!');
 
       } catch (err) {
@@ -1070,7 +1141,7 @@
         document.getElementById('action-status').textContent = 'Error generating labels';
       } finally {
         generateBtn.disabled = false;
-        generateBtn.innerHTML = '<span class="material-symbols-outlined">qr_code_2</span>Generate Labels (GLS + SSCC)';
+        updateGenerateButtonText();
       }
     }
 
@@ -1142,7 +1213,7 @@
 
     // Initialize
     async function init() {
-      await checkGLSStatus();
+      await checkCarrierStatus();
       await loadGroupData();
     }
 
