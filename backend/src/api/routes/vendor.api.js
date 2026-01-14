@@ -447,6 +447,16 @@ router.post('/orders/consolidation/restore', async (req, res) => {
  */
 router.get('/orders/consolidate/:groupId', async (req, res) => {
   try {
+    // Sync shipment status from Odoo to ensure consistency with main list
+    // This ensures the detail view shows the same orders as the header
+    try {
+      const importer = await getVendorPOImporter();
+      await importer.syncShipmentStatusFromOdoo({ limit: 50 });
+    } catch (syncError) {
+      console.warn('[VendorAPI] Consolidate detail sync warning:', syncError.message);
+      // Continue even if sync fails
+    }
+
     const db = getDb();
     // Use unified_orders collection (same as VendorPOImporter)
     const collection = db.collection('unified_orders');
@@ -465,12 +475,14 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       fcPartyId = lastUnderscoreIndex > 0 ? baseGroupId.substring(0, lastUnderscoreIndex) : baseGroupId;
       dateStr = lastUnderscoreIndex > 0 ? baseGroupId.substring(lastUnderscoreIndex + 1) : 'nodate';
 
+      // CRITICAL: Use SAME filters as main consolidation list for consistency
       query = {
         channel: 'amazon-vendor',
         'sourceIds.amazonVendorPONumber': poNumber,
         consolidationOverride: true,
         'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
-        'amazonVendor.shipmentStatus': 'not_shipped'
+        'amazonVendor.shipmentStatus': 'not_shipped',
+        'odoo.deliveryStatus': { $ne: 'full' } // Match list endpoint filter
       };
 
       console.log('[VendorAPI] Consolidate detail (SEPARATE) - groupId:', groupId, 'poNumber:', poNumber);
@@ -484,13 +496,15 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid group ID' });
       }
 
-      // Build query using unified schema field paths
+      // CRITICAL: Use SAME filters as main consolidation list for consistency
+      // This ensures header stats match expanded details
       query = {
         channel: 'amazon-vendor',
         'amazonVendor.shipToParty.partyId': fcPartyId,
         consolidationOverride: { $ne: true }, // Exclude orders that were removed from consolidation
         'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
-        'amazonVendor.shipmentStatus': 'not_shipped'
+        'amazonVendor.shipmentStatus': 'not_shipped',
+        'odoo.deliveryStatus': { $ne: 'full' } // Match list endpoint filter
       };
 
       console.log('[VendorAPI] Consolidate detail - groupId:', groupId, 'fcPartyId:', fcPartyId, 'dateStr:', dateStr);
@@ -1355,12 +1369,15 @@ async function generatePackingList(req, res) {
     const fcPartyId = lastUnderscoreIndex > 0 ? groupId.substring(0, lastUnderscoreIndex) : groupId;
     const dateStr = lastUnderscoreIndex > 0 ? groupId.substring(lastUnderscoreIndex + 1) : 'nodate';
 
-    // Build query using unified schema (amazonVendor.* fields)
+    // CRITICAL: Build query with EXACT same filters as main consolidation endpoint
+    // This ensures packing list matches what's shown in the consolidation view
     const query = {
       channel: 'amazon-vendor',
       'amazonVendor.shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
       'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
-      'amazonVendor.shipmentStatus': { $nin: ['fully_shipped', 'shipped'] }
+      'amazonVendor.shipmentStatus': 'not_shipped', // Match main endpoint
+      'odoo.deliveryStatus': { $ne: 'full' }, // Match main endpoint
+      consolidationOverride: { $ne: true } // Exclude separated orders
     };
 
     // CRITICAL: Isolate test data from production data
