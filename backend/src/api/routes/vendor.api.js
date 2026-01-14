@@ -1346,7 +1346,8 @@ function createConsolidationGroupId(partyId, deliveryWindowEnd) {
 async function generatePackingList(req, res) {
   try {
     const db = getDb();
-    const collection = db.collection('vendor_purchase_orders');
+    // IMPORTANT: Use unified_orders collection (same as consolidation endpoint)
+    const collection = db.collection('unified_orders');
 
     // Parse group ID (split on LAST underscore only, since partyId may contain underscores)
     const groupId = req.params.groupId;
@@ -1354,22 +1355,12 @@ async function generatePackingList(req, res) {
     const fcPartyId = lastUnderscoreIndex > 0 ? groupId.substring(0, lastUnderscoreIndex) : groupId;
     const dateStr = lastUnderscoreIndex > 0 ? groupId.substring(lastUnderscoreIndex + 1) : 'nodate';
 
-    // Build query - include both New and Acknowledged states
-    // Support both unified (amazonVendor.*) and legacy schema
+    // Build query using unified schema (amazonVendor.* fields)
     const query = {
-      'shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
-      // PO state: check both unified and legacy fields
-      $or: [
-        { 'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] } },
-        { purchaseOrderState: { $in: ['New', 'Acknowledged'] }, 'amazonVendor.purchaseOrderState': { $exists: false } }
-      ],
-      // Shipment status: exclude fully_shipped from both unified and legacy
-      $and: [
-        { $or: [
-          { 'amazonVendor.shipmentStatus': { $nin: ['fully_shipped', 'shipped'] } },
-          { shipmentStatus: { $nin: ['fully_shipped', 'shipped'] }, 'amazonVendor.shipmentStatus': { $exists: false } }
-        ]}
-      ]
+      channel: 'amazon-vendor',
+      'amazonVendor.shipToParty.partyId': { $regex: new RegExp(fcPartyId, 'i') },
+      'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
+      'amazonVendor.shipmentStatus': { $nin: ['fully_shipped', 'shipped'] }
     };
 
     // CRITICAL: Isolate test data from production data
@@ -1377,34 +1368,38 @@ async function generatePackingList(req, res) {
       query._testData = true;
     } else {
       query._testData = { $ne: true };
+      // Also exclude TST orders by PO number pattern
+      query['sourceIds.amazonVendorPONumber'] = { $not: /^TST/ };
     }
 
     if (dateStr && dateStr !== 'nodate') {
-      const startOfDay = new Date(dateStr);
-      const endOfDay = new Date(dateStr);
-      endOfDay.setDate(endOfDay.getDate() + 1);
-      query['deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
+      const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
+      const endOfDay = new Date(dateStr + 'T00:00:00.000Z');
+      endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+      query['amazonVendor.deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
     }
 
+    console.log('[VendorAPI] Packing list query:', JSON.stringify(query));
     const orders = await collection.find(query)
-      .sort({ purchaseOrderNumber: 1 })
+      .sort({ 'sourceIds.amazonVendorPONumber': 1 })
       .toArray();
+    console.log('[VendorAPI] Packing list found', orders.length, 'orders');
 
     if (orders.length === 0) {
       return res.status(404).json({ success: false, error: 'No orders found for this group' });
     }
 
-    // Build consolidated packing list
+    // Build consolidated packing list (using unified schema fields)
     const packingList = {
       generatedAt: new Date().toISOString(),
       groupId: req.params.groupId,
       shipTo: {
         fcPartyId,
-        fcName: getFCName(fcPartyId, orders[0].shipToParty?.address),
-        address: orders[0].shipToParty?.address
+        fcName: getFCName(fcPartyId, orders[0].amazonVendor?.shipToParty?.address),
+        address: orders[0].amazonVendor?.shipToParty?.address
       },
-      deliveryWindow: orders[0].deliveryWindow,
-      purchaseOrders: orders.map(o => o.purchaseOrderNumber),
+      deliveryWindow: orders[0].amazonVendor?.deliveryWindow,
+      purchaseOrders: orders.map(o => o.sourceIds?.amazonVendorPONumber || o.purchaseOrderNumber),
       items: [],
       summary: {
         orderCount: orders.length,
@@ -1440,8 +1435,9 @@ async function generatePackingList(req, res) {
         }
 
         itemMap[key].quantity += qty;
-        if (!itemMap[key].poNumbers.includes(order.purchaseOrderNumber)) {
-          itemMap[key].poNumbers.push(order.purchaseOrderNumber);
+        const poNumber = order.sourceIds?.amazonVendorPONumber || order.purchaseOrderNumber;
+        if (!itemMap[key].poNumbers.includes(poNumber)) {
+          itemMap[key].poNumbers.push(poNumber);
         }
       }
     }
