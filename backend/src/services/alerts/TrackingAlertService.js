@@ -223,8 +223,9 @@ class TrackingAlertService {
       subChannel: 'FBM',
       'sourceIds.odooSaleOrderId': { $exists: true, $ne: null },
       $or: [
-        { 'amazon.trackingPushedAt': null },
-        { 'amazon.trackingPushedAt': { $exists: false } }
+        { 'amazonSeller.trackingPushed': null },
+        { 'amazonSeller.trackingPushed': { $exists: false } },
+        { 'amazonSeller.trackingPushed': false }
       ],
       'status.source': { $nin: ['Cancelled', 'Shipped'] }
     }).toArray();
@@ -258,7 +259,7 @@ class TrackingAlertService {
             pickingDone: picking.date_done,
             trackingRef: picking.carrier_tracking_ref,
             hoursStuck: Math.round((Date.now() - dateDone.getTime()) / (1000 * 60 * 60)),
-            reason: order.amazon?.trackingPushError || 'Not attempted'
+            reason: order.amazonSeller?.trackingPushError || 'Not attempted'
           });
         }
       }
