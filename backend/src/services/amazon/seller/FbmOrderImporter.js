@@ -271,17 +271,26 @@ class FbmOrderImporter {
     // - 5-10 characters
     // - Contains mix of letters and numbers (real SKUs are usually numeric or have dashes)
     // - Ends with a letter (many promotion codes do, like "595771C")
+    // - BUT NOT ending in K, B, S, W, G, R (common product color variants: Black, Blue, Silver, White, Grey, Red)
     const isAlphanumericOnly = /^[A-Z0-9]+$/i.test(sku);
     const hasNoDashes = !sku.includes('-') && !sku.includes('_');
     const length5to10 = sku.length >= 5 && sku.length <= 10;
     const endsWithLetter = /[A-Za-z]$/.test(sku);
     const hasLettersAndNumbers = /[A-Za-z]/.test(sku) && /[0-9]/.test(sku);
 
+    // Product SKUs often end with color codes: K=Black, B=Blue, S=Silver, W=White, G=Grey, R=Red
+    const endsWithColorCode = /[KBSWGR]$/i.test(sku);
+
     // Pattern: alphanumeric only, 5-10 chars, ends with letter, has both letters and numbers
-    // This matches patterns like "595771C", "ABC123D" but NOT "10060K-FBM" or "12345"
+    // This matches patterns like "595771C", "ABC123D" but NOT "10005K" (product) or "12345"
     if (isAlphanumericOnly && hasNoDashes && length5to10 && endsWithLetter && hasLettersAndNumbers) {
-      // Additional check: if it doesn't look like a product code (which often end in K)
-      // and the price is 0 or very low, it's likely a promotion
+      // Skip if SKU ends with common product color codes (K, B, S, W, G, R)
+      // These are likely real products like "10005K" (black variant)
+      if (endsWithColorCode) {
+        return false;
+      }
+
+      // If it ends with other letters and price is 0, it's likely a promotion
       if (price <= 0) {
         return true;
       }
