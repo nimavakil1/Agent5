@@ -339,6 +339,7 @@ router.get('/orders/consolidate', async (req, res) => {
           vendorGroupName: getVendorGroupName(vendorGroup),
           fcPartyId: partyId,
           fcName: getFCName(partyId, order.amazonVendor?.shipToParty?.address),
+          fcCountry: getFCCountry(partyId),
           fcAddress: order.amazonVendor?.shipToParty?.address || null,
           deliveryWindow: order.amazonVendor?.deliveryWindow,
           marketplace: order.marketplace?.code,
@@ -1361,6 +1362,21 @@ const FC_NAMES = {
   'PRG1': 'Amazon CZ - Dobrovíz',
   'PRG2': 'Amazon CZ - Prague'
 };
+
+/**
+ * Get country code from FC party ID
+ */
+function getFCCountry(partyId) {
+  if (!partyId) return null;
+  const upper = partyId.toUpperCase();
+  const fcName = FC_NAMES[upper];
+  if (fcName) {
+    // Extract country code from "Amazon XX - City" format
+    const match = fcName.match(/Amazon\s+(\w+)\s+-/);
+    if (match) return match[1];
+  }
+  return null;
+}
 
 /**
  * Get friendly FC name from party ID

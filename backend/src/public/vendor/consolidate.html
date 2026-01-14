@@ -286,10 +286,10 @@
                   <span class="material-symbols-outlined">calendar_today</span>
                   Deliver by: <span class="${urgencyClass}">${formatDate(group.deliveryWindow?.endDate)} (${urgencyText})</span>
                 </div>
-                <div class="group-meta-item">
+                ${group.fcCountry ? `<div class="group-meta-item">
                   <span class="material-symbols-outlined">location_on</span>
-                  ${group.fcAddress?.city || 'Unknown'}, ${group.fcAddress?.countryCode || '-'}
-                </div>
+                  ${group.fcCountry}
+                </div>` : ''}
               </div>
             </div>
             <div class="group-stats">
