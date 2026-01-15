@@ -189,6 +189,191 @@ class BolOrderCreator {
   }
 
   /**
+   * Check if order has mixed fulfillment (both FBB and FBR items)
+   * @param {Array} items - Order items
+   * @returns {object} { isMixed, fbbItems, fbrItems }
+   */
+  checkMixedFulfillment(items) {
+    if (!items || items.length === 0) {
+      return { isMixed: false, fbbItems: [], fbrItems: [] };
+    }
+
+    const fbbItems = items.filter(item => item.fulfilmentMethod === 'FBB');
+    const fbrItems = items.filter(item => item.fulfilmentMethod === 'FBR');
+
+    // Items without explicit fulfillment method default to FBR
+    const unknownItems = items.filter(item => !item.fulfilmentMethod || (item.fulfilmentMethod !== 'FBB' && item.fulfilmentMethod !== 'FBR'));
+
+    // Add unknown items to FBR
+    const allFbrItems = [...fbrItems, ...unknownItems];
+
+    return {
+      isMixed: fbbItems.length > 0 && allFbrItems.length > 0,
+      fbbItems,
+      fbrItems: allFbrItems
+    };
+  }
+
+  /**
+   * Find existing split orders for a Bol order ID
+   * Returns both FBB and FBR orders if they exist
+   * @param {string} orderId - Bol order ID
+   * @returns {object} { fbbOrder, fbrOrder }
+   */
+  async findExistingSplitOrders(orderId) {
+    const fbbOrder = await this.findExistingOrder(orderId, 'FBB');
+    const fbrOrder = await this.findExistingOrder(orderId, 'FBR');
+    return { fbbOrder, fbrOrder };
+  }
+
+  /**
+   * Create a single Odoo order for specific fulfillment items
+   * @param {string} orderId - Bol order ID
+   * @param {object} bolOrder - Full Bol order document
+   * @param {Array} items - Items to include in this order
+   * @param {string} fulfilmentMethod - FBB or FBR
+   * @param {number} partnerId - Odoo partner ID
+   * @param {object} options - Creation options
+   * @returns {object} Creation result
+   */
+  async createSingleFulfillmentOrder(orderId, bolOrder, items, fulfilmentMethod, partnerId, options = {}) {
+    const { dryRun = false, autoConfirm = true, isSplitOrder = false } = options;
+    const prefix = fulfilmentMethod === 'FBB' ? 'FBB' : 'FBR';
+    const orderRef = `${prefix}${orderId}`;
+    const bolData = bolOrder.bol || {};
+
+    const result = {
+      success: false,
+      fulfilmentMethod,
+      odooOrderId: null,
+      odooOrderName: null,
+      errors: [],
+      warnings: []
+    };
+
+    // Check for existing order with this prefix
+    const existingOrder = await this.findExistingOrder(orderId, prefix);
+    if (existingOrder) {
+      result.success = true;
+      result.skipped = true;
+      result.skipReason = `Order already exists: ${existingOrder.name}`;
+      result.odooOrderId = existingOrder.id;
+      result.odooOrderName = existingOrder.name;
+      return result;
+    }
+
+    // Get tax configuration based on fulfillment and destination
+    const destCountry = bolOrder.shippingAddress?.countryCode || 'NL';
+    const taxConfig = this.getTaxConfig(fulfilmentMethod, destCountry);
+    const shipFrom = fulfilmentMethod === 'FBB' ? 'NL' : 'BE';
+    console.log(`[BolOrderCreator] Tax config for ${prefix} ${shipFrom}->${destCountry}: Tax ID ${taxConfig.taxId}, Journal ${taxConfig.journalCode}`);
+
+    // Build order lines for these specific items
+    const orderLines = [];
+    for (const item of items) {
+      let productId = await this.findProduct(item.ean);
+
+      if (!productId && item.sku) {
+        productId = await this.findProductBySku(item.sku);
+        if (productId) {
+          console.log(`[BolOrderCreator] Product found via SKU fallback: ${item.sku}`);
+        }
+      }
+
+      if (!productId) {
+        result.warnings.push(`Product not found for EAN ${item.ean} or SKU ${item.sku}: ${item.name}`);
+        continue;
+      }
+
+      const unitPrice = item.unitPrice || (item.lineTotal / (item.quantity || 1)) || 0;
+
+      orderLines.push([0, 0, {
+        product_id: productId,
+        product_uom_qty: item.quantity || 1,
+        price_unit: unitPrice,
+        name: item.name || `[${item.ean}]`,
+        tax_id: [[6, 0, [taxConfig.taxId]]]
+      }]);
+    }
+
+    if (orderLines.length === 0) {
+      result.errors.push(`No valid order lines for ${prefix} items`);
+      return result;
+    }
+
+    // Get journal ID
+    const journalId = taxConfig.journalId || await this.getJournalId(taxConfig.journalCode);
+
+    // Prepare order data
+    const orderDate = bolOrder.orderDate
+      ? new Date(bolOrder.orderDate).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+
+    const warehouseId = fulfilmentMethod === 'FBB' ? BOL_WAREHOUSE_ID : CENTRAL_WAREHOUSE_ID;
+    console.log(`[BolOrderCreator] Creating ${prefix} order with warehouse: ${fulfilmentMethod === 'FBB' ? 'BOL' : 'CW'} (ID: ${warehouseId})`);
+
+    // Build order notes with split indicator
+    const splitNote = isSplitOrder ? `\n⚠️ SPLIT ORDER: This is the ${prefix} part of a mixed fulfillment order. See also ${prefix === 'FBB' ? 'FBR' : 'FBB'}${orderId}` : '';
+
+    const orderData = {
+      name: orderRef,
+      partner_id: partnerId,
+      partner_invoice_id: partnerId,
+      partner_shipping_id: partnerId,
+      client_order_ref: orderRef,
+      date_order: orderDate,
+      warehouse_id: warehouseId,
+      team_id: BOL_TEAM_ID,
+      order_line: orderLines,
+      note: this.buildOrderNotes(bolOrder, bolData, prefix, taxConfig) + splitNote
+    };
+
+    if (taxConfig.fiscalPositionId) {
+      orderData.fiscal_position_id = taxConfig.fiscalPositionId;
+    }
+
+    if (journalId) {
+      orderData.journal_id = journalId;
+    }
+
+    if (dryRun) {
+      result.success = true;
+      result.dryRun = true;
+      result.orderData = orderData;
+      result.warnings.push('Dry run - order not created');
+      return result;
+    }
+
+    // Create the order
+    const saleOrderId = await this.odoo.create('sale.order', orderData);
+
+    // Get created order name
+    const createdOrder = await this.odoo.read('sale.order', [saleOrderId], ['name', 'journal_id']);
+    const orderName = createdOrder[0]?.name || `SO-${saleOrderId}`;
+
+    result.success = true;
+    result.odooOrderId = saleOrderId;
+    result.odooOrderName = orderName;
+    result.taxConfig = { taxId: taxConfig.taxId, journal: taxConfig.journalCode, fiscalPositionId: taxConfig.fiscalPositionId };
+    result.journalId = createdOrder[0]?.journal_id?.[0] || journalId;
+    result.itemCount = orderLines.length;
+
+    // Auto-confirm order
+    if (autoConfirm) {
+      try {
+        await this.odoo.execute('sale.order', 'action_confirm', [[saleOrderId]]);
+        result.confirmed = true;
+        await this.syncDeliveryAddresses(saleOrderId);
+      } catch (confirmError) {
+        result.warnings.push(`Order created but auto-confirm failed: ${confirmError.message}`);
+      }
+    }
+
+    console.log(`[BolOrderCreator] Created ${prefix} order ${orderName} for Bol order ${orderId} (${orderLines.length} items)`);
+    return result;
+  }
+
+  /**
    * Find or create customer from shipping details with AI address cleaning
    * @param {object} shipmentDetails - Bol order shipping details
    */
@@ -372,6 +557,7 @@ class BolOrderCreator {
 
   /**
    * Create Odoo order for a single Bol order
+   * Handles mixed fulfillment orders by creating separate FBB and FBR orders
    * @param {string} orderId - Bol order ID
    * @param {object} options - Creation options
    */
@@ -386,7 +572,10 @@ class BolOrderCreator {
       skipped: false,
       skipReason: null,
       errors: [],
-      warnings: []
+      warnings: [],
+      // New fields for split orders
+      isSplitOrder: false,
+      splitOrders: null
     };
 
     try {
@@ -401,11 +590,16 @@ class BolOrderCreator {
         return result;
       }
 
-      // Extract Bol-specific data
-      const bolData = bolOrder.bol || {};
+      // Step 2: Check for mixed fulfillment (FBB + FBR items in same order)
+      const { isMixed, fbbItems, fbrItems } = this.checkMixedFulfillment(bolOrder.items);
 
-      // Step 2: Determine prefix based on fulfillment method
-      // Use unified schema: bolOrder.bol.fulfilmentMethod or subChannel
+      if (isMixed) {
+        console.log(`[BolOrderCreator] ⚠️ MIXED ORDER detected: ${orderId} has ${fbbItems.length} FBB items and ${fbrItems.length} FBR items`);
+        return await this.createSplitOrders(orderId, bolOrder, fbbItems, fbrItems, options);
+      }
+
+      // Non-mixed order: determine single fulfillment method
+      const bolData = bolOrder.bol || {};
       let fulfilmentMethod = bolData.fulfilmentMethod ||
         bolOrder.subChannel ||
         bolOrder.items?.[0]?.fulfilmentMethod;
@@ -417,20 +611,17 @@ class BolOrderCreator {
 
       // Check if any order item indicates FBB
       if (!fulfilmentMethod && bolOrder.items?.length > 0) {
-        const hasFBB = bolOrder.items.some(item =>
-          item.fulfilmentMethod === 'FBB'
-        );
+        const hasFBB = bolOrder.items.some(item => item.fulfilmentMethod === 'FBB');
         if (hasFBB) fulfilmentMethod = 'FBB';
       }
 
-      // Default to FBR only as last resort, but log a warning
+      // Default to FBR only as last resort
       if (!fulfilmentMethod) {
         console.warn(`[BolOrderCreator] No fulfilmentMethod found for order ${orderId}, defaulting to FBR`);
         fulfilmentMethod = 'FBR';
       }
 
       const prefix = fulfilmentMethod === 'FBB' ? 'FBB' : 'FBR';
-      const orderRef = `${prefix}${orderId}`;
 
       // Step 3: Check for existing order
       const existingOrder = await this.findExistingOrder(orderId, prefix);
@@ -443,7 +634,6 @@ class BolOrderCreator {
 
         // Update unified_orders if not linked
         if (!bolOrder.sourceIds?.odooSaleOrderId) {
-          // Use full odoo object to avoid "Cannot create field in element {odoo: null}" error
           const odooData = {
             ...(bolOrder.odoo || {}),
             saleOrderId: existingOrder.id,
@@ -462,164 +652,63 @@ class BolOrderCreator {
             }
           );
         }
-
         return result;
       }
 
       // Step 4: Find or create customer
-      // Map unified schema to shipmentDetails format expected by findOrCreatePartner
       const shipmentDetails = this.buildShipmentDetails(bolOrder);
       const partnerId = await this.findOrCreatePartner(shipmentDetails);
 
-      // Step 5: Get tax configuration based on fulfillment and destination
-      const destCountry = bolOrder.shippingAddress?.countryCode || 'NL';
-      const taxConfig = this.getTaxConfig(fulfilmentMethod, destCountry);
-      const shipFrom = fulfilmentMethod === 'FBB' ? 'NL' : 'BE';
-      console.log(`[BolOrderCreator] Tax config for ${prefix} ${shipFrom}->${destCountry}: Tax ID ${taxConfig.taxId}, Journal ${taxConfig.journalCode}`);
-
-      // Step 6: Build order lines with tax-included tax
-      // Use unified schema items array
-      const orderLines = [];
-      for (const item of (bolOrder.items || [])) {
-        // Try to find product by EAN first, then fall back to SKU (default_code)
-        let productId = await this.findProduct(item.ean);
-
-        if (!productId && item.sku) {
-          // Fallback: try to find by SKU (internal reference)
-          productId = await this.findProductBySku(item.sku);
-          if (productId) {
-            console.log(`[BolOrderCreator] Product found via SKU fallback: ${item.sku}`);
-          }
-        }
-
-        if (!productId) {
-          result.warnings.push(`Product not found for EAN ${item.ean} or SKU ${item.sku}: ${item.name}`);
-          continue;
-        }
-
-        const unitPrice = item.unitPrice || (item.lineTotal / (item.quantity || 1)) || 0;
-
-        orderLines.push([0, 0, {
-          product_id: productId,
-          product_uom_qty: item.quantity || 1,
-          price_unit: unitPrice,
-          name: item.name || `[${item.ean}]`,
-          tax_id: [[6, 0, [taxConfig.taxId]]]  // Set tax-included tax
-        }]);
-      }
-
-      if (orderLines.length === 0) {
-        result.errors.push('No valid order lines could be created');
-        return result;
-      }
-
-      // Step 7: Get journal ID for the order (use hardcoded ID or lookup by code)
-      const journalId = taxConfig.journalId || await this.getJournalId(taxConfig.journalCode);
-
-      // Step 8: Prepare order data
-      // Use unified schema orderDate field
-      const orderDate = bolOrder.orderDate
-        ? new Date(bolOrder.orderDate).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
-
-      // Use BOL warehouse for FBB orders, Central Warehouse for FBR orders
-      const warehouseId = fulfilmentMethod === 'FBB' ? BOL_WAREHOUSE_ID : CENTRAL_WAREHOUSE_ID;
-      console.log(`[BolOrderCreator] Using warehouse: ${fulfilmentMethod === 'FBB' ? 'BOL' : 'CW'} (ID: ${warehouseId})`);
-
-      const orderData = {
-        name: orderRef,                   // Set order name to Bol reference (e.g., FBBA000DD78MR)
-        partner_id: partnerId,
-        partner_invoice_id: partnerId,   // Required: Invoice address
-        partner_shipping_id: partnerId,  // Required: Delivery address
-        client_order_ref: orderRef,
-        date_order: orderDate,
-        warehouse_id: warehouseId,
-        team_id: BOL_TEAM_ID,            // Sales Team: BOL
-        order_line: orderLines,
-        note: this.buildOrderNotes(bolOrder, bolData, prefix, taxConfig)
-      };
-
-      // Set fiscal position for correct tax mapping
-      if (taxConfig.fiscalPositionId) {
-        orderData.fiscal_position_id = taxConfig.fiscalPositionId;
-        console.log(`[BolOrderCreator] Setting fiscal_position_id=${taxConfig.fiscalPositionId}`);
-      }
-
-      // Set journal_id on sales order (inherits to invoice)
-      if (journalId) {
-        orderData.journal_id = journalId;
-        console.log(`[BolOrderCreator] Setting journal_id=${journalId} (${taxConfig.journalCode})`);
-      }
-
-      if (dryRun) {
-        result.success = true;
-        result.dryRun = true;
-        result.orderData = orderData;
-        result.warnings.push('Dry run - order not created');
-        return result;
-      }
-
-      // Step 9: Create the order
-      const saleOrderId = await this.odoo.create('sale.order', orderData);
-
-      // Get created order name
-      const createdOrder = await this.odoo.read('sale.order', [saleOrderId], ['name', 'journal_id']);
-      const orderName = createdOrder[0]?.name || `SO-${saleOrderId}`;
-
-      result.success = true;
-      result.odooOrderId = saleOrderId;
-      result.odooOrderName = orderName;
-      result.taxConfig = { taxId: taxConfig.taxId, journal: taxConfig.journalCode, fiscalPositionId: taxConfig.fiscalPositionId };
-      result.journalId = createdOrder[0]?.journal_id?.[0] || journalId;
-
-      // Step 10: Update unified_orders with Odoo link
-      // Use full odoo object to avoid "Cannot create field in element {odoo: null}" error
-      const odooData = {
-        ...(bolOrder.odoo || {}),
-        saleOrderId,
-        saleOrderName: orderName,
-        linkedAt: new Date(),
-        syncedAt: new Date(),
-        syncError: ''
-      };
-      await collection.updateOne(
-        { unifiedOrderId },
-        {
-          $set: {
-            'sourceIds.odooSaleOrderId': saleOrderId,
-            'sourceIds.odooSaleOrderName': orderName,
-            odoo: odooData,
-            updatedAt: new Date()
-          }
-        }
+      // Step 5: Create single order using helper method
+      const createResult = await this.createSingleFulfillmentOrder(
+        orderId, bolOrder, bolOrder.items, fulfilmentMethod, partnerId,
+        { dryRun, autoConfirm, isSplitOrder: false }
       );
 
-      // Step 11: Auto-confirm order
-      if (autoConfirm) {
-        try {
-          await this.odoo.execute('sale.order', 'action_confirm', [[saleOrderId]]);
-          result.confirmed = true;
+      // Copy results
+      result.success = createResult.success;
+      result.odooOrderId = createResult.odooOrderId;
+      result.odooOrderName = createResult.odooOrderName;
+      result.skipped = createResult.skipped;
+      result.skipReason = createResult.skipReason;
+      result.errors = [...result.errors, ...createResult.errors];
+      result.warnings = [...result.warnings, ...createResult.warnings];
+      result.confirmed = createResult.confirmed;
+      result.taxConfig = createResult.taxConfig;
 
-          // Sync delivery addresses to ensure they match the order
-          await this.syncDeliveryAddresses(saleOrderId);
-        } catch (confirmError) {
-          result.warnings.push(`Order created but auto-confirm failed: ${confirmError.message}`);
-        }
+      // Step 6: Update unified_orders with Odoo link
+      if (createResult.success && createResult.odooOrderId) {
+        const odooData = {
+          ...(bolOrder.odoo || {}),
+          saleOrderId: createResult.odooOrderId,
+          saleOrderName: createResult.odooOrderName,
+          linkedAt: new Date(),
+          syncedAt: new Date(),
+          syncError: ''
+        };
+        await collection.updateOne(
+          { unifiedOrderId },
+          {
+            $set: {
+              'sourceIds.odooSaleOrderId': createResult.odooOrderId,
+              'sourceIds.odooSaleOrderName': createResult.odooOrderName,
+              odoo: odooData,
+              updatedAt: new Date()
+            }
+          }
+        );
       }
 
-      console.log(`[BolOrderCreator] Created Odoo order ${orderName} for Bol order ${orderId}`);
       return result;
 
     } catch (error) {
       result.errors.push(error.message);
 
       // Update unified_orders with error
-      // Use full odoo object to avoid "Cannot create field in element {odoo: null}" error
       try {
         const db = getDb();
         const collection = db.collection(COLLECTION_NAME);
         const unifiedOrderId = `${CHANNELS.BOL}:${orderId}`;
-        // Fetch current order to preserve existing odoo data
         const currentOrder = await collection.findOne({ unifiedOrderId });
         const odooData = {
           ...(currentOrder?.odoo || {}),
@@ -634,6 +723,179 @@ class BolOrderCreator {
       }
 
       console.error(`[BolOrderCreator] Error creating order for ${orderId}:`, error);
+      return result;
+    }
+  }
+
+  /**
+   * Create split orders for mixed FBB/FBR fulfillment
+   * Creates separate Odoo orders for FBB and FBR items
+   * @param {string} orderId - Bol order ID
+   * @param {object} bolOrder - Full Bol order document
+   * @param {Array} fbbItems - FBB items
+   * @param {Array} fbrItems - FBR items
+   * @param {object} options - Creation options
+   */
+  async createSplitOrders(orderId, bolOrder, fbbItems, fbrItems, options = {}) {
+    const { dryRun = false, autoConfirm = true } = options;
+    const db = getDb();
+    const collection = db.collection(COLLECTION_NAME);
+    const unifiedOrderId = `${CHANNELS.BOL}:${orderId}`;
+
+    const result = {
+      success: false,
+      bolOrderId: orderId,
+      odooOrderId: null,
+      odooOrderName: null,
+      skipped: false,
+      skipReason: null,
+      errors: [],
+      warnings: [],
+      isSplitOrder: true,
+      splitOrders: {
+        fbb: null,
+        fbr: null
+      }
+    };
+
+    try {
+      // Check for existing split orders
+      const { fbbOrder: existingFbb, fbrOrder: existingFbr } = await this.findExistingSplitOrders(orderId);
+
+      // If both already exist, skip
+      if (existingFbb && existingFbr) {
+        result.success = true;
+        result.skipped = true;
+        result.skipReason = `Split orders already exist: ${existingFbb.name} and ${existingFbr.name}`;
+        result.splitOrders = {
+          fbb: { odooOrderId: existingFbb.id, odooOrderName: existingFbb.name, skipped: true },
+          fbr: { odooOrderId: existingFbr.id, odooOrderName: existingFbr.name, skipped: true }
+        };
+        return result;
+      }
+
+      // Find or create customer (shared between both orders)
+      const shipmentDetails = this.buildShipmentDetails(bolOrder);
+      const partnerId = await this.findOrCreatePartner(shipmentDetails);
+
+      // Create FBB order if needed and has items
+      let fbbResult = null;
+      if (fbbItems.length > 0) {
+        if (existingFbb) {
+          fbbResult = {
+            success: true,
+            skipped: true,
+            skipReason: `FBB order already exists: ${existingFbb.name}`,
+            odooOrderId: existingFbb.id,
+            odooOrderName: existingFbb.name
+          };
+        } else {
+          console.log(`[BolOrderCreator] Creating FBB order for ${orderId} with ${fbbItems.length} items`);
+          fbbResult = await this.createSingleFulfillmentOrder(
+            orderId, bolOrder, fbbItems, 'FBB', partnerId,
+            { dryRun, autoConfirm, isSplitOrder: true }
+          );
+        }
+        result.splitOrders.fbb = fbbResult;
+      }
+
+      // Create FBR order if needed and has items
+      let fbrResult = null;
+      if (fbrItems.length > 0) {
+        if (existingFbr) {
+          fbrResult = {
+            success: true,
+            skipped: true,
+            skipReason: `FBR order already exists: ${existingFbr.name}`,
+            odooOrderId: existingFbr.id,
+            odooOrderName: existingFbr.name
+          };
+        } else {
+          console.log(`[BolOrderCreator] Creating FBR order for ${orderId} with ${fbrItems.length} items`);
+          fbrResult = await this.createSingleFulfillmentOrder(
+            orderId, bolOrder, fbrItems, 'FBR', partnerId,
+            { dryRun, autoConfirm, isSplitOrder: true }
+          );
+        }
+        result.splitOrders.fbr = fbrResult;
+      }
+
+      // Aggregate results
+      const allSuccess = (fbbResult?.success ?? true) && (fbrResult?.success ?? true);
+      result.success = allSuccess;
+
+      // Collect all errors and warnings
+      if (fbbResult?.errors) result.errors.push(...fbbResult.errors);
+      if (fbrResult?.errors) result.errors.push(...fbrResult.errors);
+      if (fbbResult?.warnings) result.warnings.push(...fbbResult.warnings);
+      if (fbrResult?.warnings) result.warnings.push(...fbrResult.warnings);
+
+      // Set primary order ID (prefer FBB if exists, else FBR)
+      result.odooOrderId = fbbResult?.odooOrderId || fbrResult?.odooOrderId;
+      result.odooOrderName = fbbResult?.odooOrderName || fbrResult?.odooOrderName;
+
+      // Update unified_orders with split order references
+      if (allSuccess && !dryRun) {
+        const odooData = {
+          ...(bolOrder.odoo || {}),
+          isSplitOrder: true,
+          linkedAt: new Date(),
+          syncedAt: new Date(),
+          syncError: ''
+        };
+
+        const updateSet = {
+          odoo: odooData,
+          'bol.isSplitOrder': true,
+          updatedAt: new Date()
+        };
+
+        // Store FBB order reference
+        if (fbbResult?.odooOrderId) {
+          odooData.fbbSaleOrderId = fbbResult.odooOrderId;
+          odooData.fbbSaleOrderName = fbbResult.odooOrderName;
+          updateSet['sourceIds.odooFbbSaleOrderId'] = fbbResult.odooOrderId;
+          updateSet['sourceIds.odooFbbSaleOrderName'] = fbbResult.odooOrderName;
+        }
+
+        // Store FBR order reference
+        if (fbrResult?.odooOrderId) {
+          odooData.fbrSaleOrderId = fbrResult.odooOrderId;
+          odooData.fbrSaleOrderName = fbrResult.odooOrderName;
+          updateSet['sourceIds.odooFbrSaleOrderId'] = fbrResult.odooOrderId;
+          updateSet['sourceIds.odooFbrSaleOrderName'] = fbrResult.odooOrderName;
+        }
+
+        // Also set the primary odooSaleOrderId (for backward compatibility)
+        updateSet['sourceIds.odooSaleOrderId'] = fbbResult?.odooOrderId || fbrResult?.odooOrderId;
+        updateSet['sourceIds.odooSaleOrderName'] = fbbResult?.odooOrderName || fbrResult?.odooOrderName;
+        updateSet.odoo = odooData;
+
+        await collection.updateOne({ unifiedOrderId }, { $set: updateSet });
+
+        console.log(`[BolOrderCreator] ✅ Created split orders for ${orderId}: FBB=${fbbResult?.odooOrderName || 'N/A'}, FBR=${fbrResult?.odooOrderName || 'N/A'}`);
+      }
+
+      return result;
+
+    } catch (error) {
+      result.errors.push(error.message);
+
+      try {
+        const currentOrder = await collection.findOne({ unifiedOrderId });
+        const odooData = {
+          ...(currentOrder?.odoo || {}),
+          syncError: error.message
+        };
+        await collection.updateOne(
+          { unifiedOrderId },
+          { $set: { odoo: odooData, updatedAt: new Date() } }
+        );
+      } catch (dbError) {
+        console.error(`[BolOrderCreator] Failed to update error in DB:`, dbError.message);
+      }
+
+      console.error(`[BolOrderCreator] Error creating split orders for ${orderId}:`, error);
       return result;
     }
   }
