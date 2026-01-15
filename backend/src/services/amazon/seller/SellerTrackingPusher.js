@@ -128,6 +128,7 @@ class SellerTrackingPusher {
       }
 
       // Step 2: Find done pickings with tracking for these orders
+      // Order by date_done DESC to process newest pickings first (fixes stuck orders issue)
       const pickings = await this.odoo.searchRead('stock.picking',
         [
           ['sale_id', 'in', saleOrderIds],
@@ -136,7 +137,7 @@ class SellerTrackingPusher {
           ['carrier_tracking_ref', '!=', false]
         ],
         ['id', 'name', 'sale_id', 'carrier_tracking_ref', 'carrier_id', 'date_done'],
-        { limit: 200 }
+        { limit: 500, order: 'date_done DESC' }
       );
 
       console.log(`[SellerTrackingPusher] Found ${pickings.length} done pickings with tracking for Amazon Seller orders`);
