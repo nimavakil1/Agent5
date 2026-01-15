@@ -345,6 +345,7 @@ class BolOrderCreator {
     }
 
     // Create the order
+    console.log(`[BolOrderCreator] Creating order with name="${orderData.name}" client_order_ref="${orderData.client_order_ref}"`);
     const saleOrderId = await this.odoo.create('sale.order', orderData);
 
     // Get created order name
