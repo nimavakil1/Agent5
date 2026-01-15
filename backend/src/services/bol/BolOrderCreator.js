@@ -165,7 +165,7 @@ class BolOrderCreator {
   async findExistingOrder(orderId, prefix) {
     const orderRef = `${prefix}${orderId}`;
 
-    // Search by client_order_ref (exclude cancelled orders)
+    // Search by client_order_ref with prefix (exclude cancelled orders)
     const orders = await this.odoo.searchRead('sale.order',
       [['client_order_ref', '=', orderRef], ['state', '!=', 'cancel']],
       ['id', 'name', 'state', 'amount_total', 'partner_id']
@@ -175,14 +175,14 @@ class BolOrderCreator {
       return orders[0];
     }
 
-    // Also try without prefix (exclude cancelled orders)
-    const ordersNoPrefix = await this.odoo.searchRead('sale.order',
-      [['client_order_ref', '=', orderId], ['state', '!=', 'cancel']],
+    // Also try by name field with prefix (some orders may have correct name but old client_order_ref)
+    const ordersByName = await this.odoo.searchRead('sale.order',
+      [['name', '=', orderRef], ['state', '!=', 'cancel']],
       ['id', 'name', 'state', 'amount_total', 'partner_id']
     );
 
-    if (ordersNoPrefix.length > 0) {
-      return ordersNoPrefix[0];
+    if (ordersByName.length > 0) {
+      return ordersByName[0];
     }
 
     return null;
