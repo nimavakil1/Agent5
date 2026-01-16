@@ -1,10 +1,12 @@
 /**
  * SellerFbaInventorySync - Sync FBA inventory from Amazon to Odoo
  *
- * Imports FBA inventory levels:
+ * Rock-solid approach (same as FBM export):
  * 1. Request GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA report
  * 2. Download and parse the report
- * 3. Update Odoo stock.quant for FBA warehouses
+ * 3. Use SkuResolver to map Amazon SKU → Odoo SKU
+ * 4. Update Odoo stock.quant for FBA warehouses
+ * 5. Notify via Teams for unresolved SKUs
  *
  * @module SellerFbaInventorySync
  */
@@ -13,12 +15,17 @@ const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { getSellerClient } = require('./SellerClient');
 const { MARKETPLACE_CONFIG, getWarehouseId: _getWarehouseId } = require('./SellerMarketplaceConfig');
+const { skuResolver } = require('../SkuResolver');
+const { TeamsNotificationService } = require('../../../core/agents/services/TeamsNotificationService');
 
 // FBA Inventory report type
 const FBA_INVENTORY_REPORT = 'GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA';
 
 // Collection for tracking report requests
 const REPORTS_COLLECTION = 'seller_reports';
+
+// Collection for unresolved SKUs (shared with FBM)
+const UNRESOLVED_SKUS_COLLECTION = 'amazon_unresolved_skus';
 
 /**
  * SellerFbaInventorySync - Syncs FBA inventory to Odoo
@@ -43,6 +50,9 @@ class SellerFbaInventorySync {
     await this.client.init();
 
     this.db = getDb();
+
+    // Load SKU resolver for Amazon → Odoo mapping
+    await skuResolver.load();
   }
 
   /**
@@ -236,11 +246,14 @@ class SellerFbaInventorySync {
 
   /**
    * Update Odoo inventory with FBA stock levels
+   * Uses SkuResolver for rock-solid Amazon → Odoo SKU mapping
    */
   async updateOdooInventory(inventory) {
     const result = {
       updated: 0,
-      skipped: 0,
+      resolved: 0,
+      unresolved: 0,
+      unresolvedSkus: [],
       errors: []
     };
 
@@ -249,7 +262,9 @@ class SellerFbaInventorySync {
     for (const item of inventory) {
       if (!skuQuantities[item.sku]) {
         skuQuantities[item.sku] = {
-          sku: item.sku,
+          amazonSku: item.sku,
+          asin: item.asin,
+          productName: item.productName,
           quantity: 0,
           warehouseQuantity: 0,
           inboundQuantity: 0,
@@ -262,7 +277,45 @@ class SellerFbaInventorySync {
       skuQuantities[item.sku].reservedQuantity += item.reservedQuantity;
     }
 
-    // Get FBA warehouse location (use first FBA warehouse)
+    // Step 1: Resolve all Amazon SKUs to Odoo SKUs
+    console.log(`[SellerFbaInventorySync] Resolving ${Object.keys(skuQuantities).length} Amazon SKUs...`);
+
+    const resolvedItems = [];
+    const unresolvedItems = [];
+
+    for (const [amazonSku, data] of Object.entries(skuQuantities)) {
+      const resolution = skuResolver.resolve(amazonSku);
+
+      if (resolution.odooSku) {
+        resolvedItems.push({
+          amazonSku,
+          odooSku: resolution.odooSku,
+          matchType: resolution.matchType,
+          ...data
+        });
+      } else {
+        unresolvedItems.push({
+          sellerSku: amazonSku,
+          asin: data.asin,
+          productName: data.productName,
+          quantity: data.quantity,
+          reason: 'Could not resolve to Odoo SKU (FBA inventory)'
+        });
+      }
+    }
+
+    result.resolved = resolvedItems.length;
+    result.unresolved = unresolvedItems.length;
+    result.unresolvedSkus = unresolvedItems;
+
+    console.log(`[SellerFbaInventorySync] Resolved: ${resolvedItems.length}, Unresolved: ${unresolvedItems.length}`);
+
+    // Step 2: Handle unresolved SKUs
+    if (unresolvedItems.length > 0) {
+      await this.handleUnresolvedSkus(unresolvedItems);
+    }
+
+    // Step 3: Get FBA warehouse location
     const fbaWarehouses = await this.odoo.searchRead('stock.warehouse',
       [['name', 'like', 'FBA%']],
       ['id', 'name', 'lot_stock_id']
@@ -273,23 +326,37 @@ class SellerFbaInventorySync {
       return result;
     }
 
-    // Use the main FBA warehouse location
     const fbaLocationId = fbaWarehouses[0].lot_stock_id[0];
+    console.log(`[SellerFbaInventorySync] Using FBA location: ${fbaWarehouses[0].name} (${fbaLocationId})`);
 
-    for (const [sku, data] of Object.entries(skuQuantities)) {
+    // Step 4: Update Odoo for resolved items
+    // First, batch-fetch all products by Odoo SKU
+    const odooSkus = [...new Set(resolvedItems.map(i => i.odooSku))];
+    const products = await this.odoo.searchRead('product.product',
+      [['default_code', 'in', odooSkus], ['active', '=', true]],
+      ['id', 'default_code']
+    );
+
+    const skuToProductId = {};
+    for (const p of products) {
+      if (p.default_code) {
+        skuToProductId[p.default_code] = p.id;
+      }
+    }
+
+    for (const item of resolvedItems) {
       try {
-        // Find product by SKU
-        const products = await this.odoo.searchRead('product.product',
-          [['default_code', '=', sku]],
-          ['id', 'name']
-        );
+        const productId = skuToProductId[item.odooSku];
 
-        if (products.length === 0) {
-          result.skipped++;
+        if (!productId) {
+          // Odoo SKU doesn't exist as a product
+          result.errors.push({
+            amazonSku: item.amazonSku,
+            odooSku: item.odooSku,
+            error: 'Odoo product not found for resolved SKU'
+          });
           continue;
         }
-
-        const productId = products[0].id;
 
         // Find or create quant
         const quants = await this.odoo.searchRead('stock.quant',
@@ -303,25 +370,138 @@ class SellerFbaInventorySync {
         if (quants.length > 0) {
           // Update existing quant
           await this.odoo.write('stock.quant', [quants[0].id], {
-            quantity: data.quantity
+            quantity: item.quantity
           });
         } else {
           // Create new quant
           await this.odoo.create('stock.quant', {
             product_id: productId,
             location_id: fbaLocationId,
-            quantity: data.quantity
+            quantity: item.quantity
           });
         }
 
         result.updated++;
 
       } catch (error) {
-        result.errors.push({ sku, error: error.message });
+        result.errors.push({ amazonSku: item.amazonSku, odooSku: item.odooSku, error: error.message });
       }
     }
 
     return result;
+  }
+
+  /**
+   * Handle unresolved SKUs - store in DB and send Teams notification
+   */
+  async handleUnresolvedSkus(unresolvedItems) {
+    const now = new Date();
+
+    // Store in MongoDB (same collection as FBM for unified tracking)
+    const operations = unresolvedItems.map(item => ({
+      updateOne: {
+        filter: { sellerSku: item.sellerSku },
+        update: {
+          $set: {
+            sellerSku: item.sellerSku,
+            asin: item.asin,
+            productName: item.productName,
+            reason: item.reason,
+            lastSeenAt: now,
+            resolved: false,
+            source: 'FBA_INVENTORY' // Track which sync found this
+          },
+          $setOnInsert: { createdAt: now },
+          $inc: { seenCount: 1 }
+        },
+        upsert: true
+      }
+    }));
+
+    await this.db.collection(UNRESOLVED_SKUS_COLLECTION).bulkWrite(operations);
+
+    // Send Teams notification for new unresolved SKUs
+    await this.sendUnresolvedSkusNotification(unresolvedItems);
+  }
+
+  /**
+   * Send Teams notification for unresolved FBA SKUs
+   */
+  async sendUnresolvedSkusNotification(unresolvedItems) {
+    const webhookUrl = process.env.TEAMS_WEBHOOK_URL;
+    if (!webhookUrl) {
+      console.log('[SellerFbaInventorySync] No Teams webhook configured, skipping notification');
+      return;
+    }
+
+    // Only notify if there are new unresolved SKUs (not seen in last 24h)
+    const recentThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const newUnresolved = [];
+
+    for (const item of unresolvedItems) {
+      const existing = await this.db.collection(UNRESOLVED_SKUS_COLLECTION).findOne({
+        sellerSku: item.sellerSku,
+        lastSeenAt: { $gte: recentThreshold }
+      });
+
+      if (!existing || existing.seenCount <= 1) {
+        newUnresolved.push(item);
+      }
+    }
+
+    if (newUnresolved.length === 0) {
+      return; // All unresolved SKUs were already reported recently
+    }
+
+    try {
+      const teams = new TeamsNotificationService({ webhookUrl });
+
+      const skuList = newUnresolved.slice(0, 10).map(item =>
+        `- **${item.sellerSku}** (${item.asin || 'no ASIN'}): ${item.quantity} units`
+      ).join('\n');
+
+      const moreText = newUnresolved.length > 10
+        ? `\n\n...and ${newUnresolved.length - 10} more`
+        : '';
+
+      const card = {
+        $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+        type: 'AdaptiveCard',
+        version: '1.4',
+        body: [
+          {
+            type: 'TextBlock',
+            text: `Amazon FBA Inventory Sync: ${newUnresolved.length} Unresolved SKUs`,
+            weight: 'bolder',
+            size: 'medium',
+            color: 'warning'
+          },
+          {
+            type: 'TextBlock',
+            text: 'The following Amazon FBA SKUs could not be resolved to Odoo products. FBA stock for these items was NOT imported.',
+            wrap: true
+          },
+          {
+            type: 'TextBlock',
+            text: skuList + moreText,
+            wrap: true,
+            fontType: 'monospace'
+          },
+          {
+            type: 'TextBlock',
+            text: `Time: ${new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' })}`,
+            size: 'small',
+            isSubtle: true
+          }
+        ]
+      };
+
+      await teams.sendMessage(card);
+      console.log(`[SellerFbaInventorySync] Teams notification sent for ${newUnresolved.length} unresolved FBA SKUs`);
+
+    } catch (error) {
+      console.error('[SellerFbaInventorySync] Failed to send Teams notification:', error.message);
+    }
   }
 
   /**

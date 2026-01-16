@@ -15,6 +15,9 @@ let _bolCancellationCheckTimer = null;
 let _lateOrdersAlertCronMorning = null;
 let _lateOrdersAlertCronAfternoon = null;
 let _trackingHealthTimer = null;
+let _amazonFbmStockTimer = null;
+let _amazonFbaInventoryTimer = null;
+let _amazonFbaReportCheckTimer = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -191,6 +194,33 @@ function start() {
 
     console.log(`[scheduler] Tracking Health Check initialized (every ${trackingCheckMinutes} min) - CRITICAL for tracking reliability`);
   } catch (e) { console.error('[scheduler] Tracking Health Check init error', e); }
+
+  // Amazon Seller Stock Sync (FBM export + FBA import)
+  // Replicates Emipro module functionality:
+  // - FBM: Odoo CW → Amazon (every 30 min)
+  // - FBA: Amazon → Odoo (every 1 hour)
+  try {
+    if (process.env.AMAZON_STOCK_SYNC_ENABLED === '1') {
+      // FBM Stock Export: Odoo CW → Amazon (every 30 minutes)
+      const fbmSyncMinutes = Number(process.env.AMAZON_FBM_STOCK_INTERVAL_MIN || '30');
+      const fbmSyncMs = Math.max(15, fbmSyncMinutes) * 60 * 1000;
+      _amazonFbmStockTimer = setInterval(syncAmazonFbmStock, fbmSyncMs);
+      setTimeout(syncAmazonFbmStock, 2 * 60 * 1000); // Initial run after 2 min
+      console.log(`[scheduler] Amazon FBM stock export initialized (every ${fbmSyncMinutes} min)`);
+
+      // FBA Inventory Sync: Amazon → Odoo (every 1 hour)
+      const fbaSyncMinutes = Number(process.env.AMAZON_FBA_INVENTORY_INTERVAL_MIN || '60');
+      const fbaSyncMs = Math.max(30, fbaSyncMinutes) * 60 * 1000;
+      _amazonFbaInventoryTimer = setInterval(syncAmazonFbaInventory, fbaSyncMs);
+      setTimeout(syncAmazonFbaInventory, 5 * 60 * 1000); // Initial run after 5 min
+      console.log(`[scheduler] Amazon FBA inventory sync initialized (every ${fbaSyncMinutes} min)`);
+
+      // FBA Report Check (every 15 minutes - check pending reports)
+      _amazonFbaReportCheckTimer = setInterval(checkAmazonFbaReports, 15 * 60 * 1000);
+      setTimeout(checkAmazonFbaReports, 10 * 60 * 1000); // Initial run after 10 min
+      console.log('[scheduler] Amazon FBA report check initialized (every 15 min)');
+    }
+  } catch (e) { console.error('[scheduler] Amazon stock sync init error', e); }
 }
 
 /**
@@ -509,6 +539,96 @@ async function checkTrackingHealth() {
   }
 }
 
+/**
+ * Sync FBM stock from Odoo CW to Amazon (Rock-solid approach)
+ *
+ * Flow:
+ * 1. Get all FBM Seller SKUs from Amazon (source of truth)
+ * 2. Use SkuResolver to map Amazon SKU → Odoo SKU
+ * 3. Get CW stock for resolved Odoo SKUs
+ * 4. Send stock to Amazon using original Seller SKU
+ * 5. Notify via Teams for unresolved SKUs
+ */
+async function syncAmazonFbmStock() {
+  try {
+    const { getSellerFbmStockExport } = require('../services/amazon/seller/SellerFbmStockExport');
+
+    const exporter = await getSellerFbmStockExport();
+    const result = await exporter.syncStock();
+
+    if (result.success) {
+      if (result.feedId) {
+        console.log(`[scheduler] Amazon FBM stock: Feed submitted (${result.feedItemCount} items, feedId: ${result.feedId})`);
+        console.log(`[scheduler]   Resolved: ${result.resolved}, Unresolved: ${result.unresolved}`);
+      } else {
+        console.log(`[scheduler] Amazon FBM stock: ${result.message || 'No items to sync'}`);
+      }
+    } else {
+      console.error(`[scheduler] Amazon FBM stock failed: ${result.error}`);
+    }
+
+    return result;
+  } catch (e) {
+    console.error('[scheduler] Amazon FBM stock sync error:', e?.message || e);
+    return { success: false, error: e?.message || e };
+  }
+}
+
+/**
+ * Sync FBA inventory from Amazon to Odoo
+ * Replicates Emipro's FBA inventory import functionality
+ */
+async function syncAmazonFbaInventory() {
+  try {
+    const { getSellerFbaInventorySync } = require('../services/amazon/seller/SellerFbaInventorySync');
+
+    const fbaSync = await getSellerFbaInventorySync();
+
+    // First process any completed reports
+    const processResult = await fbaSync.processReports();
+
+    // Then request a new report
+    const requestResult = await fbaSync.requestReport();
+
+    if (processResult.processed > 0) {
+      console.log(`[scheduler] Amazon FBA inventory: ${processResult.processed} reports processed`);
+    }
+    if (requestResult.success) {
+      console.log(`[scheduler] Amazon FBA inventory: New report requested (${requestResult.reportId})`);
+    }
+
+    return {
+      processed: processResult.processed || 0,
+      newReportId: requestResult.reportId
+    };
+  } catch (e) {
+    console.error('[scheduler] Amazon FBA inventory sync error:', e?.message || e);
+    return { success: false, error: e?.message || e };
+  }
+}
+
+/**
+ * Check for completed FBA inventory reports
+ * Runs more frequently than the full FBA sync to process reports as soon as they're ready
+ */
+async function checkAmazonFbaReports() {
+  try {
+    const { getSellerFbaInventorySync } = require('../services/amazon/seller/SellerFbaInventorySync');
+
+    const fbaSync = await getSellerFbaInventorySync();
+    const result = await fbaSync.processReports();
+
+    if (result.processed > 0) {
+      console.log(`[scheduler] Amazon FBA reports: ${result.processed} processed`);
+    }
+
+    return result;
+  } catch (e) {
+    console.error('[scheduler] Amazon FBA report check error:', e?.message || e);
+    return { success: false, error: e?.message || e };
+  }
+}
+
 module.exports = {
   start,
   checkAmazonSettlementReminders,
@@ -520,5 +640,9 @@ module.exports = {
   checkBolShipments,
   checkBolCancellations,
   sendLateOrdersAlert,
-  checkTrackingHealth
+  checkTrackingHealth,
+  // Amazon stock sync functions
+  syncAmazonFbmStock,
+  syncAmazonFbaInventory,
+  checkAmazonFbaReports
 };

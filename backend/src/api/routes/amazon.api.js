@@ -942,6 +942,205 @@ router.get('/sync/fbm-stock/feed/:queueId', async (req, res) => {
   }
 });
 
+// ==================== AMAZON STOCK SCHEDULER ENDPOINTS ====================
+// These endpoints use SP-API directly (replaces Emipro module)
+
+/**
+ * @route POST /api/amazon/stock/fbm-export
+ * @desc Export FBM stock from Odoo CW to Amazon via SP-API inventory feed
+ * Rock-solid approach:
+ * 1. Get FBM listings from Amazon (source of truth)
+ * 2. Resolve SKUs via SkuResolver
+ * 3. Get CW stock for resolved Odoo SKUs
+ * 4. Send to Amazon with original Seller SKU
+ * 5. Notify via Teams for unresolved SKUs
+ */
+router.post('/stock/fbm-export', async (req, res) => {
+  try {
+    const { getSellerFbmStockExport } = require('../../services/amazon/seller/SellerFbmStockExport');
+    const { dryRun = false } = req.body || {};
+
+    const exporter = await getSellerFbmStockExport();
+    const result = await exporter.syncStock({ dryRun });
+
+    res.json({
+      success: result.success,
+      feedId: result.feedId,
+      feedItemCount: result.feedItemCount,
+      resolved: result.resolved,
+      unresolved: result.unresolved,
+      unresolvedSkus: result.unresolvedSkus?.slice(0, 20), // First 20 for display
+      error: result.error,
+      message: result.success
+        ? result.feedId
+          ? `Submitted inventory feed with ${result.feedItemCount} products (${result.unresolved} unresolved)`
+          : result.message
+        : `Failed: ${result.error}`
+    });
+  } catch (error) {
+    console.error('FBM stock export error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/stock/fbm-export/status
+ * @desc Check status of submitted FBM inventory feeds
+ */
+router.get('/stock/fbm-export/status', async (req, res) => {
+  try {
+    const { getSellerFbmStockExport } = require('../../services/amazon/seller/SellerFbmStockExport');
+
+    const exporter = await getSellerFbmStockExport();
+    const checkResult = await exporter.checkFeedStatus();
+    const stats = await exporter.getStats();
+
+    res.json({
+      ...stats,
+      lastCheck: checkResult
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/stock/unresolved-skus
+ * @desc Get list of Amazon SKUs that couldn't be resolved to Odoo products
+ */
+router.get('/stock/unresolved-skus', async (req, res) => {
+  try {
+    const { getSellerFbmStockExport } = require('../../services/amazon/seller/SellerFbmStockExport');
+
+    const exporter = await getSellerFbmStockExport();
+    const unresolvedSkus = await exporter.getUnresolvedSkus();
+
+    res.json({
+      count: unresolvedSkus.length,
+      skus: unresolvedSkus
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/stock/unresolved-skus/:sku/mark-resolved
+ * @desc Mark an unresolved SKU as resolved (after adding mapping)
+ */
+router.post('/stock/unresolved-skus/:sku/mark-resolved', async (req, res) => {
+  try {
+    const { getSellerFbmStockExport } = require('../../services/amazon/seller/SellerFbmStockExport');
+    const { sku } = req.params;
+
+    const exporter = await getSellerFbmStockExport();
+    await exporter.markSkuResolved(sku);
+
+    res.json({ success: true, message: `SKU ${sku} marked as resolved` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/stock/fbm-listings/refresh
+ * @desc Request a new FBM listings report from Amazon
+ */
+router.post('/stock/fbm-listings/refresh', async (req, res) => {
+  try {
+    const { getSellerFbmStockExport } = require('../../services/amazon/seller/SellerFbmStockExport');
+
+    const exporter = await getSellerFbmStockExport();
+    const result = await exporter.requestListingsReport();
+
+    res.json({
+      success: result.success,
+      reportId: result.reportId,
+      message: result.success
+        ? `Listings report requested: ${result.reportId}`
+        : `Failed: ${result.error}`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/stock/fba-import
+ * @desc Import FBA inventory from Amazon to Odoo via SP-API report
+ * Replicates Emipro's FBA inventory sync (runs every 1 hour when scheduled)
+ */
+router.post('/stock/fba-import', async (req, res) => {
+  try {
+    const { getSellerFbaInventorySync } = require('../../services/amazon/seller/SellerFbaInventorySync');
+
+    const fbaSync = await getSellerFbaInventorySync();
+
+    // Process any pending reports first
+    const processResult = await fbaSync.processReports();
+
+    // Request a new report
+    const requestResult = await fbaSync.requestReport();
+
+    res.json({
+      success: true,
+      reportsProcessed: processResult.processed || 0,
+      reportsChecked: processResult.checked || 0,
+      newReportRequested: requestResult.success,
+      newReportId: requestResult.reportId,
+      errors: [...(processResult.errors || []), ...(requestResult.error ? [requestResult.error] : [])]
+    });
+  } catch (error) {
+    console.error('FBA inventory import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/stock/fba-import/status
+ * @desc Check status of FBA inventory sync
+ */
+router.get('/stock/fba-import/status', async (req, res) => {
+  try {
+    const { getSellerFbaInventorySync } = require('../../services/amazon/seller/SellerFbaInventorySync');
+
+    const fbaSync = await getSellerFbaInventorySync();
+    const stats = await fbaSync.getStats();
+
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/stock/scheduler-status
+ * @desc Get status of the Amazon stock scheduler
+ */
+router.get('/stock/scheduler-status', async (req, res) => {
+  try {
+    const { getSellerFbmStockExport } = require('../../services/amazon/seller/SellerFbmStockExport');
+    const { getSellerFbaInventorySync } = require('../../services/amazon/seller/SellerFbaInventorySync');
+
+    const [exportStats, fbaStats] = await Promise.all([
+      getSellerFbmStockExport().then(e => e.getStats()),
+      getSellerFbaInventorySync().then(s => s.getStats())
+    ]);
+
+    res.json({
+      enabled: process.env.AMAZON_STOCK_SYNC_ENABLED === '1',
+      intervals: {
+        fbmExport: `${process.env.AMAZON_FBM_STOCK_INTERVAL_MIN || '30'} minutes`,
+        fbaImport: `${process.env.AMAZON_FBA_INVENTORY_INTERVAL_MIN || '60'} minutes`
+      },
+      fbmExport: exportStats,
+      fbaImport: fbaStats
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== TRACKING SYNC ENDPOINTS ====================
 
 /**
