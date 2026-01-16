@@ -75,14 +75,16 @@ async function run() {
   console.error(`Odoo CW: ${Object.keys(odooStock).length} SKUs`);
 
   // Step 2: Request listings report from Amazon (for DE marketplace)
+  const DE_MARKETPLACE_ID = 'A1PA6795UKMFR9';
   console.error('Requesting Amazon listings report (DE marketplace)...');
 
-  // First check for any recent completed reports
+  // First check for any recent completed reports for DE marketplace
   const reportsResponse = await spClient.callAPI({
     operation: 'reports.getReports',
     query: {
       reportTypes: [LISTINGS_REPORT_TYPE],
       processingStatuses: ['DONE'],
+      marketplaceIds: [DE_MARKETPLACE_ID],
       pageSize: 10
     }
   });
@@ -90,14 +92,19 @@ async function run() {
   let reportDocumentId = null;
 
   if (reportsResponse.reports && reportsResponse.reports.length > 0) {
-    // Use most recent completed report
-    const latestReport = reportsResponse.reports[0];
-    const reportAge = Date.now() - new Date(latestReport.createdTime).getTime();
-    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+    // Find most recent DE marketplace report
+    const deReport = reportsResponse.reports.find(r =>
+      r.marketplaceIds && r.marketplaceIds.includes(DE_MARKETPLACE_ID)
+    );
 
-    if (reportAge < maxAge) {
-      console.error(`Using recent report: ${latestReport.reportId} (${Math.round(reportAge / 3600000)}h old)`);
-      reportDocumentId = latestReport.reportDocumentId;
+    if (deReport) {
+      const reportAge = Date.now() - new Date(deReport.createdTime).getTime();
+      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+      if (reportAge < maxAge) {
+        console.error(`Using recent DE report: ${deReport.reportId} (${Math.round(reportAge / 3600000)}h old)`);
+        reportDocumentId = deReport.reportDocumentId;
+      }
     }
   }
 
