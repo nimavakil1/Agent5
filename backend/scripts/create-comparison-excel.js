@@ -80,8 +80,8 @@ ws['!cols'] = [
 const wb = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(wb, ws, 'FBM Stock Comparison');
 
-// Save
-const filePath = '/Users/nimavakil/Downloads/FBM_Stock_Comparison_' + new Date().toISOString().split('T')[0] + '.xlsx';
+// Save to /tmp (works on both local and server)
+const filePath = '/tmp/FBM_Stock_Comparison_' + new Date().toISOString().split('T')[0] + '.xlsx';
 XLSX.writeFile(wb, filePath);
 console.log('Saved to:', filePath);
 console.log('');
