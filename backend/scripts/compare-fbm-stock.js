@@ -148,9 +148,14 @@ async function run() {
 
   // Parse TSV
   const lines = reportData.toString().split('\n');
-  const headers = lines[0].split('\t').map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'));
+  const headers = lines[0].split('\t').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_'));
+
+  console.error(`Report headers: ${headers.slice(0, 10).join(', ')}...`);
 
   const amazonStock = {};
+  let fbmCount = 0;
+  let fbaCount = 0;
+
   for (let i = 1; i < lines.length; i++) {
     const values = lines[i].split('\t');
     if (values.length < 2) continue;
@@ -160,24 +165,30 @@ async function run() {
       row[header] = values[idx]?.trim() || '';
     });
 
-    const sku = row.seller_sku || row.sku;
-    const quantity = parseInt(row.quantity) || 0;
-    const fulfillmentChannel = row.fulfillment_channel || '';
-    const status = row.status || '';
-    const asin = row.asin1 || row.asin || '';
-    const productName = row.item_name || row.product_name || row.title || '';
+    // Column names from GET_MERCHANT_LISTINGS_DATA report
+    const sku = row['seller_sku'] || row['seller-sku'] || '';
+    const quantity = parseInt(row['quantity']) || 0;
+    const fulfillmentChannel = row['fulfillment_channel'] || row['fulfillment-channel'] || '';
+    const asin = row['asin1'] || '';
+    const productName = row['item_name'] || row['item-name'] || '';
 
-    // Only include FBM (DEFAULT channel) and Active listings
-    if (sku && fulfillmentChannel === 'DEFAULT' && status === 'Active') {
+    if (!sku) continue;
+
+    // Track FBA vs FBM
+    if (fulfillmentChannel === 'AMAZON_EU' || fulfillmentChannel === 'AMAZON_NA' || fulfillmentChannel.startsWith('AMAZON')) {
+      fbaCount++;
+    } else if (fulfillmentChannel === 'DEFAULT') {
+      fbmCount++;
       amazonStock[sku] = {
         quantity,
         asin,
-        name: productName
+        name: productName,
+        channel: fulfillmentChannel
       };
     }
   }
 
-  console.error(`Amazon FBM: ${Object.keys(amazonStock).length} active SKUs`);
+  console.error(`Amazon report: ${fbmCount} FBM, ${fbaCount} FBA listings`);
 
   // Step 4: Compare and build result
   const allSkus = new Set([...Object.keys(odooStock), ...Object.keys(amazonStock)]);
