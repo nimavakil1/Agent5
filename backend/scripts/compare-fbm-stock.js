@@ -2,17 +2,22 @@
 /**
  * Compare FBM stock: Amazon vs Odoo CW
  * Shows what would change if we sync
+ * Uses SkuResolver to map Amazon SKU → Odoo SKU
  */
 require('dotenv').config();
 const { connectDb } = require('../src/db');
 const { OdooDirectClient } = require('../src/core/agents/integrations/OdooMCP');
 const { getSellerClient } = require('../src/services/amazon/seller/SellerClient');
+const { skuResolver } = require('../src/services/amazon/SkuResolver');
 
 const LISTINGS_REPORT_TYPE = 'GET_MERCHANT_LISTINGS_DATA';
 
 async function run() {
   console.error('Connecting...');
   await connectDb();
+
+  // Load SKU resolver mappings
+  await skuResolver.load();
 
   const odoo = new OdooDirectClient();
   await odoo.authenticate();
@@ -190,23 +195,55 @@ async function run() {
 
   console.error(`Amazon report: ${fbmCount} FBM, ${fbaCount} FBA listings`);
 
-  // Step 4: Compare and build result
-  const allSkus = new Set([...Object.keys(odooStock), ...Object.keys(amazonStock)]);
+  // Step 4: Resolve Amazon SKUs using SkuResolver
+  console.error('Resolving Amazon SKUs...');
+  const resolvedAmazonStock = {};
+  const amazonSkuToOriginal = {}; // Map resolved SKU back to original Amazon SKU
+
+  for (const [originalSku, data] of Object.entries(amazonStock)) {
+    const resolution = skuResolver.resolve(originalSku);
+    const resolvedSku = resolution.odooSku || originalSku;
+
+    // Store the mapping
+    if (!amazonSkuToOriginal[resolvedSku]) {
+      amazonSkuToOriginal[resolvedSku] = [];
+    }
+    amazonSkuToOriginal[resolvedSku].push({
+      originalSku,
+      matchType: resolution.matchType
+    });
+
+    // Aggregate stock for resolved SKU
+    if (!resolvedAmazonStock[resolvedSku]) {
+      resolvedAmazonStock[resolvedSku] = {
+        quantity: 0,
+        asin: data.asin,
+        name: data.name,
+        originalSkus: []
+      };
+    }
+    resolvedAmazonStock[resolvedSku].quantity += data.quantity;
+    resolvedAmazonStock[resolvedSku].originalSkus.push(originalSku);
+  }
+
+  // Step 5: Compare and build result
+  const allSkus = new Set([...Object.keys(odooStock), ...Object.keys(resolvedAmazonStock)]);
   const comparison = [];
 
   for (const sku of allSkus) {
     const odoo = odooStock[sku] || { name: '', quantity: 0 };
-    const amazon = amazonStock[sku] || { quantity: 0, asin: '', name: '' };
+    const amazon = resolvedAmazonStock[sku] || { quantity: 0, asin: '', name: '', originalSkus: [] };
 
     comparison.push({
-      sku,
+      sku,                              // Resolved/Odoo SKU
+      amazonSku: amazon.originalSkus.join(', ') || '',  // Original Amazon SKU(s)
       name: odoo.name || amazon.name,
       asin: amazon.asin || '',
       odooQty: odoo.quantity,
       amazonQty: amazon.quantity,
       difference: odoo.quantity - amazon.quantity,
       inOdoo: !!odooStock[sku],
-      inAmazon: !!amazonStock[sku]
+      inAmazon: !!resolvedAmazonStock[sku]
     });
   }
 

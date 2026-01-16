@@ -9,7 +9,7 @@ const data = JSON.parse(fs.readFileSync('/tmp/comparison.json', 'utf8'));
 
 // Create worksheet with headers
 const wsData = [
-  ['SKU', 'Product Name', 'ASIN', 'Odoo CW Stock', 'Amazon FBM Stock', 'Difference', 'In Odoo', 'In Amazon', 'Status']
+  ['Odoo SKU', 'Amazon SKU (Original)', 'Product Name', 'ASIN', 'Odoo CW Stock', 'Amazon FBM Stock', 'Difference', 'In Odoo', 'In Amazon', 'Status']
 ];
 
 for (const item of data) {
@@ -27,7 +27,8 @@ for (const item of data) {
   }
 
   wsData.push([
-    item.sku,
+    item.sku,                          // Resolved Odoo SKU
+    item.amazonSku || '',              // Original Amazon SKU(s)
     item.name,
     item.asin || '',
     item.odooQty,
@@ -65,11 +66,12 @@ const ws = XLSX.utils.aoa_to_sheet(wsData);
 
 // Set column widths
 ws['!cols'] = [
-  { wch: 15 },   // SKU
+  { wch: 15 },   // Odoo SKU
+  { wch: 20 },   // Amazon SKU (Original)
   { wch: 60 },   // Product Name
   { wch: 15 },   // ASIN
-  { wch: 15 },   // Odoo
-  { wch: 18 },   // Amazon
+  { wch: 15 },   // Odoo CW Stock
+  { wch: 18 },   // Amazon FBM Stock
   { wch: 12 },   // Difference
   { wch: 10 },   // In Odoo
   { wch: 12 },   // In Amazon
