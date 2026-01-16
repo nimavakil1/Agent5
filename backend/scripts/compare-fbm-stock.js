@@ -74,133 +74,117 @@ async function run() {
 
   console.error(`Odoo CW: ${Object.keys(odooStock).length} SKUs`);
 
-  // Step 2: Request listings report from Amazon (for DE marketplace)
-  const DE_MARKETPLACE_ID = 'A1PA6795UKMFR9';
-  console.error('Requesting Amazon listings report (DE marketplace)...');
+  // Step 2: Get listings reports from ALL EU marketplaces
+  const EU_MARKETPLACES = {
+    'A1PA6795UKMFR9': 'DE',
+    'A1RKKUPIHCS9HS': 'ES',
+    'A13V1IB3VIYBER': 'FR',
+    'A1F83G8C2ARO7P': 'UK',
+    'APJ6JRA9NG5V4': 'IT',
+    'A1805IZSGTT6HS': 'NL',
+    'A2NODRKZP88ZB9': 'SE',
+    'A1C3SOZRARQ6R3': 'PL',
+    'AMEN7PMS3EDWL': 'BE'
+  };
 
-  // First check for any recent completed reports for DE marketplace
+  console.error('Getting Amazon listings reports for all EU marketplaces...');
+
+  // Get all recent reports
   const reportsResponse = await spClient.callAPI({
     operation: 'reports.getReports',
     query: {
       reportTypes: [LISTINGS_REPORT_TYPE],
       processingStatuses: ['DONE'],
-      marketplaceIds: [DE_MARKETPLACE_ID],
-      pageSize: 10
+      pageSize: 50
     }
   });
 
-  let reportDocumentId = null;
+  // Find most recent report for each marketplace
+  const marketplaceReports = {};
+  const maxAge = 24 * 60 * 60 * 1000; // 24 hours
 
-  if (reportsResponse.reports && reportsResponse.reports.length > 0) {
-    // Find most recent DE marketplace report
-    const deReport = reportsResponse.reports.find(r =>
-      r.marketplaceIds && r.marketplaceIds.includes(DE_MARKETPLACE_ID)
-    );
+  for (const report of (reportsResponse.reports || [])) {
+    const mpId = report.marketplaceIds?.[0];
+    if (!mpId || !EU_MARKETPLACES[mpId]) continue;
 
-    if (deReport) {
-      const reportAge = Date.now() - new Date(deReport.createdTime).getTime();
-      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+    const reportAge = Date.now() - new Date(report.createdTime).getTime();
+    if (reportAge > maxAge) continue;
 
-      if (reportAge < maxAge) {
-        console.error(`Using recent DE report: ${deReport.reportId} (${Math.round(reportAge / 3600000)}h old)`);
-        reportDocumentId = deReport.reportDocumentId;
-      }
+    // Keep only the most recent per marketplace
+    if (!marketplaceReports[mpId] || new Date(report.createdTime) > new Date(marketplaceReports[mpId].createdTime)) {
+      marketplaceReports[mpId] = report;
     }
   }
 
-  if (!reportDocumentId) {
-    // Request new report for single marketplace
-    console.error('Requesting new listings report...');
-    const createResponse = await spClient.callAPI({
-      operation: 'reports.createReport',
-      body: {
-        reportType: LISTINGS_REPORT_TYPE,
-        marketplaceIds: ['A1PA6795UKMFR9'] // DE marketplace only
-      }
+  console.error(`Found recent reports for: ${Object.keys(marketplaceReports).map(m => EU_MARKETPLACES[m]).join(', ')}`);
+
+  // Download and parse all reports
+  const amazonStock = {};
+  let totalFbm = 0;
+  let totalFba = 0;
+
+  for (const [mpId, report] of Object.entries(marketplaceReports)) {
+    const mpName = EU_MARKETPLACES[mpId];
+    console.error(`Processing ${mpName} report...`);
+
+    const docResponse = await spClient.callAPI({
+      operation: 'reports.getReportDocument',
+      path: { reportDocumentId: report.reportDocumentId }
     });
 
-    const reportId = createResponse.reportId;
-    console.error(`Report requested: ${reportId}`);
+    const reportData = await spClient.download(docResponse, { json: false });
+    const lines = reportData.toString().split('\n');
+    const headers = lines[0].split('\t').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_'));
 
-    // Poll for completion (max 5 minutes)
-    const startTime = Date.now();
-    const timeout = 5 * 60 * 1000;
+    let mpFbm = 0;
+    let mpFba = 0;
 
-    while (Date.now() - startTime < timeout) {
-      await new Promise(r => setTimeout(r, 10000)); // Wait 10 seconds
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split('\t');
+      if (values.length < 2) continue;
 
-      const statusResponse = await spClient.callAPI({
-        operation: 'reports.getReport',
-        path: { reportId }
+      const row = {};
+      headers.forEach((header, idx) => {
+        row[header] = values[idx]?.trim() || '';
       });
 
-      console.error(`Report status: ${statusResponse.processingStatus}`);
+      const sku = row['seller_sku'] || row['seller-sku'] || '';
+      const quantity = parseInt(row['quantity']) || 0;
+      const fulfillmentChannel = row['fulfillment_channel'] || row['fulfillment-channel'] || '';
+      const asin = row['asin1'] || '';
+      const productName = row['item_name'] || row['item-name'] || '';
 
-      if (statusResponse.processingStatus === 'DONE') {
-        reportDocumentId = statusResponse.reportDocumentId;
-        break;
-      } else if (statusResponse.processingStatus === 'FATAL' || statusResponse.processingStatus === 'CANCELLED') {
-        throw new Error(`Report failed: ${statusResponse.processingStatus}`);
+      if (!sku) continue;
+
+      if (fulfillmentChannel === 'AMAZON_EU' || fulfillmentChannel === 'AMAZON_NA' || fulfillmentChannel.startsWith('AMAZON')) {
+        mpFba++;
+      } else if (fulfillmentChannel === 'DEFAULT') {
+        mpFbm++;
+        // For FBM, use the SKU as key - if same SKU in multiple marketplaces, keep the one with data
+        if (!amazonStock[sku] || !amazonStock[sku].name) {
+          amazonStock[sku] = {
+            quantity,
+            asin,
+            name: productName,
+            channel: fulfillmentChannel,
+            marketplaces: [mpName]
+          };
+        } else {
+          // Same SKU in multiple marketplaces - add marketplace to list
+          if (!amazonStock[sku].marketplaces.includes(mpName)) {
+            amazonStock[sku].marketplaces.push(mpName);
+          }
+        }
       }
     }
 
-    if (!reportDocumentId) {
-      throw new Error('Report timed out');
-    }
+    console.error(`  ${mpName}: ${mpFbm} FBM, ${mpFba} FBA`);
+    totalFbm += mpFbm;
+    totalFba += mpFba;
   }
 
-  // Step 3: Download and parse report
-  console.error('Downloading report...');
-  const docResponse = await spClient.callAPI({
-    operation: 'reports.getReportDocument',
-    path: { reportDocumentId }
-  });
-
-  const reportData = await spClient.download(docResponse, { json: false });
-
-  // Parse TSV
-  const lines = reportData.toString().split('\n');
-  const headers = lines[0].split('\t').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_'));
-
-  console.error(`Report headers: ${headers.slice(0, 10).join(', ')}...`);
-
-  const amazonStock = {};
-  let fbmCount = 0;
-  let fbaCount = 0;
-
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split('\t');
-    if (values.length < 2) continue;
-
-    const row = {};
-    headers.forEach((header, idx) => {
-      row[header] = values[idx]?.trim() || '';
-    });
-
-    // Column names from GET_MERCHANT_LISTINGS_DATA report
-    const sku = row['seller_sku'] || row['seller-sku'] || '';
-    const quantity = parseInt(row['quantity']) || 0;
-    const fulfillmentChannel = row['fulfillment_channel'] || row['fulfillment-channel'] || '';
-    const asin = row['asin1'] || '';
-    const productName = row['item_name'] || row['item-name'] || '';
-
-    if (!sku) continue;
-
-    // Track FBA vs FBM
-    if (fulfillmentChannel === 'AMAZON_EU' || fulfillmentChannel === 'AMAZON_NA' || fulfillmentChannel.startsWith('AMAZON')) {
-      fbaCount++;
-    } else if (fulfillmentChannel === 'DEFAULT') {
-      fbmCount++;
-      amazonStock[sku] = {
-        quantity,
-        asin,
-        name: productName,
-        channel: fulfillmentChannel
-      };
-    }
-  }
-
-  console.error(`Amazon report: ${fbmCount} FBM, ${fbaCount} FBA listings`);
+  console.error(`Total across all marketplaces: ${totalFbm} FBM, ${totalFba} FBA listings`);
+  console.error(`Unique FBM SKUs: ${Object.keys(amazonStock).length}`);
 
   // Step 4: Resolve Amazon SKUs using SkuResolver
   console.error('Resolving Amazon SKUs...');
@@ -226,11 +210,16 @@ async function run() {
         quantity: 0,
         asin: data.asin,
         name: data.name,
-        originalSkus: []
+        originalSkus: [],
+        marketplaces: new Set()
       };
     }
     resolvedAmazonStock[resolvedSku].quantity += data.quantity;
     resolvedAmazonStock[resolvedSku].originalSkus.push(originalSku);
+    // Add marketplaces from this SKU
+    if (data.marketplaces) {
+      data.marketplaces.forEach(mp => resolvedAmazonStock[resolvedSku].marketplaces.add(mp));
+    }
   }
 
   // Step 5: Compare and build result
@@ -239,11 +228,12 @@ async function run() {
 
   for (const sku of allSkus) {
     const odoo = odooStock[sku] || { name: '', quantity: 0 };
-    const amazon = resolvedAmazonStock[sku] || { quantity: 0, asin: '', name: '', originalSkus: [] };
+    const amazon = resolvedAmazonStock[sku] || { quantity: 0, asin: '', name: '', originalSkus: [], marketplaces: new Set() };
 
     comparison.push({
       sku,                              // Resolved/Odoo SKU
       amazonSku: amazon.originalSkus.join(', ') || '',  // Original Amazon SKU(s)
+      marketplaces: [...(amazon.marketplaces || [])].join(', '),  // Which marketplaces
       name: odoo.name || amazon.name,
       asin: amazon.asin || '',
       odooQty: odoo.quantity,
