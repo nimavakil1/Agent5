@@ -14,6 +14,7 @@
  */
 
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+const Product = require('../../models/Product');
 
 // Central Warehouse ID in Odoo
 const CENTRAL_WAREHOUSE_ID = 1;
@@ -383,6 +384,39 @@ class BolStockSync {
   }
 
   /**
+   * Get safety stock values from MongoDB for multiple EANs
+   * @param {string[]} eans - Array of EANs to lookup
+   * @returns {Object} Map of EAN -> safety stock value
+   */
+  async getSafetyStock(eans) {
+    const safetyStockMap = {};
+
+    // Initialize all with default
+    for (const ean of eans) {
+      safetyStockMap[ean] = 10; // Default safety stock
+    }
+
+    try {
+      // Find products by barcode (EAN) in MongoDB
+      const products = await Product.find({ barcode: { $in: eans } })
+        .select('barcode safetyStock')
+        .lean();
+
+      for (const p of products) {
+        if (p.barcode) {
+          safetyStockMap[p.barcode] = p.safetyStock ?? 10;
+        }
+      }
+
+      console.log(`[BolStockSync] Got safety stock for ${products.length} of ${eans.length} EANs`);
+    } catch (err) {
+      console.error('[BolStockSync] Error getting safety stock:', err.message);
+    }
+
+    return safetyStockMap;
+  }
+
+  /**
    * Update stock for a single offer on Bol.com (Emipro workflow step 5)
    * Note: Bol.com has a maximum stock limit of 999
    */
@@ -430,57 +464,128 @@ class BolStockSync {
         return { success: true, updated: 0, message: 'No offers found in export' };
       }
 
-      // Step 4: Get stock from Odoo for all EANs
+      // Step 4: Get stock from Odoo and safety stock from MongoDB for all EANs
       const allEans = [...new Set(offers.map(o => o.ean).filter(Boolean))];
-      const odooStock = await this.getOdooStock(allEans);
+      console.log(`[BolStockSync] Step 4: Getting CW stock and safety stock for ${allEans.length} EANs...`);
+
+      const [odooStock, safetyStockMap] = await Promise.all([
+        this.getOdooStock(allEans),
+        this.getSafetyStock(allEans)
+      ]);
+
       console.log(`[BolStockSync] Got Odoo stock for ${Object.keys(odooStock).length} of ${allEans.length} EANs`);
 
       // Log EANs not found in Odoo
       const notFoundEans = allEans.filter(ean => odooStock[ean] === undefined);
       if (notFoundEans.length > 0) {
-        console.log(`[BolStockSync] EANs NOT FOUND in Odoo (${notFoundEans.length}): ${notFoundEans.join(', ')}`);
+        console.log(`[BolStockSync] EANs NOT FOUND in Odoo (${notFoundEans.length}): ${notFoundEans.slice(0, 10).join(', ')}${notFoundEans.length > 10 ? '...' : ''}`);
       }
 
-      // Step 5: Update stock for each offer
+      // Step 5: Update stock for each offer with safety stock deduction
       let updated = 0;
       let skipped = 0;
       let skippedNotInOdoo = 0;
       let skippedNoChange = 0;
       let failed = 0;
+      let increases = 0;
+      let decreases = 0;
+      let zeroStock = 0;
       const errors = [];
+      const detailedResults = [];
 
       for (const offer of offers) {
         const ean = offer.ean;
-        const newStock = odooStock[ean];
+        const cwFreeQty = odooStock[ean];
+        const safetyStock = safetyStockMap[ean] || 10;
 
         // Skip if no Odoo stock data (product doesn't exist in Odoo)
-        if (newStock === undefined) {
+        if (cwFreeQty === undefined) {
           skipped++;
           skippedNotInOdoo++;
+          detailedResults.push({
+            ean,
+            offerId: offer.offerId,
+            reference: offer.reference,
+            bolQtyBefore: offer.currentStock,
+            cwFreeQty: null,
+            safetyStock,
+            newBolQty: null,
+            delta: null,
+            status: 'skipped',
+            reason: 'not_in_odoo'
+          });
           continue;
         }
 
-        // Cap stock at 999 (Bol.com limit) for comparison
-        const cappedNewStock = Math.min(999, Math.max(0, Math.floor(newStock)));
+        // Apply safety stock deduction: newBolQty = max(0, cwFreeQty - safetyStock)
+        const newBolQty = Math.max(0, Math.floor(cwFreeQty - safetyStock));
 
-        // Only update if stock changed (comparing capped values)
-        if (cappedNewStock === offer.currentStock) {
+        // Cap stock at 999 (Bol.com limit)
+        const cappedNewBolQty = Math.min(999, newBolQty);
+        const delta = cappedNewBolQty - offer.currentStock;
+
+        // Track zero stock
+        if (cappedNewBolQty === 0) {
+          zeroStock++;
+        }
+
+        // Only update if stock changed
+        if (delta === 0) {
           skipped++;
           skippedNoChange++;
+          detailedResults.push({
+            ean,
+            offerId: offer.offerId,
+            reference: offer.reference,
+            bolQtyBefore: offer.currentStock,
+            cwFreeQty,
+            safetyStock,
+            newBolQty: cappedNewBolQty,
+            delta: 0,
+            status: 'unchanged'
+          });
           continue;
         }
 
         // Update stock on Bol.com
-        const result = await this.updateOfferStock(offer.offerId, cappedNewStock);
+        const result = await this.updateOfferStock(offer.offerId, cappedNewBolQty);
 
         if (result.success) {
           updated++;
-          const stockLog = cappedNewStock !== newStock ? `${newStock} (capped to ${cappedNewStock})` : cappedNewStock;
-          console.log(`[BolStockSync] Updated ${ean}: ${offer.currentStock} → ${stockLog}`);
+          if (delta > 0) increases++;
+          if (delta < 0) decreases++;
+
+          const stockLog = cappedNewBolQty !== newBolQty ? `${newBolQty} (capped to ${cappedNewBolQty})` : cappedNewBolQty;
+          console.log(`[BolStockSync] Updated ${ean}: ${offer.currentStock} → ${stockLog} (CW=${cwFreeQty}, safety=${safetyStock}, delta=${delta > 0 ? '+' : ''}${delta})`);
+
+          detailedResults.push({
+            ean,
+            offerId: offer.offerId,
+            reference: offer.reference,
+            bolQtyBefore: offer.currentStock,
+            cwFreeQty,
+            safetyStock,
+            newBolQty: cappedNewBolQty,
+            delta,
+            status: 'success'
+          });
         } else {
           failed++;
           errors.push({ ean, offerId: offer.offerId, error: result.error });
           console.error(`[BolStockSync] Failed to update ${ean}:`, result.error);
+
+          detailedResults.push({
+            ean,
+            offerId: offer.offerId,
+            reference: offer.reference,
+            bolQtyBefore: offer.currentStock,
+            cwFreeQty,
+            safetyStock,
+            newBolQty: cappedNewBolQty,
+            delta,
+            status: 'failed',
+            error: result.error
+          });
         }
 
         // Rate limiting
@@ -488,20 +593,38 @@ class BolStockSync {
       }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      // Build summary for reporting
+      const summary = {
+        totalOffers: offers.length,
+        updated,
+        increases,
+        decreases,
+        unchanged: skippedNoChange,
+        zeroStock,
+        notInOdoo: skippedNotInOdoo,
+        failed
+      };
+
       this.lastSync = new Date();
       this.lastResult = {
+        success: true,
         updated,
         skipped,
         skippedNotInOdoo,
         skippedNoChange,
         failed,
+        increases,
+        decreases,
         duration,
         totalOffers: offers.length,
         notFoundEans,
-        errors: errors.slice(0, 30)  // Keep all 30 errors
+        errors: errors.slice(0, 30),
+        summary,
+        detailedResults
       };
 
-      console.log(`[BolStockSync] Sync complete in ${duration}s: ${updated} updated, ${skipped} skipped (${skippedNotInOdoo} not in Odoo, ${skippedNoChange} no change), ${failed} failed`);
+      console.log(`[BolStockSync] Sync complete in ${duration}s: ${updated} updated (↑${increases} ↓${decreases}), ${skipped} skipped (${skippedNotInOdoo} not in Odoo, ${skippedNoChange} no change), ${failed} failed`);
 
       // Log all failed updates
       if (errors.length > 0) {
@@ -513,10 +636,15 @@ class BolStockSync {
         success: true,
         updated,
         skipped,
+        skippedNotInOdoo,
         failed,
+        increases,
+        decreases,
         totalOffers: offers.length,
         duration: `${duration}s`,
-        errors: errors.slice(0, 10)
+        errors: errors.slice(0, 10),
+        summary,
+        detailedResults
       };
 
     } catch (error) {

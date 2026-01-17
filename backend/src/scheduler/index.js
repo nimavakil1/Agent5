@@ -418,18 +418,67 @@ async function syncBolOrders() {
 }
 
 /**
- * Sync stock from Odoo to Bol.com
+ * Sync stock from Odoo to Bol.com (with safety stock deduction)
+ *
+ * Flow:
+ * 1. Get all FBR offers from Bol.com (via CSV export)
+ * 2. Get CW stock for each EAN from Odoo
+ * 3. Get safety stock for each EAN from MongoDB
+ * 4. Calculate: bolQty = max(0, cwFreeQty - safetyStock)
+ * 5. Update offers where stock changed
+ * 6. Generate Excel report and send Teams notification
+ * 7. On error: Send escalation to Teams
  */
 async function syncBolStock() {
   try {
     const { runStockSync } = require('../services/bol/BolStockSync');
-    const result = await runStockSync();
+    const { getBolStockReportService } = require('../services/bol/BolStockReportService');
 
-    if (result.updated > 0) {
-      console.log(`[scheduler] Bol stock sync: ${result.updated} offers updated`);
+    const result = await runStockSync();
+    const reportService = getBolStockReportService();
+
+    if (result.success) {
+      const summary = result.summary || {};
+      console.log(`[scheduler] Bol stock sync: ${result.updated} offers updated (↑${result.increases || 0} ↓${result.decreases || 0})`);
+
+      // Generate and send report
+      try {
+        const reportResult = await reportService.generateAndSendReport(result);
+        if (reportResult.reported) {
+          console.log(`[scheduler]   Bol report sent: Excel=${reportResult.excelUrl ? 'Yes' : 'No'}, Teams=${reportResult.teamsNotified}`);
+        }
+      } catch (reportError) {
+        console.error('[scheduler]   Bol report generation failed:', reportError.message);
+      }
+    } else {
+      console.error(`[scheduler] Bol stock sync failed: ${result.error}`);
+
+      // Send error escalation
+      try {
+        await reportService.sendErrorEscalation({
+          error: result.error,
+          affectedOffers: 'Unknown - sync failed'
+        });
+      } catch (escError) {
+        console.error('[scheduler]   Bol escalation failed:', escError.message);
+      }
     }
+
+    return result;
   } catch (e) {
     console.error('[scheduler] Bol stock sync error:', e?.message || e);
+
+    // Try to send error escalation even on complete failure
+    try {
+      const { getBolStockReportService } = require('../services/bol/BolStockReportService');
+      const reportService = getBolStockReportService();
+      await reportService.sendErrorEscalation({
+        error: e?.message || String(e),
+        affectedOffers: 'Unknown - sync failed completely'
+      });
+    } catch (_) {}
+
+    return { success: false, error: e?.message || e };
   }
 }
 
