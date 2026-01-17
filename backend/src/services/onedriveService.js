@@ -98,20 +98,20 @@ class OneDriveService {
       const remotePath = `${folderPath}/${fileName}`;
       
       // Upload file
-      const fileStream = fs.createReadStream(localFilePath);
       const fileStats = fs.statSync(localFilePath);
-      
-      let uploadedFile;
-      
       const drivePath = await this.getDrivePath();
 
+      let uploadedFile;
+
       if (fileStats.size < 4 * 1024 * 1024) {
-        // Small file upload (< 4MB)
+        // Small file upload (< 4MB) - use buffer for SharePoint compatibility
+        const fileBuffer = fs.readFileSync(localFilePath);
         uploadedFile = await this.graphClient
           .api(`${drivePath}/items/root:${remotePath}:/content`)
-          .put(fileStream);
+          .put(fileBuffer);
       } else {
         // Large file upload session
+        const fileStream = fs.createReadStream(localFilePath);
         uploadedFile = await this.uploadLargeFile(remotePath, fileStream, fileStats.size);
       }
 
@@ -123,7 +123,7 @@ class OneDriveService {
           scope: 'organization' // Only people in your organization can access
         });
       
-      console.log(`Recording uploaded to OneDrive: ${fileName}`);
+      console.log(`Recording uploaded to SharePoint: ${fileName}`);
       
       return {
         url: sharingLink.link.webUrl,
@@ -131,7 +131,7 @@ class OneDriveService {
       };
       
     } catch (error) {
-      console.error('OneDrive upload failed:', error);
+      console.error('SharePoint upload failed:', error);
       throw error;
     }
   }
