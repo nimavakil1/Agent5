@@ -20,6 +20,26 @@ let _amazonFbaInventoryTimer = null;
 let _amazonFbaReportCheckTimer = null;
 let _safetyStockVerifyCron = null;
 
+/**
+ * Check if current time is within stock sync operating hours
+ * Operating hours: 6:00 AM - 23:30 (Europe/Brussels timezone)
+ * @returns {boolean} true if within operating hours
+ */
+function isWithinStockSyncHours() {
+  const now = new Date();
+  // Convert to Brussels time
+  const brusselsTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Brussels' }));
+  const hours = brusselsTime.getHours();
+  const minutes = brusselsTime.getMinutes();
+  const timeInMinutes = hours * 60 + minutes;
+
+  // 6:00 AM = 360 minutes, 23:30 = 1410 minutes
+  const startTime = 6 * 60;      // 6:00 AM
+  const endTime = 23 * 60 + 30;  // 23:30
+
+  return timeInMinutes >= startTime && timeInMinutes < endTime;
+}
+
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
   for (const job of due) {
@@ -150,8 +170,10 @@ function start() {
       _bolOrderSyncTimer = setInterval(syncBolOrders, bolSyncMs);
       setTimeout(syncBolOrders, 45000); // Initial run after 45s
 
-      // Stock sync to Bol.com (every 15 minutes)
-      _bolStockSyncTimer = setInterval(syncBolStock, bolSyncMs);
+      // Stock sync to Bol.com (every 30 minutes, only during operating hours 6:00-23:30)
+      const bolStockSyncMinutes = Number(process.env.BOL_STOCK_SYNC_INTERVAL_MIN || '30');
+      const bolStockSyncMs = Math.max(15, bolStockSyncMinutes) * 60 * 1000;
+      _bolStockSyncTimer = setInterval(syncBolStock, bolStockSyncMs);
       setTimeout(syncBolStock, 90000); // Initial run after 1.5min
 
       // Shipment check (every 5 minutes)
@@ -162,7 +184,7 @@ function start() {
       _bolCancellationCheckTimer = setInterval(checkBolCancellations, 5 * 60 * 1000);
       setTimeout(checkBolCancellations, 240000); // Initial run after 4min
 
-      console.log(`[scheduler] Bol.com sync initialized (orders/stock every ${bolSyncMinutes} min, shipments/cancellations every 5 min)`);
+      console.log(`[scheduler] Bol.com sync initialized (orders every ${bolSyncMinutes} min, stock every ${bolStockSyncMinutes} min [6:00-23:30], shipments/cancellations every 5 min)`);
     }
   } catch (e) { console.error('[scheduler] Bol.com sync init error', e); }
 
@@ -219,7 +241,7 @@ function start() {
       const fbmSyncMs = Math.max(15, fbmSyncMinutes) * 60 * 1000;
       _amazonFbmStockTimer = setInterval(syncAmazonFbmStock, fbmSyncMs);
       setTimeout(syncAmazonFbmStock, 2 * 60 * 1000); // Initial run after 2 min
-      console.log(`[scheduler] Amazon FBM stock export initialized (every ${fbmSyncMinutes} min)`);
+      console.log(`[scheduler] Amazon FBM stock export initialized (every ${fbmSyncMinutes} min [6:00-23:30])`);
 
       // FBA Inventory Sync: Amazon → Odoo (every 1 hour)
       const fbaSyncMinutes = Number(process.env.AMAZON_FBA_INVENTORY_INTERVAL_MIN || '60');
@@ -419,6 +441,7 @@ async function syncBolOrders() {
 
 /**
  * Sync stock from Odoo to Bol.com (with safety stock deduction)
+ * Only runs during operating hours: 6:00 AM - 23:30 (Europe/Brussels)
  *
  * Flow:
  * 1. Get all FBR offers from Bol.com (via CSV export)
@@ -430,6 +453,12 @@ async function syncBolOrders() {
  * 7. On error: Send escalation to Teams
  */
 async function syncBolStock() {
+  // Check operating hours (6:00 - 23:30 Brussels time)
+  if (!isWithinStockSyncHours()) {
+    console.log('[scheduler] Bol stock sync skipped - outside operating hours (6:00-23:30)');
+    return { success: true, skipped: true, reason: 'outside_operating_hours' };
+  }
+
   try {
     const { runStockSync } = require('../services/bol/BolStockSync');
     const { getBolStockReportService } = require('../services/bol/BolStockReportService');
@@ -603,6 +632,7 @@ async function checkTrackingHealth() {
 
 /**
  * Sync FBM stock from Odoo CW to Amazon (Rock-solid approach)
+ * Only runs during operating hours: 6:00 AM - 23:30 (Europe/Brussels)
  *
  * Flow:
  * 1. Get all FBM Seller SKUs from Amazon (source of truth)
@@ -614,6 +644,12 @@ async function checkTrackingHealth() {
  * 7. On error: Generate fallback TSV and escalate to Teams
  */
 async function syncAmazonFbmStock() {
+  // Check operating hours (6:00 - 23:30 Brussels time)
+  if (!isWithinStockSyncHours()) {
+    console.log('[scheduler] Amazon FBM stock sync skipped - outside operating hours (6:00-23:30)');
+    return { success: true, skipped: true, reason: 'outside_operating_hours' };
+  }
+
   try {
     const { getSellerFbmStockExport } = require('../services/amazon/seller/SellerFbmStockExport');
     const { getFbmStockReportService } = require('../services/amazon/seller/FbmStockReportService');
