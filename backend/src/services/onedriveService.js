@@ -8,9 +8,11 @@ class OneDriveService {
     this.tenantId = process.env.MICROSOFT_TENANT_ID;
     this.clientId = process.env.MICROSOFT_CLIENT_ID;
     this.clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
-    // For application (service-to-service) auth, we need a specific user's OneDrive
-    this.userEmail = process.env.MICROSOFT_USER_EMAIL || 'info@acropaq.com';
+    // SharePoint site configuration
+    this.sharePointHost = process.env.SHAREPOINT_HOST || 'acropaq2.sharepoint.com';
+    this.sharePointSite = process.env.SHAREPOINT_SITE || 'Acropaq-AITest';
     this.graphClient = null;
+    this.siteId = null;
 
     if (this.tenantId && this.clientId && this.clientSecret) {
       this.initializeClient();
@@ -20,11 +22,24 @@ class OneDriveService {
   }
 
   /**
-   * Get the drive API path - uses specific user for app auth, /me for delegated auth
+   * Get the SharePoint site ID (cached)
    */
-  getDrivePath() {
-    // For application credentials, we must use a specific user's drive
-    return `/users/${this.userEmail}/drive`;
+  async getSiteId() {
+    if (this.siteId) return this.siteId;
+
+    const site = await this.graphClient
+      .api(`/sites/${this.sharePointHost}:/sites/${this.sharePointSite}`)
+      .get();
+    this.siteId = site.id;
+    return this.siteId;
+  }
+
+  /**
+   * Get the drive API path - uses SharePoint site's document library
+   */
+  async getDrivePath() {
+    const siteId = await this.getSiteId();
+    return `/sites/${siteId}/drive`;
   }
   
   initializeClient() {
@@ -88,19 +103,21 @@ class OneDriveService {
       
       let uploadedFile;
       
+      const drivePath = await this.getDrivePath();
+
       if (fileStats.size < 4 * 1024 * 1024) {
         // Small file upload (< 4MB)
         uploadedFile = await this.graphClient
-          .api(`${this.getDrivePath()}/root:${remotePath}:/content`)
+          .api(`${drivePath}/root:${remotePath}:/content`)
           .put(fileStream);
       } else {
         // Large file upload session
         uploadedFile = await this.uploadLargeFile(remotePath, fileStream, fileStats.size);
       }
-      
+
       // Create sharing link
       const sharingLink = await this.graphClient
-        .api(`${this.getDrivePath()}/items/${uploadedFile.id}/createLink`)
+        .api(`${drivePath}/items/${uploadedFile.id}/createLink`)
         .post({
           type: 'view',
           scope: 'organization' // Only people in your organization can access
@@ -120,22 +137,23 @@ class OneDriveService {
   }
   
   /**
-   * Ensure folder structure exists in OneDrive
+   * Ensure folder structure exists in SharePoint
    */
   async ensureFolderExists(folderPath) {
+    const drivePath = await this.getDrivePath();
     const parts = folderPath.split('/').filter(p => p);
     let currentPath = '';
-    
+
     for (const part of parts) {
       currentPath += `/${part}`;
       try {
-        await this.graphClient.api(`${this.getDrivePath()}/root:${currentPath}`).get();
+        await this.graphClient.api(`${drivePath}/root:${currentPath}`).get();
       } catch (error) {
         if (error.code === 'itemNotFound') {
           // Create folder
           const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
           await this.graphClient
-            .api(`${this.getDrivePath()}/root:${parentPath}:/children`)
+            .api(`${drivePath}/root:${parentPath}:/children`)
             .post({
               name: part,
               folder: {},
@@ -152,8 +170,9 @@ class OneDriveService {
    * Upload large files using upload session
    */
   async uploadLargeFile(remotePath, fileStream, fileSize) {
+    const drivePath = await this.getDrivePath();
     const uploadSession = await this.graphClient
-      .api(`${this.getDrivePath()}/root:${remotePath}:/createUploadSession`)
+      .api(`${drivePath}/root:${remotePath}:/createUploadSession`)
       .post({});
     
     // Upload in chunks (4MB each)
@@ -203,7 +222,7 @@ class OneDriveService {
   }
   
   /**
-   * Test connection to Microsoft Graph
+   * Test connection to Microsoft Graph / SharePoint
    */
   async testConnection() {
     if (!this.graphClient) {
@@ -211,13 +230,14 @@ class OneDriveService {
     }
 
     try {
-      // For app auth, test by accessing the user's drive instead of /me
-      const drive = await this.graphClient.api(this.getDrivePath()).get();
+      // Test by accessing the SharePoint site's document library
+      const drivePath = await this.getDrivePath();
+      const drive = await this.graphClient.api(drivePath).get();
       return {
         success: true,
-        drive: {
-          name: drive.name,
-          owner: drive.owner?.user?.displayName || this.userEmail,
+        sharePoint: {
+          site: this.sharePointSite,
+          driveName: drive.name,
           webUrl: drive.webUrl
         }
       };
