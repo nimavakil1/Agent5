@@ -107,7 +107,7 @@ class OneDriveService {
         // Small file upload (< 4MB) - use buffer for SharePoint compatibility
         const fileBuffer = fs.readFileSync(localFilePath);
         uploadedFile = await this.graphClient
-          .api(`${drivePath}/items/root:${remotePath}:/content`)
+          .api(`${drivePath}/root:${remotePath}:/content`)
           .put(fileBuffer);
       } else {
         // Large file upload session
@@ -147,17 +147,22 @@ class OneDriveService {
     for (const part of parts) {
       currentPath += `/${part}`;
       try {
-        await this.graphClient.api(`${drivePath}/items/root:${currentPath}`).get();
+        // Check if folder exists using /root:/path format
+        await this.graphClient.api(`${drivePath}/root:${currentPath}`).get();
       } catch (error) {
-        if (error.code === 'itemNotFound') {
-          // Create folder
-          const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
+        if (error.statusCode === 404 || error.code === 'itemNotFound') {
+          // Create folder - use /root/children for root level, or /root:/parentPath:/children for nested
+          const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/'));
+          const apiPath = parentPath
+            ? `${drivePath}/root:${parentPath}:/children`
+            : `${drivePath}/root/children`;
+
           await this.graphClient
-            .api(`${drivePath}/items/root:${parentPath}:/children`)
+            .api(apiPath)
             .post({
               name: part,
               folder: {},
-              '@microsoft.graph.conflictBehavior': 'rename'
+              '@microsoft.graph.conflictBehavior': 'replace'
             });
         } else {
           throw error;
@@ -172,7 +177,7 @@ class OneDriveService {
   async uploadLargeFile(remotePath, fileStream, fileSize) {
     const drivePath = await this.getDrivePath();
     const uploadSession = await this.graphClient
-      .api(`${drivePath}/items/root:${remotePath}:/createUploadSession`)
+      .api(`${drivePath}/root:${remotePath}:/createUploadSession`)
       .post({});
     
     // Upload in chunks (4MB each)
