@@ -644,7 +644,8 @@ class BolStockSync {
         duration: `${duration}s`,
         errors: errors.slice(0, 10),
         summary,
-        detailedResults
+        detailedResults,
+        notFoundEans  // Include the list of EANs not found in Odoo
       };
 
     } catch (error) {
