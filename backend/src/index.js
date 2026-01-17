@@ -466,6 +466,43 @@ app.use('/api/chat', requireSession, chatRouter);
 // Unified Orders API (all channels: Amazon Seller, Vendor, Bol.com)
 app.use('/api/orders', requireSession, ordersRouter);
 // Products API - Safety stock management for FBM sync
+// One-time setup endpoint (no auth - should be removed after setup)
+app.post('/api/products-api/setup/create-odoo-field', async (req, res) => {
+  try {
+    const { OdooDirectClient } = require('./core/agents/integrations/OdooMCP');
+    const client = new OdooDirectClient();
+    await client.authenticate();
+
+    // Check if field exists on product.template
+    const existing = await client.searchRead('ir.model.fields', [
+      ['model', '=', 'product.template'],
+      ['name', '=', 'x_safety_stock']
+    ], ['id', 'name']);
+
+    if (existing.length > 0) {
+      return res.json({ success: true, message: 'Field already exists', fieldId: existing[0].id });
+    }
+
+    // Get model ID
+    const models = await client.searchRead('ir.model', [['model', '=', 'product.template']], ['id']);
+    const modelId = models[0].id;
+
+    // Create field
+    const fieldId = await client.create('ir.model.fields', {
+      name: 'x_safety_stock',
+      field_description: 'Safety Stock (Amazon FBM)',
+      model_id: modelId,
+      ttype: 'float',
+      store: true
+    });
+
+    console.log('[Setup] Created x_safety_stock on product.template, ID:', fieldId);
+    res.json({ success: true, fieldId });
+  } catch (error) {
+    console.error('[Setup] Create field error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 app.use('/api/products-api', requireSession, productsApiRouter);
 // Alerts API - Public warehouse display endpoint (no auth for big screen display)
 app.get('/api/alerts/warehouse-display', async (req, res) => {
