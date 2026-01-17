@@ -38,6 +38,9 @@ class FbmStockReportService {
     workbook.creator = 'Agent5 FBM Stock Sync';
     workbook.created = new Date();
 
+    // Marketplace columns
+    const MARKETPLACES = ['DE', 'FR', 'NL', 'BE', 'ES', 'IT', 'UK'];
+
     const worksheet = workbook.addWorksheet('FBM Stock Updates', {
       views: [{ state: 'frozen', ySplit: 3 }] // Freeze first 3 rows (summary + header)
     });
@@ -46,16 +49,20 @@ class FbmStockReportService {
     const now = new Date();
     const dateStr = now.toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' });
 
-    worksheet.addRow(['Amazon FBM Stock Update Report', '', '', '', '', '', '', '', dateStr]);
-    worksheet.mergeCells('A1:H1');
-    worksheet.getCell('A1').font = { bold: true, size: 14 };
-    worksheet.getCell('I1').font = { italic: true, size: 10 };
+    // Get changed items first so we can show correct count in summary
+    const detailedResults = syncResults.detailedResults || [];
+    const changedItems = detailedResults.filter(item => (item.delta || 0) !== 0);
 
-    // Summary row
+    worksheet.addRow(['Amazon FBM Stock Update Report', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', dateStr]);
+    worksheet.mergeCells('A1:P1');
+    worksheet.getCell('A1').font = { bold: true, size: 14 };
+    worksheet.getCell('Q1').font = { italic: true, size: 10 };
+
+    // Summary row - show count of items in the list, not total SKUs
     const summary = syncResults.summary || {};
-    const summaryText = `Total: ${summary.totalSkus || 0} SKUs | Updated: ${summary.updated || 0} | Increases: ${summary.increases || 0} | Decreases: ${summary.decreases || 0} | Unchanged: ${summary.unchanged || 0} | Zero Stock: ${summary.zeroStock || 0}`;
+    const summaryText = `Changed: ${changedItems.length} SKUs | Increases: ${summary.increases || 0} | Decreases: ${summary.decreases || 0} | (Total processed: ${summary.totalSkus || 0})`;
     worksheet.addRow([summaryText]);
-    worksheet.mergeCells('A2:I2');
+    worksheet.mergeCells('A2:Q2');
     worksheet.getCell('A2').font = { italic: true };
     worksheet.getCell('A2').fill = {
       type: 'pattern',
@@ -63,7 +70,7 @@ class FbmStockReportService {
       fgColor: { argb: 'FFFFF2CC' }
     };
 
-    // Header row
+    // Header row - add marketplace columns
     worksheet.addRow([
       'ASIN',
       'Amazon SKU',
@@ -74,7 +81,8 @@ class FbmStockReportService {
       'Safety Stock',
       'New Amazon QTY',
       'Delta',
-      'Status'
+      'Status',
+      ...MARKETPLACES  // DE, FR, NL, BE, ES, IT, UK columns
     ]);
 
     // Style header row
@@ -98,14 +106,25 @@ class FbmStockReportService {
       { width: 13 },  // Safety Stock
       { width: 16 },  // New Amazon QTY
       { width: 10 },  // Delta
-      { width: 12 }   // Status
+      { width: 12 },  // Status
+      { width: 5 },   // DE
+      { width: 5 },   // FR
+      { width: 5 },   // NL
+      { width: 5 },   // BE
+      { width: 5 },   // ES
+      { width: 5 },   // IT
+      { width: 5 }    // UK
     ];
 
-    // Add data rows - ONLY include items with changes (delta != 0)
-    const detailedResults = syncResults.detailedResults || [];
-    const changedItems = detailedResults.filter(item => (item.delta || 0) !== 0);
+    const totalColumns = 10 + MARKETPLACES.length; // 17 columns total
 
     for (const item of changedItems) {
+      // Determine which marketplaces this SKU is listed in
+      const itemMarketplaces = item.marketplaces || MARKETPLACES;
+      const marketplaceMarks = MARKETPLACES.map(mp =>
+        itemMarketplaces.includes(mp) ? 'x' : ''
+      );
+
       const row = worksheet.addRow([
         item.asin || '',
         item.amazonSku || '',
@@ -116,7 +135,8 @@ class FbmStockReportService {
         item.safetyStock ?? 10,
         item.newAmazonQty ?? 0,
         item.delta ?? 0,
-        item.status || 'pending'
+        item.status || 'pending',
+        ...marketplaceMarks
       ]);
 
       // Conditional formatting for delta (column 9)
@@ -146,18 +166,23 @@ class FbmStockReportService {
       } else if (item.status === 'failed') {
         statusCell.font = { color: { argb: 'FF9C0006' } };
       }
+
+      // Center marketplace columns
+      for (let col = 11; col <= totalColumns; col++) {
+        row.getCell(col).alignment = { horizontal: 'center' };
+      }
     }
 
     // Auto-filter
     worksheet.autoFilter = {
       from: { row: 3, column: 1 },
-      to: { row: 3 + changedItems.length, column: 10 }
+      to: { row: 3 + changedItems.length, column: totalColumns }
     };
 
     // Add borders to all data cells
     const lastRow = 3 + changedItems.length;
     for (let row = 3; row <= lastRow; row++) {
-      for (let col = 1; col <= 10; col++) {
+      for (let col = 1; col <= totalColumns; col++) {
         const cell = worksheet.getCell(row, col);
         cell.border = {
           top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
