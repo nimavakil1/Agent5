@@ -23,6 +23,7 @@ const { getSellerClient } = require('./SellerClient');
 const { skuResolver } = require('../SkuResolver');
 const { TeamsNotificationService } = require('../../../core/agents/services/TeamsNotificationService');
 const { getAllMarketplaceIds, MARKETPLACE_IDS } = require('./SellerMarketplaceConfig');
+const Product = require('../../../models/Product');
 
 // Feed type for inventory updates (kept for backwards compatibility with stats)
 const INVENTORY_FEED_TYPE = 'POST_INVENTORY_AVAILABILITY_DATA';
@@ -303,6 +304,36 @@ class SellerFbmStockExport {
   }
 
   /**
+   * Get safety stock values from MongoDB for multiple Odoo SKUs
+   * @param {string[]} odooSkus
+   * @returns {Map<string, number>} Map of odooSku → safety stock value
+   */
+  async getSafetyStock(odooSkus) {
+    const safetyStockMap = new Map();
+
+    // Initialize all with default
+    for (const sku of odooSkus) {
+      safetyStockMap.set(sku, 10); // Default safety stock
+    }
+
+    try {
+      const products = await Product.find({ sku: { $in: odooSkus } })
+        .select('sku safetyStock')
+        .lean();
+
+      for (const p of products) {
+        if (p.sku) {
+          safetyStockMap.set(p.sku, p.safetyStock ?? 10);
+        }
+      }
+    } catch (error) {
+      console.error('[SellerFbmStockExport] Error fetching safety stock:', error.message);
+    }
+
+    return safetyStockMap;
+  }
+
+  /**
    * Get CW stock for multiple Odoo SKUs
    * @param {string[]} odooSkus
    * @returns {Map<string, number>} Map of odooSku → available quantity
@@ -367,7 +398,7 @@ class SellerFbmStockExport {
    * Main sync function - the rock-solid approach
    * @param {Object} options
    * @param {boolean} options.dryRun - Don't submit to Amazon, just return what would be sent
-   * @returns {Object} Sync results
+   * @returns {Object} Sync results with detailed tracking for reporting
    */
   async syncStock(options = {}) {
     await this.init();
@@ -379,8 +410,17 @@ class SellerFbmStockExport {
       unresolved: 0,
       unresolvedSkus: [],
       stockItems: [],
+      detailedResults: [], // For Excel report
       feedId: null,
-      feedItemCount: 0
+      feedItemCount: 0,
+      summary: {
+        totalSkus: 0,
+        updated: 0,
+        unchanged: 0,
+        increases: 0,
+        decreases: 0,
+        zeroStock: 0
+      }
     };
 
     try {
@@ -396,7 +436,7 @@ class SellerFbmStockExport {
 
       console.log(`[SellerFbmStockExport] Found ${fbmListings.length} FBM listings`);
 
-      // Step 2: Resolve each Seller SKU to Odoo SKU and track marketplaces
+      // Step 2: Resolve each Seller SKU to Odoo SKU and track marketplaces + current Amazon qty
       console.log('[SellerFbmStockExport] Step 2: Resolving SKUs...');
       const resolvedItems = [];
       const unresolvedItems = [];
@@ -408,7 +448,8 @@ class SellerFbmStockExport {
         if (!skuMarketplaces.has(sku)) {
           skuMarketplaces.set(sku, {
             listing,
-            marketplaces: new Set()
+            marketplaces: new Set(),
+            amazonQtyBefore: listing.quantity || 0 // Current Amazon quantity
           });
         }
         // Add marketplace if present
@@ -429,7 +470,8 @@ class SellerFbmStockExport {
             asin: listing.asin,
             productName: listing.productName,
             matchType: resolution.matchType,
-            marketplaces: marketplaces.length > 0 ? marketplaces : ['DE'] // Default to DE if no marketplace info
+            marketplaces: marketplaces.length > 0 ? marketplaces : ['DE'], // Default to DE if no marketplace info
+            amazonQtyBefore: data.amazonQtyBefore
           });
         } else {
           unresolvedItems.push({
@@ -447,27 +489,64 @@ class SellerFbmStockExport {
 
       console.log(`[SellerFbmStockExport] Resolved: ${resolvedItems.length}, Unresolved: ${unresolvedItems.length}`);
 
-      // Step 3: Get CW stock for resolved Odoo SKUs
-      console.log('[SellerFbmStockExport] Step 3: Getting CW stock...');
+      // Step 3: Get CW stock AND safety stock for resolved Odoo SKUs
+      console.log('[SellerFbmStockExport] Step 3: Getting CW stock and safety stock...');
       const odooSkus = [...new Set(resolvedItems.map(i => i.odooSku))];
-      const stockMap = await this.getCwStock(odooSkus);
+      const [stockMap, safetyStockMap] = await Promise.all([
+        this.getCwStock(odooSkus),
+        this.getSafetyStock(odooSkus)
+      ]);
 
-      // Step 4: Build stock items with original Seller SKU and marketplace info
-      console.log('[SellerFbmStockExport] Step 4: Building stock items...');
+      // Step 4: Build stock items with safety stock deduction and detailed tracking
+      console.log('[SellerFbmStockExport] Step 4: Building stock items with safety stock deduction...');
       const stockItems = [];
+      const detailedResults = [];
 
       for (const item of resolvedItems) {
-        const quantity = stockMap.get(item.odooSku) || 0;
+        const cwFreeQty = stockMap.get(item.odooSku) || 0;
+        const safetyStock = safetyStockMap.get(item.odooSku) || 10;
+
+        // Apply safety stock deduction: send max(0, cwFreeQty - safetyStock) to Amazon
+        const newAmazonQty = Math.max(0, cwFreeQty - safetyStock);
+        const delta = newAmazonQty - item.amazonQtyBefore;
+
         stockItems.push({
           sellerSku: item.sellerSku,
           odooSku: item.odooSku,
-          quantity,
+          quantity: newAmazonQty,
           fulfillmentLatency: 3,
           marketplaces: item.marketplaces || ['DE']
         });
+
+        // Track detailed result for reporting
+        detailedResults.push({
+          asin: item.asin || '',
+          amazonSku: item.sellerSku,
+          odooSku: item.odooSku,
+          productName: item.productName || '',
+          amazonQtyBefore: item.amazonQtyBefore,
+          cwQty: cwFreeQty + (cwFreeQty > 0 ? 0 : 0), // Total CW stock (before reserved)
+          cwFreeQty: cwFreeQty,
+          safetyStock: safetyStock,
+          newAmazonQty: newAmazonQty,
+          delta: delta,
+          status: 'pending', // Will be updated after API call
+          error: null
+        });
+
+        // Update summary counts
+        if (delta > 0) result.summary.increases++;
+        else if (delta < 0) result.summary.decreases++;
+        else result.summary.unchanged++;
+
+        if (newAmazonQty === 0) result.summary.zeroStock++;
       }
 
       result.stockItems = stockItems;
+      result.detailedResults = detailedResults;
+      result.summary.totalSkus = stockItems.length;
+
+      console.log(`[SellerFbmStockExport] Safety stock applied: ${result.summary.increases} increases, ${result.summary.decreases} decreases, ${result.summary.unchanged} unchanged, ${result.summary.zeroStock} zero stock`);
 
       // Step 5: Handle unresolved SKUs
       if (unresolvedItems.length > 0) {
@@ -476,19 +555,42 @@ class SellerFbmStockExport {
 
       // Step 6: Submit to Amazon via Listings Items API (unless dry run)
       if (!dryRun && stockItems.length > 0) {
-        console.log('[SellerFbmStockExport] Step 5: Submitting to Amazon via Listings Items API...');
+        console.log('[SellerFbmStockExport] Step 6: Submitting to Amazon via Listings Items API...');
         const updateResult = await this.submitStockViaListingsApi(stockItems);
         result.updateId = updateResult.updateId;
         result.itemsUpdated = updateResult.updated;
         result.itemsFailed = updateResult.failed;
         result.feedItemCount = updateResult.updated; // For backwards compatibility
         result.success = updateResult.success;
+        result.summary.updated = updateResult.updated;
+
+        // Update detailed results with API response status
+        if (updateResult.details) {
+          const statusBySku = new Map();
+          for (const detail of updateResult.details) {
+            if (!statusBySku.has(detail.sku)) {
+              statusBySku.set(detail.sku, { status: detail.status, error: detail.error });
+            }
+          }
+          for (const dr of result.detailedResults) {
+            const apiStatus = statusBySku.get(dr.amazonSku);
+            if (apiStatus) {
+              dr.status = apiStatus.status;
+              dr.error = apiStatus.error;
+            }
+          }
+        }
+
         if (!updateResult.success) {
           result.error = updateResult.error;
         }
       } else if (dryRun) {
         result.success = true;
         result.message = 'Dry run - no updates submitted';
+        // Mark all as skipped for dry run
+        for (const dr of result.detailedResults) {
+          dr.status = 'skipped';
+        }
       } else {
         result.success = true;
         result.message = 'No stock items to submit';

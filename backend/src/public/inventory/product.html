@@ -334,6 +334,67 @@
     </div>
   </div>
 
+  <!-- Safety Stock Bulk Upload Modal -->
+  <div class="modal-overlay" id="safety-stock-modal">
+    <div class="modal" style="max-width:500px">
+      <div class="modal-title">
+        <span class="material-symbols-outlined" style="vertical-align:middle;margin-right:8px">upload_file</span>
+        Bulk Update Safety Stock
+      </div>
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px">
+        Update safety stock values for multiple products at once. Safety stock is deducted from available quantity when syncing to Amazon FBM.
+      </p>
+
+      <div style="display:flex;gap:12px;margin-bottom:20px">
+        <button class="btn btn-secondary" onclick="downloadSafetyStockTemplate()" style="flex:1">
+          <span class="material-symbols-outlined">download</span>
+          Download Template
+        </button>
+        <button class="btn btn-secondary" onclick="downloadSafetyStockReport()" style="flex:1">
+          <span class="material-symbols-outlined">description</span>
+          Export All Products
+        </button>
+      </div>
+
+      <div class="modal-field">
+        <label>Upload Excel File</label>
+        <div style="border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all 0.15s"
+             id="safety-stock-dropzone"
+             onclick="document.getElementById('safety-stock-file').click()"
+             ondrop="handleSafetyStockDrop(event)"
+             ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+             ondragleave="this.style.borderColor='var(--border)'">
+          <span class="material-symbols-outlined" style="font-size:32px;color:var(--text-muted);margin-bottom:8px;display:block">cloud_upload</span>
+          <span style="color:var(--text-muted);font-size:13px">Drop file here or click to browse</span>
+          <input type="file" id="safety-stock-file" accept=".xlsx,.xls" style="display:none" onchange="handleSafetyStockFile(this)">
+        </div>
+      </div>
+
+      <div id="safety-stock-preview" style="display:none;margin-top:16px;max-height:200px;overflow-y:auto">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Preview:</div>
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--bg-input)">
+              <th style="padding:8px;text-align:left;border:1px solid var(--border)">SKU</th>
+              <th style="padding:8px;text-align:right;border:1px solid var(--border)">Safety Stock</th>
+            </tr>
+          </thead>
+          <tbody id="safety-stock-preview-body"></tbody>
+        </table>
+      </div>
+
+      <div id="safety-stock-result" style="display:none;margin-top:16px;padding:12px;border-radius:8px;font-size:13px"></div>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeSafetyStockModal()">Cancel</button>
+        <button class="btn btn-success" id="safety-stock-upload-btn" onclick="uploadSafetyStock()" disabled>
+          <span class="material-symbols-outlined">cloud_upload</span>
+          Upload & Update
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let product = null;
     let attachments = { pictures: [], videos: [], packaging: [], documents: [] };
@@ -510,6 +571,141 @@
 
     function closePackagingModal() {
       document.getElementById('packaging-modal').classList.remove('show');
+    }
+
+    // ==================== SAFETY STOCK BULK UPLOAD ====================
+
+    let safetyStockData = [];
+
+    function showSafetyStockModal() {
+      safetyStockData = [];
+      document.getElementById('safety-stock-file').value = '';
+      document.getElementById('safety-stock-preview').style.display = 'none';
+      document.getElementById('safety-stock-result').style.display = 'none';
+      document.getElementById('safety-stock-upload-btn').disabled = true;
+      document.getElementById('safety-stock-modal').classList.add('show');
+    }
+
+    function closeSafetyStockModal() {
+      document.getElementById('safety-stock-modal').classList.remove('show');
+    }
+
+    function downloadSafetyStockTemplate() {
+      window.location.href = '/api/products-api/safety-stock/template';
+    }
+
+    async function downloadSafetyStockReport() {
+      try {
+        const res = await fetch('/api/products-api/safety-stock/export', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to export');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `safety_stock_export_${new Date().toISOString().slice(0,10)}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        alert('Failed to export: ' + error.message);
+      }
+    }
+
+    function handleSafetyStockDrop(e) {
+      e.preventDefault();
+      e.currentTarget.style.borderColor = 'var(--border)';
+      const file = e.dataTransfer.files[0];
+      if (file) processSafetyStockFile(file);
+    }
+
+    function handleSafetyStockFile(input) {
+      const file = input.files[0];
+      if (file) processSafetyStockFile(file);
+    }
+
+    async function processSafetyStockFile(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/products-api/safety-stock/preview', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Failed to process file');
+        }
+        const data = await res.json();
+        safetyStockData = data.items || [];
+
+        // Show preview
+        const tbody = document.getElementById('safety-stock-preview-body');
+        tbody.innerHTML = safetyStockData.slice(0, 10).map(item => `
+          <tr>
+            <td style="padding:6px 8px;border:1px solid var(--border)">${escapeHtml(item.sku)}</td>
+            <td style="padding:6px 8px;border:1px solid var(--border);text-align:right">${item.safetyStock}</td>
+          </tr>
+        `).join('');
+        if (safetyStockData.length > 10) {
+          tbody.innerHTML += `<tr><td colspan="2" style="padding:8px;text-align:center;color:var(--text-muted)">...and ${safetyStockData.length - 10} more</td></tr>`;
+        }
+        document.getElementById('safety-stock-preview').style.display = 'block';
+        document.getElementById('safety-stock-upload-btn').disabled = false;
+        document.getElementById('safety-stock-result').style.display = 'none';
+      } catch (error) {
+        const result = document.getElementById('safety-stock-result');
+        result.style.display = 'block';
+        result.style.background = 'rgba(239,68,68,0.15)';
+        result.style.color = '#f87171';
+        result.innerHTML = `<span class="material-symbols-outlined" style="vertical-align:middle;margin-right:8px">error</span>${error.message}`;
+        document.getElementById('safety-stock-upload-btn').disabled = true;
+      }
+    }
+
+    async function uploadSafetyStock() {
+      if (safetyStockData.length === 0) return;
+
+      const btn = document.getElementById('safety-stock-upload-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined spin">sync</span> Updating...';
+
+      try {
+        const res = await fetch('/api/products-api/safety-stock/bulk', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: safetyStockData })
+        });
+        const data = await res.json();
+
+        const result = document.getElementById('safety-stock-result');
+        result.style.display = 'block';
+
+        if (data.success) {
+          result.style.background = 'rgba(34,197,94,0.15)';
+          result.style.color = '#4ade80';
+          result.innerHTML = `<span class="material-symbols-outlined" style="vertical-align:middle;margin-right:8px">check_circle</span>
+            Updated ${data.updated} products. ${data.notFound > 0 ? `${data.notFound} SKUs not found.` : ''}`;
+
+          // Reload product to show updated safety stock
+          setTimeout(() => {
+            closeSafetyStockModal();
+            loadProduct();
+          }, 1500);
+        } else {
+          throw new Error(data.error || 'Update failed');
+        }
+      } catch (error) {
+        const result = document.getElementById('safety-stock-result');
+        result.style.display = 'block';
+        result.style.background = 'rgba(239,68,68,0.15)';
+        result.style.color = '#f87171';
+        result.innerHTML = `<span class="material-symbols-outlined" style="vertical-align:middle;margin-right:8px">error</span>${error.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span> Upload & Update';
+      }
     }
 
     async function savePackaging() {
@@ -756,6 +952,10 @@
               <button class="btn btn-secondary" onclick="copyToClipboard('${p.sku || p.id}')">
                 <span class="material-symbols-outlined">content_copy</span>
                 Copy SKU
+              </button>
+              <button class="btn btn-secondary" onclick="showSafetyStockModal()" title="Bulk Update Safety Stock">
+                <span class="material-symbols-outlined">upload_file</span>
+                Safety Stock
               </button>
             </div>
           </div>
@@ -1052,6 +1252,11 @@
                 <div class="field">
                   <div class="field-label">Country of Origin</div>
                   <div class="field-value ${!p.originCountry ? 'empty' : ''}">${p.originCountry || 'Not set'}</div>
+                </div>
+                <div class="field">
+                  <div class="field-label">Safety Stock (Amazon FBM)</div>
+                  <div class="field-value">${p.safetyStock !== undefined ? p.safetyStock : 10}</div>
+                  <input type="number" class="field-input" data-field="safetyStock" value="${p.safetyStock !== undefined ? p.safetyStock : 10}" min="0" step="1">
                 </div>
               </div>
             </div>

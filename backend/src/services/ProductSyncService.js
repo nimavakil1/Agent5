@@ -117,6 +117,7 @@ class ProductSyncService {
       stockByWarehouse: stockByWarehouse,
       totalStock,
       cwStock,
+      safetyStock: p.x_safety_stock ?? 10,  // Default to 10 if not set in Odoo
       odooWriteDate: p.write_date ? new Date(p.write_date) : new Date(),
       syncedAt: new Date()
     };
@@ -137,7 +138,7 @@ class ProductSyncService {
         'id', 'name', 'default_code', 'barcode', 'active', 'type',
         'categ_id', 'list_price', 'standard_price', 'uom_id',
         'weight', 'volume', 'sale_ok', 'purchase_ok', 'image_128',
-        'write_date'
+        'write_date', 'x_safety_stock'
       ];
 
       const domain = [['sale_ok', '=', true]];
@@ -202,7 +203,7 @@ class ProductSyncService {
         'id', 'name', 'default_code', 'barcode', 'active', 'type',
         'categ_id', 'list_price', 'standard_price', 'uom_id',
         'weight', 'volume', 'sale_ok', 'purchase_ok', 'image_128',
-        'write_date'
+        'write_date', 'x_safety_stock'
       ];
 
       const domain = [

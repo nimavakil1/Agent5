@@ -938,4 +938,50 @@ router.post('/orders/:orderId/sync-shipment', async (req, res) => {
   }
 });
 
+// ==================== FBM STOCK REPORT DOWNLOAD ====================
+
+/**
+ * GET /api/seller/fbm-report/:filename
+ * Download FBM stock update report files
+ * Files are stored temporarily on server for Teams notification download
+ */
+router.get('/fbm-report/:filename', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+
+  try {
+    const filename = req.params.filename;
+
+    // Security: Only allow specific file extensions and no path traversal
+    if (!filename.match(/^FBM_Stock_(Update|Fallback)_[\d\-T]+\.(xlsx|tsv)$/)) {
+      return res.status(400).json({ success: false, error: 'Invalid filename' });
+    }
+
+    const reportsDir = path.join(__dirname, '..', '..', 'tmp', 'fbm-reports');
+    const filePath = path.join(reportsDir, filename);
+
+    // Check file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, error: 'Report not found' });
+    }
+
+    // Set headers for download
+    const ext = path.extname(filename).toLowerCase();
+    const contentType = ext === '.xlsx'
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : 'text/tab-separated-values';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Stream file to response
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
+  } catch (error) {
+    console.error('[SellerAPI] GET /fbm-report/:filename error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

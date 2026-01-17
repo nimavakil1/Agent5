@@ -52,6 +52,11 @@ const productSchema = new mongoose.Schema({
   totalStock: { type: Number, default: 0 },
   cwStock: { type: Number, default: 0 },  // Central Warehouse (ID 1)
 
+  // Safety stock for Amazon FBM sync
+  // When sending stock to Amazon, we deduct this from free quantity
+  // Default 10: if 25 free stock in Odoo, send 15 to Amazon
+  safetyStock: { type: Number, default: 10 },
+
   // Sync tracking
   odooWriteDate: { type: Date },  // Odoo's write_date for change detection
   syncedAt: { type: Date, default: Date.now }

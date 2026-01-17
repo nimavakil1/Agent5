@@ -60,6 +60,7 @@ const { checkPermissionRouter: chatCheckRouter } = require('./api/routes/chat-pe
 const chatRouter = require('./api/routes/chat.api');
 const ordersRouter = require('./api/routes/orders.api');
 const alertsRouter = require('./api/routes/alerts.api');
+const productsApiRouter = require('./api/routes/products.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -464,6 +465,8 @@ app.use('/api/chat/my-permissions', requireSession, chatCheckRouter);
 app.use('/api/chat', requireSession, chatRouter);
 // Unified Orders API (all channels: Amazon Seller, Vendor, Bol.com)
 app.use('/api/orders', requireSession, ordersRouter);
+// Products API - Safety stock management for FBM sync
+app.use('/api/products-api', requireSession, productsApiRouter);
 // Alerts API - Public warehouse display endpoint (no auth for big screen display)
 app.get('/api/alerts/warehouse-display', async (req, res) => {
   try {
