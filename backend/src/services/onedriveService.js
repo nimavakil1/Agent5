@@ -108,7 +108,7 @@ class OneDriveService {
       if (fileStats.size < 4 * 1024 * 1024) {
         // Small file upload (< 4MB)
         uploadedFile = await this.graphClient
-          .api(`${drivePath}/root:${remotePath}:/content`)
+          .api(`${drivePath}/items/root:${remotePath}:/content`)
           .put(fileStream);
       } else {
         // Large file upload session
@@ -147,13 +147,13 @@ class OneDriveService {
     for (const part of parts) {
       currentPath += `/${part}`;
       try {
-        await this.graphClient.api(`${drivePath}/root:${currentPath}`).get();
+        await this.graphClient.api(`${drivePath}/items/root:${currentPath}`).get();
       } catch (error) {
         if (error.code === 'itemNotFound') {
           // Create folder
           const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
           await this.graphClient
-            .api(`${drivePath}/root:${parentPath}:/children`)
+            .api(`${drivePath}/items/root:${parentPath}:/children`)
             .post({
               name: part,
               folder: {},
@@ -172,7 +172,7 @@ class OneDriveService {
   async uploadLargeFile(remotePath, fileStream, fileSize) {
     const drivePath = await this.getDrivePath();
     const uploadSession = await this.graphClient
-      .api(`${drivePath}/root:${remotePath}:/createUploadSession`)
+      .api(`${drivePath}/items/root:${remotePath}:/createUploadSession`)
       .post({});
     
     // Upload in chunks (4MB each)
