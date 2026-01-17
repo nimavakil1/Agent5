@@ -22,7 +22,10 @@ const REPORTS_FOLDER = process.env.FBM_STOCK_REPORTS_FOLDER || 'FBM_Stock_Report
  */
 class FbmStockReportService {
   constructor() {
+    // Regular updates webhook (stock changes, daily reports)
     this.webhookUrl = process.env.TEAMS_FBM_STOCK_WEBHOOK_URL || process.env.TEAMS_WEBHOOK_URL;
+    // Escalation webhook (errors, manual intervention needed)
+    this.escalationWebhookUrl = process.env.TEAMS_FBM_ESCALATION_WEBHOOK_URL || this.webhookUrl;
   }
 
   /**
@@ -327,8 +330,8 @@ class FbmStockReportService {
    * @returns {Object} { success, error }
    */
   async sendErrorEscalation(errorInfo, tsvUrl = null) {
-    if (!this.webhookUrl) {
-      console.log('[FbmStockReportService] Teams webhook not configured, skipping escalation');
+    if (!this.escalationWebhookUrl) {
+      console.log('[FbmStockReportService] Teams escalation webhook not configured, skipping');
       return { success: false, error: 'Teams webhook not configured' };
     }
 
@@ -408,13 +411,16 @@ class FbmStockReportService {
       actions: actions.length > 0 ? actions : undefined
     };
 
-    return this._postToWebhook(card);
+    return this._postToWebhook(card, this.escalationWebhookUrl);
   }
 
   /**
    * Post adaptive card to Teams webhook
+   * @param {Object} card - Adaptive card content
+   * @param {string} webhookUrl - Optional webhook URL (defaults to this.webhookUrl)
    */
-  async _postToWebhook(card) {
+  async _postToWebhook(card, webhookUrl = null) {
+    const targetUrl = webhookUrl || this.webhookUrl;
     return new Promise((resolve) => {
       try {
         const message = {
@@ -427,7 +433,7 @@ class FbmStockReportService {
           ]
         };
 
-        const parsedUrl = url.parse(this.webhookUrl);
+        const parsedUrl = url.parse(targetUrl);
         const postData = JSON.stringify(message);
 
         const options = {
