@@ -37,6 +37,10 @@ const LISTINGS_REPORT_TYPE = 'GET_MERCHANT_LISTINGS_DATA';
 // Collections
 const FEEDS_COLLECTION = 'seller_feeds';
 const STOCK_UPDATES_COLLECTION = 'amazon_stock_updates';
+
+// Target marketplaces for FBM stock sync
+// These are the 7 marketplaces where Acropaq sells FBM
+const FBM_TARGET_MARKETPLACES = ['DE', 'FR', 'NL', 'BE', 'ES', 'IT', 'UK'];
 const UNRESOLVED_SKUS_COLLECTION = 'amazon_unresolved_skus';
 const FBM_LISTINGS_COLLECTION = 'amazon_fbm_listings';
 
@@ -474,7 +478,7 @@ class SellerFbmStockExport {
             asin: listing.asin,
             productName: listing.productName,
             matchType: resolution.matchType,
-            marketplaces: marketplaces.length > 0 ? marketplaces : ['DE'], // Default to DE if no marketplace info
+            marketplaces: marketplaces.length > 0 ? marketplaces : FBM_TARGET_MARKETPLACES, // All 7 FBM marketplaces
             amazonQtyBefore: data.amazonQtyBefore
           });
         } else {
@@ -519,7 +523,7 @@ class SellerFbmStockExport {
           odooSku: item.odooSku,
           quantity: newAmazonQty,
           fulfillmentLatency: 3,
-          marketplaces: item.marketplaces || ['DE']
+          marketplaces: item.marketplaces || FBM_TARGET_MARKETPLACES
         });
 
         // Track detailed result for reporting
@@ -754,7 +758,7 @@ class SellerFbmStockExport {
     // Process each SKU
     for (let i = 0; i < stockItems.length; i++) {
       const item = stockItems[i];
-      const marketplaces = item.marketplaces || ['DE'];
+      const marketplaces = item.marketplaces || FBM_TARGET_MARKETPLACES;
 
       // Update each marketplace for this SKU
       for (const marketplaceCode of marketplaces) {
