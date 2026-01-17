@@ -572,7 +572,8 @@ class SellerFbmStockExport {
           newAmazonQty: newAmazonQty,
           delta: delta,
           status: 'pending', // Will be updated after API call
-          error: null
+          error: null,
+          marketplaces: item.marketplaces || [] // Include marketplaces for Excel report
         });
 
         // Update summary counts
