@@ -46,7 +46,7 @@ class FbmStockReportService {
     const now = new Date();
     const dateStr = now.toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' });
 
-    worksheet.addRow(['FBM Stock Update Report', '', '', '', '', '', '', '', dateStr]);
+    worksheet.addRow(['Amazon FBM Stock Update Report', '', '', '', '', '', '', '', dateStr]);
     worksheet.mergeCells('A1:H1');
     worksheet.getCell('A1').font = { bold: true, size: 14 };
     worksheet.getCell('I1').font = { italic: true, size: 10 };
@@ -252,7 +252,7 @@ class FbmStockReportService {
     const cardBody = [
       {
         type: 'TextBlock',
-        text: `📦 FBM Stock Update Report - ${dateStr}`,
+        text: `📦 Amazon FBM Stock Update Report - ${dateStr}`,
         weight: 'bolder',
         size: 'medium',
         color: hasErrors ? 'warning' : 'default'

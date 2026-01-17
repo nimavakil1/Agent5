@@ -97,11 +97,15 @@ class SellerFbmStockExport {
     try {
       const spClient = await this.client.getClient();
 
+      // Use single marketplace for listings report (Amazon only allows one at a time)
+      // DE is the primary EU marketplace - listings are shared across EU marketplaces
+      const primaryMarketplace = MARKETPLACE_IDS.DE;
+
       const response = await spClient.callAPI({
         operation: 'reports.createReport',
         body: {
           reportType: LISTINGS_REPORT_TYPE,
-          marketplaceIds: getAllMarketplaceIds()
+          marketplaceIds: [primaryMarketplace]
         }
       });
 
