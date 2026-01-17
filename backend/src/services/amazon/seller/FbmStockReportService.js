@@ -289,8 +289,31 @@ class FbmStockReportService {
       });
     }
 
-    // Add unresolved SKUs info
-    if (syncResults.unresolved > 0) {
+    // Add unresolved SKUs info - show the specific SKUs
+    if (syncResults.unresolved > 0 && syncResults.unresolvedSkus && syncResults.unresolvedSkus.length > 0) {
+      const unresolvedSkus = syncResults.unresolvedSkus;
+      const maxToShow = 10;
+      const skusToShow = unresolvedSkus.slice(0, maxToShow);
+      const hasMore = unresolvedSkus.length > maxToShow;
+
+      cardBody.push({
+        type: 'TextBlock',
+        text: `⚠️ ${unresolvedSkus.length} SKU(s) could not be resolved to Odoo:`,
+        color: 'warning',
+        wrap: true,
+        separator: true
+      });
+
+      // Show the actual SKUs (amazonSku)
+      const skuList = skusToShow.map(s => s.amazonSku || s.sku || s).join(', ');
+      cardBody.push({
+        type: 'TextBlock',
+        text: skuList + (hasMore ? ` ... and ${unresolvedSkus.length - maxToShow} more` : ''),
+        fontType: 'monospace',
+        wrap: true
+      });
+    } else if (syncResults.unresolved > 0) {
+      // Fallback if unresolvedSkus array is not available
       cardBody.push({
         type: 'TextBlock',
         text: `⚠️ ${syncResults.unresolved} SKUs could not be resolved to Odoo`,

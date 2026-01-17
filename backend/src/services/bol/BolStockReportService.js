@@ -284,8 +284,30 @@ class BolStockReportService {
       });
     }
 
-    // Add not found EANs info
-    if (syncResults.skippedNotInOdoo > 0) {
+    // Add not found EANs info - show the specific EANs
+    if (syncResults.skippedNotInOdoo > 0 && syncResults.notFoundEans && syncResults.notFoundEans.length > 0) {
+      const notFoundEans = syncResults.notFoundEans;
+      const maxToShow = 10;
+      const eansToShow = notFoundEans.slice(0, maxToShow);
+      const hasMore = notFoundEans.length > maxToShow;
+
+      cardBody.push({
+        type: 'TextBlock',
+        text: `⚠️ ${notFoundEans.length} EAN(s) not found in Odoo:`,
+        color: 'warning',
+        wrap: true,
+        separator: true
+      });
+
+      // Show the actual EANs in a monospace code block
+      cardBody.push({
+        type: 'TextBlock',
+        text: eansToShow.join(', ') + (hasMore ? ` ... and ${notFoundEans.length - maxToShow} more` : ''),
+        fontType: 'monospace',
+        wrap: true
+      });
+    } else if (syncResults.skippedNotInOdoo > 0) {
+      // Fallback if notFoundEans array is not available
       cardBody.push({
         type: 'TextBlock',
         text: `⚠️ ${syncResults.skippedNotInOdoo} EANs not found in Odoo`,
