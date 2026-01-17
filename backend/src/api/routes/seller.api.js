@@ -389,6 +389,161 @@ router.post('/orders/import-fbm', uploadFbm.single('file'), async (req, res) => 
 });
 
 /**
+ * @route POST /api/seller/orders/import-fbm-stream
+ * @desc Import FBM orders with Server-Sent Events for real-time progress
+ *
+ * Streams progress events:
+ * - { type: 'parsing', count: N } - Parsing TSV
+ * - { type: 'progress', step: 'partner', orderId, customer } - Creating partner
+ * - { type: 'progress', step: 'order', orderId } - Creating order
+ * - { type: 'result', orderId, status, odooName, error } - Order result
+ * - { type: 'complete', summary: {...} } - Final summary
+ */
+router.post('/orders/import-fbm-stream', uploadFbm.single('file'), async (req, res) => {
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (data) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    if (!req.file) {
+      sendEvent({ type: 'error', error: 'No file uploaded' });
+      res.end();
+      return;
+    }
+
+    const { getFbmOrderImporter } = require('../../services/amazon/seller/FbmOrderImporter');
+    const { getSellerOrderCreator } = require('../../services/amazon/seller/SellerOrderCreator');
+
+    const importer = await getFbmOrderImporter();
+    const creator = await getSellerOrderCreator();
+    const tsvContent = req.file.buffer.toString('utf-8');
+    const fileName = req.file.originalname;
+
+    // Step 1: Parse TSV
+    sendEvent({ type: 'status', message: 'Parsing TSV file...' });
+    const orderGroups = importer.parseTsv(tsvContent);
+    const orderIds = Object.keys(orderGroups);
+    sendEvent({ type: 'parsing', count: orderIds.length, message: `Found ${orderIds.length} orders in TSV` });
+
+    // Step 2: Import to unified_orders
+    sendEvent({ type: 'status', message: 'Storing orders to database...' });
+    const importResult = await importer.importToUnifiedOrders(tsvContent, { fileName });
+    sendEvent({
+      type: 'imported',
+      count: importResult.imported + importResult.updated,
+      message: `Stored ${importResult.imported} new, ${importResult.updated} updated`
+    });
+
+    // Step 3: Create Odoo orders with progress tracking
+    const results = {
+      created: 0,
+      skipped: 0,
+      errors: [],
+      orders: []
+    };
+
+    if (importResult.orderIds.length > 0) {
+      sendEvent({ type: 'status', message: 'Creating orders in Odoo...', total: importResult.orderIds.length });
+
+      for (let i = 0; i < importResult.orderIds.length; i++) {
+        const amazonOrderId = importResult.orderIds[i];
+        const orderData = orderGroups[amazonOrderId];
+        const progress = Math.round(((i + 1) / importResult.orderIds.length) * 100);
+
+        sendEvent({
+          type: 'progress',
+          step: 'processing',
+          orderId: amazonOrderId,
+          customer: orderData?.recipientName || 'Unknown',
+          city: orderData?.city || '',
+          current: i + 1,
+          total: importResult.orderIds.length,
+          percent: progress
+        });
+
+        try {
+          // Create single order
+          const orderResult = await creator.createOrdersFromUnified([amazonOrderId], { autoConfirm: true });
+
+          if (orderResult.orders && orderResult.orders.length > 0) {
+            const order = orderResult.orders[0];
+
+            sendEvent({
+              type: 'result',
+              orderId: amazonOrderId,
+              status: order.status,
+              odooName: order.odooOrderName || null,
+              reason: order.reason || order.error || null,
+              customer: orderData?.recipientName || 'Unknown',
+              city: orderData?.city || '',
+              country: orderData?.country || ''
+            });
+
+            results.orders.push({
+              orderId: amazonOrderId,
+              status: order.status,
+              odooName: order.odooOrderName,
+              customer: orderData?.recipientName,
+              address: {
+                street: orderData?.address1,
+                postalCode: orderData?.postalCode,
+                city: orderData?.city,
+                country: orderData?.country
+              },
+              reason: order.reason,
+              error: order.error
+            });
+
+            if (order.status === 'created') results.created++;
+            else if (order.status === 'skipped') results.skipped++;
+            else if (order.status === 'error') results.errors.push({ orderId: amazonOrderId, error: order.error });
+          }
+        } catch (orderError) {
+          sendEvent({
+            type: 'result',
+            orderId: amazonOrderId,
+            status: 'error',
+            error: orderError.message,
+            customer: orderData?.recipientName || 'Unknown'
+          });
+          results.errors.push({ orderId: amazonOrderId, error: orderError.message });
+          results.orders.push({
+            orderId: amazonOrderId,
+            status: 'error',
+            error: orderError.message,
+            customer: orderData?.recipientName
+          });
+        }
+      }
+    }
+
+    // Final summary
+    sendEvent({
+      type: 'complete',
+      success: true,
+      parsed: importResult.parsed,
+      created: results.created,
+      skipped: results.skipped,
+      errors: results.errors.length,
+      orders: results.orders
+    });
+
+    res.end();
+
+  } catch (error) {
+    console.error('[SellerAPI] POST /orders/import-fbm-stream error:', error);
+    sendEvent({ type: 'error', error: error.message });
+    res.end();
+  }
+});
+
+/**
  * @route POST /api/seller/orders/import-fbm-unified
  * @desc Step 1 only: Parse TSV and store to unified_orders without creating Odoo orders
  * Useful when you want to review data before creating Odoo orders
