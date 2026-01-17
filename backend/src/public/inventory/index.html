@@ -96,6 +96,28 @@
     .multi-select-actions button { flex: 1; padding: 4px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; border: none; }
     .multi-select-actions .select-all { background: #8b5cf6; color: white; }
     .multi-select-actions .clear-all { background: #252532; color: #e4e4e7; }
+
+    /* Modal styles */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 4000; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: #18181f; border-radius: 16px; padding: 24px; width: 100%; max-width: 500px; animation: modalIn 0.2s ease; border: 1px solid #252532; }
+    @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    .modal-title { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .modal-title .material-symbols-outlined { color: #8b5cf6; }
+    .modal-field { margin-bottom: 16px; }
+    .modal-field label { display: block; font-size: 12px; color: #71717a; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .modal-actions .btn { flex: 1; justify-content: center; }
+    .dropzone { border: 2px dashed #3f3f50; border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.15s; }
+    .dropzone:hover { border-color: #8b5cf6; background: rgba(139, 92, 246, 0.05); }
+    .dropzone .material-symbols-outlined { font-size: 32px; color: #71717a; margin-bottom: 8px; display: block; }
+    .dropzone span { color: #71717a; font-size: 13px; }
+    .preview-table { width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 12px; }
+    .preview-table th, .preview-table td { padding: 8px; border: 1px solid #252532; text-align: left; }
+    .preview-table th { background: #12121a; color: #71717a; }
+    .result-box { margin-top: 16px; padding: 12px; border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .result-box.success { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .result-box.error { background: rgba(239, 68, 68, 0.15); color: #f87171; }
   </style>
 </head>
 <body>
@@ -108,6 +130,9 @@
       <div class="header-actions">
         <button class="btn btn-secondary btn-sm" onclick="syncStock()" id="sync-btn" data-tooltip="Sync stock levels from Odoo">
           <span class="material-symbols-outlined">sync</span>Sync Stock
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="showSafetyStockModal()" data-tooltip="Bulk update safety stock for Amazon FBM">
+          <span class="material-symbols-outlined">inventory_2</span>Safety Stock
         </button>
         <button class="btn btn-secondary btn-sm" onclick="exportToExcel()">
           <span class="material-symbols-outlined">download</span>Export Excel
@@ -702,6 +727,172 @@
     }
 
     init();
+  </script>
+
+  <!-- Safety Stock Modal -->
+  <div class="modal-overlay" id="safety-stock-modal" onclick="if(event.target===this)closeSafetyStockModal()">
+    <div class="modal">
+      <div class="modal-title">
+        <span class="material-symbols-outlined">inventory_2</span>
+        Bulk Update Safety Stock
+      </div>
+      <p style="color:#71717a;font-size:13px;margin-bottom:16px">
+        Update safety stock values for multiple products. Safety stock is deducted from available quantity when syncing to Amazon FBM.
+      </p>
+
+      <div style="display:flex;gap:10px;margin-bottom:16px">
+        <button class="btn btn-secondary btn-sm" onclick="downloadSafetyStockTemplate()" style="flex:1">
+          <span class="material-symbols-outlined">download</span>Download Template
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadSafetyStockExport()" style="flex:1">
+          <span class="material-symbols-outlined">description</span>Export All
+        </button>
+      </div>
+
+      <div class="modal-field">
+        <label>Upload Excel File</label>
+        <div class="dropzone" id="dropzone"
+             onclick="document.getElementById('safety-file').click()"
+             ondrop="handleDrop(event)"
+             ondragover="event.preventDefault();this.style.borderColor='#8b5cf6'"
+             ondragleave="this.style.borderColor='#3f3f50'">
+          <span class="material-symbols-outlined">cloud_upload</span>
+          <span>Drop file here or click to browse</span>
+          <input type="file" id="safety-file" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(this)">
+        </div>
+      </div>
+
+      <div id="preview-section" style="display:none;max-height:200px;overflow-y:auto">
+        <div style="font-size:12px;color:#71717a;margin-bottom:8px">Preview:</div>
+        <table class="preview-table">
+          <thead><tr><th>SKU</th><th style="text-align:right">Safety Stock</th></tr></thead>
+          <tbody id="preview-body"></tbody>
+        </table>
+      </div>
+
+      <div id="result-section" style="display:none"></div>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeSafetyStockModal()">Cancel</button>
+        <button class="btn btn-primary" id="upload-btn" onclick="uploadSafetyStock()" disabled>
+          <span class="material-symbols-outlined">cloud_upload</span>Upload & Update
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Safety Stock Modal Functions
+    let safetyStockData = [];
+
+    function showSafetyStockModal() {
+      safetyStockData = [];
+      document.getElementById('safety-file').value = '';
+      document.getElementById('preview-section').style.display = 'none';
+      document.getElementById('result-section').style.display = 'none';
+      document.getElementById('upload-btn').disabled = true;
+      document.getElementById('safety-stock-modal').classList.add('show');
+    }
+
+    function closeSafetyStockModal() {
+      document.getElementById('safety-stock-modal').classList.remove('show');
+    }
+
+    function downloadSafetyStockTemplate() {
+      window.location.href = '/api/products-api/safety-stock/template';
+    }
+
+    function downloadSafetyStockExport() {
+      window.location.href = '/api/products-api/safety-stock/export';
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      e.currentTarget.style.borderColor = '#3f3f50';
+      const file = e.dataTransfer.files[0];
+      if (file) processFile(file);
+    }
+
+    function handleFileSelect(input) {
+      const file = input.files[0];
+      if (file) processFile(file);
+    }
+
+    async function processFile(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/products-api/safety-stock/preview', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Failed to process file');
+        }
+        const data = await res.json();
+        safetyStockData = data.items || [];
+
+        // Show preview
+        const tbody = document.getElementById('preview-body');
+        tbody.innerHTML = safetyStockData.slice(0, 10).map(item =>
+          `<tr><td>${escapeHtml(item.sku)}</td><td style="text-align:right">${item.safetyStock}</td></tr>`
+        ).join('');
+        if (safetyStockData.length > 10) {
+          tbody.innerHTML += `<tr><td colspan="2" style="text-align:center;color:#71717a">...and ${safetyStockData.length - 10} more</td></tr>`;
+        }
+        document.getElementById('preview-section').style.display = 'block';
+        document.getElementById('upload-btn').disabled = false;
+        document.getElementById('result-section').style.display = 'none';
+      } catch (error) {
+        showResult('error', error.message);
+        document.getElementById('upload-btn').disabled = true;
+      }
+    }
+
+    async function uploadSafetyStock() {
+      if (safetyStockData.length === 0) return;
+
+      const btn = document.getElementById('upload-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined loading-spinner">sync</span>Updating...';
+
+      try {
+        const res = await fetch('/api/products-api/safety-stock/bulk', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: safetyStockData })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showResult('success', `Updated ${data.updated} products.${data.notFound > 0 ? ` ${data.notFound} SKUs not found.` : ''}`);
+          setTimeout(() => closeSafetyStockModal(), 2000);
+        } else {
+          throw new Error(data.error || 'Update failed');
+        }
+      } catch (error) {
+        showResult('error', error.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span>Upload & Update';
+      }
+    }
+
+    function showResult(type, message) {
+      const el = document.getElementById('result-section');
+      el.className = 'result-box ' + type;
+      el.innerHTML = `<span class="material-symbols-outlined">${type === 'success' ? 'check_circle' : 'error'}</span>${message}`;
+      el.style.display = 'flex';
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
   </script>
 </body>
 </html>

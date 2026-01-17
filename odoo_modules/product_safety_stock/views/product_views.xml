@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add safety stock field to product template form view (main product view) -->
+    <record id="product_template_form_view_safety_stock" model="ir.ui.view">
+        <field name="name">product.template.form.safety.stock</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="stock.view_stock_product_template_form"/>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <!-- Insert after country_of_origin in the Logistics section -->
+            <xpath expr="//field[@name='country_of_origin']" position="after">
+                <field name="x_safety_stock" widget="float"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add to product.product form view (variant view) -->
+    <record id="product_product_form_view_safety_stock" model="ir.ui.view">
+        <field name="name">product.product.form.safety.stock</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_normal_form_view"/>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='default_code']" position="after">
+                <field name="x_safety_stock" widget="float"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
