@@ -92,46 +92,72 @@ class SellerFbmStockExport {
   }
 
   /**
-   * Request a listings report from Amazon
+   * Request a listings report from Amazon for a specific marketplace
+   * @param {string} marketplaceCode - Marketplace code (DE, FR, NL, etc.)
    * @returns {Object} { success, reportId }
    */
-  async requestListingsReport() {
+  async requestListingsReport(marketplaceCode = 'DE') {
     await this.init();
 
     try {
       const spClient = await this.client.getClient();
 
-      // Use single marketplace for listings report (Amazon only allows one at a time)
-      // DE is the primary EU marketplace - listings are shared across EU marketplaces
-      const primaryMarketplace = MARKETPLACE_IDS.DE;
+      const marketplaceId = MARKETPLACE_IDS[marketplaceCode];
+      if (!marketplaceId) {
+        throw new Error(`Unknown marketplace code: ${marketplaceCode}`);
+      }
 
       const response = await spClient.callAPI({
         operation: 'reports.createReport',
         body: {
           reportType: LISTINGS_REPORT_TYPE,
-          marketplaceIds: [primaryMarketplace]
+          marketplaceIds: [marketplaceId]
         }
       });
 
       const reportId = response.reportId;
-      console.log(`[SellerFbmStockExport] Requested listings report: ${reportId}`);
+      console.log(`[SellerFbmStockExport] Requested listings report for ${marketplaceCode}: ${reportId}`);
 
-      // Store report request
+      // Store report request with marketplace info
       await this.db.collection('seller_reports').insertOne({
         reportId,
         reportType: LISTINGS_REPORT_TYPE,
+        marketplace: marketplaceCode,
         purpose: 'fbm_stock_sync',
         status: 'IN_QUEUE',
         requestedAt: new Date(),
         processed: false
       });
 
-      return { success: true, reportId };
+      return { success: true, reportId, marketplace: marketplaceCode };
 
     } catch (error) {
-      console.error('[SellerFbmStockExport] Error requesting listings report:', error.message);
+      console.error(`[SellerFbmStockExport] Error requesting listings report for ${marketplaceCode}:`, error.message);
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Request listings reports from all target marketplaces
+   * @returns {Object} { success, reports: [{ marketplace, reportId }] }
+   */
+  async requestAllMarketplaceReports() {
+    await this.init();
+
+    const results = [];
+
+    for (const marketplaceCode of FBM_TARGET_MARKETPLACES) {
+      const result = await this.requestListingsReport(marketplaceCode);
+      if (result.success) {
+        results.push({ marketplace: marketplaceCode, reportId: result.reportId });
+      }
+      // Small delay between requests to avoid rate limiting
+      await sleep(500);
+    }
+
+    console.log(`[SellerFbmStockExport] Requested listings reports for ${results.length}/${FBM_TARGET_MARKETPLACES.length} marketplaces`);
+
+    return { success: results.length > 0, reports: results };
   }
 
   /**
@@ -171,8 +197,8 @@ class SellerFbmStockExport {
       .toArray();
 
     if (listings.length === 0) {
-      console.log('[SellerFbmStockExport] No FBM listings in cache, requesting new report...');
-      await this.requestListingsReport();
+      console.log('[SellerFbmStockExport] No FBM listings in cache, requesting reports for all marketplaces...');
+      await this.requestAllMarketplaceReports();
     }
 
     return listings;
@@ -211,7 +237,8 @@ class SellerFbmStockExport {
 
         if (status === 'DONE') {
           const documentId = statusResponse.reportDocumentId;
-          await this.downloadAndProcessListings(report.reportId, documentId);
+          // Pass marketplace from the report document
+          await this.downloadAndProcessListings(report.reportId, documentId, report.marketplace || 'DE');
           processed++;
         }
 
@@ -225,8 +252,11 @@ class SellerFbmStockExport {
 
   /**
    * Download and process listings report
+   * @param {string} reportId - Report ID
+   * @param {string} documentId - Document ID for download
+   * @param {string} marketplace - Marketplace code this report is from
    */
-  async downloadAndProcessListings(reportId, documentId) {
+  async downloadAndProcessListings(reportId, documentId, marketplace = 'DE') {
     const spClient = await this.client.getClient();
 
     try {
@@ -236,9 +266,9 @@ class SellerFbmStockExport {
       });
 
       const reportData = await spClient.download(docResponse, { json: false });
-      const listings = this.parseListingsReport(reportData);
+      const listings = this.parseListingsReport(reportData, marketplace);
 
-      console.log(`[SellerFbmStockExport] Parsed ${listings.length} listings from report`);
+      console.log(`[SellerFbmStockExport] Parsed ${listings.length} listings from ${marketplace} report`);
 
       // Store in MongoDB
       const now = new Date();
@@ -263,21 +293,23 @@ class SellerFbmStockExport {
       // Mark report as processed
       await this.db.collection('seller_reports').updateOne(
         { reportId },
-        { $set: { processed: true, processedAt: now, listingCount: listings.length } }
+        { $set: { processed: true, processedAt: now, listingCount: listings.length, marketplace } }
       );
 
-      console.log(`[SellerFbmStockExport] Stored ${listings.length} listings in cache`);
+      console.log(`[SellerFbmStockExport] Stored ${listings.length} ${marketplace} listings in cache`);
 
     } catch (error) {
-      console.error(`[SellerFbmStockExport] Error processing listings report:`, error.message);
+      console.error(`[SellerFbmStockExport] Error processing ${marketplace} listings report:`, error.message);
       throw error;
     }
   }
 
   /**
    * Parse listings report (TSV format)
+   * @param {Buffer|string} data - Report data
+   * @param {string} marketplace - Marketplace code this report is from
    */
-  parseListingsReport(data) {
+  parseListingsReport(data, marketplace = 'DE') {
     const lines = data.toString().split('\n');
     const listings = [];
 
@@ -296,6 +328,7 @@ class SellerFbmStockExport {
       });
 
       // Standard listings report fields
+      // Use the marketplace parameter - this is the marketplace the report was requested from
       listings.push({
         sellerSku: row.seller_sku || row.sku,
         asin: row.asin1 || row.asin,
@@ -304,7 +337,7 @@ class SellerFbmStockExport {
         quantity: parseInt(row.quantity) || 0,
         fulfillmentChannel: row.fulfillment_channel || 'DEFAULT', // DEFAULT = FBM, AMAZON_NA/EU = FBA
         status: row.status || 'Active',
-        marketplace: row.marketplace || 'ALL'
+        marketplace: marketplace // Use the marketplace the report was requested from
       });
     }
 
