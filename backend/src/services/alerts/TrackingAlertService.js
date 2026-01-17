@@ -270,8 +270,17 @@ class TrackingAlertService {
 
   /**
    * Get all Amazon Vendor orders with missing ASN
+   *
+   * DISABLED (2026-01-17): Amazon Vendor tracking alerts disabled to reduce noise.
+   * The Fulfilment status channel was being spammed with these alerts.
+   * Re-enable by removing the early return below.
    */
   async getStuckVendorOrders() {
+    // DISABLED: Return empty array to stop Vendor tracking alerts
+    // Remove this line to re-enable Vendor tracking alerts
+    return [];
+
+    /* Original implementation - kept for reference
     await this.init();
 
     const cutoffTime = new Date(Date.now() - ALERT_THRESHOLDS.AMAZON_VENDOR_MAX_HOURS_BEFORE_ALERT * 60 * 60 * 1000);
@@ -321,6 +330,7 @@ class TrackingAlertService {
     }
 
     return result;
+    */
   }
 
   /**
@@ -363,17 +373,18 @@ class TrackingAlertService {
       lastAttempt: o.amazon?.trackingPushAttempt
     }));
 
-    // Vendor failures
-    const vendorFailed = await this.db.collection('vendor_orders').find({
-      asnError: { $exists: true, $ne: null }
-    }).limit(20).toArray();
-
-    results.amazonVendor = vendorFailed.map(o => ({
-      orderId: o.purchaseOrderNumber,
-      odooOrderName: o.odoo?.saleOrderName,
-      error: o.asnError,
-      lastAttempt: o.asnAttemptedAt
-    }));
+    // Vendor failures - DISABLED (2026-01-17)
+    // const vendorFailed = await this.db.collection('vendor_orders').find({
+    //   asnError: { $exists: true, $ne: null }
+    // }).limit(20).toArray();
+    //
+    // results.amazonVendor = vendorFailed.map(o => ({
+    //   orderId: o.purchaseOrderNumber,
+    //   odooOrderName: o.odoo?.saleOrderName,
+    //   error: o.asnError,
+    //   lastAttempt: o.asnAttemptedAt
+    // }));
+    results.amazonVendor = []; // Disabled
 
     return results;
   }
@@ -454,7 +465,8 @@ class TrackingAlertService {
     }
 
     // Check for stale syncs
-    for (const [channel, name] of [['bolShipment', 'Bol.com'], ['amazonFbm', 'Amazon FBM'], ['amazonVendor', 'Amazon Vendor']]) {
+    // Note: amazonVendor removed (2026-01-17) - Vendor tracking alerts disabled
+    for (const [channel, name] of [['bolShipment', 'Bol.com'], ['amazonFbm', 'Amazon FBM']]) {
       if (this.isSyncStale(channel)) {
         health.status = health.status === 'OK' ? 'WARNING' : health.status;
         health.alerts.push({
