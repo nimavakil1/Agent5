@@ -8,13 +8,23 @@ class OneDriveService {
     this.tenantId = process.env.MICROSOFT_TENANT_ID;
     this.clientId = process.env.MICROSOFT_CLIENT_ID;
     this.clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+    // For application (service-to-service) auth, we need a specific user's OneDrive
+    this.userEmail = process.env.MICROSOFT_USER_EMAIL || 'info@acropaq.com';
     this.graphClient = null;
-    
+
     if (this.tenantId && this.clientId && this.clientSecret) {
       this.initializeClient();
     } else {
       console.warn('Microsoft Graph credentials not configured. OneDrive uploads will be skipped.');
     }
+  }
+
+  /**
+   * Get the drive API path - uses specific user for app auth, /me for delegated auth
+   */
+  getDrivePath() {
+    // For application credentials, we must use a specific user's drive
+    return `/users/${this.userEmail}/drive`;
   }
   
   initializeClient() {
@@ -81,7 +91,7 @@ class OneDriveService {
       if (fileStats.size < 4 * 1024 * 1024) {
         // Small file upload (< 4MB)
         uploadedFile = await this.graphClient
-          .api(`/me/drive/root:${remotePath}:/content`)
+          .api(`${this.getDrivePath()}/root:${remotePath}:/content`)
           .put(fileStream);
       } else {
         // Large file upload session
@@ -90,7 +100,7 @@ class OneDriveService {
       
       // Create sharing link
       const sharingLink = await this.graphClient
-        .api(`/me/drive/items/${uploadedFile.id}/createLink`)
+        .api(`${this.getDrivePath()}/items/${uploadedFile.id}/createLink`)
         .post({
           type: 'view',
           scope: 'organization' // Only people in your organization can access
@@ -119,13 +129,13 @@ class OneDriveService {
     for (const part of parts) {
       currentPath += `/${part}`;
       try {
-        await this.graphClient.api(`/me/drive/root:${currentPath}`).get();
+        await this.graphClient.api(`${this.getDrivePath()}/root:${currentPath}`).get();
       } catch (error) {
         if (error.code === 'itemNotFound') {
           // Create folder
           const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
           await this.graphClient
-            .api(`/me/drive/root:${parentPath}:/children`)
+            .api(`${this.getDrivePath()}/root:${parentPath}:/children`)
             .post({
               name: part,
               folder: {},
@@ -143,7 +153,7 @@ class OneDriveService {
    */
   async uploadLargeFile(remotePath, fileStream, fileSize) {
     const uploadSession = await this.graphClient
-      .api(`/me/drive/root:${remotePath}:/createUploadSession`)
+      .api(`${this.getDrivePath()}/root:${remotePath}:/createUploadSession`)
       .post({});
     
     // Upload in chunks (4MB each)
@@ -199,14 +209,16 @@ class OneDriveService {
     if (!this.graphClient) {
       return { success: false, error: 'Client not initialized' };
     }
-    
+
     try {
-      const user = await this.graphClient.api('/me').get();
-      return { 
-        success: true, 
-        user: { 
-          displayName: user.displayName, 
-          mail: user.mail 
+      // For app auth, test by accessing the user's drive instead of /me
+      const drive = await this.graphClient.api(this.getDrivePath()).get();
+      return {
+        success: true,
+        drive: {
+          name: drive.name,
+          owner: drive.owner?.user?.displayName || this.userEmail,
+          webUrl: drive.webUrl
         }
       };
     } catch (error) {
