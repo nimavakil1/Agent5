@@ -18,6 +18,7 @@ let _trackingHealthTimer = null;
 let _amazonFbmStockTimer = null;
 let _amazonFbaInventoryTimer = null;
 let _amazonFbaReportCheckTimer = null;
+let _safetyStockVerifyCron = null;
 
 async function runDueJobs(now = new Date()) {
   const due = await ScheduledJob.find({ status: 'pending', run_at: { $lte: now } }).sort({ run_at: 1 }).limit(10);
@@ -181,6 +182,18 @@ function start() {
       console.log('[scheduler] Late Orders Alert scheduled: 7:00 and 14:00 daily (Europe/Brussels timezone)');
     }
   } catch (e) { console.error('[scheduler] Late Orders Alert cron init error', e); }
+
+  // Safety Stock Verification (3:00 AM daily)
+  // Ensures MongoDB and Odoo safety stock values are in sync
+  try {
+    if (process.env.SAFETY_STOCK_VERIFY_ENABLED !== '0') {
+      _safetyStockVerifyCron = cron.schedule('0 3 * * *', async () => {
+        await verifySafetyStockSync();
+      }, { timezone: 'Europe/Brussels' });
+
+      console.log('[scheduler] Safety Stock Verification scheduled: 3:00 AM daily (Europe/Brussels timezone)');
+    }
+  } catch (e) { console.error('[scheduler] Safety Stock Verification cron init error', e); }
 
   // Tracking Health Check - CRITICAL: Ensures no tracking confirmations are missed
   // Runs every 15 minutes to detect stuck orders and stale sync jobs
@@ -682,6 +695,109 @@ async function checkAmazonFbaReports() {
   }
 }
 
+/**
+ * Verify safety stock sync between MongoDB and Odoo
+ * Runs nightly to detect and optionally fix mismatches
+ * Logs warnings for manual review
+ */
+async function verifySafetyStockSync() {
+  try {
+    const { OdooDirectClient } = require('../core/agents/integrations/OdooMCP');
+    const Product = require('../models/Product');
+
+    console.log('[scheduler] Starting safety stock verification...');
+
+    // Get all MongoDB products with safety stock
+    const mongoProducts = await Product.find(
+      { safetyStock: { $exists: true } },
+      { odooId: 1, sku: 1, name: 1, safetyStock: 1 }
+    ).lean();
+
+    if (mongoProducts.length === 0) {
+      console.log('[scheduler] Safety stock verify: No products with safety stock in MongoDB');
+      return { success: true, checked: 0, mismatches: 0 };
+    }
+
+    // Get corresponding Odoo products
+    const odooIds = mongoProducts.map(p => p.odooId).filter(Boolean);
+
+    const client = new OdooDirectClient();
+    await client.authenticate();
+
+    // Fetch x_safety_stock from product.template (via product.product)
+    const odooProducts = await client.searchRead(
+      'product.product',
+      [['id', 'in', odooIds]],
+      ['id', 'default_code', 'name', 'x_safety_stock'],
+      { limit: 5000 }
+    );
+
+    // Build lookup by odooId
+    const odooLookup = {};
+    for (const p of odooProducts) {
+      odooLookup[p.id] = p.x_safety_stock ?? 10;
+    }
+
+    // Find mismatches
+    const mismatches = [];
+    for (const mp of mongoProducts) {
+      if (!mp.odooId) continue;
+
+      const odooValue = odooLookup[mp.odooId];
+      if (odooValue === undefined) continue; // Product not in Odoo (deleted?)
+
+      if (mp.safetyStock !== odooValue) {
+        mismatches.push({
+          odooId: mp.odooId,
+          sku: mp.sku,
+          name: mp.name,
+          mongoValue: mp.safetyStock,
+          odooValue: odooValue
+        });
+      }
+    }
+
+    if (mismatches.length > 0) {
+      console.log(`[scheduler] ⚠️ Safety stock verification: ${mismatches.length} mismatches found`);
+
+      // Log first 10 mismatches for visibility
+      const sample = mismatches.slice(0, 10);
+      for (const m of sample) {
+        console.log(`[scheduler]   ${m.sku || m.odooId}: MongoDB=${m.mongoValue}, Odoo=${m.odooValue}`);
+      }
+      if (mismatches.length > 10) {
+        console.log(`[scheduler]   ... and ${mismatches.length - 10} more`);
+      }
+
+      // Auto-fix: Update MongoDB to match Odoo (Odoo is authoritative via UI)
+      if (process.env.SAFETY_STOCK_AUTO_FIX === '1') {
+        console.log('[scheduler] Auto-fixing mismatches (SAFETY_STOCK_AUTO_FIX=1)...');
+        const bulkOps = mismatches.map(m => ({
+          updateOne: {
+            filter: { odooId: m.odooId },
+            update: { $set: { safetyStock: m.odooValue, syncedAt: new Date() } }
+          }
+        }));
+
+        const result = await Product.bulkWrite(bulkOps);
+        console.log(`[scheduler] Auto-fixed ${result.modifiedCount} products`);
+      }
+    } else {
+      console.log(`[scheduler] Safety stock verification: OK (${mongoProducts.length} products checked, no mismatches)`);
+    }
+
+    return {
+      success: true,
+      checked: mongoProducts.length,
+      mismatches: mismatches.length,
+      mismatchDetails: mismatches.slice(0, 50) // Return first 50 for logging
+    };
+  } catch (e) {
+    console.error('[scheduler] Safety stock verification error:', e?.message || e);
+    return { success: false, error: e?.message || e };
+  }
+}
+
 module.exports = {
   start,
   checkAmazonSettlementReminders,
@@ -697,5 +813,7 @@ module.exports = {
   // Amazon stock sync functions
   syncAmazonFbmStock,
   syncAmazonFbaInventory,
-  checkAmazonFbaReports
+  checkAmazonFbaReports,
+  // Safety stock verification
+  verifySafetyStockSync
 };

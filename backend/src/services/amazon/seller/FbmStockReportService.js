@@ -23,7 +23,7 @@ const REPORTS_FOLDER = process.env.FBM_STOCK_REPORTS_FOLDER || 'FBM_Stock_Report
 class FbmStockReportService {
   constructor() {
     // Regular updates webhook (stock changes, daily reports)
-    this.webhookUrl = process.env.TEAMS_FBM_STOCK_WEBHOOK_URL || process.env.TEAMS_WEBHOOK_URL;
+    this.webhookUrl = process.env.TEAMS_FBM_REPORT_WEBHOOK_URL || process.env.TEAMS_WEBHOOK_URL;
     // Escalation webhook (errors, manual intervention needed)
     this.escalationWebhookUrl = process.env.TEAMS_FBM_ESCALATION_WEBHOOK_URL || this.webhookUrl;
   }

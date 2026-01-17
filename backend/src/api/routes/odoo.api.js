@@ -499,7 +499,9 @@ router.get('/products/:id', async (req, res) => {
       // Extra
       'company_id', 'currency_id',
       // Packaging
-      'packaging_ids'
+      'packaging_ids',
+      // Safety Stock (FBM/FBR)
+      'x_safety_stock'
     ];
 
     const products = await client.read('product.product', [parseInt(req.params.id)], allFields);
@@ -599,6 +601,9 @@ router.get('/products/:id', async (req, res) => {
         produceDelay: 0,
         packagingCount: Array.isArray(p.packaging_ids) ? p.packaging_ids.length : 0,
 
+        // Safety Stock for FBM/FBR sync
+        safetyStock: p.x_safety_stock ?? 10,
+
         // Audit
         createdAt: p.create_date,
         updatedAt: p.write_date,
@@ -637,7 +642,8 @@ router.put('/products/:id', async (req, res) => {
       canSell: 'sale_ok',
       canPurchase: 'purchase_ok',
       tracking: 'tracking',
-      invoicePolicy: 'invoice_policy'
+      invoicePolicy: 'invoice_policy',
+      safetyStock: 'x_safety_stock'
     };
 
     // Build Odoo update object
@@ -650,6 +656,20 @@ router.put('/products/:id', async (req, res) => {
 
     // Update in Odoo
     await client.write('product.product', [productId], odooUpdates);
+
+    // If safetyStock was updated, also update MongoDB cache
+    if (updates.safetyStock !== undefined) {
+      try {
+        await Product.updateOne(
+          { odooId: productId },
+          { $set: { safetyStock: updates.safetyStock, syncedAt: new Date() } }
+        );
+        console.log(`[ProductUpdate] SafetyStock updated in MongoDB for product ${productId}: ${updates.safetyStock}`);
+      } catch (mongoErr) {
+        console.error('[ProductUpdate] Failed to update MongoDB:', mongoErr.message);
+        // Continue - Odoo update succeeded, MongoDB will catch up on next sync
+      }
+    }
 
     // Fetch updated product
     const products = await client.read('product.product', [productId], [
@@ -1166,6 +1186,181 @@ router.get('/dashboard', async (req, res) => {
     });
   } catch (error) {
     console.error('Odoo dashboard error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== SAFETY STOCK MANAGEMENT ====================
+
+/**
+ * Bulk update safety stock from JSON array
+ * Body: { updates: [{ sku: "ABC123", safetyStock: 15 }, ...] }
+ * or:   { updates: [{ odooId: 123, safetyStock: 15 }, ...] }
+ */
+router.post('/products/safety-stock/bulk', async (req, res) => {
+  try {
+    const { updates } = req.body;
+
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ error: 'Updates array is required' });
+    }
+
+    const client = await getOdooClient();
+    const results = { success: [], failed: [] };
+
+    for (const item of updates) {
+      try {
+        let productId = item.odooId;
+
+        // If SKU provided instead of odooId, look up the product
+        if (!productId && item.sku) {
+          const products = await client.searchRead('product.product', [
+            ['default_code', '=', item.sku]
+          ], ['id'], { limit: 1 });
+
+          if (products.length === 0) {
+            results.failed.push({ sku: item.sku, error: 'Product not found' });
+            continue;
+          }
+          productId = products[0].id;
+        }
+
+        if (!productId) {
+          results.failed.push({ ...item, error: 'No odooId or sku provided' });
+          continue;
+        }
+
+        const safetyStock = parseInt(item.safetyStock) || 0;
+
+        // Update Odoo
+        await client.write('product.product', [productId], { x_safety_stock: safetyStock });
+
+        // Update MongoDB
+        await Product.updateOne(
+          { odooId: productId },
+          { $set: { safetyStock, syncedAt: new Date() } }
+        );
+
+        results.success.push({ odooId: productId, sku: item.sku, safetyStock });
+      } catch (err) {
+        results.failed.push({ ...item, error: err.message });
+      }
+    }
+
+    console.log(`[SafetyStock Bulk] Updated ${results.success.length}, Failed ${results.failed.length}`);
+
+    res.json({
+      success: true,
+      updated: results.success.length,
+      failed: results.failed.length,
+      results
+    });
+  } catch (error) {
+    console.error('Safety stock bulk update error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Verify safety stock sync between MongoDB and Odoo
+ * Returns mismatches for review/correction
+ */
+router.get('/products/safety-stock/verify', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+
+    // Get all products from MongoDB with safetyStock
+    const mongoProducts = await Product.find({}, { odooId: 1, sku: 1, name: 1, safetyStock: 1 }).lean();
+
+    if (mongoProducts.length === 0) {
+      return res.json({ success: true, message: 'No products in MongoDB cache', mismatches: [] });
+    }
+
+    // Get safetyStock from Odoo for all products
+    const odooIds = mongoProducts.map(p => p.odooId);
+    const batchSize = 500;
+    const odooProducts = [];
+
+    for (let i = 0; i < odooIds.length; i += batchSize) {
+      const batchIds = odooIds.slice(i, i + batchSize);
+      const batch = await client.read('product.product', batchIds, ['id', 'default_code', 'x_safety_stock']);
+      odooProducts.push(...batch);
+    }
+
+    // Build lookup map
+    const odooMap = {};
+    for (const p of odooProducts) {
+      odooMap[p.id] = p.x_safety_stock ?? 10;
+    }
+
+    // Find mismatches
+    const mismatches = [];
+    for (const mongo of mongoProducts) {
+      const odooValue = odooMap[mongo.odooId];
+      const mongoValue = mongo.safetyStock ?? 10;
+
+      if (odooValue !== undefined && odooValue !== mongoValue) {
+        mismatches.push({
+          odooId: mongo.odooId,
+          sku: mongo.sku,
+          name: mongo.name,
+          mongoValue,
+          odooValue
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      totalProducts: mongoProducts.length,
+      mismatches: mismatches.length,
+      details: mismatches.slice(0, 100) // Limit to first 100 for response size
+    });
+  } catch (error) {
+    console.error('Safety stock verify error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Sync safety stock from Odoo to MongoDB (fix mismatches)
+ * Direction: Odoo → MongoDB
+ */
+router.post('/products/safety-stock/sync-from-odoo', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+
+    // Get all products from Odoo with x_safety_stock
+    const odooProducts = await client.searchRead('product.product', [
+      ['sale_ok', '=', true]
+    ], ['id', 'x_safety_stock'], { limit: 10000 });
+
+    let updated = 0;
+    const bulkOps = [];
+
+    for (const p of odooProducts) {
+      bulkOps.push({
+        updateOne: {
+          filter: { odooId: p.id },
+          update: { $set: { safetyStock: p.x_safety_stock ?? 10, syncedAt: new Date() } }
+        }
+      });
+    }
+
+    if (bulkOps.length > 0) {
+      const result = await Product.bulkWrite(bulkOps, { ordered: false });
+      updated = result.modifiedCount;
+    }
+
+    console.log(`[SafetyStock Sync] Synced ${updated} products from Odoo to MongoDB`);
+
+    res.json({
+      success: true,
+      message: `Synced ${updated} products from Odoo to MongoDB`,
+      updated
+    });
+  } catch (error) {
+    console.error('Safety stock sync from Odoo error:', error);
     res.status(500).json({ error: error.message });
   }
 });
