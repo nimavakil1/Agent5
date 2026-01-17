@@ -659,4 +659,75 @@ router.get('/safety-stock/export', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/products-api/setup/create-odoo-field
+ * Create x_safety_stock field in Odoo on product.template
+ * One-time setup endpoint
+ */
+router.post('/setup/create-odoo-field', async (req, res) => {
+  try {
+    const client = await getOdooClient();
+
+    // Check if field exists on product.template
+    const existing = await client.searchRead('ir.model.fields', [
+      ['model', '=', 'product.template'],
+      ['name', '=', 'x_safety_stock']
+    ], ['id', 'name']);
+
+    if (existing.length > 0) {
+      return res.json({
+        success: true,
+        message: 'Field x_safety_stock already exists on product.template',
+        fieldId: existing[0].id
+      });
+    }
+
+    // Get model ID for product.template
+    const models = await client.searchRead('ir.model', [
+      ['model', '=', 'product.template']
+    ], ['id']);
+
+    if (models.length === 0) {
+      return res.status(500).json({
+        success: false,
+        error: 'Could not find product.template model in Odoo'
+      });
+    }
+
+    const modelId = models[0].id;
+
+    // Create the field
+    const fieldId = await client.create('ir.model.fields', {
+      name: 'x_safety_stock',
+      field_description: 'Safety Stock (Amazon FBM)',
+      model_id: modelId,
+      ttype: 'float',
+      store: true
+    });
+
+    console.log('[Products API] Created x_safety_stock field on product.template with ID:', fieldId);
+
+    // Set default value for all templates
+    const templates = await client.searchRead('product.template', [
+      '|', ['x_safety_stock', '=', false], ['x_safety_stock', '=', 0]
+    ], ['id'], { limit: 1000 });
+
+    if (templates.length > 0) {
+      const ids = templates.map(t => t.id);
+      await client.write('product.template', ids, { x_safety_stock: 10 });
+      console.log('[Products API] Set default safety stock for', ids.length, 'templates');
+    }
+
+    res.json({
+      success: true,
+      message: 'Field created successfully',
+      fieldId,
+      templatesUpdated: templates.length
+    });
+  } catch (error) {
+    console.error('[Products API] Create Odoo field error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
