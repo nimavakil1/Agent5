@@ -195,20 +195,23 @@ class FbmStockReportService {
 
       const remotePath = `${folderPath}/${filename}`;
 
+      // Get SharePoint drive path (uses site document library, not /me/drive)
+      const drivePath = await oneDriveService.getDrivePath();
+
       // Upload file
       const uploadedFile = await oneDriveService.graphClient
-        .api(`/me/drive/root:${remotePath}:/content`)
+        .api(`${drivePath}/root:${remotePath}:/content`)
         .put(buffer);
 
       // Create sharing link
       const sharingLink = await oneDriveService.graphClient
-        .api(`/me/drive/items/${uploadedFile.id}/createLink`)
+        .api(`${drivePath}/items/${uploadedFile.id}/createLink`)
         .post({
           type: 'view',
           scope: 'organization'
         });
 
-      console.log(`[FbmStockReportService] Report uploaded to OneDrive: ${filename}`);
+      console.log(`[FbmStockReportService] Report uploaded to SharePoint: ${filename}`);
 
       return {
         success: true,
@@ -216,7 +219,7 @@ class FbmStockReportService {
         fileId: uploadedFile.id
       };
     } catch (error) {
-      console.error('[FbmStockReportService] OneDrive upload failed:', error.message);
+      console.error('[FbmStockReportService] SharePoint upload failed:', error.message);
       return { success: false, error: error.message };
     }
   }
