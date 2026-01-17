@@ -15,6 +15,7 @@
  */
 
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+const { TeamsNotificationService } = require('../../core/agents/services/TeamsNotificationService');
 
 // Central Warehouse ID in Odoo
 const CENTRAL_WAREHOUSE_ID = 1;
@@ -539,14 +540,19 @@ class BolFulfillmentSwapper {
             } else {
               results.swappedToFbb++;
             }
-            results.swaps.push({
+            const swapRecord = {
               ean,
+              sku: offer.reference || null,
               offerId: offer.offerId,
               from: currentMethod,
               to: newMethod,
               reason,
               processStatusId: swapResult.processStatusId
-            });
+            };
+            results.swaps.push(swapRecord);
+
+            // Send Teams notification immediately
+            await this.sendSwapNotification(swapRecord);
           } else {
             results.failed++;
             console.error(`[BolFulfillmentSwapper] Failed to swap ${ean}:`, swapResult.error);
@@ -590,6 +596,54 @@ class BolFulfillmentSwapper {
       lastRun: this.lastRun,
       lastResult: this.lastResult
     };
+  }
+
+  /**
+   * Send Teams notification for a swap
+   * @param {Object} swap - Swap details
+   */
+  async sendSwapNotification(swap) {
+    const webhookUrl = process.env.TEAMS_WEBHOOK_URL;
+    if (!webhookUrl) {
+      console.log('[BolFulfillmentSwapper] No Teams webhook configured, skipping notification');
+      return;
+    }
+
+    try {
+      const teams = new TeamsNotificationService({ webhookUrl });
+
+      const directionEmoji = swap.to === 'FBB' ? '📦' : '🏭';
+      const directionText = swap.to === 'FBB' ? 'FBR → FBB' : 'FBB → FBR';
+
+      const card = {
+        $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+        type: 'AdaptiveCard',
+        version: '1.4',
+        body: [
+          {
+            type: 'TextBlock',
+            text: `${directionEmoji} Bol.com Fulfillment Swap`,
+            weight: 'bolder',
+            size: 'medium'
+          },
+          {
+            type: 'FactSet',
+            facts: [
+              { title: 'SKU', value: swap.sku || '-' },
+              { title: 'EAN', value: swap.ean },
+              { title: 'Direction', value: directionText },
+              { title: 'Reason', value: swap.reason },
+              { title: 'Time', value: new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' }) }
+            ]
+          }
+        ]
+      };
+
+      await teams.sendMessage(card);
+      console.log(`[BolFulfillmentSwapper] Teams notification sent for ${swap.ean}`);
+    } catch (error) {
+      console.error('[BolFulfillmentSwapper] Failed to send Teams notification:', error.message);
+    }
   }
 }
 

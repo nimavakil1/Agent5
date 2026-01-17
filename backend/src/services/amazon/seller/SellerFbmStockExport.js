@@ -5,13 +5,14 @@
  * 1. Get all FBM Seller SKUs from Amazon (via listings report)
  * 2. Use SkuResolver to map Amazon SKU → Odoo SKU
  * 3. Get CW stock for resolved Odoo SKUs
- * 4. Send stock to Amazon using original Seller SKU
+ * 4. Send stock to Amazon using Listings Items API (patchListingsItem)
  * 5. Notify via Teams + store unresolved SKUs for review
  *
  * This approach is rock-solid because:
  * - Amazon is the source of truth for which SKUs exist
  * - SkuResolver is already battle-tested from order imports
  * - Unresolved SKUs get flagged → we improve resolver → self-healing
+ * - Uses Listings Items API (not Feeds API) for inventory updates
  *
  * @module SellerFbmStockExport
  */
@@ -21,18 +22,25 @@ const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP'
 const { getSellerClient } = require('./SellerClient');
 const { skuResolver } = require('../SkuResolver');
 const { TeamsNotificationService } = require('../../../core/agents/services/TeamsNotificationService');
-const { getAllMarketplaceIds } = require('./SellerMarketplaceConfig');
+const { getAllMarketplaceIds, MARKETPLACE_IDS } = require('./SellerMarketplaceConfig');
 
-// Feed type for inventory updates
+// Feed type for inventory updates (kept for backwards compatibility with stats)
 const INVENTORY_FEED_TYPE = 'POST_INVENTORY_AVAILABILITY_DATA';
+
+// Rate limiting for Listings Items API (5 requests per second to be safe)
+const API_DELAY_MS = 200;
 
 // Report type for listings
 const LISTINGS_REPORT_TYPE = 'GET_MERCHANT_LISTINGS_DATA';
 
 // Collections
 const FEEDS_COLLECTION = 'seller_feeds';
+const STOCK_UPDATES_COLLECTION = 'amazon_stock_updates';
 const UNRESOLVED_SKUS_COLLECTION = 'amazon_unresolved_skus';
 const FBM_LISTINGS_COLLECTION = 'amazon_fbm_listings';
+
+// Helper for rate limiting
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * SellerFbmStockExport - Exports FBM inventory to Amazon with proper SKU resolution
@@ -388,25 +396,44 @@ class SellerFbmStockExport {
 
       console.log(`[SellerFbmStockExport] Found ${fbmListings.length} FBM listings`);
 
-      // Step 2: Resolve each Seller SKU to Odoo SKU
+      // Step 2: Resolve each Seller SKU to Odoo SKU and track marketplaces
       console.log('[SellerFbmStockExport] Step 2: Resolving SKUs...');
       const resolvedItems = [];
       const unresolvedItems = [];
 
+      // Group listings by SKU to collect all marketplaces for each SKU
+      const skuMarketplaces = new Map();
       for (const listing of fbmListings) {
-        const resolution = skuResolver.resolve(listing.sellerSku);
+        const sku = listing.sellerSku;
+        if (!skuMarketplaces.has(sku)) {
+          skuMarketplaces.set(sku, {
+            listing,
+            marketplaces: new Set()
+          });
+        }
+        // Add marketplace if present
+        if (listing.marketplace && listing.marketplace !== 'ALL') {
+          skuMarketplaces.get(sku).marketplaces.add(listing.marketplace);
+        }
+      }
+
+      for (const [sellerSku, data] of skuMarketplaces) {
+        const resolution = skuResolver.resolve(sellerSku);
+        const listing = data.listing;
+        const marketplaces = [...data.marketplaces];
 
         if (resolution.odooSku) {
           resolvedItems.push({
-            sellerSku: listing.sellerSku,
+            sellerSku,
             odooSku: resolution.odooSku,
             asin: listing.asin,
             productName: listing.productName,
-            matchType: resolution.matchType
+            matchType: resolution.matchType,
+            marketplaces: marketplaces.length > 0 ? marketplaces : ['DE'] // Default to DE if no marketplace info
           });
         } else {
           unresolvedItems.push({
-            sellerSku: listing.sellerSku,
+            sellerSku,
             asin: listing.asin,
             productName: listing.productName,
             reason: 'Could not resolve to Odoo SKU'
@@ -425,7 +452,7 @@ class SellerFbmStockExport {
       const odooSkus = [...new Set(resolvedItems.map(i => i.odooSku))];
       const stockMap = await this.getCwStock(odooSkus);
 
-      // Step 4: Build stock items with original Seller SKU
+      // Step 4: Build stock items with original Seller SKU and marketplace info
       console.log('[SellerFbmStockExport] Step 4: Building stock items...');
       const stockItems = [];
 
@@ -435,7 +462,8 @@ class SellerFbmStockExport {
           sellerSku: item.sellerSku,
           odooSku: item.odooSku,
           quantity,
-          fulfillmentLatency: 3
+          fulfillmentLatency: 3,
+          marketplaces: item.marketplaces || ['DE']
         });
       }
 
@@ -446,19 +474,21 @@ class SellerFbmStockExport {
         await this.handleUnresolvedSkus(unresolvedItems);
       }
 
-      // Step 6: Submit to Amazon (unless dry run)
+      // Step 6: Submit to Amazon via Listings Items API (unless dry run)
       if (!dryRun && stockItems.length > 0) {
-        console.log('[SellerFbmStockExport] Step 5: Submitting to Amazon...');
-        const feedResult = await this.submitFeed(stockItems);
-        result.feedId = feedResult.feedId;
-        result.feedItemCount = feedResult.itemCount;
-        result.success = feedResult.success;
-        if (!feedResult.success) {
-          result.error = feedResult.error;
+        console.log('[SellerFbmStockExport] Step 5: Submitting to Amazon via Listings Items API...');
+        const updateResult = await this.submitStockViaListingsApi(stockItems);
+        result.updateId = updateResult.updateId;
+        result.itemsUpdated = updateResult.updated;
+        result.itemsFailed = updateResult.failed;
+        result.feedItemCount = updateResult.updated; // For backwards compatibility
+        result.success = updateResult.success;
+        if (!updateResult.success) {
+          result.error = updateResult.error;
         }
       } else if (dryRun) {
         result.success = true;
-        result.message = 'Dry run - no feed submitted';
+        result.message = 'Dry run - no updates submitted';
       } else {
         result.success = true;
         result.message = 'No stock items to submit';
@@ -586,105 +616,159 @@ class SellerFbmStockExport {
   }
 
   /**
-   * Generate inventory feed XML
+   * Submit stock updates via Listings Items API (patchListingsItem)
+   * This replaces the old Feeds API approach which is restricted
+   *
+   * @param {Array} stockItems - Array of { sellerSku, quantity, marketplaces }
+   * @returns {Object} { success, updated, failed, errors, updateId }
    */
-  generateFeedXml(stockItems) {
-    const merchantId = process.env.AMAZON_MERCHANT_ID || 'A1GJ5ZORIRYSYA';
-
-    let xml = `<?xml version="1.0" encoding="utf-8"?>
-<AmazonEnvelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="amzn-envelope.xsd">
-  <Header>
-    <DocumentVersion>1.01</DocumentVersion>
-    <MerchantIdentifier>${merchantId}</MerchantIdentifier>
-  </Header>
-  <MessageType>Inventory</MessageType>`;
-
-    let messageId = 1;
-    for (const item of stockItems) {
-      xml += `
-  <Message>
-    <MessageID>${messageId++}</MessageID>
-    <OperationType>Update</OperationType>
-    <Inventory>
-      <SKU>${this.escapeXml(item.sellerSku)}</SKU>
-      <Quantity>${item.quantity}</Quantity>
-      <FulfillmentLatency>${item.fulfillmentLatency || 3}</FulfillmentLatency>
-    </Inventory>
-  </Message>`;
-    }
-
-    xml += '\n</AmazonEnvelope>';
-    return xml;
-  }
-
-  /**
-   * Submit inventory feed to Amazon
-   */
-  async submitFeed(stockItems) {
+  async submitStockViaListingsApi(stockItems) {
     await this.init();
 
     if (stockItems.length === 0) {
-      return { success: true, message: 'No items to update', itemCount: 0 };
+      return { success: true, message: 'No items to update', updated: 0, failed: 0 };
     }
 
-    try {
-      const spClient = await this.client.getClient();
-      const feedXml = this.generateFeedXml(stockItems);
+    const sellerId = process.env.AMAZON_SELLER_ID || 'A1GJ5ZORIRYSYA';
+    const spClient = await this.client.getClient();
+    const now = new Date();
+    const updateId = `stock_update_${now.getTime()}`;
 
-      // Create feed document
-      const createDocResponse = await spClient.callAPI({
-        operation: 'feeds.createFeedDocument',
-        body: {
-          contentType: 'text/xml; charset=UTF-8'
+    const results = {
+      success: true,
+      updateId,
+      updated: 0,
+      failed: 0,
+      errors: [],
+      details: []
+    };
+
+    console.log(`[SellerFbmStockExport] Starting Listings Items API updates for ${stockItems.length} SKUs...`);
+
+    // Process each SKU
+    for (let i = 0; i < stockItems.length; i++) {
+      const item = stockItems[i];
+      const marketplaces = item.marketplaces || ['DE'];
+
+      // Update each marketplace for this SKU
+      for (const marketplaceCode of marketplaces) {
+        // Convert marketplace code (DE, FR, etc.) to marketplace ID
+        const marketplaceId = MARKETPLACE_IDS[marketplaceCode];
+        if (!marketplaceId) {
+          console.warn(`[SellerFbmStockExport] Unknown marketplace code: ${marketplaceCode}, skipping`);
+          continue;
         }
-      });
 
-      const feedDocumentId = createDocResponse.feedDocumentId;
-      const uploadUrl = createDocResponse.url;
+        try {
+          // Use Listings Items API to update inventory
+          const patchBody = {
+            productType: 'PRODUCT',
+            patches: [{
+              op: 'replace',
+              path: '/attributes/fulfillment_availability',
+              value: [{
+                fulfillment_channel_code: 'DEFAULT',
+                quantity: item.quantity
+              }]
+            }]
+          };
 
-      // Upload feed content
-      await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
-        body: feedXml
-      });
+          await spClient.callAPI({
+            operation: 'listingsItems.patchListingsItem',
+            path: {
+              sellerId,
+              sku: item.sellerSku
+            },
+            query: {
+              marketplaceIds: [marketplaceId]
+            },
+            body: patchBody
+          });
 
-      // Submit feed
-      const submitResponse = await spClient.callAPI({
-        operation: 'feeds.createFeed',
-        body: {
-          feedType: INVENTORY_FEED_TYPE,
-          marketplaceIds: getAllMarketplaceIds(),
-          inputFeedDocumentId: feedDocumentId
+          results.updated++;
+          results.details.push({
+            sku: item.sellerSku,
+            marketplace: marketplaceCode,
+            quantity: item.quantity,
+            status: 'success'
+          });
+
+        } catch (error) {
+          results.failed++;
+          results.errors.push({
+            sku: item.sellerSku,
+            marketplace: marketplaceCode,
+            error: error.message
+          });
+          results.details.push({
+            sku: item.sellerSku,
+            marketplace: marketplaceCode,
+            quantity: item.quantity,
+            status: 'failed',
+            error: error.message
+          });
+          console.error(`[SellerFbmStockExport] Failed to update ${item.sellerSku} on ${marketplaceCode}: ${error.message}`);
         }
-      });
 
-      const feedId = submitResponse.feedId;
-      console.log(`[SellerFbmStockExport] Submitted feed ${feedId} with ${stockItems.length} items`);
+        // Rate limiting - wait between API calls
+        await sleep(API_DELAY_MS);
+      }
 
-      // Store feed record
-      await this.db.collection(FEEDS_COLLECTION).insertOne({
-        feedId,
-        feedDocumentId,
-        feedType: INVENTORY_FEED_TYPE,
-        itemCount: stockItems.length,
-        status: 'IN_QUEUE',
-        submittedAt: new Date(),
-        processed: false,
-        // Store summary for debugging
-        summary: {
-          resolved: stockItems.length,
-          totalQuantity: stockItems.reduce((sum, i) => sum + i.quantity, 0),
-          zeroStock: stockItems.filter(i => i.quantity === 0).length
-        }
-      });
-
-      return { success: true, feedId, itemCount: stockItems.length };
-
-    } catch (error) {
-      console.error('[SellerFbmStockExport] Error submitting feed:', error.message);
-      return { success: false, error: error.message };
+      // Progress logging every 50 SKUs
+      if ((i + 1) % 50 === 0) {
+        console.log(`[SellerFbmStockExport] Progress: ${i + 1}/${stockItems.length} SKUs processed (${results.updated} updated, ${results.failed} failed)`);
+      }
     }
+
+    // Store update record in MongoDB
+    await this.db.collection(STOCK_UPDATES_COLLECTION).insertOne({
+      updateId,
+      method: 'listings_items_api',
+      itemCount: stockItems.length,
+      updated: results.updated,
+      failed: results.failed,
+      errors: results.errors.slice(0, 100), // Limit stored errors
+      submittedAt: now,
+      completedAt: new Date(),
+      summary: {
+        totalSkus: stockItems.length,
+        totalQuantity: stockItems.reduce((sum, i) => sum + i.quantity, 0),
+        zeroStock: stockItems.filter(i => i.quantity === 0).length
+      }
+    });
+
+    // Also store in feeds collection for backwards compatibility with stats
+    await this.db.collection(FEEDS_COLLECTION).insertOne({
+      feedId: updateId,
+      feedType: 'LISTINGS_ITEMS_API',
+      itemCount: stockItems.length,
+      status: 'DONE',
+      submittedAt: now,
+      processed: true,
+      processedAt: new Date(),
+      summary: {
+        resolved: stockItems.length,
+        updated: results.updated,
+        failed: results.failed,
+        totalQuantity: stockItems.reduce((sum, i) => sum + i.quantity, 0),
+        zeroStock: stockItems.filter(i => i.quantity === 0).length
+      }
+    });
+
+    console.log(`[SellerFbmStockExport] Completed: ${results.updated} updated, ${results.failed} failed`);
+
+    results.success = results.failed < results.updated; // Consider success if more succeeded than failed
+
+    return results;
+  }
+
+  /**
+   * @deprecated Use submitStockViaListingsApi instead
+   * Kept for backwards compatibility - redirects to new method
+   */
+  async submitFeed(stockItems) {
+    console.warn('[SellerFbmStockExport] submitFeed is deprecated, using submitStockViaListingsApi');
+    return this.submitStockViaListingsApi(stockItems);
   }
 
   /**

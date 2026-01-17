@@ -78,7 +78,7 @@ async function run() {
   const EU_MARKETPLACES = {
     'A1PA6795UKMFR9': 'DE',
     'A1RKKUPIHCS9HS': 'ES',
-    'A13V1IB3VIYBER': 'FR',
+    'A13V1IB3VIYZZH': 'FR',  // Note: Account-specific FR ID (not standard A13V1IB3VIYBER)
     'A1F83G8C2ARO7P': 'UK',
     'APJ6JRA9NG5V4': 'IT',
     'A1805IZSGTT6HS': 'NL',

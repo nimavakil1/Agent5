@@ -267,10 +267,18 @@ class SellerOrderCreator {
         this.warehouseCache[wh.id] = wh;
       }
 
-      // Pre-load countries
+      // Pre-load countries (case-insensitive, map both code AND name)
+      // This handles Amazon sending "Luxembourg" instead of "LU" in ship-country
       const countries = await this.odoo.searchRead('res.country', [], ['id', 'code', 'name']);
       for (const c of countries) {
-        this.countryCache[c.code] = c.id;
+        // Map by code (case-insensitive): "LU", "lu", "Lu" all work
+        if (c.code) {
+          this.countryCache[c.code.toUpperCase()] = c.id;
+        }
+        // Also map by name (case-insensitive): "Luxembourg", "LUXEMBOURG" all work
+        if (c.name) {
+          this.countryCache[c.name.toUpperCase()] = c.id;
+        }
       }
 
       // Load SKU resolver
@@ -715,7 +723,7 @@ class SellerOrderCreator {
       console.log(`[SellerOrderCreator] Using location-based customer name for ${amazonOrderId}: ${customerName}`);
     }
 
-    const countryId = this.countryCache[address.countryCode] || null;
+    const countryId = address.countryCode ? this.countryCache[address.countryCode.toUpperCase()] || null : null;
     const buyerEmail = order.customer?.email || order.amazonSeller?.buyerEmail || order.buyerEmail;
 
     // Check cache for customer
@@ -851,7 +859,7 @@ class SellerOrderCreator {
     }
 
     // Create generic customer
-    const countryId = this.countryCache[countryCode] || null;
+    const countryId = countryCode ? this.countryCache[countryCode.toUpperCase()] || null : null;
     const partnerId = await this.odoo.create('res.partner', {
       name: customerName,
       company_type: 'company',
@@ -1345,7 +1353,7 @@ class SellerOrderCreator {
       console.log(`[SellerOrderCreator] Using location-based customer name for ${amazonOrderId}: ${customerName}`);
     }
 
-    const countryId = this.countryCache[address.countryCode] || null;
+    const countryId = address.countryCode ? this.countryCache[address.countryCode.toUpperCase()] || null : null;
     const buyerEmail = order.customer?.email;
 
     // Check cache for customer
@@ -1467,7 +1475,8 @@ class SellerOrderCreator {
         billingAddress.postalCode !== address.postalCode;
 
       if (billingIsDifferent) {
-        const billingCountryId = this.countryCache[billingAddress.countryCode || address.countryCode] || countryId;
+        const billingCountryCode = billingAddress.countryCode || address.countryCode;
+        const billingCountryId = billingCountryCode ? this.countryCache[billingCountryCode.toUpperCase()] || countryId : countryId;
         const billingCacheKey = `invoice|${customerId}|${billingAddress.postalCode || 'no-zip'}|${billingAddress.city || 'no-city'}`;
 
         invoiceAddressId = this.partnerCache[billingCacheKey];
