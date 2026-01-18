@@ -626,6 +626,10 @@ class SellerFbmStockExport {
         if (!updateResult.success) {
           result.error = updateResult.error;
         }
+
+        // IMPORTANT: Update cached listings with new quantities
+        // This prevents the next sync from recalculating the same deltas
+        await this.updateCachedQuantities(stockItems);
       } else if (dryRun) {
         result.success = true;
         result.message = 'Dry run - no updates submitted';
@@ -1048,6 +1052,49 @@ class SellerFbmStockExport {
       { sellerSku },
       { $set: { resolved: true, resolvedAt: new Date() } }
     );
+  }
+
+  /**
+   * Update cached quantities in the FBM listings collection after successful stock push
+   * This is CRITICAL to prevent the same delta from being recalculated on the next sync
+   *
+   * @param {Array} stockItems - Array of { sellerSku, quantity, marketplaces }
+   */
+  async updateCachedQuantities(stockItems) {
+    if (!stockItems || stockItems.length === 0) return;
+
+    const now = new Date();
+    let updated = 0;
+
+    try {
+      const bulkOps = [];
+
+      for (const item of stockItems) {
+        // Update all marketplace entries for this SKU
+        bulkOps.push({
+          updateMany: {
+            filter: { sellerSku: item.sellerSku },
+            update: {
+              $set: {
+                quantity: item.quantity,
+                lastStockSyncAt: now
+              }
+            }
+          }
+        });
+      }
+
+      if (bulkOps.length > 0) {
+        const result = await this.db.collection(FBM_LISTINGS_COLLECTION).bulkWrite(bulkOps);
+        updated = result.modifiedCount || 0;
+      }
+
+      console.log(`[SellerFbmStockExport] Updated cached quantities for ${updated} listings`);
+
+    } catch (error) {
+      console.error('[SellerFbmStockExport] Error updating cached quantities:', error.message);
+      // Don't throw - this is not critical enough to fail the whole sync
+    }
   }
 
   /**
