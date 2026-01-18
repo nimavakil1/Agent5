@@ -242,9 +242,6 @@ class BolInvoiceRequestService {
     await this.init();
 
     const odooUrl = process.env.ODOO_URL;
-    const db = process.env.ODOO_DB;
-    const login = process.env.ODOO_USERNAME;
-    const password = process.env.ODOO_PASSWORD;
 
     console.log(`[BolInvoiceRequest] Fetching invoice PDF from Odoo for invoice ${invoiceId}...`);
 
@@ -264,54 +261,34 @@ class BolInvoiceRequestService {
       return Buffer.from(attachments[0].datas, 'base64');
     }
 
-    // Authenticate with Odoo web session
-    console.log(`[BolInvoiceRequest] No attachment found, authenticating with Odoo web...`);
+    // No attachment found, use portal download with access token
+    console.log(`[BolInvoiceRequest] No attachment found, generating access token...`);
 
-    const authResponse = await fetch(`${odooUrl}/web/session/authenticate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'call',
-        params: {
-          db: db,
-          login: login,
-          password: password
-        },
-        id: Date.now()
-      })
-    });
+    // Get or generate access token for portal download
+    let invoice = await this.odoo.searchRead('account.move',
+      [['id', '=', invoiceId]],
+      ['id', 'access_token']
+    );
 
-    // Extract session cookie from response
-    const setCookie = authResponse.headers.get('set-cookie');
-    if (!setCookie) {
-      throw new Error('Failed to authenticate with Odoo - no session cookie');
+    if (!invoice.length) {
+      throw new Error(`Invoice ${invoiceId} not found`);
     }
 
-    // Parse session_id from cookie
-    const sessionMatch = setCookie.match(/session_id=([^;]+)/);
-    if (!sessionMatch) {
-      throw new Error('Failed to get Odoo session ID');
-    }
-    const sessionCookie = `session_id=${sessionMatch[1]}`;
+    let accessToken = invoice[0].access_token;
 
-    const authData = await authResponse.json();
-    if (authData.error) {
-      throw new Error(`Odoo auth error: ${authData.error.message || JSON.stringify(authData.error)}`);
+    // Generate token if not exists
+    if (!accessToken) {
+      const crypto = require('crypto');
+      accessToken = crypto.randomBytes(20).toString('hex');
+      await this.odoo.execute('account.move', 'write', [[invoiceId], { access_token: accessToken }]);
+      console.log(`[BolInvoiceRequest] Generated new access token`);
     }
 
-    console.log(`[BolInvoiceRequest] Authenticated, downloading PDF...`);
+    // Download PDF via portal URL
+    const pdfUrl = `${odooUrl}/my/invoices/${invoiceId}?access_token=${accessToken}&report_type=pdf&download=true`;
+    console.log(`[BolInvoiceRequest] Downloading PDF via portal...`);
 
-    // Download PDF using authenticated session
-    const reportUrl = `${odooUrl}/report/pdf/account.report_invoice/${invoiceId}`;
-
-    const pdfResponse = await fetch(reportUrl, {
-      method: 'GET',
-      headers: {
-        'Cookie': sessionCookie
-      },
+    const pdfResponse = await fetch(pdfUrl, {
       redirect: 'follow'
     });
 
@@ -321,10 +298,9 @@ class BolInvoiceRequestService {
 
     const contentType = pdfResponse.headers.get('content-type');
     if (!contentType || !contentType.includes('pdf')) {
-      // Might have been redirected to login page
       const body = await pdfResponse.text();
-      if (body.includes('login') || body.includes('Login')) {
-        throw new Error('PDF download redirected to login - session may have expired');
+      if (body.includes('login') || body.includes('Login') || body.includes('Access Denied')) {
+        throw new Error('PDF download failed - access denied');
       }
       throw new Error(`Unexpected content type: ${contentType}`);
     }
