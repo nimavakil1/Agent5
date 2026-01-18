@@ -424,7 +424,8 @@ class SellerFbmStockExport {
       summary: {
         totalSkus: 0,
         zeroStock: 0,
-        withStock: 0
+        withStock: 0,
+        belowSafetyStock: 0  // Products with 0 < cwFreeQty < safetyStock (have stock but listed as 0)
       }
     };
 
@@ -511,15 +512,22 @@ class SellerFbmStockExport {
           status: 'pending'
         });
 
-        if (amazonQty === 0) result.summary.zeroStock++;
-        else result.summary.withStock++;
+        if (amazonQty === 0) {
+          result.summary.zeroStock++;
+          // Track products that have some stock but below safety stock
+          if (cwFreeQty > 0 && cwFreeQty < safetyStock) {
+            result.summary.belowSafetyStock++;
+          }
+        } else {
+          result.summary.withStock++;
+        }
       }
 
       result.totalSkus = stockItems.length;
       result.summary.totalSkus = stockItems.length;
       result.sentItems = sentItems;
 
-      console.log(`[SellerFbmStockExport] ${result.summary.withStock} with stock, ${result.summary.zeroStock} zero stock`);
+      console.log(`[SellerFbmStockExport] ${result.summary.withStock} with stock, ${result.summary.zeroStock} zero (${result.summary.belowSafetyStock} below safety stock)`);
 
       // Step 5: Handle unresolved SKUs
       if (unresolvedItems.length > 0) {

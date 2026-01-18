@@ -490,6 +490,7 @@ class BolStockSync {
       let increases = 0;
       let decreases = 0;
       let zeroStock = 0;
+      let belowSafetyStock = 0;  // Products with 0 < cwFreeQty < safetyStock (have stock but listed as 0)
       const errors = [];
       const detailedResults = [];
 
@@ -524,9 +525,13 @@ class BolStockSync {
         const cappedNewBolQty = Math.min(999, newBolQty);
         const delta = cappedNewBolQty - offer.currentStock;
 
-        // Track zero stock
+        // Track zero stock and below safety stock
         if (cappedNewBolQty === 0) {
           zeroStock++;
+          // Track products that have some stock but below safety stock
+          if (cwFreeQty > 0 && cwFreeQty < safetyStock) {
+            belowSafetyStock++;
+          }
         }
 
         // Only update if stock changed
@@ -602,6 +607,7 @@ class BolStockSync {
         decreases,
         unchanged: skippedNoChange,
         zeroStock,
+        belowSafetyStock,  // Products with 0 < cwFreeQty < safetyStock
         notInOdoo: skippedNotInOdoo,
         failed
       };

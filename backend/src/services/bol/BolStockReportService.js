@@ -54,7 +54,7 @@ class BolStockReportService {
 
     // Summary row
     const summary = syncResults.summary || {};
-    const summaryText = `Total: ${summary.totalOffers || 0} Offers | Updated: ${summary.updated || 0} | Increases: ${summary.increases || 0} | Decreases: ${summary.decreases || 0} | Unchanged: ${summary.unchanged || 0} | Zero Stock: ${summary.zeroStock || 0}`;
+    const summaryText = `Total: ${summary.totalOffers || 0} Offers | Updated: ${summary.updated || 0} | Increases: ${summary.increases || 0} | Decreases: ${summary.decreases || 0} | Unchanged: ${summary.unchanged || 0} | Zero Stock: ${summary.zeroStock || 0} | Below Safety: ${summary.belowSafetyStock || 0}`;
     worksheet.addRow([summaryText]);
     worksheet.mergeCells('A2:H2');
     worksheet.getCell('A2').font = { italic: true };
@@ -260,10 +260,22 @@ class BolStockReportService {
           { title: 'Increases', value: `↑ ${summary.increases || 0}` },
           { title: 'Decreases', value: `↓ ${summary.decreases || 0}` },
           { title: 'Unchanged', value: String(summary.unchanged || 0) },
-          { title: 'Zero Stock', value: String(summary.zeroStock || 0) }
+          { title: 'Zero Stock', value: String(summary.zeroStock || 0) },
+          { title: 'Below Safety Stock', value: `⚠️ ${summary.belowSafetyStock || 0}` }
         ]
       }
     ];
+
+    // Warning if products below safety stock
+    if ((summary.belowSafetyStock || 0) > 0) {
+      cardBody.push({
+        type: 'TextBlock',
+        text: `ℹ️ ${summary.belowSafetyStock} products have stock but below safety stock (listed as 0)`,
+        color: 'warning',
+        wrap: true,
+        size: 'small'
+      });
+    }
 
     // Add error info if present
     if (syncResults.failed > 0) {

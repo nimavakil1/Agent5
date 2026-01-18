@@ -258,11 +258,23 @@ class FbmStockReportService {
           { title: 'Total SKUs', value: String(summary.totalSkus || 0) },
           { title: 'With Stock', value: String(summary.withStock || 0) },
           { title: 'Zero Stock', value: String(summary.zeroStock || 0) },
+          { title: 'Below Safety Stock', value: `⚠️ ${summary.belowSafetyStock || 0}` },
           { title: 'Sent', value: String(syncResults.itemsUpdated || 0) },
           { title: 'Failed', value: String(syncResults.itemsFailed || 0) }
         ]
       }
     ];
+
+    // Warning if many products below safety stock
+    if ((summary.belowSafetyStock || 0) > 0) {
+      cardBody.push({
+        type: 'TextBlock',
+        text: `ℹ️ ${summary.belowSafetyStock} products have stock but below safety stock (listed as 0)`,
+        color: 'warning',
+        wrap: true,
+        size: 'small'
+      });
+    }
 
     if (syncResults.itemsFailed > 0) {
       cardBody.push({
