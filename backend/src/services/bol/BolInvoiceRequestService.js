@@ -241,52 +241,14 @@ class BolInvoiceRequestService {
   async getInvoicePdfFromOdoo(invoiceId) {
     await this.init();
 
-    // Use Odoo's report rendering
-    // The standard invoice report is 'account.report_invoice'
     const odooUrl = process.env.ODOO_URL;
-
-    // Get session info for authentication
-    const sessionResponse = await fetch(`${odooUrl}/web/session/get_session_info`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'call',
-        params: {},
-        id: Date.now()
-      })
-    });
-
-    // Alternative approach: Use render_qweb_pdf via execute_kw
-    // This requires special handling, so we'll use the report URL approach
-
-    // Build report URL - Odoo standard report download URL
-    const reportUrl = `${odooUrl}/report/pdf/account.report_invoice/${invoiceId}`;
-
-    // We need to authenticate - use the XML-RPC uid and make an HTTP request
-    // For now, let's use a different approach: fetch via API
+    const db = process.env.ODOO_DB;
+    const login = process.env.ODOO_USERNAME;
+    const password = process.env.ODOO_PASSWORD;
 
     console.log(`[BolInvoiceRequest] Fetching invoice PDF from Odoo for invoice ${invoiceId}...`);
 
-    // Try using ir.actions.report render method
-    try {
-      // Get the report action
-      const reportResult = await this.odoo.execute(
-        'ir.actions.report',
-        '_render_qweb_pdf',
-        ['account.report_invoice', [invoiceId]]
-      );
-
-      if (reportResult && reportResult[0]) {
-        return Buffer.from(reportResult[0], 'base64');
-      }
-    } catch (renderError) {
-      console.log(`[BolInvoiceRequest] Direct render failed: ${renderError.message}`);
-    }
-
-    // Fallback: Check if invoice has PDF attachment
+    // First, try to find existing PDF attachment (fastest)
     const attachments = await this.odoo.searchRead('ir.attachment',
       [
         ['res_model', '=', 'account.move'],
@@ -302,7 +264,75 @@ class BolInvoiceRequestService {
       return Buffer.from(attachments[0].datas, 'base64');
     }
 
-    throw new Error(`Could not get PDF for invoice ${invoiceId}`);
+    // Authenticate with Odoo web session
+    console.log(`[BolInvoiceRequest] No attachment found, authenticating with Odoo web...`);
+
+    const authResponse = await fetch(`${odooUrl}/web/session/authenticate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'call',
+        params: {
+          db: db,
+          login: login,
+          password: password
+        },
+        id: Date.now()
+      })
+    });
+
+    // Extract session cookie from response
+    const setCookie = authResponse.headers.get('set-cookie');
+    if (!setCookie) {
+      throw new Error('Failed to authenticate with Odoo - no session cookie');
+    }
+
+    // Parse session_id from cookie
+    const sessionMatch = setCookie.match(/session_id=([^;]+)/);
+    if (!sessionMatch) {
+      throw new Error('Failed to get Odoo session ID');
+    }
+    const sessionCookie = `session_id=${sessionMatch[1]}`;
+
+    const authData = await authResponse.json();
+    if (authData.error) {
+      throw new Error(`Odoo auth error: ${authData.error.message || JSON.stringify(authData.error)}`);
+    }
+
+    console.log(`[BolInvoiceRequest] Authenticated, downloading PDF...`);
+
+    // Download PDF using authenticated session
+    const reportUrl = `${odooUrl}/report/pdf/account.report_invoice/${invoiceId}`;
+
+    const pdfResponse = await fetch(reportUrl, {
+      method: 'GET',
+      headers: {
+        'Cookie': sessionCookie
+      },
+      redirect: 'follow'
+    });
+
+    if (!pdfResponse.ok) {
+      throw new Error(`Failed to download PDF: ${pdfResponse.status} ${pdfResponse.statusText}`);
+    }
+
+    const contentType = pdfResponse.headers.get('content-type');
+    if (!contentType || !contentType.includes('pdf')) {
+      // Might have been redirected to login page
+      const body = await pdfResponse.text();
+      if (body.includes('login') || body.includes('Login')) {
+        throw new Error('PDF download redirected to login - session may have expired');
+      }
+      throw new Error(`Unexpected content type: ${contentType}`);
+    }
+
+    const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer());
+    console.log(`[BolInvoiceRequest] Downloaded PDF: ${pdfBuffer.length} bytes`);
+
+    return pdfBuffer;
   }
 
   /**
