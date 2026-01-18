@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent5 Dashboard</title>
+  <script src="/shell-v2.js"></script>
+  <style>
+    .dashboard-layout {
+      display: flex;
+      min-height: calc(100vh - 60px);
+    }
+
+    /* Left Sidebar - Apps Panel */
+    .apps-sidebar {
+      width: 280px;
+      background: #18181f;
+      border-right: 1px solid #252532;
+      padding: 24px 16px;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    .sidebar-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 0 12px;
+      margin-bottom: 12px;
+    }
+
+    .app-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      text-decoration: none;
+      color: #fff;
+      transition: all 0.15s ease;
+      margin-bottom: 4px;
+    }
+
+    .app-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .app-item.active {
+      background: rgba(99, 102, 241, 0.15);
+    }
+
+    .app-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .app-icon .material-symbols-outlined {
+      font-size: 20px;
+    }
+
+    .app-icon img {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+    }
+
+    .app-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .app-name {
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .app-desc {
+      font-size: 11px;
+      color: #71717a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Main Dashboard Area */
+    .dashboard-main {
+      flex: 1;
+      padding: 32px 40px;
+      overflow-y: auto;
+    }
+
+    .dashboard-header {
+      margin-bottom: 32px;
+    }
+
+    .dashboard-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 8px 0;
+    }
+
+    .dashboard-subtitle {
+      font-size: 14px;
+      color: #71717a;
+    }
+
+    /* Jobs Status Table */
+    .jobs-card {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .jobs-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      border-bottom: 1px solid #252532;
+    }
+
+    .jobs-card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .jobs-card-title .material-symbols-outlined {
+      font-size: 20px;
+      color: #6366f1;
+    }
+
+    .refresh-btn {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      color: #818cf8;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .refresh-btn:hover {
+      background: rgba(99, 102, 241, 0.2);
+    }
+
+    .refresh-btn .material-symbols-outlined {
+      font-size: 16px;
+    }
+
+    .refresh-btn.loading .material-symbols-outlined {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .jobs-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .jobs-table th {
+      text-align: left;
+      padding: 14px 24px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .jobs-table td {
+      padding: 16px 24px;
+      border-top: 1px solid #252532;
+      vertical-align: middle;
+    }
+
+    .jobs-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .job-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #fff;
+    }
+
+    .job-category {
+      font-size: 12px;
+      color: #71717a;
+      margin-top: 2px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.ok {
+      background: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+    }
+
+    .status-dot.error {
+      background: #ef4444;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+    }
+
+    .status-dot.warning {
+      background: #f59e0b;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+    }
+
+    .status-dot.unknown {
+      background: #71717a;
+    }
+
+    .status-text {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .status-text.ok { color: #22c55e; }
+    .status-text.error { color: #ef4444; }
+    .status-text.warning { color: #f59e0b; }
+    .status-text.unknown { color: #71717a; }
+
+    .last-update {
+      font-size: 13px;
+      color: #a1a1aa;
+    }
+
+    .last-update-relative {
+      font-size: 12px;
+      color: #71717a;
+    }
+
+    .error-message {
+      font-size: 13px;
+      color: #fca5a5;
+      background: rgba(239, 68, 68, 0.1);
+      padding: 8px 12px;
+      border-radius: 6px;
+      max-width: 300px;
+    }
+
+    .no-error {
+      font-size: 13px;
+      color: #71717a;
+    }
+
+    /* Summary Stats */
+    .stats-summary {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-box {
+      background: #18181f;
+      border: 1px solid #252532;
+      border-radius: 12px;
+      padding: 20px 24px;
+      min-width: 140px;
+    }
+
+    .stat-box-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .stat-box-value.ok { color: #22c55e; }
+    .stat-box-value.error { color: #ef4444; }
+    .stat-box-value.warning { color: #f59e0b; }
+
+    .stat-box-label {
+      font-size: 13px;
+      color: #71717a;
+      margin-top: 4px;
+    }
+
+    /* Empty State */
+    .jobs-empty {
+      padding: 60px 40px;
+      text-align: center;
+      color: #71717a;
+    }
+
+    .jobs-empty .material-symbols-outlined {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    /* Loading */
+    .skeleton {
+      background: linear-gradient(90deg, #252532 25%, #2a2a38 50%, #252532 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 6px;
+      height: 20px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-layout">
+    <!-- Left Sidebar - Apps -->
+    <aside class="apps-sidebar">
+      <div class="sidebar-title">Applications</div>
+      <div id="apps-list">
+        <!-- Apps will be injected here -->
+      </div>
+    </aside>
+
+    <!-- Main Dashboard -->
+    <main class="dashboard-main">
+      <header class="dashboard-header">
+        <h1 class="dashboard-title">System Dashboard</h1>
+        <p class="dashboard-subtitle">Monitor scheduled jobs and system health</p>
+      </header>
+
+      <!-- Summary Stats -->
+      <div class="stats-summary">
+        <div class="stat-box">
+          <div class="stat-box-value" id="stat-total">--</div>
+          <div class="stat-box-label">Total Jobs</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-value ok" id="stat-ok">--</div>
+          <div class="stat-box-label">Healthy</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-value error" id="stat-error">--</div>
+          <div class="stat-box-label">Problems</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-value warning" id="stat-warning">--</div>
+          <div class="stat-box-label">Warnings</div>
+        </div>
+      </div>
+
+      <!-- Jobs Status Table -->
+      <div class="jobs-card">
+        <div class="jobs-card-header">
+          <div class="jobs-card-title">
+            <span class="material-symbols-outlined">schedule</span>
+            Scheduled Jobs Status
+          </div>
+          <button class="refresh-btn" id="refresh-btn" onclick="loadJobStatuses()">
+            <span class="material-symbols-outlined">refresh</span>
+            Refresh
+          </button>
+        </div>
+        <table class="jobs-table">
+          <thead>
+            <tr>
+              <th style="width: 30%">Job Name</th>
+              <th style="width: 15%">Status</th>
+              <th style="width: 20%">Last Update</th>
+              <th style="width: 35%">Error Message</th>
+            </tr>
+          </thead>
+          <tbody id="jobs-tbody">
+            <tr>
+              <td colspan="4">
+                <div class="jobs-empty">
+                  <span class="material-symbols-outlined">hourglass_empty</span>
+                  <div>Loading job statuses...</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Module definitions
+    const MODULES = [
+      { id: 'dashboard', name: 'Dashboard', icon: 'dashboard', color: '#6366f1', path: '/dashboard-test.html' },
+      { id: 'assistant', name: 'Assistant', icon: 'chat', color: '#6366f1', path: '/assistant/' },
+      { id: 'accounting', name: 'Accounting', icon: 'account_balance', color: '#14b8a6', path: '/accounting/' },
+      { id: 'amazon-seller', name: 'Amazon Seller', icon: 'storefront', color: '#f59e0b', logo: '/assets/logos/amazon-seller-central.png', path: '/seller/' },
+      { id: 'amazon-vendor', name: 'Amazon Vendor', icon: 'local_shipping', color: '#f97316', logo: '/assets/logos/amazon_vendor.png', path: '/vendor/' },
+      { id: 'bol', name: 'Bol.com', icon: 'shopping_bag', color: '#0066ff', logo: '/assets/logos/bolcom.png', path: '/bol/' },
+      { id: 'fulfillment', name: 'CW Fulfillment', icon: 'package_2', color: '#eab308', path: '/fulfillment/' },
+      { id: 'inventory', name: 'Inventory', icon: 'inventory_2', color: '#8b5cf6', path: '/inventory/' },
+      { id: 'settings', name: 'Settings', icon: 'settings', color: '#64748b', path: '/settings/' }
+    ];
+
+    async function init() {
+      renderApps();
+      await loadJobStatuses();
+    }
+
+    function renderApps() {
+      const container = document.getElementById('apps-list');
+      const currentPath = window.location.pathname;
+
+      container.innerHTML = MODULES.map(m => `
+        <a href="${m.path}" class="app-item ${currentPath === m.path ? 'active' : ''}">
+          <div class="app-icon" style="background: ${m.color}20;">
+            ${m.logo
+              ? `<img src="${m.logo}" alt="${m.name}">`
+              : `<span class="material-symbols-outlined" style="color: ${m.color};">${m.icon}</span>`
+            }
+          </div>
+          <div class="app-info">
+            <div class="app-name">${m.name}</div>
+          </div>
+        </a>
+      `).join('');
+    }
+
+    async function loadJobStatuses() {
+      const btn = document.getElementById('refresh-btn');
+      btn.classList.add('loading');
+
+      try {
+        const res = await fetch('/api/system/job-statuses', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load');
+
+        const data = await res.json();
+        renderJobStatuses(data.jobs || []);
+        updateStats(data.jobs || []);
+      } catch (e) {
+        console.error('Error loading job statuses:', e);
+        renderJobStatuses([]);
+      } finally {
+        btn.classList.remove('loading');
+      }
+    }
+
+    function renderJobStatuses(jobs) {
+      const tbody = document.getElementById('jobs-tbody');
+
+      if (jobs.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="4">
+              <div class="jobs-empty">
+                <span class="material-symbols-outlined">check_circle</span>
+                <div>No jobs configured yet</div>
+              </div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = jobs.map(job => {
+        const statusClass = job.status || 'unknown';
+        const statusText = {
+          'ok': 'OK',
+          'error': 'Error',
+          'warning': 'Warning',
+          'unknown': 'Unknown'
+        }[statusClass] || 'Unknown';
+
+        const lastUpdate = job.lastUpdate ? formatDateTime(job.lastUpdate) : 'Never';
+        const relativeTime = job.lastUpdate ? formatRelativeTime(job.lastUpdate) : '';
+
+        return `
+          <tr>
+            <td>
+              <div class="job-name">${job.name}</div>
+              ${job.category ? `<div class="job-category">${job.category}</div>` : ''}
+            </td>
+            <td>
+              <div class="status-indicator">
+                <div class="status-dot ${statusClass}"></div>
+                <span class="status-text ${statusClass}">${statusText}</span>
+              </div>
+            </td>
+            <td>
+              <div class="last-update">${lastUpdate}</div>
+              ${relativeTime ? `<div class="last-update-relative">${relativeTime}</div>` : ''}
+            </td>
+            <td>
+              ${job.error
+                ? `<div class="error-message">${escapeHtml(job.error)}</div>`
+                : `<span class="no-error">-</span>`
+              }
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function updateStats(jobs) {
+      const total = jobs.length;
+      const ok = jobs.filter(j => j.status === 'ok').length;
+      const error = jobs.filter(j => j.status === 'error').length;
+      const warning = jobs.filter(j => j.status === 'warning').length;
+
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-ok').textContent = ok;
+      document.getElementById('stat-error').textContent = error;
+      document.getElementById('stat-warning').textContent = warning;
+    }
+
+    function formatDateTime(dateStr) {
+      const date = new Date(dateStr);
+      return date.toLocaleString('nl-NL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function formatRelativeTime(dateStr) {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diff = now - date;
+
+      if (diff < 60000) return 'Just now';
+      if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`;
+      return `${Math.floor(diff / 86400000)} days ago`;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Auto-refresh every 60 seconds
+    setInterval(loadJobStatuses, 60000);
+
+    init();
+  </script>
+</body>
+</html>
