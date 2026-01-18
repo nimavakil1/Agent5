@@ -16,9 +16,13 @@
 
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const { TeamsNotificationService } = require('../../core/agents/services/TeamsNotificationService');
+const Product = require('../../models/Product');
 
 // Central Warehouse ID in Odoo
 const CENTRAL_WAREHOUSE_ID = 1;
+
+// Default safety stock if not configured
+const DEFAULT_SAFETY_STOCK = 10;
 
 // Rate limiting configuration
 const REQUEST_DELAY_MS = 100;   // 100ms between API calls
@@ -426,6 +430,58 @@ class BolFulfillmentSwapper {
   }
 
   /**
+   * Get safety stock values from MongoDB for multiple EANs
+   * @param {string[]} eans - Array of EANs to lookup
+   * @returns {Object} Map of EAN -> safety stock value
+   */
+  async getSafetyStock(eans) {
+    const safetyStockMap = {};
+
+    // Initialize all with default
+    for (const ean of eans) {
+      safetyStockMap[ean] = DEFAULT_SAFETY_STOCK;
+    }
+
+    try {
+      // Find products by barcode (EAN) in MongoDB
+      const products = await Product.find({ barcode: { $in: eans } })
+        .select('barcode safetyStock')
+        .lean();
+
+      for (const p of products) {
+        if (p.barcode) {
+          safetyStockMap[p.barcode] = p.safetyStock ?? DEFAULT_SAFETY_STOCK;
+        }
+      }
+
+      console.log(`[BolFulfillmentSwapper] Got safety stock for ${products.length} of ${eans.length} EANs`);
+    } catch (err) {
+      console.error('[BolFulfillmentSwapper] Error getting safety stock:', err.message);
+    }
+
+    return safetyStockMap;
+  }
+
+  /**
+   * Update stock for a single offer on Bol.com
+   * @param {string} offerId - Bol.com offer ID
+   * @param {number} amount - Stock quantity to set
+   */
+  async updateOfferStock(offerId, amount) {
+    try {
+      // Bol.com API limit: stock must be between 0 and 999
+      const cappedAmount = Math.min(999, Math.max(0, Math.floor(amount)));
+      await this.bolRequest(`/offers/${offerId}/stock`, 'PUT', {
+        amount: cappedAmount,
+        managedByRetailer: true
+      });
+      return { success: true, amount: cappedAmount };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Swap offer fulfillment method
    */
   async swapFulfillment(offerId, newMethod) {
@@ -472,7 +528,9 @@ class BolFulfillmentSwapper {
       swappedToFbr: 0,
       swappedToFbb: 0,
       failed: 0,
-      swaps: []
+      blockedBySafetyStock: 0,  // FBB offers that could swap but CW free < safety stock
+      swaps: [],
+      blockedOffers: []  // Details of offers blocked by safety stock
     };
 
     try {
@@ -494,9 +552,12 @@ class BolFulfillmentSwapper {
         return { success: true, ...results, message: 'No offers found' };
       }
 
-      // Step 3: Get local warehouse stock for all offer EANs
+      // Step 3: Get local warehouse stock AND safety stock for all offer EANs
       const allEans = offers.map(o => o.ean).filter(Boolean);
-      const localStock = await this.getLocalStock(allEans);
+      const [localStock, safetyStockMap] = await Promise.all([
+        this.getLocalStock(allEans),
+        this.getSafetyStock(allEans)
+      ]);
       console.log(`[BolFulfillmentSwapper] Got local stock for ${Object.keys(localStock).length} products`);
 
       console.log(`[BolFulfillmentSwapper] Checking ${offers.length} offers...`);
@@ -509,20 +570,41 @@ class BolFulfillmentSwapper {
         if (!ean) continue;
 
         const fbbStock = fbbInventory[ean]?.regularStock || 0;
-        const localQty = localStock[ean] || 0;
+        const cwFreeQty = localStock[ean] || 0;
+        const safetyStock = safetyStockMap[ean] || DEFAULT_SAFETY_STOCK;
+
+        // Available stock for Bol = CW free - safety stock
+        const availableForBol = Math.max(0, cwFreeQty - safetyStock);
         const currentMethod = offer.fulfillmentMethod;
 
         let needsSwap = false;
         let newMethod = null;
         let reason = '';
 
-        // Logic from Emipro:
-        // - If currently FBB and FBB stock <= 0 and local stock > 0 → swap to FBR
+        // Logic (updated with safety stock):
+        // - If currently FBB and FBB stock <= 0 and availableForBol > 0 → swap to FBR
+        // - If currently FBB and FBB stock <= 0 and cwFreeQty > 0 but < safetyStock → blocked by safety stock
         // - If currently FBR and FBB stock > 0 → swap to FBB
-        if (currentMethod === 'FBB' && fbbStock <= 0 && localQty > 0) {
-          needsSwap = true;
-          newMethod = 'FBR';
-          reason = `FBB out of stock (${fbbStock}), local has ${localQty}`;
+        if (currentMethod === 'FBB' && fbbStock <= 0) {
+          if (availableForBol > 0) {
+            // Has enough stock after safety deduction → swap to FBR
+            needsSwap = true;
+            newMethod = 'FBR';
+            reason = `FBB out of stock, CW has ${cwFreeQty} (safety: ${safetyStock}, available: ${availableForBol})`;
+          } else if (cwFreeQty > 0 && cwFreeQty <= safetyStock) {
+            // Has some stock but below safety stock → blocked
+            results.blockedBySafetyStock++;
+            results.blockedOffers.push({
+              ean,
+              sku: offer.reference || null,
+              offerId: offer.offerId,
+              cwFreeQty,
+              safetyStock,
+              reason: `CW has ${cwFreeQty} but safety stock is ${safetyStock}`
+            });
+            console.log(`[BolFulfillmentSwapper] Blocked ${ean}: FBB out, CW=${cwFreeQty} < safety=${safetyStock}`);
+          }
+          // else: cwFreeQty is 0, nothing we can do
         } else if (currentMethod === 'FBR' && fbbStock > 0) {
           needsSwap = true;
           newMethod = 'FBB';
@@ -540,6 +622,7 @@ class BolFulfillmentSwapper {
             } else {
               results.swappedToFbb++;
             }
+
             const swapRecord = {
               ean,
               sku: offer.reference || null,
@@ -547,8 +630,29 @@ class BolFulfillmentSwapper {
               from: currentMethod,
               to: newMethod,
               reason,
-              processStatusId: swapResult.processStatusId
+              processStatusId: swapResult.processStatusId,
+              cwFreeQty,
+              safetyStock,
+              stockSentToBol: null,
+              stockUpdateSuccess: null
             };
+
+            // After FBB→FBR swap, immediately update stock on Bol.com
+            if (newMethod === 'FBR') {
+              await this.sleep(REQUEST_DELAY_MS);  // Small delay before stock update
+              const stockResult = await this.updateOfferStock(offer.offerId, availableForBol);
+
+              if (stockResult.success) {
+                swapRecord.stockSentToBol = stockResult.amount;
+                swapRecord.stockUpdateSuccess = true;
+                console.log(`[BolFulfillmentSwapper] Updated stock for ${ean}: ${stockResult.amount} (CW=${cwFreeQty}, safety=${safetyStock})`);
+              } else {
+                swapRecord.stockUpdateSuccess = false;
+                swapRecord.stockUpdateError = stockResult.error;
+                console.error(`[BolFulfillmentSwapper] Failed to update stock for ${ean}:`, stockResult.error);
+              }
+            }
+
             results.swaps.push(swapRecord);
 
             // Send Teams notification immediately
@@ -570,6 +674,7 @@ class BolFulfillmentSwapper {
         checked: results.checked,
         swappedToFbr: results.swappedToFbr,
         swappedToFbb: results.swappedToFbb,
+        blockedBySafetyStock: results.blockedBySafetyStock,
         failed: results.failed
       });
 
@@ -615,28 +720,54 @@ class BolFulfillmentSwapper {
       const directionEmoji = swap.to === 'FBB' ? '📦' : '🏭';
       const directionText = swap.to === 'FBB' ? 'FBR → FBB' : 'FBB → FBR';
 
+      // Build facts list
+      const facts = [
+        { title: 'SKU', value: swap.sku || '-' },
+        { title: 'EAN', value: swap.ean },
+        { title: 'Direction', value: directionText },
+        { title: 'Reason', value: swap.reason }
+      ];
+
+      // Add stock details for FBB→FBR swaps
+      if (swap.to === 'FBR') {
+        facts.push({ title: 'CW Free Qty', value: String(swap.cwFreeQty ?? '-') });
+        facts.push({ title: 'Safety Stock', value: String(swap.safetyStock ?? DEFAULT_SAFETY_STOCK) });
+        if (swap.stockSentToBol !== null) {
+          const stockStatus = swap.stockUpdateSuccess ? '✅' : '❌';
+          facts.push({ title: 'Stock Sent to Bol', value: `${stockStatus} ${swap.stockSentToBol}` });
+        }
+      }
+
+      facts.push({ title: 'Time', value: new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' }) });
+
+      const cardBody = [
+        {
+          type: 'TextBlock',
+          text: `${directionEmoji} Bol.com Fulfillment Swap`,
+          weight: 'bolder',
+          size: 'medium'
+        },
+        {
+          type: 'FactSet',
+          facts
+        }
+      ];
+
+      // Add warning if stock update failed
+      if (swap.to === 'FBR' && swap.stockUpdateSuccess === false) {
+        cardBody.push({
+          type: 'TextBlock',
+          text: `⚠️ Stock update failed: ${swap.stockUpdateError || 'Unknown error'}`,
+          color: 'warning',
+          wrap: true
+        });
+      }
+
       const card = {
         $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
         type: 'AdaptiveCard',
         version: '1.4',
-        body: [
-          {
-            type: 'TextBlock',
-            text: `${directionEmoji} Bol.com Fulfillment Swap`,
-            weight: 'bolder',
-            size: 'medium'
-          },
-          {
-            type: 'FactSet',
-            facts: [
-              { title: 'SKU', value: swap.sku || '-' },
-              { title: 'EAN', value: swap.ean },
-              { title: 'Direction', value: directionText },
-              { title: 'Reason', value: swap.reason },
-              { title: 'Time', value: new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' }) }
-            ]
-          }
-        ]
+        body: cardBody
       };
 
       await teams.sendMessage(card);
