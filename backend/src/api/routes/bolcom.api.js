@@ -2752,4 +2752,129 @@ router.post('/fbb-delivery/sync', async (req, res) => {
   }
 });
 
+// =============================================
+// INVOICE REQUESTS (Customer Invoice Uploads)
+// =============================================
+
+const { getBolInvoiceRequestService, processInvoiceRequests } = require('../../services/bol/BolInvoiceRequestService');
+
+/**
+ * Get status of invoice request processing
+ * GET /api/bolcom/invoice-requests/status
+ */
+router.get('/invoice-requests/status', async (req, res) => {
+  try {
+    const service = getBolInvoiceRequestService();
+    const status = service.getStatus();
+    res.json({ success: true, ...status });
+  } catch (error) {
+    console.error('[BolComAPI] Error getting invoice request status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Get open invoice requests from Bol.com
+ * GET /api/bolcom/invoice-requests/open
+ */
+router.get('/invoice-requests/open', async (req, res) => {
+  try {
+    const service = getBolInvoiceRequestService();
+    await service.init();
+    const requests = await service.getAllOpenRequests();
+
+    res.json({
+      success: true,
+      count: requests.length,
+      requests
+    });
+  } catch (error) {
+    console.error('[BolComAPI] Error getting open invoice requests:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Process all open invoice requests
+ * POST /api/bolcom/invoice-requests/process
+ *
+ * Fetches open requests from Bol.com, matches to Odoo invoices,
+ * and uploads PDFs to Bol.com
+ */
+router.post('/invoice-requests/process', async (req, res) => {
+  try {
+    console.log('[BolComAPI] Processing invoice requests...');
+    const results = await processInvoiceRequests();
+    res.json(results);
+  } catch (error) {
+    console.error('[BolComAPI] Error processing invoice requests:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Process a single invoice request manually
+ * POST /api/bolcom/invoice-requests/upload/:shipmentId
+ *
+ * Body: { orderId?: string } - Optional Bol order ID if not in shipments
+ */
+router.post('/invoice-requests/upload/:shipmentId', async (req, res) => {
+  try {
+    const { shipmentId } = req.params;
+    const { orderId } = req.body;
+
+    console.log(`[BolComAPI] Processing invoice request for shipment ${shipmentId}...`);
+
+    const service = getBolInvoiceRequestService();
+    await service.init();
+
+    const result = await service.processRequest({
+      shipmentId,
+      orderId
+    });
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: `Invoice ${result.invoiceName} uploaded successfully`,
+        ...result
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+        ...result
+      });
+    }
+  } catch (error) {
+    console.error('[BolComAPI] Error uploading invoice:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Find Odoo invoice for a Bol.com shipment/order
+ * GET /api/bolcom/invoice-requests/find/:shipmentId
+ */
+router.get('/invoice-requests/find/:shipmentId', async (req, res) => {
+  try {
+    const { shipmentId } = req.params;
+    const { orderId } = req.query;
+
+    const service = getBolInvoiceRequestService();
+    await service.init();
+
+    const invoiceInfo = await service.findOdooInvoice(shipmentId, orderId);
+
+    res.json({
+      success: true,
+      shipmentId,
+      ...invoiceInfo
+    });
+  } catch (error) {
+    console.error('[BolComAPI] Error finding invoice:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
