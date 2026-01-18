@@ -20,6 +20,8 @@ const { runCancellationCheck } = require('./BolCancellationHandler');
 const { runFulfillmentSwap } = require('./BolFulfillmentSwapper');
 const { runBolSalesInvoicing } = require('./BolSalesInvoicer');
 const { runFBBDeliverySync } = require('./BolFBBDeliverySync');
+const { runBolInvoiceUpload } = require('./BolInvoiceUploader');
+const { processInvoiceRequests } = require('./BolInvoiceRequestService');
 const { getModuleLogger } = require('../logging/ModuleLogger');
 
 // Get Bol module logger
@@ -33,6 +35,8 @@ let fulfillmentSwapInterval = null;
 let returnsSyncInterval = null;
 let shipmentsSyncInterval = null;
 let fbbDeliverySyncInterval = null;
+let invoiceUploadJob = null;
+let invoiceRequestJob = null;
 
 // Interval settings (in milliseconds)
 const ORDER_POLL_INTERVAL = 15 * 60 * 1000;       // 15 minutes
@@ -57,6 +61,26 @@ function getMillisUntil3AM() {
   }
 
   return target.getTime() - now.getTime();
+}
+
+/**
+ * Calculate milliseconds until a specific hour (Amsterdam timezone)
+ */
+function getMillisUntilHour(hour, minute = 0) {
+  const now = new Date();
+  const target = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Amsterdam' }));
+  target.setHours(hour, minute, 0, 0);
+
+  // Convert back to local time
+  const targetLocal = new Date(now);
+  targetLocal.setHours(hour, minute, 0, 0);
+
+  // If it's already past the target time today, schedule for tomorrow
+  if (now >= targetLocal) {
+    targetLocal.setDate(targetLocal.getDate() + 1);
+  }
+
+  return targetLocal.getTime() - now.getTime();
 }
 
 /**
@@ -295,6 +319,80 @@ async function doFBBDeliverySync() {
 }
 
 /**
+ * Upload invoices to Bol.com for all orders (runs at 6:00 AM)
+ */
+async function doInvoiceUpload() {
+  const timer = logger.startTimer('BOL_INVOICE_UPLOAD', 'scheduler');
+  try {
+    console.log('[BolScheduler] Uploading invoices to Bol.com...');
+    const results = await runBolInvoiceUpload({ limit: 500 });
+    if (results.uploaded > 0) {
+      console.log(`[BolScheduler] Uploaded ${results.uploaded} invoices to Bol.com`);
+      await timer.success(`Invoice upload: ${results.uploaded} uploaded`, { details: results });
+    } else {
+      await timer.info('Invoice upload complete, no invoices to upload', { details: results });
+    }
+    return results;
+  } catch (error) {
+    console.error('[BolScheduler] Invoice upload failed:', error.message);
+    await timer.error('Invoice upload failed', error);
+    throw error;
+  } finally {
+    // Schedule next run at 6:00 AM tomorrow
+    scheduleInvoiceUpload();
+  }
+}
+
+/**
+ * Process invoice requests from Bol.com (runs at 6:30 AM)
+ */
+async function doInvoiceRequests() {
+  const timer = logger.startTimer('BOL_INVOICE_REQUESTS', 'scheduler');
+  try {
+    console.log('[BolScheduler] Processing Bol.com invoice requests...');
+    const results = await processInvoiceRequests();
+    if (results.success > 0) {
+      console.log(`[BolScheduler] Processed ${results.success} invoice requests`);
+      await timer.success(`Invoice requests: ${results.success} processed`, { details: results });
+    } else {
+      await timer.info('Invoice requests complete, no requests to process', { details: results });
+    }
+    return results;
+  } catch (error) {
+    console.error('[BolScheduler] Invoice requests failed:', error.message);
+    await timer.error('Invoice requests failed', error);
+    throw error;
+  } finally {
+    // Schedule next run at 6:30 AM tomorrow
+    scheduleInvoiceRequests();
+  }
+}
+
+/**
+ * Schedule invoice upload job for 6:00 AM
+ */
+function scheduleInvoiceUpload() {
+  const msUntil6AM = getMillisUntilHour(6, 0);
+  const hoursUntil = (msUntil6AM / 1000 / 60 / 60).toFixed(1);
+
+  console.log(`[BolScheduler] Next invoice upload in ${hoursUntil} hours (6:00 AM)`);
+
+  invoiceUploadJob = setTimeout(doInvoiceUpload, msUntil6AM);
+}
+
+/**
+ * Schedule invoice requests job for 6:30 AM
+ */
+function scheduleInvoiceRequests() {
+  const msUntil630AM = getMillisUntilHour(6, 30);
+  const hoursUntil = (msUntil630AM / 1000 / 60 / 60).toFixed(1);
+
+  console.log(`[BolScheduler] Next invoice requests in ${hoursUntil} hours (6:30 AM)`);
+
+  invoiceRequestJob = setTimeout(doInvoiceRequests, msUntil630AM);
+}
+
+/**
  * Schedule the nightly sync job
  */
 function scheduleNightlySync() {
@@ -315,7 +413,7 @@ function start() {
   // Log scheduler start
   logger.info('SCHEDULER_START', 'Bol scheduler started', {
     details: {
-      jobs: ['ORDER_POLL', 'STOCK_SYNC', 'SHIPMENT_CHECK', 'FULFILLMENT_SWAP', 'RETURNS_SYNC', 'SHIPMENTS_SYNC', 'FBB_DELIVERY_SYNC', 'NIGHTLY_SYNC'],
+      jobs: ['ORDER_POLL', 'STOCK_SYNC', 'SHIPMENT_CHECK', 'FULFILLMENT_SWAP', 'RETURNS_SYNC', 'SHIPMENTS_SYNC', 'FBB_DELIVERY_SYNC', 'NIGHTLY_SYNC', 'INVOICE_UPLOAD', 'INVOICE_REQUESTS'],
       intervals: {
         orderPoll: '15 min',
         stockSync: '15 min',
@@ -324,13 +422,21 @@ function start() {
         returnsSync: '1 hour',
         shipmentsSync: '1 hour',
         fbbDeliverySync: '1 hour',
-        nightlySync: '3:00 AM daily'
+        nightlySync: '3:00 AM daily',
+        invoiceUpload: '6:00 AM daily',
+        invoiceRequests: '6:30 AM daily'
       }
     }
   });
 
   // Schedule nightly sync
   scheduleNightlySync();
+
+  // Schedule invoice upload at 6:00 AM
+  scheduleInvoiceUpload();
+
+  // Schedule invoice requests at 6:30 AM
+  scheduleInvoiceRequests();
 
   // Start interval jobs (with staggered initial delays)
   console.log('[BolScheduler] Starting interval jobs...');
@@ -416,6 +522,14 @@ function stop() {
     clearInterval(fbbDeliverySyncInterval);
     fbbDeliverySyncInterval = null;
   }
+  if (invoiceUploadJob) {
+    clearTimeout(invoiceUploadJob);
+    invoiceUploadJob = null;
+  }
+  if (invoiceRequestJob) {
+    clearTimeout(invoiceRequestJob);
+    invoiceRequestJob = null;
+  }
   console.log('[BolScheduler] All jobs stopped');
 }
 
@@ -424,10 +538,18 @@ function stop() {
  */
 function getStatus() {
   return {
-    running: !!(nightlySyncJob || orderPollInterval || stockSyncInterval || shipmentCheckInterval || fulfillmentSwapInterval || returnsSyncInterval || shipmentsSyncInterval || fbbDeliverySyncInterval),
+    running: !!(nightlySyncJob || orderPollInterval || stockSyncInterval || shipmentCheckInterval || fulfillmentSwapInterval || returnsSyncInterval || shipmentsSyncInterval || fbbDeliverySyncInterval || invoiceUploadJob || invoiceRequestJob),
     nightlySync: {
       scheduled: !!nightlySyncJob,
       nextRunAt: nightlySyncJob ? new Date(Date.now() + getMillisUntil3AM()) : null
+    },
+    invoiceUpload: {
+      scheduled: !!invoiceUploadJob,
+      nextRunAt: invoiceUploadJob ? new Date(Date.now() + getMillisUntilHour(6, 0)) : null
+    },
+    invoiceRequests: {
+      scheduled: !!invoiceRequestJob,
+      nextRunAt: invoiceRequestJob ? new Date(Date.now() + getMillisUntilHour(6, 30)) : null
     },
     intervals: {
       orderPoll: !!orderPollInterval,
@@ -475,5 +597,7 @@ module.exports = {
   doReturnsSync,
   doShipmentsSync,
   doFBBDeliverySync,
-  doSalesInvoicing
+  doSalesInvoicing,
+  doInvoiceUpload,
+  doInvoiceRequests
 };

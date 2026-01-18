@@ -551,7 +551,7 @@ class BolInvoiceRequestService {
    * Send Teams notification with results
    */
   async sendTeamsNotification(results) {
-    const webhookUrl = process.env.TEAMS_WEBHOOK_URL;
+    const webhookUrl = process.env.TEAMS_ACROPAQ_WEBHOOK_URL || process.env.TEAMS_WEBHOOK_URL;
     if (!webhookUrl) {
       return;
     }
