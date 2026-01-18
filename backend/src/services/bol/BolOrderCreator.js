@@ -433,8 +433,9 @@ class BolOrderCreator {
     const personalName = cleanedAddress.name || rawName;
 
     // Build display name: company first, then personal name
+    // Use " - " separator to avoid confusion with Odoo's parent/child comma notation
     const displayName = company
-      ? (personalName ? `${company}, ${personalName}` : company)
+      ? (personalName ? `${company} - ${personalName}` : company)
       : personalName;
 
     // Check cache first
