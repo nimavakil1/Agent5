@@ -9,7 +9,7 @@
  *
  * Bol.com API endpoints used:
  * - GET /retailer/shipments/invoices/requests - Get list of invoice requests
- * - POST /retailer/shipments/{shipment-id}/invoice - Upload invoice PDF
+ * - POST /retailer/shipments/invoices/{shipment-id} - Upload invoice PDF
  *
  * Requirements:
  * - Invoice must be uploaded within 24 hours of request
@@ -208,7 +208,7 @@ class BolInvoiceRequestService {
     const footerBuffer = Buffer.from(`\r\n--${boundary}--\r\n`);
     const fullBody = Buffer.concat([headerBuffer, pdfBuffer, footerBuffer]);
 
-    const response = await fetch(`https://api.bol.com/retailer/shipments/${shipmentId}/invoice`, {
+    const response = await fetch(`https://api.bol.com/retailer/shipments/invoices/${shipmentId}`, {
       method: 'POST',
       headers: {
         'Accept': 'application/vnd.retailer.v10+json',
