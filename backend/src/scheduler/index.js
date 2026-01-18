@@ -19,6 +19,7 @@ let _amazonFbmStockTimer = null;
 let _amazonFbaInventoryTimer = null;
 let _amazonFbaReportCheckTimer = null;
 let _safetyStockVerifyCron = null;
+let _amazonFbmListingsRefreshCron = null;
 
 /**
  * Check if current time is within stock sync operating hours
@@ -254,6 +255,13 @@ function start() {
       _amazonFbaReportCheckTimer = setInterval(checkAmazonFbaReports, 15 * 60 * 1000);
       setTimeout(checkAmazonFbaReports, 10 * 60 * 1000); // Initial run after 10 min
       console.log('[scheduler] Amazon FBA report check initialized (every 15 min)');
+
+      // FBM Listings Refresh: Daily at 5:00 AM (Brussels time)
+      // This refreshes the list of FBM listings from all marketplaces
+      _amazonFbmListingsRefreshCron = cron.schedule('0 5 * * *', refreshFbmListings, {
+        timezone: 'Europe/Brussels'
+      });
+      console.log('[scheduler] Amazon FBM listings refresh initialized (daily at 5:00 AM)');
     }
   } catch (e) { console.error('[scheduler] Amazon stock sync init error', e); }
 }
@@ -631,17 +639,16 @@ async function checkTrackingHealth() {
 }
 
 /**
- * Sync FBM stock from Odoo CW to Amazon (Rock-solid approach)
+ * Sync FBM stock from Odoo CW to Amazon (Simplified approach)
  * Only runs during operating hours: 6:00 AM - 23:30 (Europe/Brussels)
  *
  * Flow:
- * 1. Get all FBM Seller SKUs from Amazon (source of truth)
+ * 1. Get cached FBM listings (refreshed daily at 5:00 AM)
  * 2. Use SkuResolver to map Amazon SKU → Odoo SKU
  * 3. Get CW stock for resolved Odoo SKUs
  * 4. Apply safety stock deduction (amazonQty = cwFreeQty - safetyStock)
- * 5. Send stock to Amazon using original Seller SKU
- * 6. Generate Excel report and send Teams notification (if changes exist)
- * 7. On error: Generate fallback TSV and escalate to Teams
+ * 5. Send stock to Amazon for each marketplace
+ * 6. Generate Excel report and send Teams notification
  */
 async function syncAmazonFbmStock() {
   // Check operating hours (6:00 - 23:30 Brussels time)
@@ -653,74 +660,69 @@ async function syncAmazonFbmStock() {
   try {
     const { getSellerFbmStockExport } = require('../services/amazon/seller/SellerFbmStockExport');
     const { getFbmStockReportService } = require('../services/amazon/seller/FbmStockReportService');
-    const { getFbmStockFallbackGenerator } = require('../services/amazon/seller/FbmStockFallbackGenerator');
 
     const exporter = await getSellerFbmStockExport();
     const result = await exporter.syncStock();
 
-    // Initialize reporting services
     const reportService = getFbmStockReportService();
-    const fallbackGenerator = getFbmStockFallbackGenerator();
 
     if (result.success) {
-      if (result.updateId) {
-        const summary = result.summary || {};
-        console.log(`[scheduler] Amazon FBM stock: Updated ${result.itemsUpdated || 0} items via Listings API`);
-        console.log(`[scheduler]   Resolved: ${result.resolved}, Unresolved: ${result.unresolved}`);
-        console.log(`[scheduler]   Changes: +${summary.increases || 0} / -${summary.decreases || 0} / =${summary.unchanged || 0}`);
+      const summary = result.summary || {};
+      console.log(`[scheduler] Amazon FBM stock: Sent ${result.itemsUpdated || 0} updates via Listings API`);
+      console.log(`[scheduler]   SKUs: ${summary.totalSkus || 0} (${summary.withStock || 0} with stock, ${summary.zeroStock || 0} zero)`);
 
-        // Generate and send report (only if there are changes)
-        try {
-          const reportResult = await reportService.generateAndSendReport(result);
-          if (reportResult.reported) {
-            console.log(`[scheduler]   Report sent: Excel=${reportResult.excelUrl ? 'Yes' : 'No'}, Teams=${reportResult.teamsNotified}`);
-          }
-        } catch (reportError) {
-          console.error('[scheduler]   Report generation failed:', reportError.message);
+      // Always generate and send report
+      try {
+        const reportResult = await reportService.generateAndSendReport(result);
+        if (reportResult.reported) {
+          console.log(`[scheduler]   Report: Excel=${reportResult.excelUrl ? 'Yes' : 'No'}, Teams=${reportResult.teamsNotified}`);
         }
-      } else {
-        console.log(`[scheduler] Amazon FBM stock: ${result.message || 'No items to sync'}`);
+      } catch (reportError) {
+        console.error('[scheduler]   Report generation failed:', reportError.message);
       }
     } else {
       console.error(`[scheduler] Amazon FBM stock failed: ${result.error}`);
 
-      // Generate fallback TSV and escalate
+      // Send error notification
       try {
-        if (result.detailedResults && result.detailedResults.length > 0) {
-          const fallbackResult = await fallbackGenerator.generateAndUploadFallback(result, result.error);
-
-          if (fallbackResult.success) {
-            console.log(`[scheduler]   Fallback TSV generated: ${fallbackResult.filename} (${fallbackResult.itemCount} items)`);
-
-            // Send error escalation to Teams
-            await reportService.sendErrorEscalation(
-              {
-                error: result.error,
-                affectedSkus: result.detailedResults.length
-              },
-              fallbackResult.url
-            );
-          }
-        }
-      } catch (fallbackError) {
-        console.error('[scheduler]   Fallback generation failed:', fallbackError.message);
+        await reportService.sendToTeams({
+          ...result,
+          summary: result.summary || { totalSkus: 0 }
+        });
+      } catch (notifyError) {
+        console.error('[scheduler]   Error notification failed:', notifyError.message);
       }
     }
 
     return result;
   } catch (e) {
     console.error('[scheduler] Amazon FBM stock sync error:', e?.message || e);
+    return { success: false, error: e?.message || e };
+  }
+}
 
-    // Try to send error escalation even on complete failure
-    try {
-      const { getFbmStockReportService } = require('../services/amazon/seller/FbmStockReportService');
-      const reportService = getFbmStockReportService();
-      await reportService.sendErrorEscalation({
-        error: e?.message || String(e),
-        affectedSkus: 'Unknown - sync failed completely'
-      });
-    } catch (_) {}
+/**
+ * Refresh FBM listings from all marketplaces (daily at 5:00 AM)
+ * Requests new listings reports from Amazon for DE, FR, NL, BE, ES, IT, UK
+ */
+async function refreshFbmListings() {
+  try {
+    const { getSellerFbmStockExport } = require('../services/amazon/seller/SellerFbmStockExport');
+    const exporter = await getSellerFbmStockExport();
 
+    console.log('[scheduler] Refreshing FBM listings from all marketplaces...');
+    const result = await exporter.requestAllMarketplaceReports();
+
+    if (result.success) {
+      console.log(`[scheduler] FBM listings refresh: Requested ${result.reports.length} marketplace reports`);
+      result.reports.forEach(r => console.log(`[scheduler]   - ${r.marketplace}: ${r.reportId}`));
+    } else {
+      console.error('[scheduler] FBM listings refresh failed');
+    }
+
+    return result;
+  } catch (e) {
+    console.error('[scheduler] FBM listings refresh error:', e?.message || e);
     return { success: false, error: e?.message || e };
   }
 }
@@ -897,6 +899,7 @@ module.exports = {
   checkTrackingHealth,
   // Amazon stock sync functions
   syncAmazonFbmStock,
+  refreshFbmListings,
   syncAmazonFbaInventory,
   checkAmazonFbaReports,
   // Safety stock verification

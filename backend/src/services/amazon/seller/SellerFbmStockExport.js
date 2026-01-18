@@ -1,18 +1,15 @@
 /**
- * SellerFbmStockExport - Rock-solid FBM stock sync from Odoo to Amazon
+ * SellerFbmStockExport - Simplified FBM stock sync from Odoo to Amazon
  *
  * Flow:
- * 1. Get all FBM Seller SKUs from Amazon (via listings report)
- * 2. Use SkuResolver to map Amazon SKU → Odoo SKU
- * 3. Get CW stock for resolved Odoo SKUs
- * 4. Send stock to Amazon using Listings Items API (patchListingsItem)
- * 5. Notify via Teams + store unresolved SKUs for review
+ * 1. Daily: Fetch FBM listings from all marketplaces (to know which SKUs exist where)
+ * 2. Every 30 min: Get CW stock, apply safety stock, send to Amazon
+ * 3. Send report to Teams with Excel showing what was sent
  *
- * This approach is rock-solid because:
- * - Amazon is the source of truth for which SKUs exist
- * - SkuResolver is already battle-tested from order imports
- * - Unresolved SKUs get flagged → we improve resolver → self-healing
- * - Uses Listings Items API (not Feeds API) for inventory updates
+ * Simple approach:
+ * - No "before" tracking or delta calculation
+ * - Just send current stock levels to Amazon
+ * - Report shows what was sent, not what changed
  *
  * @module SellerFbmStockExport
  */
@@ -22,33 +19,28 @@ const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP'
 const { getSellerClient } = require('./SellerClient');
 const { skuResolver } = require('../SkuResolver');
 const { TeamsNotificationService } = require('../../../core/agents/services/TeamsNotificationService');
-const { getAllMarketplaceIds, MARKETPLACE_IDS } = require('./SellerMarketplaceConfig');
+const { MARKETPLACE_IDS } = require('./SellerMarketplaceConfig');
 const Product = require('../../../models/Product');
 
-// Feed type for inventory updates (kept for backwards compatibility with stats)
-const INVENTORY_FEED_TYPE = 'POST_INVENTORY_AVAILABILITY_DATA';
-
-// Rate limiting for Listings Items API (5 requests per second to be safe)
+// Rate limiting for Listings Items API
 const API_DELAY_MS = 200;
 
 // Report type for listings
 const LISTINGS_REPORT_TYPE = 'GET_MERCHANT_LISTINGS_DATA';
 
 // Collections
-const FEEDS_COLLECTION = 'seller_feeds';
+const FBM_LISTINGS_COLLECTION = 'amazon_fbm_listings';
 const STOCK_UPDATES_COLLECTION = 'amazon_stock_updates';
+const UNRESOLVED_SKUS_COLLECTION = 'amazon_unresolved_skus';
 
 // Target marketplaces for FBM stock sync
-// These are the 7 marketplaces where Acropaq sells FBM
 const FBM_TARGET_MARKETPLACES = ['DE', 'FR', 'NL', 'BE', 'ES', 'IT', 'UK'];
-const UNRESOLVED_SKUS_COLLECTION = 'amazon_unresolved_skus';
-const FBM_LISTINGS_COLLECTION = 'amazon_fbm_listings';
 
 // Helper for rate limiting
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * SellerFbmStockExport - Exports FBM inventory to Amazon with proper SKU resolution
+ * SellerFbmStockExport - Simplified FBM stock sync
  */
 class SellerFbmStockExport {
   constructor() {
@@ -91,117 +83,59 @@ class SellerFbmStockExport {
     }
   }
 
-  /**
-   * Request a listings report from Amazon for a specific marketplace
-   * @param {string} marketplaceCode - Marketplace code (DE, FR, NL, etc.)
-   * @returns {Object} { success, reportId }
-   */
-  async requestListingsReport(marketplaceCode = 'DE') {
-    await this.init();
-
-    try {
-      const spClient = await this.client.getClient();
-
-      const marketplaceId = MARKETPLACE_IDS[marketplaceCode];
-      if (!marketplaceId) {
-        throw new Error(`Unknown marketplace code: ${marketplaceCode}`);
-      }
-
-      const response = await spClient.callAPI({
-        operation: 'reports.createReport',
-        body: {
-          reportType: LISTINGS_REPORT_TYPE,
-          marketplaceIds: [marketplaceId]
-        }
-      });
-
-      const reportId = response.reportId;
-      console.log(`[SellerFbmStockExport] Requested listings report for ${marketplaceCode}: ${reportId}`);
-
-      // Store report request with marketplace info
-      await this.db.collection('seller_reports').insertOne({
-        reportId,
-        reportType: LISTINGS_REPORT_TYPE,
-        marketplace: marketplaceCode,
-        purpose: 'fbm_stock_sync',
-        status: 'IN_QUEUE',
-        requestedAt: new Date(),
-        processed: false
-      });
-
-      return { success: true, reportId, marketplace: marketplaceCode };
-
-    } catch (error) {
-      console.error(`[SellerFbmStockExport] Error requesting listings report for ${marketplaceCode}:`, error.message);
-      return { success: false, error: error.message };
-    }
-  }
+  // ============================================
+  // DAILY: Refresh FBM listings from all marketplaces
+  // ============================================
 
   /**
-   * Request listings reports from all target marketplaces
+   * Request listings reports from all marketplaces (run daily)
    * @returns {Object} { success, reports: [{ marketplace, reportId }] }
    */
   async requestAllMarketplaceReports() {
     await this.init();
 
     const results = [];
+    const spClient = await this.client.getClient();
 
     for (const marketplaceCode of FBM_TARGET_MARKETPLACES) {
-      const result = await this.requestListingsReport(marketplaceCode);
-      if (result.success) {
-        results.push({ marketplace: marketplaceCode, reportId: result.reportId });
+      try {
+        const marketplaceId = MARKETPLACE_IDS[marketplaceCode];
+        if (!marketplaceId) continue;
+
+        const response = await spClient.callAPI({
+          operation: 'reports.createReport',
+          body: {
+            reportType: LISTINGS_REPORT_TYPE,
+            marketplaceIds: [marketplaceId]
+          }
+        });
+
+        const reportId = response.reportId;
+        console.log(`[SellerFbmStockExport] Requested listings report for ${marketplaceCode}: ${reportId}`);
+
+        // Store report request
+        await this.db.collection('seller_reports').insertOne({
+          reportId,
+          reportType: LISTINGS_REPORT_TYPE,
+          marketplace: marketplaceCode,
+          purpose: 'fbm_listings_refresh',
+          status: 'IN_QUEUE',
+          requestedAt: new Date(),
+          processed: false
+        });
+
+        results.push({ marketplace: marketplaceCode, reportId });
+
+        // Small delay between requests
+        await sleep(500);
+
+      } catch (error) {
+        console.error(`[SellerFbmStockExport] Error requesting report for ${marketplaceCode}:`, error.message);
       }
-      // Small delay between requests to avoid rate limiting
-      await sleep(500);
     }
 
-    console.log(`[SellerFbmStockExport] Requested listings reports for ${results.length}/${FBM_TARGET_MARKETPLACES.length} marketplaces`);
-
+    console.log(`[SellerFbmStockExport] Requested ${results.length}/${FBM_TARGET_MARKETPLACES.length} marketplace reports`);
     return { success: results.length > 0, reports: results };
-  }
-
-  /**
-   * Get FBM listings from cache or Amazon
-   * @param {Object} options
-   * @param {boolean} options.forceRefresh - Force refresh from Amazon
-   * @returns {Array} FBM listings with seller SKU
-   */
-  async getFbmListings(options = {}) {
-    await this.init();
-
-    const { forceRefresh = false } = options;
-
-    // Check cache first (listings cached from last report)
-    if (!forceRefresh) {
-      const cachedListings = await this.db.collection(FBM_LISTINGS_COLLECTION)
-        .find({ fulfillmentChannel: 'DEFAULT' }) // DEFAULT = FBM in Amazon terms
-        .toArray();
-
-      if (cachedListings.length > 0) {
-        const cacheAge = Date.now() - new Date(cachedListings[0].updatedAt).getTime();
-        const maxCacheAge = 24 * 60 * 60 * 1000; // 24 hours
-
-        if (cacheAge < maxCacheAge) {
-          console.log(`[SellerFbmStockExport] Using cached FBM listings (${cachedListings.length} items, ${Math.round(cacheAge / 3600000)}h old)`);
-          return cachedListings;
-        }
-      }
-    }
-
-    // Try to process any pending listings reports
-    await this.processListingsReports();
-
-    // Return whatever we have in cache
-    const listings = await this.db.collection(FBM_LISTINGS_COLLECTION)
-      .find({ fulfillmentChannel: 'DEFAULT' })
-      .toArray();
-
-    if (listings.length === 0) {
-      console.log('[SellerFbmStockExport] No FBM listings in cache, requesting reports for all marketplaces...');
-      await this.requestAllMarketplaceReports();
-    }
-
-    return listings;
   }
 
   /**
@@ -237,7 +171,6 @@ class SellerFbmStockExport {
 
         if (status === 'DONE') {
           const documentId = statusResponse.reportDocumentId;
-          // Pass marketplace from the report document
           await this.downloadAndProcessListings(report.reportId, documentId, report.marketplace || 'DE');
           processed++;
         }
@@ -252,11 +185,8 @@ class SellerFbmStockExport {
 
   /**
    * Download and process listings report
-   * @param {string} reportId - Report ID
-   * @param {string} documentId - Document ID for download
-   * @param {string} marketplace - Marketplace code this report is from
    */
-  async downloadAndProcessListings(reportId, documentId, marketplace = 'DE') {
+  async downloadAndProcessListings(reportId, documentId, marketplace) {
     const spClient = await this.client.getClient();
 
     try {
@@ -268,18 +198,15 @@ class SellerFbmStockExport {
       const reportData = await spClient.download(docResponse, { json: false });
       const listings = this.parseListingsReport(reportData, marketplace);
 
-      console.log(`[SellerFbmStockExport] Parsed ${listings.length} listings from ${marketplace} report`);
+      console.log(`[SellerFbmStockExport] Parsed ${listings.length} listings from ${marketplace}`);
 
-      // Store in MongoDB
+      // Store/update in MongoDB
       const now = new Date();
       const operations = listings.map(listing => ({
         updateOne: {
           filter: { sellerSku: listing.sellerSku, marketplace: listing.marketplace },
           update: {
-            $set: {
-              ...listing,
-              updatedAt: now
-            },
+            $set: { ...listing, updatedAt: now },
             $setOnInsert: { createdAt: now }
           },
           upsert: true
@@ -293,29 +220,26 @@ class SellerFbmStockExport {
       // Mark report as processed
       await this.db.collection('seller_reports').updateOne(
         { reportId },
-        { $set: { processed: true, processedAt: now, listingCount: listings.length, marketplace } }
+        { $set: { processed: true, processedAt: now, listingCount: listings.length } }
       );
 
-      console.log(`[SellerFbmStockExport] Stored ${listings.length} ${marketplace} listings in cache`);
+      console.log(`[SellerFbmStockExport] Stored ${listings.length} ${marketplace} FBM listings`);
 
     } catch (error) {
-      console.error(`[SellerFbmStockExport] Error processing ${marketplace} listings report:`, error.message);
+      console.error(`[SellerFbmStockExport] Error processing ${marketplace} report:`, error.message);
       throw error;
     }
   }
 
   /**
    * Parse listings report (TSV format)
-   * @param {Buffer|string} data - Report data
-   * @param {string} marketplace - Marketplace code this report is from
    */
-  parseListingsReport(data, marketplace = 'DE') {
+  parseListingsReport(data, marketplace) {
     const lines = data.toString().split('\n');
     const listings = [];
 
     if (lines.length < 2) return listings;
 
-    // Parse header
     const headers = lines[0].split('\t').map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'));
 
     for (let i = 1; i < lines.length; i++) {
@@ -327,34 +251,88 @@ class SellerFbmStockExport {
         row[header] = values[idx]?.trim() || '';
       });
 
-      // Standard listings report fields
-      // Use the marketplace parameter - this is the marketplace the report was requested from
+      const fulfillmentChannel = row.fulfillment_channel || 'DEFAULT';
+
+      // Only FBM listings (DEFAULT = Merchant Fulfilled)
+      if (fulfillmentChannel !== 'DEFAULT') continue;
+
       listings.push({
         sellerSku: row.seller_sku || row.sku,
         asin: row.asin1 || row.asin,
         productName: row.item_name || row.product_name || row.title,
-        price: parseFloat(row.price) || 0,
-        quantity: parseInt(row.quantity) || 0,
-        fulfillmentChannel: row.fulfillment_channel || 'DEFAULT', // DEFAULT = FBM, AMAZON_NA/EU = FBA
+        fulfillmentChannel: 'DEFAULT',
         status: row.status || 'Active',
-        marketplace: marketplace // Use the marketplace the report was requested from
+        marketplace: marketplace
       });
     }
 
     return listings.filter(l => l.sellerSku);
   }
 
+  // ============================================
+  // EVERY 30 MIN: Sync stock levels to Amazon
+  // ============================================
+
   /**
-   * Get safety stock values from MongoDB for multiple Odoo SKUs
-   * @param {string[]} odooSkus
-   * @returns {Map<string, number>} Map of odooSku → safety stock value
+   * Get FBM listings grouped by SKU with their marketplaces
+   */
+  async getFbmListingsGrouped() {
+    await this.init();
+
+    // First, try to process any pending reports
+    await this.processListingsReports();
+
+    // Get all FBM listings
+    const listings = await this.db.collection(FBM_LISTINGS_COLLECTION)
+      .find({ fulfillmentChannel: 'DEFAULT' })
+      .toArray();
+
+    if (listings.length === 0) {
+      console.log('[SellerFbmStockExport] No FBM listings in cache, requesting reports...');
+      await this.requestAllMarketplaceReports();
+      return [];
+    }
+
+    // Group by SKU to collect marketplaces
+    const skuMap = new Map();
+    for (const listing of listings) {
+      const sku = listing.sellerSku;
+      if (!skuMap.has(sku)) {
+        skuMap.set(sku, {
+          sellerSku: sku,
+          asin: listing.asin,
+          productName: listing.productName,
+          marketplaces: new Set()
+        });
+      }
+      if (listing.marketplace) {
+        skuMap.get(sku).marketplaces.add(listing.marketplace);
+      }
+    }
+
+    // Convert to array with marketplace arrays
+    const grouped = [];
+    for (const [sku, data] of skuMap) {
+      grouped.push({
+        sellerSku: data.sellerSku,
+        asin: data.asin,
+        productName: data.productName,
+        marketplaces: [...data.marketplaces]
+      });
+    }
+
+    console.log(`[SellerFbmStockExport] ${grouped.length} unique FBM SKUs across ${listings.length} marketplace listings`);
+    return grouped;
+  }
+
+  /**
+   * Get safety stock values from MongoDB
    */
   async getSafetyStock(odooSkus) {
     const safetyStockMap = new Map();
 
-    // Initialize all with default
     for (const sku of odooSkus) {
-      safetyStockMap.set(sku, 10); // Default safety stock
+      safetyStockMap.set(sku, 10); // Default
     }
 
     try {
@@ -376,8 +354,6 @@ class SellerFbmStockExport {
 
   /**
    * Get CW stock for multiple Odoo SKUs
-   * @param {string[]} odooSkus
-   * @returns {Map<string, number>} Map of odooSku → available quantity
    */
   async getCwStock(odooSkus) {
     await this.init();
@@ -386,7 +362,6 @@ class SellerFbmStockExport {
       throw new Error('Central Warehouse not configured');
     }
 
-    // Get products by SKU
     const products = await this.odoo.searchRead('product.product',
       [['default_code', 'in', odooSkus], ['active', '=', true]],
       ['id', 'default_code']
@@ -400,12 +375,8 @@ class SellerFbmStockExport {
     }
 
     const productIds = Object.keys(productIdToSku).map(id => parseInt(id));
+    if (productIds.length === 0) return new Map();
 
-    if (productIds.length === 0) {
-      return new Map();
-    }
-
-    // Get stock quants for CW
     const quants = await this.odoo.searchRead('stock.quant',
       [
         ['product_id', 'in', productIds],
@@ -414,15 +385,11 @@ class SellerFbmStockExport {
       ['product_id', 'quantity', 'reserved_quantity']
     );
 
-    // Build stock map
     const stockMap = new Map();
-
-    // Initialize all requested SKUs to 0
     for (const sku of odooSkus) {
       stockMap.set(sku, 0);
     }
 
-    // Fill in actual stock
     for (const quant of quants) {
       const productId = quant.product_id[0];
       const sku = productIdToSku[productId];
@@ -436,10 +403,10 @@ class SellerFbmStockExport {
   }
 
   /**
-   * Main sync function - the rock-solid approach
+   * Main sync function - simplified approach
    * @param {Object} options
-   * @param {boolean} options.dryRun - Don't submit to Amazon, just return what would be sent
-   * @returns {Object} Sync results with detailed tracking for reporting
+   * @param {boolean} options.dryRun - Don't submit to Amazon
+   * @returns {Object} Sync results
    */
   async syncStock(options = {}) {
     await this.init();
@@ -447,76 +414,52 @@ class SellerFbmStockExport {
     const { dryRun = false } = options;
     const result = {
       success: false,
+      totalSkus: 0,
       resolved: 0,
       unresolved: 0,
       unresolvedSkus: [],
-      stockItems: [],
-      detailedResults: [], // For Excel report
-      feedId: null,
-      feedItemCount: 0,
+      sentItems: [], // What we sent to Amazon
+      itemsUpdated: 0,
+      itemsFailed: 0,
       summary: {
         totalSkus: 0,
-        updated: 0,
-        unchanged: 0,
-        increases: 0,
-        decreases: 0,
-        zeroStock: 0
+        zeroStock: 0,
+        withStock: 0
       }
     };
 
     try {
-      // Step 1: Get FBM listings from Amazon
+      // Step 1: Get FBM listings (grouped by SKU with marketplaces)
       console.log('[SellerFbmStockExport] Step 1: Getting FBM listings...');
-      const fbmListings = await this.getFbmListings();
+      const fbmListings = await this.getFbmListingsGrouped();
 
       if (fbmListings.length === 0) {
         result.success = true;
-        result.message = 'No FBM listings found. Report may be processing - try again later.';
+        result.message = 'No FBM listings found. Reports may be processing.';
         return result;
       }
 
-      console.log(`[SellerFbmStockExport] Found ${fbmListings.length} FBM listings`);
+      console.log(`[SellerFbmStockExport] Found ${fbmListings.length} FBM SKUs`);
 
-      // Step 2: Resolve each Seller SKU to Odoo SKU and track marketplaces + current Amazon qty
+      // Step 2: Resolve SKUs to Odoo
       console.log('[SellerFbmStockExport] Step 2: Resolving SKUs...');
       const resolvedItems = [];
       const unresolvedItems = [];
 
-      // Group listings by SKU to collect all marketplaces for each SKU
-      const skuMarketplaces = new Map();
       for (const listing of fbmListings) {
-        const sku = listing.sellerSku;
-        if (!skuMarketplaces.has(sku)) {
-          skuMarketplaces.set(sku, {
-            listing,
-            marketplaces: new Set(),
-            amazonQtyBefore: listing.quantity || 0 // Current Amazon quantity
-          });
-        }
-        // Add marketplace if present
-        if (listing.marketplace && listing.marketplace !== 'ALL') {
-          skuMarketplaces.get(sku).marketplaces.add(listing.marketplace);
-        }
-      }
-
-      for (const [sellerSku, data] of skuMarketplaces) {
-        const resolution = skuResolver.resolve(sellerSku);
-        const listing = data.listing;
-        const marketplaces = [...data.marketplaces];
+        const resolution = skuResolver.resolve(listing.sellerSku);
 
         if (resolution.odooSku) {
           resolvedItems.push({
-            sellerSku,
+            sellerSku: listing.sellerSku,
             odooSku: resolution.odooSku,
             asin: listing.asin,
             productName: listing.productName,
-            matchType: resolution.matchType,
-            marketplaces: marketplaces.length > 0 ? marketplaces : FBM_TARGET_MARKETPLACES, // All 7 FBM marketplaces
-            amazonQtyBefore: data.amazonQtyBefore
+            marketplaces: listing.marketplaces.length > 0 ? listing.marketplaces : FBM_TARGET_MARKETPLACES
           });
         } else {
           unresolvedItems.push({
-            sellerSku,
+            sellerSku: listing.sellerSku,
             asin: listing.asin,
             productName: listing.productName,
             reason: 'Could not resolve to Odoo SKU'
@@ -530,7 +473,7 @@ class SellerFbmStockExport {
 
       console.log(`[SellerFbmStockExport] Resolved: ${resolvedItems.length}, Unresolved: ${unresolvedItems.length}`);
 
-      // Step 3: Get CW stock AND safety stock for resolved Odoo SKUs
+      // Step 3: Get CW stock and safety stock
       console.log('[SellerFbmStockExport] Step 3: Getting CW stock and safety stock...');
       const odooSkus = [...new Set(resolvedItems.map(i => i.odooSku))];
       const [stockMap, safetyStockMap] = await Promise.all([
@@ -538,75 +481,60 @@ class SellerFbmStockExport {
         this.getSafetyStock(odooSkus)
       ]);
 
-      // Step 4: Build stock items with safety stock deduction and detailed tracking
-      console.log('[SellerFbmStockExport] Step 4: Building stock items with safety stock deduction...');
+      // Step 4: Build stock items to send
+      console.log('[SellerFbmStockExport] Step 4: Calculating stock to send...');
       const stockItems = [];
-      const detailedResults = [];
+      const sentItems = [];
 
       for (const item of resolvedItems) {
         const cwFreeQty = stockMap.get(item.odooSku) || 0;
         const safetyStock = safetyStockMap.get(item.odooSku) || 10;
-
-        // Apply safety stock deduction: send max(0, cwFreeQty - safetyStock) to Amazon
-        const newAmazonQty = Math.max(0, cwFreeQty - safetyStock);
-        const delta = newAmazonQty - item.amazonQtyBefore;
+        const amazonQty = Math.max(0, cwFreeQty - safetyStock);
 
         stockItems.push({
           sellerSku: item.sellerSku,
           odooSku: item.odooSku,
-          quantity: newAmazonQty,
-          fulfillmentLatency: 3,
-          marketplaces: item.marketplaces || FBM_TARGET_MARKETPLACES
+          quantity: amazonQty,
+          marketplaces: item.marketplaces
         });
 
-        // Track detailed result for reporting
-        detailedResults.push({
+        // Track what we're sending (for report)
+        sentItems.push({
           asin: item.asin || '',
           amazonSku: item.sellerSku,
           odooSku: item.odooSku,
           productName: item.productName || '',
-          amazonQtyBefore: item.amazonQtyBefore,
-          cwQty: cwFreeQty + (cwFreeQty > 0 ? 0 : 0), // Total CW stock (before reserved)
           cwFreeQty: cwFreeQty,
           safetyStock: safetyStock,
-          newAmazonQty: newAmazonQty,
-          delta: delta,
-          status: 'pending', // Will be updated after API call
-          error: null,
-          marketplaces: item.marketplaces || [] // Include marketplaces for Excel report
+          sentQty: amazonQty,
+          marketplaces: item.marketplaces,
+          status: 'pending'
         });
 
-        // Update summary counts
-        if (delta > 0) result.summary.increases++;
-        else if (delta < 0) result.summary.decreases++;
-        else result.summary.unchanged++;
-
-        if (newAmazonQty === 0) result.summary.zeroStock++;
+        if (amazonQty === 0) result.summary.zeroStock++;
+        else result.summary.withStock++;
       }
 
-      result.stockItems = stockItems;
-      result.detailedResults = detailedResults;
+      result.totalSkus = stockItems.length;
       result.summary.totalSkus = stockItems.length;
+      result.sentItems = sentItems;
 
-      console.log(`[SellerFbmStockExport] Safety stock applied: ${result.summary.increases} increases, ${result.summary.decreases} decreases, ${result.summary.unchanged} unchanged, ${result.summary.zeroStock} zero stock`);
+      console.log(`[SellerFbmStockExport] ${result.summary.withStock} with stock, ${result.summary.zeroStock} zero stock`);
 
       // Step 5: Handle unresolved SKUs
       if (unresolvedItems.length > 0) {
         await this.handleUnresolvedSkus(unresolvedItems);
       }
 
-      // Step 6: Submit to Amazon via Listings Items API (unless dry run)
+      // Step 6: Submit to Amazon
       if (!dryRun && stockItems.length > 0) {
-        console.log('[SellerFbmStockExport] Step 6: Submitting to Amazon via Listings Items API...');
+        console.log('[SellerFbmStockExport] Step 6: Sending to Amazon...');
         const updateResult = await this.submitStockViaListingsApi(stockItems);
-        result.updateId = updateResult.updateId;
         result.itemsUpdated = updateResult.updated;
         result.itemsFailed = updateResult.failed;
-        result.feedItemCount = updateResult.updated; // For backwards compatibility
         result.success = updateResult.success;
-        result.summary.updated = updateResult.updated;
 
-        // Update detailed results with API response status
+        // Update sentItems status based on API response
         if (updateResult.details) {
           const statusBySku = new Map();
           for (const detail of updateResult.details) {
@@ -614,11 +542,11 @@ class SellerFbmStockExport {
               statusBySku.set(detail.sku, { status: detail.status, error: detail.error });
             }
           }
-          for (const dr of result.detailedResults) {
-            const apiStatus = statusBySku.get(dr.amazonSku);
+          for (const item of result.sentItems) {
+            const apiStatus = statusBySku.get(item.amazonSku);
             if (apiStatus) {
-              dr.status = apiStatus.status;
-              dr.error = apiStatus.error;
+              item.status = apiStatus.status;
+              item.error = apiStatus.error;
             }
           }
         }
@@ -626,20 +554,15 @@ class SellerFbmStockExport {
         if (!updateResult.success) {
           result.error = updateResult.error;
         }
-
-        // IMPORTANT: Update cached listings with new quantities
-        // This prevents the next sync from recalculating the same deltas
-        await this.updateCachedQuantities(stockItems);
       } else if (dryRun) {
         result.success = true;
-        result.message = 'Dry run - no updates submitted';
-        // Mark all as skipped for dry run
-        for (const dr of result.detailedResults) {
-          dr.status = 'skipped';
+        result.message = 'Dry run - no updates sent';
+        for (const item of result.sentItems) {
+          item.status = 'dry_run';
         }
       } else {
         result.success = true;
-        result.message = 'No stock items to submit';
+        result.message = 'No items to send';
       }
 
       return result;
@@ -652,129 +575,13 @@ class SellerFbmStockExport {
   }
 
   /**
-   * Handle unresolved SKUs - store in DB and send Teams notification
-   */
-  async handleUnresolvedSkus(unresolvedItems) {
-    const now = new Date();
-
-    // Store in MongoDB
-    const operations = unresolvedItems.map(item => ({
-      updateOne: {
-        filter: { sellerSku: item.sellerSku },
-        update: {
-          $set: {
-            sellerSku: item.sellerSku,
-            asin: item.asin,
-            productName: item.productName,
-            reason: item.reason,
-            lastSeenAt: now,
-            resolved: false
-          },
-          $setOnInsert: { createdAt: now },
-          $inc: { seenCount: 1 }
-        },
-        upsert: true
-      }
-    }));
-
-    await this.db.collection(UNRESOLVED_SKUS_COLLECTION).bulkWrite(operations);
-
-    // Send Teams notification (if webhook configured)
-    await this.sendUnresolvedSkusNotification(unresolvedItems);
-  }
-
-  /**
-   * Send Teams notification for unresolved SKUs
-   */
-  async sendUnresolvedSkusNotification(unresolvedItems) {
-    const webhookUrl = process.env.TEAMS_WEBHOOK_URL;
-    if (!webhookUrl) {
-      console.log('[SellerFbmStockExport] No Teams webhook configured, skipping notification');
-      return;
-    }
-
-    // Only notify if there are new unresolved SKUs (not seen in last 24h)
-    const recentThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const newUnresolved = [];
-
-    for (const item of unresolvedItems) {
-      const existing = await this.db.collection(UNRESOLVED_SKUS_COLLECTION).findOne({
-        sellerSku: item.sellerSku,
-        lastSeenAt: { $gte: recentThreshold }
-      });
-
-      if (!existing || existing.seenCount <= 1) {
-        newUnresolved.push(item);
-      }
-    }
-
-    if (newUnresolved.length === 0) {
-      return; // All unresolved SKUs were already reported recently
-    }
-
-    try {
-      const teams = new TeamsNotificationService({ webhookUrl });
-
-      const skuList = newUnresolved.slice(0, 10).map(item =>
-        `- **${item.sellerSku}** (${item.asin || 'no ASIN'}): ${item.productName?.substring(0, 50) || 'Unknown'}`
-      ).join('\n');
-
-      const moreText = newUnresolved.length > 10
-        ? `\n\n...and ${newUnresolved.length - 10} more`
-        : '';
-
-      const card = {
-        $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
-        type: 'AdaptiveCard',
-        version: '1.4',
-        body: [
-          {
-            type: 'TextBlock',
-            text: `Amazon FBM Stock Sync: ${newUnresolved.length} Unresolved SKUs`,
-            weight: 'bolder',
-            size: 'medium',
-            color: 'warning'
-          },
-          {
-            type: 'TextBlock',
-            text: 'The following Amazon Seller SKUs could not be resolved to Odoo products. Please update the SKU resolver or add custom mappings.',
-            wrap: true
-          },
-          {
-            type: 'TextBlock',
-            text: skuList + moreText,
-            wrap: true,
-            fontType: 'monospace'
-          },
-          {
-            type: 'TextBlock',
-            text: `Time: ${new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' })}`,
-            size: 'small',
-            isSubtle: true
-          }
-        ]
-      };
-
-      await teams.sendMessage(card);
-      console.log(`[SellerFbmStockExport] Teams notification sent for ${newUnresolved.length} unresolved SKUs`);
-
-    } catch (error) {
-      console.error('[SellerFbmStockExport] Failed to send Teams notification:', error.message);
-    }
-  }
-
-  /**
-   * Submit stock updates via Listings Items API (patchListingsItem)
-   * This replaces the old Feeds API approach which is restricted
-   *
-   * @param {Array} stockItems - Array of { sellerSku, quantity, marketplaces }
-   * @returns {Object} { success, updated, failed, errors, updateId }
+   * Submit stock updates via Listings Items API
    */
   async submitStockViaListingsApi(stockItems) {
     await this.init();
 
     if (stockItems.length === 0) {
-      return { success: true, message: 'No items to update', updated: 0, failed: 0 };
+      return { success: true, updated: 0, failed: 0 };
     }
 
     const sellerId = process.env.AMAZON_SELLER_ID || 'A1GJ5ZORIRYSYA';
@@ -791,24 +598,17 @@ class SellerFbmStockExport {
       details: []
     };
 
-    console.log(`[SellerFbmStockExport] Starting Listings Items API updates for ${stockItems.length} SKUs...`);
+    console.log(`[SellerFbmStockExport] Sending stock for ${stockItems.length} SKUs...`);
 
-    // Process each SKU
     for (let i = 0; i < stockItems.length; i++) {
       const item = stockItems[i];
       const marketplaces = item.marketplaces || FBM_TARGET_MARKETPLACES;
 
-      // Update each marketplace for this SKU
       for (const marketplaceCode of marketplaces) {
-        // Convert marketplace code (DE, FR, etc.) to marketplace ID
         const marketplaceId = MARKETPLACE_IDS[marketplaceCode];
-        if (!marketplaceId) {
-          console.warn(`[SellerFbmStockExport] Unknown marketplace code: ${marketplaceCode}, skipping`);
-          continue;
-        }
+        if (!marketplaceId) continue;
 
         try {
-          // Use Listings Items API to update inventory
           const patchBody = {
             productType: 'PRODUCT',
             patches: [{
@@ -823,13 +623,8 @@ class SellerFbmStockExport {
 
           await spClient.callAPI({
             operation: 'listingsItems.patchListingsItem',
-            path: {
-              sellerId,
-              sku: item.sellerSku
-            },
-            query: {
-              marketplaceIds: [marketplaceId]
-            },
+            path: { sellerId, sku: item.sellerSku },
+            query: { marketplaceIds: [marketplaceId] },
             body: patchBody
           });
 
@@ -855,29 +650,25 @@ class SellerFbmStockExport {
             status: 'failed',
             error: error.message
           });
-          console.error(`[SellerFbmStockExport] Failed to update ${item.sellerSku} on ${marketplaceCode}: ${error.message}`);
+          console.error(`[SellerFbmStockExport] Failed ${item.sellerSku} on ${marketplaceCode}: ${error.message}`);
         }
 
-        // Rate limiting - wait between API calls
         await sleep(API_DELAY_MS);
       }
 
-      // Progress logging every 50 SKUs
       if ((i + 1) % 50 === 0) {
-        console.log(`[SellerFbmStockExport] Progress: ${i + 1}/${stockItems.length} SKUs processed (${results.updated} updated, ${results.failed} failed)`);
+        console.log(`[SellerFbmStockExport] Progress: ${i + 1}/${stockItems.length} SKUs`);
       }
     }
 
-    // Store update record in MongoDB
+    // Store record
     await this.db.collection(STOCK_UPDATES_COLLECTION).insertOne({
       updateId,
       method: 'listings_items_api',
       itemCount: stockItems.length,
       updated: results.updated,
       failed: results.failed,
-      errors: results.errors.slice(0, 100), // Limit stored errors
       submittedAt: now,
-      completedAt: new Date(),
       summary: {
         totalSkus: stockItems.length,
         totalQuantity: stockItems.reduce((sum, i) => sum + i.quantity, 0),
@@ -885,108 +676,99 @@ class SellerFbmStockExport {
       }
     });
 
-    // Also store in feeds collection for backwards compatibility with stats
-    await this.db.collection(FEEDS_COLLECTION).insertOne({
-      feedId: updateId,
-      feedType: 'LISTINGS_ITEMS_API',
-      itemCount: stockItems.length,
-      status: 'DONE',
-      submittedAt: now,
-      processed: true,
-      processedAt: new Date(),
-      summary: {
-        resolved: stockItems.length,
-        updated: results.updated,
-        failed: results.failed,
-        totalQuantity: stockItems.reduce((sum, i) => sum + i.quantity, 0),
-        zeroStock: stockItems.filter(i => i.quantity === 0).length
-      }
-    });
-
-    console.log(`[SellerFbmStockExport] Completed: ${results.updated} updated, ${results.failed} failed`);
-
-    results.success = results.failed < results.updated; // Consider success if more succeeded than failed
+    console.log(`[SellerFbmStockExport] Completed: ${results.updated} sent, ${results.failed} failed`);
+    results.success = results.failed < results.updated;
 
     return results;
   }
 
   /**
-   * @deprecated Use submitStockViaListingsApi instead
-   * Kept for backwards compatibility - redirects to new method
+   * Handle unresolved SKUs
    */
-  async submitFeed(stockItems) {
-    console.warn('[SellerFbmStockExport] submitFeed is deprecated, using submitStockViaListingsApi');
-    return this.submitStockViaListingsApi(stockItems);
+  async handleUnresolvedSkus(unresolvedItems) {
+    const now = new Date();
+
+    const operations = unresolvedItems.map(item => ({
+      updateOne: {
+        filter: { sellerSku: item.sellerSku },
+        update: {
+          $set: {
+            sellerSku: item.sellerSku,
+            asin: item.asin,
+            productName: item.productName,
+            reason: item.reason,
+            lastSeenAt: now,
+            resolved: false
+          },
+          $setOnInsert: { createdAt: now },
+          $inc: { seenCount: 1 }
+        },
+        upsert: true
+      }
+    }));
+
+    await this.db.collection(UNRESOLVED_SKUS_COLLECTION).bulkWrite(operations);
+    await this.sendUnresolvedSkusNotification(unresolvedItems);
   }
 
   /**
-   * Check status of submitted feeds
+   * Send Teams notification for unresolved SKUs
    */
-  async checkFeedStatus() {
-    await this.init();
+  async sendUnresolvedSkusNotification(unresolvedItems) {
+    const webhookUrl = process.env.TEAMS_WEBHOOK_URL;
+    if (!webhookUrl) return;
 
-    const result = {
-      checked: 0,
-      completed: 0,
-      errors: []
-    };
+    // Only notify for new unresolved SKUs
+    const recentThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const newUnresolved = [];
 
-    try {
-      const pendingFeeds = await this.db.collection(FEEDS_COLLECTION).find({
-        feedType: INVENTORY_FEED_TYPE,
-        processed: false,
-        status: { $nin: ['CANCELLED', 'FATAL'] }
-      }).toArray();
+    for (const item of unresolvedItems) {
+      const existing = await this.db.collection(UNRESOLVED_SKUS_COLLECTION).findOne({
+        sellerSku: item.sellerSku,
+        lastSeenAt: { $gte: recentThreshold }
+      });
 
-      result.checked = pendingFeeds.length;
-      const spClient = await this.client.getClient();
-
-      for (const feed of pendingFeeds) {
-        try {
-          const statusResponse = await spClient.callAPI({
-            operation: 'feeds.getFeed',
-            path: { feedId: feed.feedId }
-          });
-
-          const status = statusResponse.processingStatus;
-
-          await this.db.collection(FEEDS_COLLECTION).updateOne(
-            { feedId: feed.feedId },
-            {
-              $set: {
-                status,
-                updatedAt: new Date(),
-                resultFeedDocumentId: statusResponse.resultFeedDocumentId
-              }
-            }
-          );
-
-          if (status === 'DONE') {
-            await this.db.collection(FEEDS_COLLECTION).updateOne(
-              { feedId: feed.feedId },
-              { $set: { processed: true, processedAt: new Date() } }
-            );
-            result.completed++;
-            console.log(`[SellerFbmStockExport] Feed ${feed.feedId} completed`);
-
-          } else if (status === 'FATAL' || status === 'CANCELLED') {
-            await this.db.collection(FEEDS_COLLECTION).updateOne(
-              { feedId: feed.feedId },
-              { $set: { processed: true, processedAt: new Date() } }
-            );
-            result.errors.push({ feedId: feed.feedId, status });
-          }
-
-        } catch (error) {
-          result.errors.push({ feedId: feed.feedId, error: error.message });
-        }
+      if (!existing || existing.seenCount <= 1) {
+        newUnresolved.push(item);
       }
-
-    } catch (error) {
-      result.errors.push({ error: error.message });
     }
 
-    return result;
+    if (newUnresolved.length === 0) return;
+
+    try {
+      const teams = new TeamsNotificationService({ webhookUrl });
+
+      const skuList = newUnresolved.slice(0, 10).map(item =>
+        `- **${item.sellerSku}** (${item.asin || 'no ASIN'})`
+      ).join('\n');
+
+      const card = {
+        $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+        type: 'AdaptiveCard',
+        version: '1.4',
+        body: [
+          {
+            type: 'TextBlock',
+            text: `FBM Stock Sync: ${newUnresolved.length} Unresolved SKUs`,
+            weight: 'bolder',
+            size: 'medium',
+            color: 'warning'
+          },
+          {
+            type: 'TextBlock',
+            text: skuList + (newUnresolved.length > 10 ? `\n\n...and ${newUnresolved.length - 10} more` : ''),
+            wrap: true,
+            fontType: 'monospace'
+          }
+        ]
+      };
+
+      await teams.sendMessage(card);
+      console.log(`[SellerFbmStockExport] Teams notification sent for ${newUnresolved.length} unresolved SKUs`);
+
+    } catch (error) {
+      console.error('[SellerFbmStockExport] Failed to send Teams notification:', error.message);
+    }
   }
 
   /**
@@ -996,46 +778,29 @@ class SellerFbmStockExport {
     await this.init();
 
     const [
-      pendingFeeds,
-      completedFeeds,
-      lastFeed,
-      unresolvedCount,
-      fbmListingsCount
+      fbmListingsCount,
+      lastUpdate,
+      unresolvedCount
     ] = await Promise.all([
-      this.db.collection(FEEDS_COLLECTION).countDocuments({
-        feedType: INVENTORY_FEED_TYPE,
-        processed: false
-      }),
-      this.db.collection(FEEDS_COLLECTION).countDocuments({
-        feedType: INVENTORY_FEED_TYPE,
-        processed: true,
-        status: 'DONE'
-      }),
-      this.db.collection(FEEDS_COLLECTION).findOne(
-        { feedType: INVENTORY_FEED_TYPE, processed: true },
-        { sort: { processedAt: -1 } }
-      ),
-      this.db.collection(UNRESOLVED_SKUS_COLLECTION).countDocuments({ resolved: false }),
-      this.db.collection(FBM_LISTINGS_COLLECTION).countDocuments({ fulfillmentChannel: 'DEFAULT' })
+      this.db.collection(FBM_LISTINGS_COLLECTION).countDocuments({ fulfillmentChannel: 'DEFAULT' }),
+      this.db.collection(STOCK_UPDATES_COLLECTION).findOne({}, { sort: { submittedAt: -1 } }),
+      this.db.collection(UNRESOLVED_SKUS_COLLECTION).countDocuments({ resolved: false })
     ]);
 
     return {
-      pendingFeeds,
-      completedFeeds,
-      lastExportAt: lastFeed?.submittedAt,
-      lastItemCount: lastFeed?.itemCount,
-      lastSummary: lastFeed?.summary,
-      unresolvedSkus: unresolvedCount,
-      fbmListingsInCache: fbmListingsCount
+      fbmListingsInCache: fbmListingsCount,
+      lastExportAt: lastUpdate?.submittedAt,
+      lastItemCount: lastUpdate?.itemCount,
+      lastSummary: lastUpdate?.summary,
+      unresolvedSkus: unresolvedCount
     };
   }
 
   /**
-   * Get list of unresolved SKUs
+   * Get unresolved SKUs
    */
   async getUnresolvedSkus() {
     await this.init();
-
     return this.db.collection(UNRESOLVED_SKUS_COLLECTION)
       .find({ resolved: false })
       .sort({ seenCount: -1, lastSeenAt: -1 })
@@ -1043,79 +808,20 @@ class SellerFbmStockExport {
   }
 
   /**
-   * Mark an unresolved SKU as resolved (after adding mapping)
+   * Mark SKU as resolved
    */
   async markSkuResolved(sellerSku) {
     await this.init();
-
     await this.db.collection(UNRESOLVED_SKUS_COLLECTION).updateOne(
       { sellerSku },
       { $set: { resolved: true, resolvedAt: new Date() } }
     );
   }
-
-  /**
-   * Update cached quantities in the FBM listings collection after successful stock push
-   * This is CRITICAL to prevent the same delta from being recalculated on the next sync
-   *
-   * @param {Array} stockItems - Array of { sellerSku, quantity, marketplaces }
-   */
-  async updateCachedQuantities(stockItems) {
-    if (!stockItems || stockItems.length === 0) return;
-
-    const now = new Date();
-    let updated = 0;
-
-    try {
-      const bulkOps = [];
-
-      for (const item of stockItems) {
-        // Update all marketplace entries for this SKU
-        bulkOps.push({
-          updateMany: {
-            filter: { sellerSku: item.sellerSku },
-            update: {
-              $set: {
-                quantity: item.quantity,
-                lastStockSyncAt: now
-              }
-            }
-          }
-        });
-      }
-
-      if (bulkOps.length > 0) {
-        const result = await this.db.collection(FBM_LISTINGS_COLLECTION).bulkWrite(bulkOps);
-        updated = result.modifiedCount || 0;
-      }
-
-      console.log(`[SellerFbmStockExport] Updated cached quantities for ${updated} listings`);
-
-    } catch (error) {
-      console.error('[SellerFbmStockExport] Error updating cached quantities:', error.message);
-      // Don't throw - this is not critical enough to fail the whole sync
-    }
-  }
-
-  /**
-   * Escape XML special characters
-   */
-  escapeXml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
-  }
 }
 
-// Singleton instance
+// Singleton
 let fbmStockExportInstance = null;
 
-/**
- * Get the singleton SellerFbmStockExport instance
- */
 async function getSellerFbmStockExport() {
   if (!fbmStockExportInstance) {
     fbmStockExportInstance = new SellerFbmStockExport();
@@ -1127,6 +833,6 @@ async function getSellerFbmStockExport() {
 module.exports = {
   SellerFbmStockExport,
   getSellerFbmStockExport,
-  INVENTORY_FEED_TYPE,
-  LISTINGS_REPORT_TYPE
+  LISTINGS_REPORT_TYPE,
+  FBM_TARGET_MARKETPLACES
 };
