@@ -8,8 +8,8 @@
  * 4. Upload PDF to Bol.com
  *
  * Bol.com API endpoints used:
- * - GET /retailer/invoices/requests - Get list of invoice requests
- * - POST /retailer/invoices/{shipment-id} - Upload invoice PDF
+ * - GET /retailer/shipments/invoices/requests - Get list of invoice requests
+ * - POST /retailer/shipments/{shipment-id}/invoice - Upload invoice PDF
  *
  * Requirements:
  * - Invoice must be uploaded within 24 hours of request
@@ -145,10 +145,11 @@ class BolInvoiceRequestService {
    * @param {number} page - Page number (1-based)
    * @returns {Object} Invoice requests response
    */
-  async getInvoiceRequests(status = 'OPEN', page = 1) {
-    console.log(`[BolInvoiceRequest] Fetching invoice requests (status=${status}, page=${page})...`);
+  async getInvoiceRequests(state = 'OPEN', page = 1) {
+    console.log(`[BolInvoiceRequest] Fetching invoice requests (state=${state}, page=${page})...`);
 
-    const endpoint = `/invoices/requests?status=${status}&page=${page}`;
+    // Correct endpoint: /shipments/invoices/requests (not /invoices/requests)
+    const endpoint = `/shipments/invoices/requests?state=${state}&page=${page}`;
     const response = await this.bolRequest(endpoint);
 
     return response;
@@ -207,7 +208,7 @@ class BolInvoiceRequestService {
     const footerBuffer = Buffer.from(`\r\n--${boundary}--\r\n`);
     const fullBody = Buffer.concat([headerBuffer, pdfBuffer, footerBuffer]);
 
-    const response = await fetch(`https://api.bol.com/retailer/invoices/${shipmentId}`, {
+    const response = await fetch(`https://api.bol.com/retailer/shipments/${shipmentId}/invoice`, {
       method: 'POST',
       headers: {
         'Accept': 'application/vnd.retailer.v10+json',
