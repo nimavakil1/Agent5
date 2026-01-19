@@ -332,6 +332,11 @@ app.get('/index.html', requireSession, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Dashboard test page (protected)
+app.get('/dashboard-test', requireSession, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard-test.html'));
+});
+
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
