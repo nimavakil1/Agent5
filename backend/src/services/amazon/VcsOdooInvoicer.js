@@ -2319,6 +2319,28 @@ class VcsOdooInvoicer {
       }
     }
 
+    // Update promotion discount line if present - ensure tax matches the invoice's fiscal position
+    // This fixes the bug where promotion discount lines kept BE*VAT tax instead of OSS tax
+    if (correctTaxId) {
+      const promotionDiscountLine = invoiceLines.find(line => {
+        const productName = (line.name || '').toLowerCase();
+        return productName.includes('promotion discount') || productName.includes('promo discount');
+      });
+
+      if (promotionDiscountLine) {
+        // Check if current tax is different from correct tax
+        const currentTaxIds = promotionDiscountLine.tax_ids || [];
+        const needsUpdate = !currentTaxIds.includes(correctTaxId);
+
+        if (needsUpdate) {
+          await this.odoo.execute('account.move.line', 'write', [[promotionDiscountLine.id], {
+            tax_ids: [[6, 0, [correctTaxId]]]
+          }]);
+          console.log(`[VcsOdooInvoicer] Updated promotion discount line tax: ${currentTaxIds} -> ${correctTaxId}`);
+        }
+      }
+    }
+
     // Update the receivable line with the correct marketplace-specific account
     // The receivable line is auto-created by Odoo and uses the partner's default account
     // We need to override it with the marketplace-specific account (400102XX)

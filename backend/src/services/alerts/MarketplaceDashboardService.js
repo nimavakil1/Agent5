@@ -145,24 +145,26 @@ class MarketplaceDashboardService {
    */
   async getAmazonSellerDataLive(today, tomorrow) {
     const stats = { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0, upcoming: 0, noDeadline: 0, orders: [] };
+    const MAX_ORDERS = 500;
 
     try {
       // Amazon SP-API requires CreatedAfter or LastUpdatedAfter
-      // Use 30 days back - should cover all pending orders
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Use 60 days back - should cover all pending orders
+      const sixtyDaysAgo = new Date();
+      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
       // Call Amazon SP-API directly for Unshipped/PartiallyShipped MFN orders
       const response = await this.sellerClient.getAllOrders({
         orderStatuses: ['Unshipped', 'PartiallyShipped'],
         fulfillmentChannels: ['MFN'], // Only FBM (Merchant Fulfilled)
-        createdAfter: thirtyDaysAgo.toISOString()
+        createdAfter: sixtyDaysAgo.toISOString()
       });
 
-      const pendingOrders = response || [];
+      // Limit to most recent 500 orders (they come sorted by date desc)
+      const pendingOrders = (response || []).slice(0, MAX_ORDERS);
       stats.pending = pendingOrders.length;
 
-      console.log(`[MarketplaceDashboard] Amazon SP-API returned ${pendingOrders.length} pending MFN orders`);
+      console.log(`[MarketplaceDashboard] Amazon SP-API returned ${pendingOrders.length} pending MFN orders (max ${MAX_ORDERS})`);
 
       // Categorize by deadline
       for (const order of pendingOrders) {
@@ -210,6 +212,8 @@ class MarketplaceDashboardService {
       // Sort orders by deadline (earliest first)
       stats.orders.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
 
+      console.log(`[MarketplaceDashboard] Amazon breakdown: late=${stats.late}, dueToday=${stats.dueToday}, dueTomorrow=${stats.dueTomorrow}, upcoming=${stats.upcoming}, noDeadline=${stats.noDeadline}`);
+
     } catch (error) {
       console.error('[MarketplaceDashboard] Amazon SP-API error:', error.message);
       stats.error = error.message;
@@ -220,20 +224,22 @@ class MarketplaceDashboardService {
 
   /**
    * Get Bol.com pending orders directly from Bol.com API
+   * Fetches the most recent 500 open FBR orders and categorizes by deadline
    */
   async getBolDataLive(today, tomorrow) {
     const stats = { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0, upcoming: 0, noDeadline: 0, orders: [] };
+    const MAX_ORDERS = 500;
 
     try {
-      // Call Bol.com API directly - fetch orders
-      // Only get FBR (Fulfilled by Retailer) orders that need shipping
-      let allOrders = [];
+      // Fetch the most recent 500 OPEN FBR orders from Bol.com
+      // Using status=OPEN ensures we only get orders that need fulfillment
+      let openOrders = [];
       let page = 1;
       let hasMore = true;
 
-      // Fetch up to 3 pages (enough for dashboard)
-      while (hasMore && page <= 3) {
-        const data = await bolRequest(`/orders?page=${page}&fulfilment-method=FBR`);
+      while (hasMore && openOrders.length < MAX_ORDERS) {
+        // Bol.com orders endpoint with status=OPEN and fulfilment-method=FBR
+        const data = await bolRequest(`/orders?page=${page}&status=OPEN&fulfilment-method=FBR`);
         const orders = data.orders || [];
 
         if (orders.length === 0) {
@@ -241,45 +247,34 @@ class MarketplaceDashboardService {
           break;
         }
 
-        allOrders = allOrders.concat(orders);
+        openOrders = openOrders.concat(orders);
         page++;
 
-        // Small delay between pages
+        // Rate limit delay between pages
         await new Promise(r => setTimeout(r, 300));
       }
 
-      console.log(`[MarketplaceDashboard] Bol.com API returned ${allOrders.length} FBR orders from list`);
+      // Trim to exactly MAX_ORDERS if we got more
+      openOrders = openOrders.slice(0, MAX_ORDERS);
+      stats.pending = openOrders.length;
 
-      // Filter orders with pending items and fetch details to get deadline
-      const pendingOrders = allOrders.filter(order => {
-        const hasPendingItems = order.orderItems?.some(item => {
-          const shipped = item.quantityShipped || 0;
-          const ordered = item.quantity || 1;
-          return shipped < ordered;
-        });
-        return hasPendingItems;
-      });
+      console.log(`[MarketplaceDashboard] Bol.com API returned ${openOrders.length} open FBR orders from ${page - 1} pages`);
 
-      console.log(`[MarketplaceDashboard] ${pendingOrders.length} Bol.com orders have pending items`);
-      stats.pending = pendingOrders.length;
-
-      // Fetch details for pending orders (to get latestDeliveryDate)
-      // Limit to 20 to avoid rate limits
-      const ordersToFetch = pendingOrders.slice(0, 20);
-
-      for (const order of ordersToFetch) {
+      // Fetch details for ALL open orders to get latestDeliveryDate
+      // This ensures we don't miss any orders
+      for (const order of openOrders) {
         try {
           // Get order details
           const details = await bolRequest(`/orders/${order.orderId}`);
           await new Promise(r => setTimeout(r, 250)); // Rate limit delay
 
-          // Get deadline from FBR items only (we're querying FBR orders)
+          // Get deadline from FBR items only
           // For mixed orders (FBB+FBR), we only care about FBR item deadlines
           let deadline = null;
           let earliestFbrDeadline = null;
 
           for (const item of (details.orderItems || [])) {
-            // Check if this is an FBR item (fulfilmentMethod or fulfilment.method)
+            // Check if this is an FBR item
             const itemFulfilment = item.fulfilmentMethod || item.fulfilment?.method || 'FBR';
             const isFbrItem = itemFulfilment === 'FBR';
 
@@ -356,6 +351,8 @@ class MarketplaceDashboardService {
 
       // Sort orders by deadline (earliest first)
       stats.orders.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+
+      console.log(`[MarketplaceDashboard] Bol.com breakdown: late=${stats.late}, dueToday=${stats.dueToday}, dueTomorrow=${stats.dueTomorrow}, upcoming=${stats.upcoming}, noDeadline=${stats.noDeadline}`);
 
     } catch (error) {
       console.error('[MarketplaceDashboard] Bol.com API error:', error.message);
