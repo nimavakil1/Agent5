@@ -195,8 +195,8 @@ class MarketplaceDashboardService {
           stats.upcoming++;
         }
 
-        // Add to orders list if late or due today
-        if (status === 'late' || status === 'dueToday') {
+        // Add to orders list if late, due today, or due tomorrow (for downloads)
+        if (status === 'late' || status === 'dueToday' || status === 'dueTomorrow') {
           stats.orders.push({
             orderId: order.AmazonOrderId,
             status: order.OrderStatus,
@@ -207,8 +207,8 @@ class MarketplaceDashboardService {
         }
       }
 
-      // Sort orders by days late (most late first)
-      stats.orders.sort((a, b) => b.daysLate - a.daysLate);
+      // Sort orders by deadline (earliest first)
+      stats.orders.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
 
     } catch (error) {
       console.error('[MarketplaceDashboard] Amazon SP-API error:', error.message);
@@ -273,9 +273,16 @@ class MarketplaceDashboardService {
           const details = await bolRequest(`/orders/${order.orderId}`);
           await new Promise(r => setTimeout(r, 250)); // Rate limit delay
 
-          // Get deadline from order items - check multiple possible field names
+          // Get deadline from FBR items only (we're querying FBR orders)
+          // For mixed orders (FBB+FBR), we only care about FBR item deadlines
           let deadline = null;
+          let earliestFbrDeadline = null;
+
           for (const item of (details.orderItems || [])) {
+            // Check if this is an FBR item (fulfilmentMethod or fulfilment.method)
+            const itemFulfilment = item.fulfilmentMethod || item.fulfilment?.method || 'FBR';
+            const isFbrItem = itemFulfilment === 'FBR';
+
             // Try different field names Bol.com might use
             const dateFields = [
               item.latestDeliveryDate,
@@ -284,14 +291,29 @@ class MarketplaceDashboardService {
               item.expectedDeliveryDate
             ];
 
+            let itemDeadline = null;
             for (const dateField of dateFields) {
               if (dateField) {
-                deadline = new Date(dateField);
+                itemDeadline = new Date(dateField);
                 break;
               }
             }
-            if (deadline) break;
+
+            // For FBR items, track the earliest deadline
+            if (isFbrItem && itemDeadline) {
+              if (!earliestFbrDeadline || itemDeadline < earliestFbrDeadline) {
+                earliestFbrDeadline = itemDeadline;
+              }
+            }
+
+            // Also track any deadline as fallback
+            if (itemDeadline && !deadline) {
+              deadline = itemDeadline;
+            }
           }
+
+          // Prefer FBR deadline, fallback to any deadline
+          deadline = earliestFbrDeadline || deadline;
 
           if (!deadline) {
             stats.noDeadline++;
@@ -318,8 +340,8 @@ class MarketplaceDashboardService {
             stats.upcoming++;
           }
 
-          // Add to orders list if late or due today
-          if (status === 'late' || status === 'dueToday') {
+          // Add to orders list if late, due today, or due tomorrow (for downloads)
+          if (status === 'late' || status === 'dueToday' || status === 'dueTomorrow') {
             stats.orders.push({
               orderId: order.orderId,
               status: 'OPEN',
@@ -332,8 +354,8 @@ class MarketplaceDashboardService {
         }
       }
 
-      // Sort orders by days late
-      stats.orders.sort((a, b) => b.daysLate - a.daysLate);
+      // Sort orders by deadline (earliest first)
+      stats.orders.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
 
     } catch (error) {
       console.error('[MarketplaceDashboard] Bol.com API error:', error.message);

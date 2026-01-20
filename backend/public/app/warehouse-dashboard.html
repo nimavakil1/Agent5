@@ -211,6 +211,32 @@
     .total-item {
       text-align: center;
       min-width: 150px;
+      position: relative;
+    }
+
+    .download-btn {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 0.7rem;
+      color: #888;
+      transition: all 0.2s;
+    }
+
+    .download-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+
+    .download-btn svg {
+      width: 12px;
+      height: 12px;
+      vertical-align: middle;
     }
 
     .total-item .value {
@@ -366,15 +392,84 @@
 
     const CHANNEL_ORDER = ['Amazon Seller', 'Bol.com'];
 
+    // Store dashboard data globally for download function
+    let currentDashboardData = null;
+
     async function fetchData() {
       try {
         const response = await fetch('/api/alerts/marketplace-display');
         if (!response.ok) throw new Error('Failed to fetch');
-        return await response.json();
+        const data = await response.json();
+        currentDashboardData = data; // Store for downloads
+        return data;
       } catch (error) {
         console.error('Error fetching data:', error);
         return null;
       }
+    }
+
+    function downloadOrders(type) {
+      if (!currentDashboardData || !currentDashboardData.channels) {
+        alert('No data available');
+        return;
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Collect orders from all channels
+      const orders = [];
+      for (const [channel, stats] of Object.entries(currentDashboardData.channels)) {
+        if (!stats.orders) continue;
+
+        for (const order of stats.orders) {
+          const deadline = new Date(order.deadline);
+          const dlDate = new Date(deadline);
+          dlDate.setHours(0, 0, 0, 0);
+
+          let orderType = 'upcoming';
+          if (dlDate < today) {
+            orderType = 'late';
+          } else if (dlDate.getTime() === today.getTime()) {
+            orderType = 'dueToday';
+          } else if (dlDate.getTime() === tomorrow.getTime()) {
+            orderType = 'dueTomorrow';
+          }
+
+          if (orderType === type) {
+            orders.push({
+              channel,
+              orderId: order.orderId,
+              deadline: deadline.toISOString().split('T')[0],
+              daysLate: order.daysLate || 0
+            });
+          }
+        }
+      }
+
+      if (orders.length === 0) {
+        alert('No orders to download');
+        return;
+      }
+
+      // Create CSV
+      const headers = ['Channel', 'Order ID', 'Deadline', 'Days Late'];
+      const rows = orders.map(o => [o.channel, o.orderId, o.deadline, o.daysLate]);
+      const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+
+      // Download
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const typeLabel = type === 'late' ? 'late' : type === 'dueToday' ? 'due-today' : 'due-tomorrow';
+      a.download = `orders-${typeLabel}-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     function renderDashboard(data) {
@@ -456,16 +551,23 @@
       // Render totals
       const totals = data.totals || { pending: 0, late: 0, dueToday: 0, dueTomorrow: 0 };
       totalsBar.style.display = 'block';
+
+      // Download icon SVG
+      const downloadIcon = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>`;
+
       totalsGrid.innerHTML = `
         <div class="total-item late">
+          ${totals.late > 0 ? `<button class="download-btn" onclick="downloadOrders('late')" title="Download late orders">${downloadIcon}</button>` : ''}
           <div class="value">${totals.late}</div>
           <div class="label">Late</div>
         </div>
         <div class="total-item today">
+          ${totals.dueToday > 0 ? `<button class="download-btn" onclick="downloadOrders('dueToday')" title="Download due today orders">${downloadIcon}</button>` : ''}
           <div class="value">${totals.dueToday}</div>
           <div class="label">Due Today</div>
         </div>
         <div class="total-item tomorrow">
+          ${totals.dueTomorrow > 0 ? `<button class="download-btn" onclick="downloadOrders('dueTomorrow')" title="Download tomorrow orders">${downloadIcon}</button>` : ''}
           <div class="value">${totals.dueTomorrow}</div>
           <div class="label">Tomorrow</div>
         </div>
