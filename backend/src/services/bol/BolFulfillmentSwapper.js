@@ -14,9 +14,14 @@
  * - We use 100ms delay between calls for safety
  */
 
+const ExcelJS = require('exceljs');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const { TeamsNotificationService } = require('../../core/agents/services/TeamsNotificationService');
 const Product = require('../../models/Product');
+const oneDriveService = require('../onedriveService');
+
+// Report folder
+const REPORTS_FOLDER = 'Bol_Fulfillment_Swaps';
 
 // Central Warehouse ID in Odoo
 const CENTRAL_WAREHOUSE_ID = 1;
@@ -704,6 +709,62 @@ class BolFulfillmentSwapper {
   }
 
   /**
+   * Generate Excel report for a swap
+   */
+  async generateSwapExcel(swap) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Agent5 Bol Fulfillment Swapper';
+    workbook.created = new Date();
+
+    const now = new Date();
+    const dateStr = now.toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' });
+    const directionText = swap.to === 'FBB' ? 'FBR → FBB' : 'FBB → FBR';
+
+    const worksheet = workbook.addWorksheet('Fulfillment Swap', {
+      views: [{ state: 'frozen', ySplit: 1 }]
+    });
+
+    // Title
+    worksheet.addRow(['Bol.com Fulfillment Swap Report', '', dateStr]);
+    worksheet.mergeCells('A1:B1');
+    worksheet.getCell('A1').font = { bold: true, size: 14 };
+    worksheet.getCell('C1').font = { italic: true, size: 10 };
+
+    // Swap details
+    worksheet.addRow([]);
+    worksheet.addRow(['Field', 'Value']);
+    const headerRow = worksheet.getRow(3);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+
+    worksheet.addRow(['EAN', swap.ean || '-']);
+    worksheet.addRow(['SKU', swap.sku || '-']);
+    worksheet.addRow(['Product Name', swap.productName || swap.title || '-']);
+    worksheet.addRow(['Direction', directionText]);
+    worksheet.addRow(['Reason', swap.reason || '-']);
+
+    if (swap.to === 'FBR') {
+      worksheet.addRow(['CW Free Qty', swap.cwFreeQty ?? '-']);
+      worksheet.addRow(['Safety Stock', swap.safetyStock ?? DEFAULT_SAFETY_STOCK]);
+      worksheet.addRow(['Stock Sent to Bol', swap.stockSentToBol ?? '-']);
+      worksheet.addRow(['Stock Update Status', swap.stockUpdateSuccess ? 'Success' : 'Failed']);
+      if (swap.stockUpdateError) {
+        worksheet.addRow(['Stock Update Error', swap.stockUpdateError]);
+      }
+    }
+
+    if (swap.to === 'FBB') {
+      worksheet.addRow(['FBB Stock', swap.fbbStock ?? '-']);
+    }
+
+    worksheet.addRow(['Timestamp', dateStr]);
+
+    worksheet.columns = [{ width: 20 }, { width: 50 }, { width: 20 }];
+
+    return workbook.xlsx.writeBuffer();
+  }
+
+  /**
    * Send Teams notification for a swap
    * @param {Object} swap - Swap details
    */
@@ -712,6 +773,21 @@ class BolFulfillmentSwapper {
     if (!webhookUrl) {
       console.log('[BolFulfillmentSwapper] No Teams webhook configured, skipping notification');
       return;
+    }
+
+    // Generate and upload Excel report
+    let reportUrl = null;
+    try {
+      const excelBuffer = await this.generateSwapExcel(swap);
+      const now = new Date();
+      const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      const fileName = `Bol_Swap_${swap.ean}_${timestamp}.xlsx`;
+
+      const uploadResult = await oneDriveService.uploadReport(excelBuffer, fileName, REPORTS_FOLDER);
+      reportUrl = uploadResult.url;
+      console.log(`[BolFulfillmentSwapper] Excel report uploaded: ${reportUrl}`);
+    } catch (uploadError) {
+      console.error('[BolFulfillmentSwapper] Failed to upload Excel report:', uploadError.message);
     }
 
     try {
@@ -761,6 +837,20 @@ class BolFulfillmentSwapper {
           color: 'warning',
           wrap: true
         });
+      }
+
+      // Add action buttons
+      const actions = [];
+      if (reportUrl) {
+        actions.push({
+          type: 'Action.OpenUrl',
+          title: '📊 Download Excel Report',
+          url: reportUrl
+        });
+      }
+
+      if (actions.length > 0) {
+        cardBody.push({ type: 'ActionSet', actions });
       }
 
       const card = {

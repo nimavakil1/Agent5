@@ -17,9 +17,14 @@
  * @module TrackingAlertService
  */
 
+const ExcelJS = require('exceljs');
 const { getDb } = require('../../db');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const { TeamsNotificationService } = require('../../core/agents/services/TeamsNotificationService');
+const oneDriveService = require('../onedriveService');
+
+// Report folder for tracking alerts
+const REPORTS_FOLDER = 'Tracking_Alerts';
 
 // Thresholds that trigger alerts
 const ALERT_THRESHOLDS = {
@@ -492,6 +497,141 @@ class TrackingAlertService {
   }
 
   /**
+   * Generate Excel report with tracking health details
+   */
+  async generateExcel(health) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Agent5 Tracking Alert';
+    workbook.created = new Date();
+
+    const now = new Date();
+    const dateStr = now.toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' });
+
+    // Stuck Orders sheet
+    const stuckSheet = workbook.addWorksheet('Stuck Orders', {
+      views: [{ state: 'frozen', ySplit: 2 }]
+    });
+
+    stuckSheet.addRow(['Tracking Alert Report - Stuck Orders', '', '', '', '', '', dateStr]);
+    stuckSheet.mergeCells('A1:F1');
+    stuckSheet.getCell('A1').font = { bold: true, size: 14 };
+    stuckSheet.getCell('G1').font = { italic: true, size: 10 };
+
+    stuckSheet.addRow(['Channel', 'Order ID', 'Odoo Order', 'Picking', 'Hours Stuck', 'Tracking Ref', 'Reason']);
+    const headerRow = stuckSheet.getRow(2);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+
+    stuckSheet.columns = [
+      { width: 15 }, { width: 20 }, { width: 18 }, { width: 15 }, { width: 12 }, { width: 25 }, { width: 40 }
+    ];
+
+    // Combine all stuck orders
+    const allStuck = [
+      ...health.stuckOrders.bol.map(o => ({ ...o, channelName: 'Bol.com' })),
+      ...health.stuckOrders.amazonFbm.map(o => ({ ...o, channelName: 'Amazon FBM' })),
+      ...health.stuckOrders.amazonVendor.map(o => ({ ...o, channelName: 'Amazon Vendor' }))
+    ];
+
+    for (const order of allStuck) {
+      const row = stuckSheet.addRow([
+        order.channelName,
+        order.orderId,
+        order.odooOrderName || '-',
+        order.pickingName || '-',
+        order.hoursStuck,
+        order.trackingRef || '-',
+        order.reason || '-'
+      ]);
+
+      // Highlight critical (>4 hours)
+      if (order.hoursStuck > 4) {
+        row.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+      }
+    }
+
+    if (allStuck.length === 0) {
+      stuckSheet.addRow(['No stuck orders', '', '', '', '', '', '']);
+    }
+
+    // Failed Pushes sheet
+    const failedSheet = workbook.addWorksheet('Failed Pushes', {
+      views: [{ state: 'frozen', ySplit: 2 }]
+    });
+
+    failedSheet.addRow(['Tracking Alert Report - Failed Pushes', '', '', '', dateStr]);
+    failedSheet.mergeCells('A1:D1');
+    failedSheet.getCell('A1').font = { bold: true, size: 14 };
+    failedSheet.getCell('E1').font = { italic: true, size: 10 };
+
+    failedSheet.addRow(['Channel', 'Order ID', 'Odoo Order', 'Error', 'Last Attempt']);
+    const failedHeader = failedSheet.getRow(2);
+    failedHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    failedHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC00000' } };
+
+    failedSheet.columns = [
+      { width: 15 }, { width: 20 }, { width: 18 }, { width: 50 }, { width: 20 }
+    ];
+
+    const allFailed = [
+      ...health.failures.bol.map(f => ({ ...f, channelName: 'Bol.com' })),
+      ...health.failures.amazonFbm.map(f => ({ ...f, channelName: 'Amazon FBM' })),
+      ...health.failures.amazonVendor.map(f => ({ ...f, channelName: 'Amazon Vendor' }))
+    ];
+
+    for (const failure of allFailed) {
+      failedSheet.addRow([
+        failure.channelName,
+        failure.orderId || '-',
+        failure.odooOrderName || '-',
+        failure.error || '-',
+        failure.lastAttempt ? new Date(failure.lastAttempt).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' }) : '-'
+      ]);
+    }
+
+    if (allFailed.length === 0) {
+      failedSheet.addRow(['No failed pushes', '', '', '', '']);
+    }
+
+    // Summary sheet
+    const summarySheet = workbook.addWorksheet('Summary');
+    summarySheet.addRow(['Tracking Health Summary', '', dateStr]);
+    summarySheet.mergeCells('A1:B1');
+    summarySheet.getCell('A1').font = { bold: true, size: 14 };
+    summarySheet.getCell('C1').font = { italic: true, size: 10 };
+
+    summarySheet.addRow([]);
+    summarySheet.addRow(['Overall Status', health.status]);
+    summarySheet.getCell('B3').font = { bold: true, color: { argb: health.status === 'CRITICAL' ? 'FFFF0000' : 'FFFF8C00' } };
+
+    summarySheet.addRow([]);
+    summarySheet.addRow(['Channel', 'Stuck Orders', 'Failed Pushes', 'Last Sync', 'Sync Status']);
+    const sumHeader = summarySheet.getRow(5);
+    sumHeader.font = { bold: true };
+
+    const channels = [
+      { name: 'Bol.com', key: 'bol' },
+      { name: 'Amazon FBM', key: 'amazonFbm' },
+      { name: 'Amazon Vendor', key: 'amazonVendor' }
+    ];
+
+    for (const ch of channels) {
+      const sum = health.summary[ch.key];
+      summarySheet.addRow([
+        ch.name,
+        sum.stuckCount,
+        sum.failedCount,
+        sum.lastSync ? new Date(sum.lastSync).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' }) : 'Never',
+        sum.syncStale ? 'STALE' : 'OK'
+      ]);
+    }
+
+    summarySheet.columns = [{ width: 18 }, { width: 14 }, { width: 14 }, { width: 22 }, { width: 12 }];
+
+    return workbook.xlsx.writeBuffer();
+  }
+
+  /**
    * Send alert to Teams if there are issues
    */
   async sendAlertIfNeeded() {
@@ -508,13 +648,28 @@ class TrackingAlertService {
       return { sent: false, reason: 'All tracking systems healthy', health };
     }
 
-    // Build Teams alert card
-    const card = this.buildAlertCard(health);
+    // Generate and upload Excel report
+    let reportUrl = null;
+    try {
+      const excelBuffer = await this.generateExcel(health);
+      const now = new Date();
+      const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      const fileName = `TrackingAlert_${timestamp}.xlsx`;
+
+      const uploadResult = await oneDriveService.uploadReport(excelBuffer, fileName, REPORTS_FOLDER);
+      reportUrl = uploadResult.url;
+      console.log(`[TrackingAlert] Excel report uploaded: ${reportUrl}`);
+    } catch (uploadError) {
+      console.error('[TrackingAlert] Failed to upload Excel report:', uploadError.message);
+    }
+
+    // Build Teams alert card with report link
+    const card = this.buildAlertCard(health, reportUrl);
 
     try {
       await this.teamsWebhook.sendMessage(card);
       console.log(`[TrackingAlert] Sent ${health.status} alert to Teams`);
-      return { sent: true, status: health.status, alertCount: health.alerts.length };
+      return { sent: true, status: health.status, alertCount: health.alerts.length, reportUrl };
     } catch (error) {
       console.error('[TrackingAlert] Failed to send Teams alert:', error.message);
       return { sent: false, error: error.message };
@@ -524,8 +679,8 @@ class TrackingAlertService {
   /**
    * Build Teams Adaptive Card for alert
    */
-  buildAlertCard(health) {
-    const isNow = new Date().toLocaleString();
+  buildAlertCard(health, reportUrl = null) {
+    const isNow = new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' });
     const statusEmoji = health.status === 'CRITICAL' ? '🚨' : '⚠️';
     const statusColor = health.status === 'CRITICAL' ? 'attention' : 'warning';
 
@@ -612,17 +767,27 @@ class TrackingAlertService {
       });
     }
 
-    // Add action button
+    // Add action buttons
+    const actions = [
+      {
+        type: 'Action.OpenUrl',
+        title: '🔍 View Dashboard',
+        url: `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/warehouse`,
+        style: 'positive'
+      }
+    ];
+
+    if (reportUrl) {
+      actions.push({
+        type: 'Action.OpenUrl',
+        title: '📊 Download Excel Report',
+        url: reportUrl
+      });
+    }
+
     body.push({
       type: 'ActionSet',
-      actions: [
-        {
-          type: 'Action.OpenUrl',
-          title: '🔍 View Tracking Dashboard',
-          url: `${process.env.APP_BASE_URL || 'https://ai.acropaq.com'}/warehouse`,
-          style: 'positive'
-        }
-      ]
+      actions
     });
 
     return {

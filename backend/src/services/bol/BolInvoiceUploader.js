@@ -15,10 +15,15 @@
  * - POST /retailer/shipments/invoices/{shipment-id}
  */
 
+const ExcelJS = require('exceljs');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const { TeamsNotificationService } = require('../../core/agents/services/TeamsNotificationService');
 const BolShipment = require('../../models/BolShipment');
 const BolOrder = require('../../models/BolOrder');
+const oneDriveService = require('../onedriveService');
+
+// Report folder
+const REPORTS_FOLDER = 'Bol_Invoice_Uploads';
 
 const REQUEST_DELAY_MS = 300;
 const DEFAULT_BATCH_SIZE = 100;
@@ -391,11 +396,97 @@ class BolInvoiceUploader {
   }
 
   /**
+   * Generate Excel report for invoice upload results
+   */
+  async generateExcel(results) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Agent5 Bol Invoice Uploader';
+    workbook.created = new Date();
+
+    const now = new Date();
+    const dateStr = now.toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' });
+
+    const worksheet = workbook.addWorksheet('Invoice Uploads', {
+      views: [{ state: 'frozen', ySplit: 3 }]
+    });
+
+    // Title
+    worksheet.addRow(['Bol.com Invoice Upload Report', '', '', '', '', dateStr]);
+    worksheet.mergeCells('A1:E1');
+    worksheet.getCell('A1').font = { bold: true, size: 14 };
+    worksheet.getCell('F1').font = { italic: true, size: 10 };
+
+    // Summary
+    worksheet.addRow([`Total: ${results.total} | Uploaded: ${results.uploaded} | No Shipment: ${results.noShipment} | Failed: ${results.failed}`]);
+    worksheet.mergeCells('A2:F2');
+    worksheet.getCell('A2').font = { italic: true };
+    worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+
+    // Headers
+    worksheet.addRow(['Sale Order', 'Bol Order ID', 'Invoice', 'Shipment ID', 'Status', 'Error']);
+    const headerRow = worksheet.getRow(3);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+
+    worksheet.columns = [
+      { width: 18 }, { width: 15 }, { width: 20 }, { width: 40 }, { width: 14 }, { width: 40 }
+    ];
+
+    // Data rows
+    for (const order of (results.orders || [])) {
+      let status = 'Unknown';
+      if (order.success) {
+        status = '✅ Uploaded';
+      } else if (order.error === 'no_shipment') {
+        status = '⏳ No Shipment';
+      } else {
+        status = '❌ Failed';
+      }
+
+      const row = worksheet.addRow([
+        order.saleOrderName || '-',
+        order.bolOrderId || '-',
+        order.invoiceName || '-',
+        order.shipmentId || '-',
+        status,
+        order.error && order.error !== 'no_shipment' ? order.error : '-'
+      ]);
+
+      // Highlight failed rows
+      if (!order.success && order.error !== 'no_shipment') {
+        row.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+        row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+      }
+    }
+
+    if (!results.orders || results.orders.length === 0) {
+      worksheet.addRow(['No orders processed', '', '', '', '', '']);
+    }
+
+    return workbook.xlsx.writeBuffer();
+  }
+
+  /**
    * Send Teams notification with results
    */
   async sendTeamsNotification(results) {
     const webhookUrl = process.env.TEAMS_ACROPAQ_WEBHOOK_URL || process.env.TEAMS_WEBHOOK_URL;
     if (!webhookUrl) return;
+
+    // Generate and upload Excel report
+    let reportUrl = null;
+    try {
+      const excelBuffer = await this.generateExcel(results);
+      const now = new Date();
+      const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      const fileName = `Bol_Invoice_Upload_${timestamp}.xlsx`;
+
+      const uploadResult = await oneDriveService.uploadReport(excelBuffer, fileName, REPORTS_FOLDER);
+      reportUrl = uploadResult.url;
+      console.log(`[BolInvoiceUploader] Excel report uploaded: ${reportUrl}`);
+    } catch (uploadError) {
+      console.error('[BolInvoiceUploader] Failed to upload Excel report:', uploadError.message);
+    }
 
     try {
       const teams = new TeamsNotificationService({ webhookUrl });
@@ -453,6 +544,20 @@ class BolInvoiceUploader {
             });
           }
         }
+      }
+
+      // Add action buttons
+      const actions = [];
+      if (reportUrl) {
+        actions.push({
+          type: 'Action.OpenUrl',
+          title: '📊 Download Excel Report',
+          url: reportUrl
+        });
+      }
+
+      if (actions.length > 0) {
+        cardBody.push({ type: 'ActionSet', actions });
       }
 
       const card = {

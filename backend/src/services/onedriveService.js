@@ -250,6 +250,124 @@ class OneDriveService {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * Upload a report file to SharePoint with rolling cleanup
+   * @param {Buffer} fileBuffer - File content as buffer
+   * @param {string} fileName - Name of the file
+   * @param {string} folderName - Folder name in Agent5-Reports
+   * @param {number} maxFiles - Maximum files to keep (default 1000)
+   * @returns {Promise<{url: string, fileId: string}>}
+   */
+  async uploadReport(fileBuffer, fileName, folderName, maxFiles = 1000) {
+    if (!this.graphClient) {
+      throw new Error('Microsoft Graph client not initialized');
+    }
+
+    try {
+      // Create folder structure: /Agent5-Reports/{folderName}/
+      const folderPath = `/Agent5-Reports/${folderName}`;
+      await this.ensureFolderExists(folderPath);
+
+      // Perform rolling cleanup before uploading
+      await this.cleanupOldFiles(folderPath, maxFiles - 1); // -1 to make room for new file
+
+      const remotePath = `${folderPath}/${fileName}`;
+      const drivePath = await this.getDrivePath();
+
+      // Upload file
+      const uploadedFile = await this.graphClient
+        .api(`${drivePath}/root:${remotePath}:/content`)
+        .put(fileBuffer);
+
+      // Create sharing link
+      const sharingLink = await this.graphClient
+        .api(`${drivePath}/items/${uploadedFile.id}/createLink`)
+        .post({
+          type: 'view',
+          scope: 'organization'
+        });
+
+      console.log(`[OneDrive] Report uploaded to SharePoint: ${folderName}/${fileName}`);
+
+      return {
+        url: sharingLink.link.webUrl,
+        fileId: uploadedFile.id
+      };
+
+    } catch (error) {
+      console.error('[OneDrive] Report upload failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * List files in a folder sorted by creation date
+   * @param {string} folderPath - Path to folder
+   * @returns {Promise<Array>} Array of file items
+   */
+  async listFiles(folderPath) {
+    if (!this.graphClient) {
+      return [];
+    }
+
+    try {
+      const drivePath = await this.getDrivePath();
+      const allFiles = [];
+      let nextLink = `${drivePath}/root:${folderPath}:/children?$orderby=createdDateTime asc&$top=200`;
+
+      while (nextLink) {
+        const response = await this.graphClient.api(nextLink).get();
+        const files = (response.value || []).filter(item => !item.folder); // Only files, not folders
+        allFiles.push(...files);
+        nextLink = response['@odata.nextLink'] || null;
+      }
+
+      return allFiles;
+    } catch (error) {
+      if (error.statusCode === 404 || error.code === 'itemNotFound') {
+        return [];
+      }
+      console.error('[OneDrive] Failed to list files:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Delete old files to maintain rolling limit
+   * @param {string} folderPath - Path to folder
+   * @param {number} maxFiles - Maximum files to keep
+   */
+  async cleanupOldFiles(folderPath, maxFiles = 1000) {
+    if (!this.graphClient) return;
+
+    try {
+      const files = await this.listFiles(folderPath);
+
+      if (files.length <= maxFiles) {
+        return; // No cleanup needed
+      }
+
+      // Files are sorted by createdDateTime asc, so oldest are first
+      const filesToDelete = files.slice(0, files.length - maxFiles);
+      const drivePath = await this.getDrivePath();
+
+      console.log(`[OneDrive] Cleaning up ${filesToDelete.length} old files from ${folderPath}`);
+
+      for (const file of filesToDelete) {
+        try {
+          await this.graphClient.api(`${drivePath}/items/${file.id}`).delete();
+          console.log(`[OneDrive] Deleted old file: ${file.name}`);
+        } catch (deleteError) {
+          console.error(`[OneDrive] Failed to delete ${file.name}:`, deleteError.message);
+        }
+      }
+
+    } catch (error) {
+      console.error('[OneDrive] Cleanup failed:', error.message);
+      // Don't throw - cleanup failure shouldn't block upload
+    }
+  }
 }
 
 module.exports = new OneDriveService();

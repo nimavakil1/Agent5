@@ -11,12 +11,17 @@
  * @module SellerFbaInventorySync
  */
 
+const ExcelJS = require('exceljs');
 const { getDb } = require('../../../db');
 const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP');
 const { getSellerClient } = require('./SellerClient');
 const { MARKETPLACE_CONFIG, getWarehouseId: _getWarehouseId } = require('./SellerMarketplaceConfig');
 const { skuResolver } = require('../SkuResolver');
 const { TeamsNotificationService } = require('../../../core/agents/services/TeamsNotificationService');
+const oneDriveService = require('../../onedriveService');
+
+// Report folder for FBA unresolved SKUs
+const FBA_UNRESOLVED_SKUS_REPORTS_FOLDER = 'FBA_Unresolved_SKUs';
 
 // FBA Inventory report type
 const FBA_INVENTORY_REPORT = 'GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA';
@@ -425,6 +430,53 @@ class SellerFbaInventorySync {
   }
 
   /**
+   * Generate Excel report for unresolved FBA SKUs
+   */
+  async generateUnresolvedSkusExcel(unresolvedItems) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Agent5 FBA Inventory Sync';
+    workbook.created = new Date();
+
+    const now = new Date();
+    const dateStr = now.toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' });
+
+    const worksheet = workbook.addWorksheet('Unresolved FBA SKUs', {
+      views: [{ state: 'frozen', ySplit: 2 }]
+    });
+
+    worksheet.addRow(['FBA Inventory Sync - Unresolved SKUs', '', '', '', '', dateStr]);
+    worksheet.mergeCells('A1:E1');
+    worksheet.getCell('A1').font = { bold: true, size: 14 };
+    worksheet.getCell('F1').font = { italic: true, size: 10 };
+
+    worksheet.addRow(['Amazon SKU', 'ASIN', 'Product Name', 'FBA Quantity', 'Reason', 'First Seen']);
+    const headerRow = worksheet.getRow(2);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF8C00' } };
+
+    worksheet.columns = [
+      { width: 30 }, { width: 15 }, { width: 40 }, { width: 14 }, { width: 25 }, { width: 18 }
+    ];
+
+    for (const item of unresolvedItems) {
+      worksheet.addRow([
+        item.sellerSku,
+        item.asin || '-',
+        item.productName || '-',
+        item.quantity || 0,
+        item.reason || 'Not found in Odoo',
+        item.createdAt ? new Date(item.createdAt).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' }) : '-'
+      ]);
+    }
+
+    if (unresolvedItems.length === 0) {
+      worksheet.addRow(['No unresolved SKUs', '', '', '', '', '']);
+    }
+
+    return workbook.xlsx.writeBuffer();
+  }
+
+  /**
    * Send Teams notification for unresolved FBA SKUs
    */
   async sendUnresolvedSkusNotification(unresolvedItems) {
@@ -453,6 +505,21 @@ class SellerFbaInventorySync {
       return; // All unresolved SKUs were already reported recently
     }
 
+    // Generate and upload Excel report
+    let reportUrl = null;
+    try {
+      const excelBuffer = await this.generateUnresolvedSkusExcel(unresolvedItems);
+      const now = new Date();
+      const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      const fileName = `FBA_Unresolved_SKUs_${timestamp}.xlsx`;
+
+      const uploadResult = await oneDriveService.uploadReport(excelBuffer, fileName, FBA_UNRESOLVED_SKUS_REPORTS_FOLDER);
+      reportUrl = uploadResult.url;
+      console.log(`[SellerFbaInventorySync] Excel report uploaded: ${reportUrl}`);
+    } catch (uploadError) {
+      console.error('[SellerFbaInventorySync] Failed to upload Excel report:', uploadError.message);
+    }
+
     try {
       const teams = new TeamsNotificationService({ webhookUrl });
 
@@ -464,6 +531,15 @@ class SellerFbaInventorySync {
         ? `\n\n...and ${newUnresolved.length - 10} more`
         : '';
 
+      const actions = [];
+      if (reportUrl) {
+        actions.push({
+          type: 'Action.OpenUrl',
+          title: '📊 Download Excel Report',
+          url: reportUrl
+        });
+      }
+
       const card = {
         $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
         type: 'AdaptiveCard',
@@ -471,10 +547,16 @@ class SellerFbaInventorySync {
         body: [
           {
             type: 'TextBlock',
-            text: `Amazon FBA Inventory Sync: ${newUnresolved.length} Unresolved SKUs`,
+            text: `⚠️ Amazon FBA Inventory Sync: ${newUnresolved.length} Unresolved SKUs`,
             weight: 'bolder',
             size: 'medium',
             color: 'warning'
+          },
+          {
+            type: 'TextBlock',
+            text: `Total unresolved: ${unresolvedItems.length} | New: ${newUnresolved.length}`,
+            size: 'small',
+            isSubtle: true
           },
           {
             type: 'TextBlock',
@@ -495,6 +577,10 @@ class SellerFbaInventorySync {
           }
         ]
       };
+
+      if (actions.length > 0) {
+        card.body.push({ type: 'ActionSet', actions });
+      }
 
       await teams.sendMessage(card);
       console.log(`[SellerFbaInventorySync] Teams notification sent for ${newUnresolved.length} unresolved FBA SKUs`);
