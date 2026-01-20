@@ -272,12 +272,14 @@ class BolShipmentSync {
   async processOrder(bolOrder) {
     // Get order ID from unified_orders schema
     const orderId = bolOrder.sourceIds?.bolOrderId || bolOrder.orderId;
+    const isSplitOrder = bolOrder.bol?.isSplitOrder === true;
 
     const result = {
       orderId,
       success: false,
       skipped: false,
-      error: null
+      error: null,
+      isSplitOrder
     };
 
     try {
@@ -288,18 +290,21 @@ class BolShipmentSync {
         return result;
       }
 
-      // Skip FBB orders (fulfilled by Bol) - unified_orders uses subChannel
-      if (bolOrder.subChannel === 'FBB') {
+      // Skip pure FBB orders (fulfilled by Bol) - but NOT split orders which have FBR items
+      if (bolOrder.subChannel === 'FBB' && !isSplitOrder) {
         result.skipped = true;
         result.skipReason = 'FBB order - fulfilled by Bol';
         return result;
       }
 
-      // Check if has Odoo order - unified_orders uses sourceIds.odooSaleOrderId
-      const odooSaleOrderId = bolOrder.sourceIds?.odooSaleOrderId;
+      // For split orders, use the FBR order ID; for pure FBR, use the main order ID
+      const odooSaleOrderId = isSplitOrder
+        ? bolOrder.sourceIds?.odooFbrSaleOrderId
+        : bolOrder.sourceIds?.odooSaleOrderId;
+
       if (!odooSaleOrderId) {
         result.skipped = true;
-        result.skipReason = 'No Odoo order linked';
+        result.skipReason = isSplitOrder ? 'No FBR Odoo order linked' : 'No Odoo order linked';
         return result;
       }
 
@@ -328,7 +333,16 @@ class BolShipmentSync {
       }
 
       // Get order items - unified_orders uses 'items' with orderItemId field
-      const orderItems = (bolOrder.items || []).map(item => ({
+      // For split orders, only confirm FBR items (FBB items are handled by Bol)
+      let itemsToConfirm = bolOrder.items || [];
+      if (isSplitOrder) {
+        itemsToConfirm = itemsToConfirm.filter(item =>
+          item.fulfilmentMethod === 'FBR' || !item.fulfilmentMethod
+        );
+        console.log(`[BolShipmentSync] Split order ${orderId}: confirming ${itemsToConfirm.length} FBR items out of ${bolOrder.items?.length || 0} total`);
+      }
+
+      const orderItems = itemsToConfirm.map(item => ({
         orderItemId: item.orderItemId || item.bolOrderItemId
       }));
 
@@ -354,7 +368,7 @@ class BolShipmentSync {
       result.pickingName = pickingStatus.pickingName;
       result.trackingRef = pickingStatus.trackingRef;
 
-      console.log(`[BolShipmentSync] Confirmed shipment for order ${orderId}`);
+      console.log(`[BolShipmentSync] Confirmed shipment for order ${orderId}${isSplitOrder ? ' (split order - FBR items only)' : ''}`);
 
     } catch (error) {
       result.error = error.message;
@@ -381,17 +395,32 @@ class BolShipmentSync {
 
       // Find FBR orders with Odoo link but no shipment confirmation
       // Uses unified_orders collection with updated field paths
+      // NOTE: Also include split orders (mixed FBB+FBR) which have subChannel: 'FBB' but need FBR confirmation
       const db = getDb();
       // IMPORTANT: Check for BOTH null value AND missing field
       // The field can be: null (explicitly set), undefined/missing, or a Date
       const pendingOrders = await db.collection(COLLECTION_NAME).find({
         channel: 'bol',
-        'sourceIds.odooSaleOrderId': { $exists: true, $ne: null },
         $or: [
-          { 'bol.shipmentConfirmedAt': null },
-          { 'bol.shipmentConfirmedAt': { $exists: false } }
+          // Pure FBR orders - use odooSaleOrderId
+          {
+            'sourceIds.odooSaleOrderId': { $exists: true, $ne: null },
+            subChannel: 'FBR'
+          },
+          // Split orders (mixed FBB+FBR) - use odooFbrSaleOrderId
+          {
+            'sourceIds.odooFbrSaleOrderId': { $exists: true, $ne: null },
+            'bol.isSplitOrder': true
+          }
         ],
-        subChannel: 'FBR',
+        $and: [
+          {
+            $or: [
+              { 'bol.shipmentConfirmedAt': null },
+              { 'bol.shipmentConfirmedAt': { $exists: false } }
+            ]
+          }
+        ],
         'status.source': { $nin: ['CANCELLED', 'SHIPPED'] }
       })
         .sort({ orderDate: -1 })

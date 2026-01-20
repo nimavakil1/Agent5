@@ -706,11 +706,17 @@ class SellerOrderCreator {
       customerName = cleanDuplicateName(buyerName);
     }
 
-    // For B2B: use company name if available (unified: amazonSeller.isBusinessOrder)
+    // For B2B: use "Company - PersonalName" format (same as Bol orders)
     const isBusinessOrder = order.amazonSeller?.isBusinessOrder || order.isBusinessOrder;
     const buyerCompanyName = order.amazonSeller?.buyerCompanyName || order.buyerCompanyName;
     if (isBusinessOrder && buyerCompanyName) {
-      customerName = cleanDuplicateName(buyerCompanyName);
+      const companyName = cleanDuplicateName(buyerCompanyName);
+      // Use "Company - PersonalName" format when both exist, otherwise just company name
+      if (customerName && customerName !== companyName) {
+        customerName = `${companyName} - ${customerName}`;
+      } else {
+        customerName = companyName;
+      }
     }
 
     // If still no name, create location-based customer using city/postal code
