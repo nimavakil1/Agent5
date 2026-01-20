@@ -683,7 +683,27 @@ async function syncAmazonFbmStock() {
     } else {
       console.error(`[scheduler] Amazon FBM stock failed: ${result.error}`);
 
-      // Send error notification
+      // Generate TSV fallback file for manual upload
+      try {
+        const { getFbmStockFallbackGenerator } = require('../services/amazon/seller/FbmStockFallbackGenerator');
+        const fallbackGenerator = getFbmStockFallbackGenerator();
+
+        if (result.sentItems && result.sentItems.length > 0) {
+          const fallbackResult = await fallbackGenerator.generateAndUploadFallback(
+            { stockItems: result.sentItems.map(i => ({ sellerSku: i.amazonSku, quantity: i.sentQty })) },
+            result.error || 'sync_failed'
+          );
+
+          if (fallbackResult.success) {
+            console.log(`[scheduler]   Fallback TSV uploaded: ${fallbackResult.filename} (${fallbackResult.itemCount} items)`);
+            result.fallbackTsvUrl = fallbackResult.url;
+          }
+        }
+      } catch (fallbackError) {
+        console.error('[scheduler]   Fallback TSV generation failed:', fallbackError.message);
+      }
+
+      // Send error notification with fallback link
       try {
         await reportService.sendToTeams({
           ...result,

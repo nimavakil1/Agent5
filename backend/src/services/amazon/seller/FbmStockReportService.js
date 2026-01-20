@@ -325,6 +325,22 @@ class FbmStockReportService {
       });
     }
 
+    // Add TSV fallback download link for manual upload when sync failed
+    if (syncResults.fallbackTsvUrl) {
+      cardBody.push({
+        type: 'TextBlock',
+        text: '📋 **Manual Upload Available:** Download the TSV file and upload to Amazon Seller Central → Inventory → Add Products via Upload → Inventory Loader',
+        wrap: true,
+        size: 'small',
+        separator: true
+      });
+      actions.push({
+        type: 'Action.OpenUrl',
+        title: '📥 Download TSV for Manual Upload',
+        url: syncResults.fallbackTsvUrl
+      });
+    }
+
     const card = {
       $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
       type: 'AdaptiveCard',
