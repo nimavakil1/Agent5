@@ -185,6 +185,12 @@ class SSCCLabelGenerator {
     }
     .contents-title { font-weight: bold; margin-bottom: 1mm; }
     .contents-summary { display: flex; justify-content: space-between; }
+    .contents-list {
+      font-family: 'Courier New', monospace;
+      font-size: 8pt;
+      margin-top: 1mm;
+      line-height: 1.3;
+    }
     .single-sku-badge {
       background: #000;
       color: #fff;
@@ -233,6 +239,7 @@ class SSCCLabelGenerator {
         <span>${items.length} SKU${items.length !== 1 ? 's' : ''}</span>
         <span>${totalUnits} units</span>
       </div>
+      <div class="contents-list">${items.map(i => `${i.sku || i.vendorProductIdentifier || i.amazonProductIdentifier || '?'} x${i.quantity || 0}`).join(', ')}</div>
       ${items.length === 1 ? `<div class="single-sku-badge">SINGLE-SKU</div>` : ''}
     </div>
   </div>
@@ -519,7 +526,8 @@ class SSCCLabelGenerator {
 ^FO20,700^GB772,3,3^FS
 
 ^FT30,750^A0N,30,30^FDContents: ${items.length} SKU(s), ${totalUnits} units^FS
-${isSingleSKU ? '^FT30,800^A0N,40,40^GB200,50,50^FR^FDSINGLE-SKU^FS' : ''}
+^FT30,790^A0N,22,22^FD${items.map(i => `${(i.sku || i.vendorProductIdentifier || '?').substring(0, 15)}x${i.quantity || 0}`).join(' ').substring(0, 60)}^FS
+${isSingleSKU ? '^FT30,840^A0N,40,40^GB200,50,50^FR^FDSINGLE-SKU^FS' : ''}
 
 ^XZ`;
   }

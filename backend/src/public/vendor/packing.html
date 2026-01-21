@@ -1183,25 +1183,45 @@
         const statusMsg = data.message || 'Completed';
         document.getElementById('action-status').textContent = statusMsg;
 
+        // Collect all errors
+        const allErrors = [
+          ...(data.odoo?.errors || []),
+          ...(data.amazon?.errors || [])
+        ];
+
         // Show different toast based on what was accomplished
         if (data.amazon?.invoicesSubmitted?.length > 0) {
           showToast('Deliveries validated, invoices created & submitted to Amazon!');
         } else if (data.amazon?.asnSubmitted) {
           showToast('ASN submitted. Check errors for invoice details.');
+        } else if (allErrors.length > 0) {
+          // Show the actual errors in the UI
+          const errorList = allErrors.slice(0, 3).join('\n• ');
+          const moreCount = allErrors.length > 3 ? ` (+${allErrors.length - 3} more)` : '';
+          showToast(`Errors:\n• ${errorList}${moreCount}`, true);
         } else {
           showToast('Completed with some errors. Check console.');
         }
 
+        // Display errors in the action-status area for visibility
+        if (allErrors.length > 0) {
+          const statusEl = document.getElementById('action-status');
+          statusEl.innerHTML = `<span style="color: #ef4444;">Errors (${allErrors.length}):</span><br>` +
+            allErrors.map(e => `• ${e}`).join('<br>');
+          statusEl.style.color = '#ef4444';
+        }
+
         // Update button based on final status
-        const btnText = data.status === 'invoiced' ? 'Invoiced' : 'Completed';
-        asnBtn.innerHTML = `<span class="material-symbols-outlined">check_circle</span>${btnText}`;
-        asnBtn.classList.remove('btn-secondary');
-        asnBtn.classList.add('btn-success');
+        const hasErrors = allErrors.length > 0;
+        const btnText = data.status === 'invoiced' ? 'Invoiced' : (hasErrors ? 'Completed with errors' : 'Completed');
+        const btnClass = hasErrors ? 'btn-warning' : 'btn-success';
+        asnBtn.innerHTML = `<span class="material-symbols-outlined">${hasErrors ? 'warning' : 'check_circle'}</span>${btnText}`;
+        asnBtn.classList.remove('btn-secondary', 'btn-success', 'btn-warning');
+        asnBtn.classList.add(btnClass);
 
         // Log any errors for debugging
-        if (data.odoo?.errors?.length > 0 || data.amazon?.errors?.length > 0) {
-          console.log('Odoo errors:', data.odoo?.errors);
-          console.log('Amazon errors:', data.amazon?.errors);
+        if (allErrors.length > 0) {
+          console.log('All errors:', allErrors);
         }
 
       } catch (err) {

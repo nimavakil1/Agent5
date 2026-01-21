@@ -342,8 +342,16 @@ class VendorASNCreator {
     const shipmentDate = picking.date_done || picking.scheduled_date || new Date().toISOString();
     const { cartons = [], pallets = [] } = packingData;
 
+    console.log(`[VendorASNCreator] _buildASNPayloadWithSSCC: ${cartons.length} cartons, ${pallets.length} pallets`);
+    console.log(`[VendorASNCreator] PO items (${po.items?.length || 0}):`, po.items?.map(i => ({
+      vendorProductIdentifier: i.vendorProductIdentifier,
+      amazonProductIdentifier: i.amazonProductIdentifier,
+      itemSequenceNumber: i.itemSequenceNumber
+    })));
+
     // If no cartons provided, fall back to legacy format
     if (cartons.length === 0) {
+      console.log(`[VendorASNCreator] No cartons provided, falling back to legacy format`);
       return this._buildASNPayload(po, picking, shipmentId);
     }
 
@@ -358,6 +366,11 @@ class VendorASNCreator {
             pi => pi.vendorProductIdentifier === item.ean ||
                   pi.amazonProductIdentifier === item.asin
           );
+          if (!poItem) {
+            console.warn(`[VendorASNCreator] No matching PO item for carton item: ean=${item.ean}, asin=${item.asin}, sku=${item.sku}`);
+          } else {
+            console.log(`[VendorASNCreator] Matched carton item ean=${item.ean} to PO item vendorProductIdentifier=${poItem.vendorProductIdentifier}`);
+          }
           return {
             itemReference: String(itemIdx + 1),
             vendorProductIdentifier: item.ean || poItem?.vendorProductIdentifier,
@@ -480,22 +493,33 @@ class VendorASNCreator {
       warnings: []
     };
 
+    console.log(`[VendorASNCreator] submitASNWithSSCC called for PO: ${poNumber}`);
+    console.log(`[VendorASNCreator]   cartons: ${packingData.cartons?.length || 0}, pallets: ${packingData.pallets?.length || 0}`);
+
     try {
       // Get PO from MongoDB
+      console.log(`[VendorASNCreator] Fetching PO from MongoDB...`);
       const po = await this.importer.getPurchaseOrder(poNumber);
       if (!po) {
+        console.error(`[VendorASNCreator] PO not found in MongoDB: ${poNumber}`);
         result.errors.push(`PO not found: ${poNumber}`);
         return result;
       }
+      console.log(`[VendorASNCreator] PO found: marketplaceId=${po.marketplaceId}, odoo.saleOrderId=${po.odoo?.saleOrderId}`);
 
       // Get delivery from Odoo (optional - may not have Odoo order)
       let picking = null;
       if (po.odoo?.saleOrderId) {
+        console.log(`[VendorASNCreator] Fetching Odoo delivery for saleOrderId: ${po.odoo.saleOrderId}`);
         picking = await this._getDeliveryFromOdoo(po.odoo.saleOrderId, odooPickingId);
+        if (picking) {
+          console.log(`[VendorASNCreator] Odoo picking found: ${picking.name} (id: ${picking.id})`);
+        }
       }
 
       // Create a mock picking if none exists
       if (!picking) {
+        console.log(`[VendorASNCreator] No Odoo picking found, using manual shipment date`);
         picking = {
           id: null,
           name: 'MANUAL',
@@ -507,11 +531,15 @@ class VendorASNCreator {
 
       // Generate shipment ID
       const shipmentId = this._generateShipmentId(po, picking);
+      console.log(`[VendorASNCreator] Generated shipmentId: ${shipmentId}`);
 
       // Build ASN payload with SSCCs
+      console.log(`[VendorASNCreator] Building ASN payload...`);
       const asnPayload = this._buildASNPayloadWithSSCC(po, picking, shipmentId, packingData);
+      console.log(`[VendorASNCreator] ASN payload built. Items: ${asnPayload.shipmentConfirmations?.[0]?.shipmentItems?.length || 0}`);
 
       if (dryRun) {
+        console.log(`[VendorASNCreator] Dry run - not submitting to Amazon`);
         result.success = true;
         result.shipmentId = shipmentId;
         result.dryRun = true;
@@ -520,10 +548,14 @@ class VendorASNCreator {
       }
 
       // Submit to Amazon
+      console.log(`[VendorASNCreator] Getting vendor client for marketplace: ${po.marketplaceId}`);
       const client = this.getClient(po.marketplaceId);
       await client.init();
 
+      console.log(`[VendorASNCreator] Submitting ASN to Amazon Vendor Central...`);
+      console.log(`[VendorASNCreator] Payload:`, JSON.stringify(asnPayload, null, 2));
       const response = await client.submitShipmentConfirmations(asnPayload);
+      console.log(`[VendorASNCreator] Amazon response:`, JSON.stringify(response));
 
       // Store in MongoDB
       await this._saveShipment({
@@ -573,8 +605,11 @@ class VendorASNCreator {
       result.success = true;
       result.shipmentId = shipmentId;
       result.transactionId = response.transactionId;
+      console.log(`[VendorASNCreator] ASN submitted successfully! transactionId: ${response.transactionId}`);
 
     } catch (error) {
+      console.error(`[VendorASNCreator] ASN submission failed for ${poNumber}:`, error.message);
+      console.error(`[VendorASNCreator] Error stack:`, error.stack);
       result.errors.push(error.message);
     }
 

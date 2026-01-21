@@ -355,7 +355,7 @@ router.get('/orders/consolidate', async (req, res) => {
           fcPartyId: partyId,
           fcName: getFCName(partyId, order.amazonVendor?.shipToParty?.address),
           fcCountry: getFCCountry(partyId),
-          fcAddress: getFCAddress(partyId, order.amazonVendor?.shipToParty?.address),
+          fcAddress: order.amazonVendor?.shipToParty?.address || null,
           deliveryWindow: order.amazonVendor?.deliveryWindow,
           marketplace: order.marketplace?.code,
           orders: [],
@@ -684,7 +684,7 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       vendorGroupName: getVendorGroupName(actualVendorGroup),
       fcPartyId,
       fcName: getFCName(fcPartyId, firstOrder.amazonVendor?.shipToParty?.address),
-      fcAddress: getFCAddress(fcPartyId, firstOrder.amazonVendor?.shipToParty?.address),
+      fcAddress: firstOrder.amazonVendor?.shipToParty?.address || null,
       deliveryWindow: firstOrder.amazonVendor?.deliveryWindow,
       orderCount: orders.length,
       orders: orders.map(o => ({
@@ -1319,135 +1319,15 @@ router.post('/orders/:poNumber/update-acknowledgments', async (req, res) => {
 // ==================== ORDER CONSOLIDATION ====================
 
 /**
- * Amazon FC (Fulfillment Center) Addresses by Party ID
- * Used when orders don't include address in shipToParty
+ * Get FC address from Amazon order data
+ * Simply returns the address from the order's shipToParty
  */
-const FC_ADDRESSES = {
-  // France
-  'CDG7': {
-    name: 'Amazon EU SARL, succursale française',
-    street: 'Avenue Alain Boucher',
-    streetNumber: '1',
-    city: 'Senlis',
-    zipCode: '60300',
-    countryCode: 'FR'
-  },
-  'ORY1': {
-    name: 'Amazon France Logistique SAS',
-    street: 'Rue des Musiciens',
-    streetNumber: '1',
-    city: 'Saran',
-    zipCode: '45770',
-    countryCode: 'FR'
-  },
-  'LYS1': {
-    name: 'Amazon France Logistique SAS',
-    street: 'Route de Marseille',
-    city: 'Montélimar',
-    zipCode: '26200',
-    countryCode: 'FR'
-  },
-  'MRS1': {
-    name: 'Amazon France Logistique SAS',
-    street: 'Rue de la Haie Coq',
-    city: 'Lauwin-Planque',
-    zipCode: '59553',
-    countryCode: 'FR'
-  },
-  'BVA1': {
-    name: 'Amazon France Logistique SAS',
-    street: 'ZAC Haute Picardie',
-    city: 'Amiens',
-    zipCode: '80440',
-    countryCode: 'FR'
-  },
-  // Germany
-  'LEJ1': {
-    name: 'Amazon EU S.à.r.l.',
-    street: 'Amazonstraße',
-    streetNumber: '1',
-    city: 'Leipzig',
-    zipCode: '04347',
-    countryCode: 'DE'
-  },
-  'FRA3': {
-    name: 'Amazon EU S.à.r.l.',
-    street: 'Am Schloss Eichhof',
-    streetNumber: '1',
-    city: 'Bad Hersfeld',
-    zipCode: '36251',
-    countryCode: 'DE'
-  },
-  'CGN1': {
-    name: 'Amazon EU S.à.r.l.',
-    street: 'Amazonstraße',
-    streetNumber: '1',
-    city: 'Köln',
-    zipCode: '50769',
-    countryCode: 'DE'
-  },
-  'DTM2': {
-    name: 'Amazon EU S.à.r.l.',
-    street: 'Im Bergsfeld',
-    streetNumber: '1',
-    city: 'Werne',
-    zipCode: '59368',
-    countryCode: 'DE'
-  },
-  // Italy
-  'MXP5': {
-    name: 'Amazon Italia Logistica S.r.l.',
-    street: 'Via della Dogana',
-    streetNumber: '10',
-    city: 'Castel San Giovanni',
-    zipCode: '29015',
-    countryCode: 'IT'
-  },
-  // Spain
-  'MAD4': {
-    name: 'Amazon Spain Fulfillment S.L.U.',
-    street: 'Avenida de Alemania',
-    streetNumber: '6',
-    city: 'San Fernando de Henares',
-    zipCode: '28830',
-    countryCode: 'ES'
-  },
-  // Belgium
-  'CRL1': {
-    name: 'Amazon EU S.à.r.l.',
-    street: 'Avenue de l\'Europe',
-    streetNumber: '1',
-    city: 'Charleroi',
-    zipCode: '6040',
-    countryCode: 'BE'
-  },
-  // Netherlands
-  'RTM1': {
-    name: 'Amazon EU S.à.r.l.',
-    street: 'Amazonweg',
-    streetNumber: '1',
-    city: 'Rozenburg',
-    zipCode: '3181',
-    countryCode: 'NL'
+function getFCAddress(orderAddress) {
+  if (!orderAddress) {
+    return null;
   }
-};
-
-/**
- * Get FC address from party ID (lookup or from order)
- */
-function getFCAddress(partyId, orderAddress = null) {
-  // Use order address if available
-  if (orderAddress && (orderAddress.addressLine1 || orderAddress.street || orderAddress.city)) {
-    return orderAddress;
-  }
-  // Fall back to lookup table
-  if (partyId) {
-    const upper = partyId.toUpperCase();
-    if (FC_ADDRESSES[upper]) {
-      return FC_ADDRESSES[upper];
-    }
-  }
-  return null;
+  // Return the address as-is from the Amazon order
+  return orderAddress;
 }
 
 /**
@@ -1828,7 +1708,7 @@ function generatePackingListHTML(packingList) {
     <h3>SHIP TO: ${packingList.shipTo.fcName}</h3>
     <div class="info-row"><span class="info-label">FC Code:</span> ${packingList.shipTo.fcPartyId}</div>
     ${address.addressLine1 ? `<div class="info-row"><span class="info-label">Address:</span> ${address.addressLine1}</div>` : ''}
-    ${address.city ? `<div class="info-row"><span class="info-label">City:</span> ${address.city} ${address.postalCode || ''}</div>` : ''}
+    ${address.city ? `<div class="info-row"><span class="info-label">City:</span> ${address.city} ${address.postalOrZipCode || address.postalCode || ''}</div>` : ''}
     ${address.countryCode ? `<div class="info-row"><span class="info-label">Country:</span> ${address.countryCode}</div>` : ''}
     <div class="info-row"><span class="info-label">Deliver By:</span> ${formatDate(packingList.deliveryWindow?.endDate)}</div>
   </div>
@@ -3973,15 +3853,55 @@ router.post('/packing/create-shipment', async (req, res) => {
       return res.status(400).json({ success: false, error: 'At least one parcel is required' });
     }
 
-    // Extract fcPartyId from groupId (format: EU_CDG7_2026-01-22 or FR_CDG7_2026-01-22)
-    const groupParts = groupId.split('_');
-    const fcPartyId = groupParts.length >= 2 ? groupParts[1] : null;
+    // Get delivery address from Odoo sale order
+    let deliveryAddress = fcAddress || {};
+    if (purchaseOrders.length > 0) {
+      try {
+        // Get the first PO to find the linked Odoo sale order
+        const firstPO = await db.collection('unified_orders').findOne({
+          'sourceIds.amazonVendorPONumber': purchaseOrders[0]
+        });
 
-    // Use provided fcAddress, or look up from FC_ADDRESSES if empty/missing
-    let resolvedFcAddress = fcAddress;
-    if (!fcAddress || Object.keys(fcAddress).length === 0 || !fcAddress.city) {
-      resolvedFcAddress = getFCAddress(fcPartyId, fcAddress);
-      console.log(`[VendorAPI] create-shipment: Resolved fcAddress for ${fcPartyId}:`, JSON.stringify(resolvedFcAddress));
+        if (firstPO?.odoo?.saleOrderId) {
+          const odoo = new OdooDirectClient();
+          await odoo.authenticate();
+
+          // Get the sale order with partner_shipping_id
+          const [saleOrder] = await odoo.read('sale.order', [firstPO.odoo.saleOrderId],
+            ['partner_shipping_id']);
+
+          if (saleOrder?.partner_shipping_id) {
+            const shippingPartnerId = Array.isArray(saleOrder.partner_shipping_id)
+              ? saleOrder.partner_shipping_id[0]
+              : saleOrder.partner_shipping_id;
+
+            // Get the full address from res.partner
+            const [partner] = await odoo.read('res.partner', [shippingPartnerId],
+              ['name', 'street', 'street2', 'city', 'zip', 'country_id']);
+
+            if (partner) {
+              const countryCode = partner.country_id
+                ? (Array.isArray(partner.country_id) ? partner.country_id[1] : partner.country_id)
+                : '';
+              // Map country name to code
+              const countryMap = { 'France': 'FR', 'Germany': 'DE', 'Belgium': 'BE', 'Netherlands': 'NL', 'Italy': 'IT', 'Spain': 'ES' };
+
+              deliveryAddress = {
+                name: partner.name || '',
+                addressLine1: partner.street || '',
+                street2: partner.street2 || '',
+                city: (partner.city || '').trim(),
+                postalOrZipCode: partner.zip || '',
+                countryCode: countryMap[countryCode] || countryCode || 'FR'
+              };
+              console.log(`[VendorAPI] create-shipment: Got delivery address from Odoo partner ${shippingPartnerId}:`, partner.name);
+            }
+          }
+        }
+      } catch (odooError) {
+        console.error('[VendorAPI] create-shipment: Failed to fetch address from Odoo:', odooError.message);
+        // Continue with provided fcAddress as fallback
+      }
     }
 
     // Create shipment record
@@ -3989,8 +3909,8 @@ router.post('/packing/create-shipment', async (req, res) => {
     const shipment = {
       shipmentId,
       groupId,
-      fcName: fcName || '',
-      fcAddress: resolvedFcAddress || {},
+      fcName: deliveryAddress.name || fcName || '',
+      fcAddress: deliveryAddress,
       purchaseOrders,
       status: 'created',
       parcels: parcels.map((p, idx) => ({
@@ -4159,14 +4079,14 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
         console.log(`[VendorAPI] Parcel ${parcel.parcelNumber}: glsClient=${!!glsClient}, glsTrackingNumber=${parcel.glsTrackingNumber}, fcAddress=${!!shipment.fcAddress}`);
         if (glsClient && !parcel.glsTrackingNumber && shipment.fcAddress) {
           console.log('[VendorAPI] Calling GLS createShipment...');
-          // GLS parcel shipping
+          // GLS parcel shipping - use Amazon's address format (addressLine1, postalOrZipCode, etc.)
           const receiverAddress = {
-            name: shipment.fcName || 'Amazon FC',
+            name: shipment.fcAddress.name || shipment.fcName || 'Amazon FC',
             street: shipment.fcAddress.addressLine1 || shipment.fcAddress.street || '',
             streetNumber: shipment.fcAddress.streetNumber || '',
-            zipCode: shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
+            zipCode: shipment.fcAddress.postalOrZipCode || shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
             city: shipment.fcAddress.city || '',
-            countryCode: shipment.fcAddress.countryCode || 'DE',
+            countryCode: shipment.fcAddress.countryCode || 'FR',
             email: '',
             phone: ''
           };
@@ -4191,13 +4111,13 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
             parcelResult.carrierError = glsResult.error;
           }
         } else if (dachserClient && !parcel.dachserTrackingNumber && shipment.fcAddress) {
-          // Dachser freight shipping - create transport order
+          // Dachser freight shipping - use Amazon's address format
           const receiverAddress = {
-            name: shipment.fcName || 'Amazon FC',
+            name: shipment.fcAddress.name || shipment.fcName || 'Amazon FC',
             street: shipment.fcAddress.addressLine1 || shipment.fcAddress.street || '',
-            postalCode: shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
+            postalCode: shipment.fcAddress.postalOrZipCode || shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
             city: shipment.fcAddress.city || '',
-            countryCode: shipment.fcAddress.countryCode || 'DE',
+            countryCode: shipment.fcAddress.countryCode || 'FR',
             phone: '',
             email: ''
           };
@@ -4758,7 +4678,7 @@ router.get('/packing/:shipmentId/delivery-note.pdf', async (req, res) => {
     <div class="address-box">
       <div class="address-label">Ship To</div>
       <div class="address-name">${fcName}</div>
-      <div class="address-line">${fcAddress.addressLine1 || ''}, ${fcAddress.postalCode || ''} ${fcAddress.city || ''}, ${fcAddress.countryCode || ''}</div>
+      <div class="address-line">${fcAddress.addressLine1 || ''}, ${fcAddress.postalOrZipCode || fcAddress.postalCode || ''} ${fcAddress.city || ''}, ${fcAddress.countryCode || ''}</div>
     </div>
   </div>
 
@@ -5000,6 +4920,7 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
     // STEP 3: Submit ASN to Amazon
     // ========================================
     try {
+      console.log(`[VendorAPI] STEP 3: Submit ASN to Amazon for ${poNumbers.length} PO(s)`);
       const asnCreator = await getVendorASNCreator();
 
       // Build carton data from parcels
@@ -5012,12 +4933,27 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
         }))
       }));
 
+      console.log(`[VendorAPI] ASN carton data: ${cartons.length} carton(s)`);
+      cartons.forEach((c, i) => {
+        console.log(`[VendorAPI]   Carton ${i + 1}: SSCC=${c.sscc}, items=${c.items.length}, total_qty=${c.items.reduce((s, it) => s + it.quantity, 0)}`);
+        c.items.forEach(it => console.log(`[VendorAPI]     - EAN=${it.ean}, SKU=${it.sku}, qty=${it.quantity}`));
+      });
+
       // Submit ASN for each PO
       for (const poNumber of poNumbers) {
+        console.log(`[VendorAPI] Submitting ASN for PO: ${poNumber}`);
         try {
           const asnResult = await asnCreator.submitASNWithSSCC(poNumber, { cartons }, {
             dryRun: false
           });
+
+          console.log(`[VendorAPI] ASN result for ${poNumber}:`, JSON.stringify({
+            success: asnResult.success,
+            shipmentId: asnResult.shipmentId,
+            transactionId: asnResult.transactionId,
+            errors: asnResult.errors,
+            warnings: asnResult.warnings
+          }));
 
           if (asnResult.success) {
             result.amazon.asnSubmitted = true;
@@ -5032,10 +4968,12 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
             result.amazon.errors.push(`PO ${poNumber}: ${asnResult.errors.join(', ')}`);
           }
         } catch (asnErr) {
+          console.error(`[VendorAPI] ASN exception for ${poNumber}:`, asnErr);
           result.amazon.errors.push(`PO ${poNumber}: ${asnErr.message}`);
         }
       }
     } catch (amazonErr) {
+      console.error('[VendorAPI] Amazon ASN fatal error:', amazonErr);
       result.amazon.errors.push(`Amazon ASN: ${amazonErr.message}`);
     }
 
