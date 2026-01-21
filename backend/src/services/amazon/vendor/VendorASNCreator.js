@@ -342,7 +342,7 @@ class VendorASNCreator {
    */
   _buildASNPayloadWithSSCC(po, picking, shipmentId, packingData = {}) {
     const shipmentDate = picking.date_done || picking.scheduled_date || new Date().toISOString();
-    const { cartons = [], pallets = [] } = packingData;
+    const { cartons = [], pallets = [], carrier = {}, measurements = {} } = packingData;
 
     console.log(`[VendorASNCreator] _buildASNPayloadWithSSCC: ${cartons.length} cartons, ${pallets.length} pallets`);
     console.log(`[VendorASNCreator] PO items (${po.items?.length || 0}):`, po.items?.map(i => ({
@@ -473,6 +473,41 @@ class VendorASNCreator {
       cartons: cartonData
     };
 
+    // Add shipment measurements (carton count, weight, volume)
+    const totalWeight = measurements.totalWeight || cartons.reduce((sum, c) => sum + (c.weight || 0), 0);
+    const cartonCount = cartons.length;
+
+    if (totalWeight > 0 || cartonCount > 0) {
+      confirmation.shipmentMeasurements = {
+        grossShipmentWeight: {
+          unitOfMeasure: measurements.weightUnit || 'Kg',
+          value: String(totalWeight || cartonCount * 5) // Default 5kg per carton if no weight
+        },
+        shipmentVolume: {
+          unitOfMeasure: measurements.volumeUnit || 'CuFt',
+          value: String(measurements.totalVolume || cartonCount * 1) // Default 1 cubic ft per carton
+        },
+        cartonCount: cartonCount,
+        palletCount: pallets.length
+      };
+    }
+
+    // Add transportation details (carrier SCAC and tracking)
+    // GLS SCAC codes: GLSO (GLS Germany), GLSF (GLS France), GLSP (GLS Poland), GLSN (GLS Netherlands)
+    // Generic GLS = "GLSO" or use Amazon's carrier list
+    const carrierScac = carrier.scac || 'GLSO'; // Default to GLS
+    const trackingNumber = carrier.trackingNumber ||
+      (cartons.length > 0 ? cartons.map(c => c.trackingNumber).filter(Boolean).join(',') : null);
+
+    if (carrierScac || trackingNumber) {
+      confirmation.transportationDetails = {
+        carrierScac: carrierScac,
+        carrierShipmentReferenceNumber: trackingNumber,
+        transportationMode: carrier.mode || TRANSPORTATION_METHODS.ROAD
+      };
+      console.log(`[VendorASNCreator] TransportationDetails: SCAC=${carrierScac}, tracking=${trackingNumber}`);
+    }
+
     // Add pallet data if present - at root level
     if (palletData) {
       confirmation.pallets = palletData;
@@ -487,6 +522,10 @@ class VendorASNCreator {
    * Submit ASN with carton-level SSCC data
    * @param {string} poNumber - Purchase order number
    * @param {Object} packingData - Carton/pallet data from UI
+   * @param {Array} packingData.cartons - Carton data with SSCC, items, weight
+   * @param {Array} packingData.pallets - Pallet data (optional)
+   * @param {Object} packingData.carrier - Carrier info { scac, name, trackingNumber }
+   * @param {Object} packingData.measurements - { totalWeight, weightUnit, totalVolume, volumeUnit }
    * @param {Object} options - Additional options
    */
   async submitASNWithSSCC(poNumber, packingData, options = {}) {
