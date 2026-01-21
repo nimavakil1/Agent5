@@ -383,7 +383,7 @@ class VendorASNCreator {
           itemReference: itemRef,
           shippedQuantity: {
             amount: item.quantity,
-            unitOfMeasure: 'Each'
+            unitOfMeasure: 'Eaches'
           }
         };
       })
@@ -423,7 +423,7 @@ class VendorASNCreator {
             vendorProductIdentifier: item.ean || poItem?.vendorProductIdentifier,
             shippedQuantity: {
               amount: 0,
-              unitOfMeasure: 'Each'
+              unitOfMeasure: 'Eaches'
             }
           };
         }
