@@ -37,6 +37,9 @@
     .filters-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
     .filter-select { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; }
     .filter-select:focus { outline: none; border-color: #f97316; }
+    .filter-input { padding: 10px 14px; background: #18181f; border: 1px solid #252532; border-radius: 10px; color: #e4e4e7; font-size: 14px; width: 200px; }
+    .filter-input:focus { outline: none; border-color: #f97316; }
+    .filter-input::placeholder { color: #71717a; }
 
     /* Consolidation Groups */
     .groups-container { display: flex; flex-direction: column; gap: 20px; }
@@ -143,6 +146,7 @@
 
     <!-- Filters -->
     <div class="filters-bar">
+      <input type="text" class="filter-input" id="filter-po" placeholder="Search PO number..." onkeyup="debounceSearch(event)">
       <select class="filter-select" id="filter-marketplace" onchange="loadData()">
         <option value="">All Marketplaces</option>
         <option value="DE">Germany (DE)</option>
@@ -213,6 +217,20 @@
       setTimeout(() => toast.className = 'toast', 3000);
     }
 
+    // Debounce for search input
+    let searchTimeout = null;
+    function debounceSearch(event) {
+      // Trigger immediately on Enter key
+      if (event.key === 'Enter') {
+        clearTimeout(searchTimeout);
+        loadData();
+        return;
+      }
+      // Debounce other keystrokes
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(loadData, 400);
+    }
+
     // Load consolidation data
     async function loadData() {
       const container = document.getElementById('groups-container');
@@ -220,8 +238,13 @@
 
       try {
         const marketplace = document.getElementById('filter-marketplace').value;
-        let url = '/api/vendor/orders/consolidate?';
-        if (marketplace) url += `marketplace=${marketplace}`;
+        const poSearch = document.getElementById('filter-po').value.trim();
+
+        const params = new URLSearchParams();
+        if (marketplace) params.append('marketplace', marketplace);
+        if (poSearch) params.append('po', poSearch);
+
+        const url = '/api/vendor/orders/consolidate?' + params.toString();
 
         const res = await fetch(url, { credentials: 'include' });
         const data = await res.json();
@@ -465,6 +488,7 @@
     // Clear filters
     function clearFilters() {
       document.getElementById('filter-marketplace').value = '';
+      document.getElementById('filter-po').value = '';
       loadData();
     }
 

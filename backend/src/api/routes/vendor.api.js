@@ -298,13 +298,28 @@ router.get('/orders/consolidate', async (req, res) => {
       query['marketplace.code'] = req.query.marketplace.toUpperCase();
     }
 
+    // PO number search filter (case-insensitive partial match)
+    const poSearch = req.query.po?.trim();
+
     // CRITICAL: Isolate test data from production data
     if (isTestMode()) {
       query._testData = true; // In test mode, ONLY show test data
+      // Add PO filter if provided
+      if (poSearch) {
+        query['sourceIds.amazonVendorPONumber'] = { $regex: poSearch, $options: 'i' };
+      }
     } else {
       query._testData = { $ne: true }; // In production, exclude test data
-      // Also exclude TST orders by PO number pattern (some may have _testData: undefined)
-      query['sourceIds.amazonVendorPONumber'] = { $not: /^TST/ };
+      // Combine TST exclusion with optional PO search using $and
+      if (poSearch) {
+        query.$and = [
+          { 'sourceIds.amazonVendorPONumber': { $not: /^TST/ } },
+          { 'sourceIds.amazonVendorPONumber': { $regex: poSearch, $options: 'i' } }
+        ];
+      } else {
+        // Just exclude TST orders
+        query['sourceIds.amazonVendorPONumber'] = { $not: /^TST/ };
+      }
     }
 
     // Get orders
