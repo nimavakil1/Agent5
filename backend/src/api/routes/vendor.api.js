@@ -361,12 +361,17 @@ router.get('/orders/consolidate', async (req, res) => {
       });
 
       group.totalItems += order.items?.length || 0;
-      // Calculate units from items - use acknowledgeQty (accepted) if available
-      const orderUnits = (order.items || []).reduce((sum, item) =>
-        sum + (item.acknowledgeQty ?? item.orderedQuantity?.amount ?? item.quantity ?? 0), 0);
+      // Calculate units and amount from items - use acknowledgeQty (accepted) if available
+      let orderUnits = 0;
+      let orderAmount = 0;
+      for (const item of (order.items || [])) {
+        const qty = item.acknowledgeQty ?? item.orderedQuantity?.amount ?? item.quantity ?? 0;
+        const unitPrice = parseFloat(item.netCost?.amount) || 0;
+        orderUnits += qty;
+        orderAmount += qty * unitPrice;
+      }
       group.totalUnits += orderUnits;
-      // Use totals.total or totals.subtotal for amount
-      group.totalAmount += order.totals?.total || order.totals?.subtotal || order.totals?.totalAmount || 0;
+      group.totalAmount += orderAmount;
       if (order.totals?.currency) group.currency = order.totals.currency;
     }
 
@@ -679,7 +684,9 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       summary: {
         totalItems: consolidatedItems.length,
         totalUnits: consolidatedItems.reduce((sum, i) => sum + i.totalQty, 0),
-        totalAmount: orders.reduce((sum, o) => sum + (o.totals?.totalAmount || 0), 0)
+        // Calculate amount from accepted quantities × unit price
+        totalAmount: consolidatedItems.reduce((sum, i) =>
+          sum + (i.totalQty * (parseFloat(i.netCost?.amount) || 0)), 0)
       }
     });
   } catch (error) {
