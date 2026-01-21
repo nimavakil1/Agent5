@@ -355,7 +355,7 @@ router.get('/orders/consolidate', async (req, res) => {
           fcPartyId: partyId,
           fcName: getFCName(partyId, order.amazonVendor?.shipToParty?.address),
           fcCountry: getFCCountry(partyId),
-          fcAddress: order.amazonVendor?.shipToParty?.address || null,
+          fcAddress: getFCAddress(partyId, order.amazonVendor?.shipToParty?.address),
           deliveryWindow: order.amazonVendor?.deliveryWindow,
           marketplace: order.marketplace?.code,
           orders: [],
@@ -684,7 +684,7 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       vendorGroupName: getVendorGroupName(actualVendorGroup),
       fcPartyId,
       fcName: getFCName(fcPartyId, firstOrder.amazonVendor?.shipToParty?.address),
-      fcAddress: firstOrder.amazonVendor?.shipToParty?.address,
+      fcAddress: getFCAddress(fcPartyId, firstOrder.amazonVendor?.shipToParty?.address),
       deliveryWindow: firstOrder.amazonVendor?.deliveryWindow,
       orderCount: orders.length,
       orders: orders.map(o => ({
@@ -1317,6 +1317,138 @@ router.post('/orders/:poNumber/update-acknowledgments', async (req, res) => {
 });
 
 // ==================== ORDER CONSOLIDATION ====================
+
+/**
+ * Amazon FC (Fulfillment Center) Addresses by Party ID
+ * Used when orders don't include address in shipToParty
+ */
+const FC_ADDRESSES = {
+  // France
+  'CDG7': {
+    name: 'Amazon France Logistique SAS',
+    street: 'ZAC de la Croisette',
+    streetNumber: '1',
+    city: 'Senlis',
+    zipCode: '60300',
+    countryCode: 'FR'
+  },
+  'ORY1': {
+    name: 'Amazon France Logistique SAS',
+    street: 'Rue des Musiciens',
+    streetNumber: '1',
+    city: 'Saran',
+    zipCode: '45770',
+    countryCode: 'FR'
+  },
+  'LYS1': {
+    name: 'Amazon France Logistique SAS',
+    street: 'Route de Marseille',
+    city: 'Montélimar',
+    zipCode: '26200',
+    countryCode: 'FR'
+  },
+  'MRS1': {
+    name: 'Amazon France Logistique SAS',
+    street: 'Rue de la Haie Coq',
+    city: 'Lauwin-Planque',
+    zipCode: '59553',
+    countryCode: 'FR'
+  },
+  'BVA1': {
+    name: 'Amazon France Logistique SAS',
+    street: 'ZAC Haute Picardie',
+    city: 'Amiens',
+    zipCode: '80440',
+    countryCode: 'FR'
+  },
+  // Germany
+  'LEJ1': {
+    name: 'Amazon EU S.à.r.l.',
+    street: 'Amazonstraße',
+    streetNumber: '1',
+    city: 'Leipzig',
+    zipCode: '04347',
+    countryCode: 'DE'
+  },
+  'FRA3': {
+    name: 'Amazon EU S.à.r.l.',
+    street: 'Am Schloss Eichhof',
+    streetNumber: '1',
+    city: 'Bad Hersfeld',
+    zipCode: '36251',
+    countryCode: 'DE'
+  },
+  'CGN1': {
+    name: 'Amazon EU S.à.r.l.',
+    street: 'Amazonstraße',
+    streetNumber: '1',
+    city: 'Köln',
+    zipCode: '50769',
+    countryCode: 'DE'
+  },
+  'DTM2': {
+    name: 'Amazon EU S.à.r.l.',
+    street: 'Im Bergsfeld',
+    streetNumber: '1',
+    city: 'Werne',
+    zipCode: '59368',
+    countryCode: 'DE'
+  },
+  // Italy
+  'MXP5': {
+    name: 'Amazon Italia Logistica S.r.l.',
+    street: 'Via della Dogana',
+    streetNumber: '10',
+    city: 'Castel San Giovanni',
+    zipCode: '29015',
+    countryCode: 'IT'
+  },
+  // Spain
+  'MAD4': {
+    name: 'Amazon Spain Fulfillment S.L.U.',
+    street: 'Avenida de Alemania',
+    streetNumber: '6',
+    city: 'San Fernando de Henares',
+    zipCode: '28830',
+    countryCode: 'ES'
+  },
+  // Belgium
+  'CRL1': {
+    name: 'Amazon EU S.à.r.l.',
+    street: 'Avenue de l\'Europe',
+    streetNumber: '1',
+    city: 'Charleroi',
+    zipCode: '6040',
+    countryCode: 'BE'
+  },
+  // Netherlands
+  'RTM1': {
+    name: 'Amazon EU S.à.r.l.',
+    street: 'Amazonweg',
+    streetNumber: '1',
+    city: 'Rozenburg',
+    zipCode: '3181',
+    countryCode: 'NL'
+  }
+};
+
+/**
+ * Get FC address from party ID (lookup or from order)
+ */
+function getFCAddress(partyId, orderAddress = null) {
+  // Use order address if available
+  if (orderAddress && (orderAddress.addressLine1 || orderAddress.street || orderAddress.city)) {
+    return orderAddress;
+  }
+  // Fall back to lookup table
+  if (partyId) {
+    const upper = partyId.toUpperCase();
+    if (FC_ADDRESSES[upper]) {
+      return FC_ADDRESSES[upper];
+    }
+  }
+  return null;
+}
 
 /**
  * Amazon FC (Fulfillment Center) Names by Party ID
