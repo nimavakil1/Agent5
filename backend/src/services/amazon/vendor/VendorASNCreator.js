@@ -44,10 +44,10 @@ const TRANSPORTATION_METHODS = {
  * NOTE: partyId should come from the PO's sellingParty, not hardcoded
  */
 const ACROPAQ_WAREHOUSE_ADDRESS = {
-  name: 'ACROPAQ BV - Central Warehouse',
-  addressLine1: 'Patronaatstraat 79',
-  city: 'Dendermonde',
-  postalCode: '9200',
+  name: 'ACROPAQ BV',
+  addressLine1: 'Preflexbaan 403',
+  city: 'Ternat',
+  postalCode: '1740',
   countryCode: 'BE'
 };
 
@@ -496,8 +496,15 @@ class VendorASNCreator {
     // GLS SCAC codes: GLSO (GLS Germany), GLSF (GLS France), GLSP (GLS Poland), GLSN (GLS Netherlands)
     // Generic GLS = "GLSO" or use Amazon's carrier list
     const carrierScac = carrier.scac || 'GLSO'; // Default to GLS
-    const trackingNumber = carrier.trackingNumber ||
-      (cartons.length > 0 ? cartons.map(c => c.trackingNumber).filter(Boolean).join(',') : null);
+
+    // For tracking, use the provided master tracking number, or the first carton's tracking
+    // Amazon only accepts ONE tracking number per shipment (not comma-separated)
+    let trackingNumber = carrier.trackingNumber;
+    if (!trackingNumber && cartons.length > 0) {
+      // Find first carton with a tracking number
+      const cartonWithTracking = cartons.find(c => c.trackingNumber);
+      trackingNumber = cartonWithTracking?.trackingNumber || null;
+    }
 
     if (carrierScac || trackingNumber) {
       confirmation.transportationDetails = {
