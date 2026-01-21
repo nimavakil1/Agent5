@@ -1325,8 +1325,8 @@ router.post('/orders/:poNumber/update-acknowledgments', async (req, res) => {
 const FC_ADDRESSES = {
   // France
   'CDG7': {
-    name: 'Amazon France Logistique SAS',
-    street: 'ZAC de la Croisette',
+    name: 'Amazon EU SARL, succursale française',
+    street: 'Avenue Alain Boucher',
     streetNumber: '1',
     city: 'Senlis',
     zipCode: '60300',
@@ -4533,7 +4533,7 @@ router.get('/packing/:shipmentId/labels.pdf', async (req, res) => {
           items: parcel.items || []
         });
 
-        await page.setContent(ssccLabelHtml, { waitUntil: 'networkidle0' });
+        await page.setContent(ssccLabelHtml, { waitUntil: 'domcontentloaded', timeout: 10000 });
         const ssccPdfBuffer = await page.pdf({
           width: '100mm',
           height: '150mm',
@@ -4624,7 +4624,8 @@ router.get('/packing/:shipmentId/sscc-label/:parcelNumber.pdf', async (req, res)
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
-    await page.setContent(ssccLabelHtml, { waitUntil: 'networkidle0' });
+    // Use 'domcontentloaded' instead of 'networkidle0' to avoid timeout on simple HTML
+    await page.setContent(ssccLabelHtml, { waitUntil: 'domcontentloaded', timeout: 10000 });
     const pdfBuffer = await page.pdf({
       width: '100mm',
       height: '150mm',
@@ -4835,7 +4836,7 @@ router.get('/packing/:shipmentId/delivery-note.pdf', async (req, res) => {
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
-    await page.setContent(deliveryNoteHtml, { waitUntil: 'networkidle0' });
+    await page.setContent(deliveryNoteHtml, { waitUntil: 'domcontentloaded', timeout: 10000 });
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
