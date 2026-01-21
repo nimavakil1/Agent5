@@ -4085,9 +4085,13 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
     let glsClient = null;
     let dachserClient = null;
 
+    console.log(`[VendorAPI] generate-labels: carrier=${carrier}, shipmentId=${req.params.shipmentId}`);
+    console.log(`[VendorAPI] generate-labels: fcAddress=${JSON.stringify(shipment.fcAddress)}`);
+
     if (carrier === 'gls') {
       try {
         glsClient = getGLSClient();
+        console.log('[VendorAPI] GLS client initialized successfully');
       } catch (err) {
         console.warn('[VendorAPI] GLS not configured:', err.message);
       }
@@ -4141,7 +4145,9 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
         }
 
         // Generate carrier label based on selected carrier
+        console.log(`[VendorAPI] Parcel ${parcel.parcelNumber}: glsClient=${!!glsClient}, glsTrackingNumber=${parcel.glsTrackingNumber}, fcAddress=${!!shipment.fcAddress}`);
         if (glsClient && !parcel.glsTrackingNumber && shipment.fcAddress) {
+          console.log('[VendorAPI] Calling GLS createShipment...');
           // GLS parcel shipping
           const receiverAddress = {
             name: shipment.fcName || 'Amazon FC',
