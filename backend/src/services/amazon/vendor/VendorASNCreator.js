@@ -365,34 +365,52 @@ class VendorASNCreator {
     });
 
     // Build carton structures with SSCC - at root level per Amazon API
-    const cartonData = cartons.map((carton, idx) => ({
-      cartonIdentifiers: [{
-        containerIdentificationType: 'SSCC',
-        containerIdentificationNumber: carton.sscc
-      }],
-      cartonSequenceNumber: String(idx + 1),
-      items: carton.items.map((item) => {
-        // Find matching PO item
-        const poItem = po.items.find(
-          pi => pi.vendorProductIdentifier === item.ean ||
-                pi.amazonProductIdentifier === item.asin
-        );
-        if (!poItem) {
-          console.warn(`[VendorASNCreator] No matching PO item for carton item: ean=${item.ean}, asin=${item.asin}, sku=${item.sku}`);
-        } else {
-          console.log(`[VendorASNCreator] Matched carton item ean=${item.ean} to PO item vendorProductIdentifier=${poItem.vendorProductIdentifier}`);
-        }
-        // itemReference must match the itemSequenceNumber from shippedItems
-        const itemRef = itemSequenceMap[item.ean] || itemSequenceMap[item.asin] || poItem?.itemSequenceNumber || '1';
-        return {
-          itemReference: itemRef,
-          shippedQuantity: {
-            amount: item.quantity,
-            unitOfMeasure: 'Eaches'
+    // IMPORTANT: trackingNumber is required for every carton in small parcel shipments
+    const cartonData = cartons.map((carton, idx) => {
+      const cartonObj = {
+        cartonIdentifiers: [{
+          containerIdentificationType: 'SSCC',
+          containerIdentificationNumber: carton.sscc
+        }],
+        cartonSequenceNumber: String(idx + 1),
+        items: carton.items.map((item) => {
+          // Find matching PO item
+          const poItem = po.items.find(
+            pi => pi.vendorProductIdentifier === item.ean ||
+                  pi.amazonProductIdentifier === item.asin
+          );
+          if (!poItem) {
+            console.warn(`[VendorASNCreator] No matching PO item for carton item: ean=${item.ean}, asin=${item.asin}, sku=${item.sku}`);
+          } else {
+            console.log(`[VendorASNCreator] Matched carton item ean=${item.ean} to PO item vendorProductIdentifier=${poItem.vendorProductIdentifier}`);
           }
+          // itemReference must match the itemSequenceNumber from shippedItems
+          const itemRef = itemSequenceMap[item.ean] || itemSequenceMap[item.asin] || poItem?.itemSequenceNumber || '1';
+          return {
+            itemReference: itemRef,
+            shippedQuantity: {
+              amount: item.quantity,
+              unitOfMeasure: 'Eaches'
+            }
+          };
+        })
+      };
+
+      // Add tracking number at carton level (required for small parcel shipments)
+      if (carton.trackingNumber) {
+        cartonObj.trackingNumber = carton.trackingNumber;
+      }
+
+      // Add weight at carton level if provided
+      if (carton.weight) {
+        cartonObj.weight = {
+          unitOfMeasure: carton.weightUnit || 'Kg',
+          value: String(carton.weight)
         };
-      })
-    }));
+      }
+
+      return cartonObj;
+    });
 
     // Build pallet structures if any - at root level per Amazon API
     let palletData = null;
