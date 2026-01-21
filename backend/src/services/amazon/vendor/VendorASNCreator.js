@@ -275,12 +275,14 @@ class VendorASNCreator {
 
   /**
    * Build ASN payload for Amazon (legacy - item level only)
+   * Uses the correct Amazon Vendor Shipments API schema
    */
   _buildASNPayload(po, picking, shipmentId) {
     const shipmentDate = picking.date_done || picking.scheduled_date || new Date().toISOString();
 
     // Build items from PO items (we ship what was acknowledged)
-    const shipmentItems = po.items
+    // NOTE: Field is "shippedItems" not "shipmentItems" per Amazon API
+    const shippedItems = po.items
       .filter(item => (item.acknowledgeQty || item.orderedQuantity?.amount) > 0)
       .map(item => ({
         itemSequenceNumber: item.itemSequenceNumber,
@@ -292,19 +294,16 @@ class VendorASNCreator {
         }
       }));
 
+    // Amazon Vendor Shipments API expected fields:
+    // shipmentIdentifier, shipmentConfirmationType, shipmentType, shipmentConfirmationDate,
+    // shippedDate, estimatedDeliveryDate, sellingParty, shipFromParty, shipToParty,
+    // shipmentMeasurements, importDetails, shippedItems, cartons, pallets
     return {
       shipmentConfirmations: [{
         shipmentIdentifier: shipmentId,
         shipmentConfirmationType: 'Original',
         shipmentType: SHIPMENT_TYPES.SMALL_PARCEL,
-        shipmentStructure: 'PalletizedAssortmentCase',
-        transportationDetails: {
-          carrierScac: 'OTHR', // Use 'Other' carrier code - always required
-          carrierShipmentReferenceNumber: picking.carrier_tracking_ref || 'N/A',
-          transportationMode: TRANSPORTATION_METHODS.ROAD
-        },
-        amazonReferenceNumber: po.sourceIds?.amazonVendorPONumber || po.purchaseOrderNumber,
-        shipmentDate: new Date(shipmentDate).toISOString(),
+        shipmentConfirmationDate: new Date(shipmentDate).toISOString(),
         shippedDate: new Date(shipmentDate).toISOString(),
         estimatedDeliveryDate: (po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate)
           ? new Date(po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate).toISOString()
@@ -318,21 +317,20 @@ class VendorASNCreator {
           address: ACROPAQ_WAREHOUSE.address
         },
         shipToParty: po.amazonVendor?.shipToParty || po.shipToParty || {
-          partyId: 'AMAZON',
-          address: {
-            name: 'Amazon Fulfillment Center',
-            countryCode: (po.amazonVendor?.marketplaceId || po.marketplaceId) === 'UK' ? 'GB' : (po.amazonVendor?.marketplaceId || po.marketplaceId)
-          }
+          partyId: 'AMAZON'
         },
-        shipmentItems
+        shippedItems
       }]
     };
   }
 
   /**
-   * Build ASN payload with carton-level SSCCs (ASN v2 compliant)
+   * Build ASN payload with carton-level SSCCs
    *
-   * Structure: Shipment -> Pallets -> Cartons -> Items
+   * Uses Amazon Vendor Shipments API schema:
+   * shipmentIdentifier, shipmentConfirmationType, shipmentType, shipmentConfirmationDate,
+   * shippedDate, estimatedDeliveryDate, sellingParty, shipFromParty, shipToParty,
+   * shipmentMeasurements, importDetails, shippedItems, cartons, pallets
    *
    * @param {Object} po - Purchase order
    * @param {Object} picking - Odoo picking
@@ -358,49 +356,45 @@ class VendorASNCreator {
       return this._buildASNPayload(po, picking, shipmentId);
     }
 
-    // Build carton structures with SSCC
-    // First, build itemSequenceNumber map for proper itemReference values
+    // Build itemSequenceNumber map for proper itemReference values
     const itemSequenceMap = {};
     po.items.forEach(pi => {
       if (pi.vendorProductIdentifier) itemSequenceMap[pi.vendorProductIdentifier] = pi.itemSequenceNumber;
       if (pi.amazonProductIdentifier) itemSequenceMap[pi.amazonProductIdentifier] = pi.itemSequenceNumber;
     });
 
-    const packedItems = {
-      cartons: cartons.map((carton, idx) => ({
-        cartonIdentifier: carton.sscc, // SSCC-18
-        cartonSequenceNumber: String(idx + 1),
-        items: carton.items.map((item) => {
-          // Find matching PO item
-          const poItem = po.items.find(
-            pi => pi.vendorProductIdentifier === item.ean ||
-                  pi.amazonProductIdentifier === item.asin
-          );
-          if (!poItem) {
-            console.warn(`[VendorASNCreator] No matching PO item for carton item: ean=${item.ean}, asin=${item.asin}, sku=${item.sku}`);
-          } else {
-            console.log(`[VendorASNCreator] Matched carton item ean=${item.ean} to PO item vendorProductIdentifier=${poItem.vendorProductIdentifier}`);
+    // Build carton structures with SSCC - at root level per Amazon API
+    const cartonData = cartons.map((carton, idx) => ({
+      cartonIdentifiers: [carton.sscc], // SSCC-18 in array
+      cartonSequenceNumber: String(idx + 1),
+      items: carton.items.map((item) => {
+        // Find matching PO item
+        const poItem = po.items.find(
+          pi => pi.vendorProductIdentifier === item.ean ||
+                pi.amazonProductIdentifier === item.asin
+        );
+        if (!poItem) {
+          console.warn(`[VendorASNCreator] No matching PO item for carton item: ean=${item.ean}, asin=${item.asin}, sku=${item.sku}`);
+        } else {
+          console.log(`[VendorASNCreator] Matched carton item ean=${item.ean} to PO item vendorProductIdentifier=${poItem.vendorProductIdentifier}`);
+        }
+        // itemReference must match the itemSequenceNumber from shippedItems
+        const itemRef = itemSequenceMap[item.ean] || itemSequenceMap[item.asin] || poItem?.itemSequenceNumber || '1';
+        return {
+          itemReference: itemRef,
+          shippedQuantity: {
+            amount: item.quantity,
+            unitOfMeasure: 'Each'
           }
-          // itemReference must match the itemSequenceNumber from shipmentItems
-          const itemRef = itemSequenceMap[item.ean] || itemSequenceMap[item.asin] || poItem?.itemSequenceNumber || '1';
-          return {
-            itemReference: itemRef,
-            vendorProductIdentifier: item.ean || poItem?.vendorProductIdentifier,
-            amazonProductIdentifier: item.asin || poItem?.amazonProductIdentifier,
-            shippedQuantity: {
-              amount: item.quantity,
-              unitOfMeasure: 'Each'
-            }
-          };
-        })
-      }))
-    };
+        };
+      })
+    }));
 
-    // Build pallet structures if any
+    // Build pallet structures if any - at root level per Amazon API
     let palletData = null;
     if (pallets.length > 0) {
       palletData = pallets.map((pallet, idx) => ({
-        palletIdentifier: pallet.sscc, // SSCC-18
+        palletIdentifiers: [pallet.sscc], // SSCC-18 in array
         tier: String(idx + 1),
         block: '1',
         cartonReferenceDetails: pallet.cartonSSCCs.map(sscc => {
@@ -412,8 +406,8 @@ class VendorASNCreator {
       }));
     }
 
-    // Calculate total shipped items for shipmentItems array
-    const shipmentItems = [];
+    // Calculate total shipped items for shippedItems array (NOT shipmentItems)
+    const shippedItems = [];
     const itemTotals = {};
 
     cartons.forEach(carton => {
@@ -438,20 +432,14 @@ class VendorASNCreator {
       });
     });
 
-    Object.values(itemTotals).forEach(item => shipmentItems.push(item));
+    Object.values(itemTotals).forEach(item => shippedItems.push(item));
 
+    // Build confirmation with correct Amazon API field names
     const confirmation = {
       shipmentIdentifier: shipmentId,
       shipmentConfirmationType: 'Original',
       shipmentType: pallets.length > 0 ? SHIPMENT_TYPES.LESS_THAN_TRUCK_LOAD : SHIPMENT_TYPES.SMALL_PARCEL,
-      shipmentStructure: pallets.length > 0 ? 'PalletizedAssortmentCase' : 'LooseAssortmentCase',
-      transportationDetails: {
-        carrierScac: 'OTHR', // Use 'Other' carrier code - always required
-        carrierShipmentReferenceNumber: picking.carrier_tracking_ref || 'N/A',
-        transportationMode: TRANSPORTATION_METHODS.ROAD
-      },
-      amazonReferenceNumber: po.sourceIds?.amazonVendorPONumber || po.purchaseOrderNumber,
-      shipmentDate: new Date(shipmentDate).toISOString(),
+      shipmentConfirmationDate: new Date(shipmentDate).toISOString(),
       shippedDate: new Date(shipmentDate).toISOString(),
       estimatedDeliveryDate: (po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate)
         ? new Date(po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate).toISOString()
@@ -465,17 +453,13 @@ class VendorASNCreator {
         address: ACROPAQ_WAREHOUSE.address
       },
       shipToParty: po.amazonVendor?.shipToParty || po.shipToParty || {
-        partyId: 'AMAZON',
-        address: {
-          name: 'Amazon Fulfillment Center',
-          countryCode: (po.amazonVendor?.marketplaceId || po.marketplaceId) === 'UK' ? 'GB' : (po.amazonVendor?.marketplaceId || po.marketplaceId)
-        }
+        partyId: 'AMAZON'
       },
-      shipmentItems,
-      packedItems
+      shippedItems,
+      cartons: cartonData
     };
 
-    // Add pallet data if present
+    // Add pallet data if present - at root level
     if (palletData) {
       confirmation.pallets = palletData;
     }
