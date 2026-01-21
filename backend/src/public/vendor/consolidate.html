@@ -58,6 +58,8 @@
     .group-meta { display: flex; gap: 20px; font-size: 13px; color: #a1a1aa; margin-top: 8px; flex-wrap: wrap; }
     .group-meta-item { display: flex; align-items: center; gap: 4px; }
     .group-meta-item .material-symbols-outlined { font-size: 16px; color: #71717a; }
+    .group-pos { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .po-badge { font-size: 11px; font-family: monospace; color: #a1a1aa; background: #252532; padding: 3px 8px; border-radius: 4px; }
     .group-stats { display: flex; gap: 24px; align-items: center; }
     .group-stat { text-align: center; }
     .group-stat-value { font-size: 20px; font-weight: 700; color: #fff; }
@@ -313,6 +315,9 @@
                   <span class="material-symbols-outlined">location_on</span>
                   ${group.fcCountry}
                 </div>` : ''}
+              </div>
+              <div class="group-pos">
+                ${group.orders.map(o => `<span class="po-badge">${o.purchaseOrderNumber}</span>`).join('')}
               </div>
             </div>
             <div class="group-stats">
