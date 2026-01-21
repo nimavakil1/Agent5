@@ -41,16 +41,14 @@ const TRANSPORTATION_METHODS = {
 
 /**
  * ACROPAQ company info for shipFromParty
+ * NOTE: partyId should come from the PO's sellingParty, not hardcoded
  */
-const ACROPAQ_WAREHOUSE = {
-  partyId: 'ACROPAQ_CW',
-  address: {
-    name: 'ACROPAQ BV - Central Warehouse',
-    addressLine1: 'Patronaatstraat 79',
-    city: 'Dendermonde',
-    postalCode: '9200',
-    countryCode: 'BE'
-  }
+const ACROPAQ_WAREHOUSE_ADDRESS = {
+  name: 'ACROPAQ BV - Central Warehouse',
+  addressLine1: 'Patronaatstraat 79',
+  city: 'Dendermonde',
+  postalCode: '9200',
+  countryCode: 'BE'
 };
 
 /**
@@ -308,12 +306,12 @@ class VendorASNCreator {
           ? new Date(po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate).toISOString()
           : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         sellingParty: {
-          partyId: ACROPAQ_WAREHOUSE.partyId,
-          address: ACROPAQ_WAREHOUSE.address
+          partyId: po.amazonVendor?.sellingParty?.partyId || po.sellingParty?.partyId,
+          address: ACROPAQ_WAREHOUSE_ADDRESS
         },
         shipFromParty: {
-          partyId: ACROPAQ_WAREHOUSE.partyId,
-          address: ACROPAQ_WAREHOUSE.address
+          partyId: po.amazonVendor?.sellingParty?.partyId || po.sellingParty?.partyId,
+          address: ACROPAQ_WAREHOUSE_ADDRESS
         },
         shipToParty: po.amazonVendor?.shipToParty || po.shipToParty || {
           partyId: 'AMAZON'
@@ -450,12 +448,12 @@ class VendorASNCreator {
         ? new Date(po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate).toISOString()
         : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       sellingParty: {
-        partyId: ACROPAQ_WAREHOUSE.partyId,
-        address: ACROPAQ_WAREHOUSE.address
+        partyId: po.amazonVendor?.sellingParty?.partyId || po.sellingParty?.partyId,
+        address: ACROPAQ_WAREHOUSE_ADDRESS
       },
       shipFromParty: {
-        partyId: ACROPAQ_WAREHOUSE.partyId,
-        address: ACROPAQ_WAREHOUSE.address
+        partyId: po.amazonVendor?.sellingParty?.partyId || po.sellingParty?.partyId,
+        address: ACROPAQ_WAREHOUSE_ADDRESS
       },
       shipToParty: po.amazonVendor?.shipToParty || po.shipToParty || {
         partyId: 'AMAZON'
