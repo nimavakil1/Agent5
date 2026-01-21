@@ -364,7 +364,10 @@ class VendorASNCreator {
 
     // Build carton structures with SSCC - at root level per Amazon API
     const cartonData = cartons.map((carton, idx) => ({
-      cartonIdentifiers: [{ cartonIdentifier: carton.sscc }], // SSCC-18 wrapped in object
+      cartonIdentifiers: [{
+        containerIdentificationType: 'SSCC',
+        containerIdentificationNumber: carton.sscc
+      }],
       cartonSequenceNumber: String(idx + 1),
       items: carton.items.map((item) => {
         // Find matching PO item
@@ -393,7 +396,10 @@ class VendorASNCreator {
     let palletData = null;
     if (pallets.length > 0) {
       palletData = pallets.map((pallet, idx) => ({
-        palletIdentifiers: [{ palletIdentifier: pallet.sscc }], // SSCC-18 wrapped in object
+        palletIdentifiers: [{
+          containerIdentificationType: 'SSCC',
+          containerIdentificationNumber: pallet.sscc
+        }],
         tier: String(idx + 1),
         block: '1',
         cartonReferenceDetails: pallet.cartonSSCCs.map(sscc => {
