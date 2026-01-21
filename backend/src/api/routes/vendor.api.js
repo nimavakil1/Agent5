@@ -361,9 +361,9 @@ router.get('/orders/consolidate', async (req, res) => {
       });
 
       group.totalItems += order.items?.length || 0;
-      // Calculate units from items (sum of quantities)
+      // Calculate units from items - use acknowledgeQty (accepted) if available
       const orderUnits = (order.items || []).reduce((sum, item) =>
-        sum + (item.orderedQuantity?.amount || item.quantity || 0), 0);
+        sum + (item.acknowledgeQty ?? item.orderedQuantity?.amount ?? item.quantity ?? 0), 0);
       group.totalUnits += orderUnits;
       // Use totals.total or totals.subtotal for amount
       group.totalAmount += order.totals?.total || order.totals?.subtotal || order.totals?.totalAmount || 0;
@@ -640,7 +640,8 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
           consolidatedItems.push(itemMap[key]);
         }
 
-        const qty = item.orderedQuantity?.amount || item.quantity || 0;
+        // Use acknowledgeQty (accepted quantity) if available, not orderedQuantity
+        const qty = item.acknowledgeQty ?? item.orderedQuantity?.amount ?? item.quantity ?? 0;
         itemMap[key].totalQty += qty;
         itemMap[key].orders.push({
           purchaseOrderNumber: order.sourceIds?.amazonVendorPONumber || order.purchaseOrderNumber,
@@ -1547,7 +1548,8 @@ async function generatePackingList(req, res) {
     for (const order of orders) {
       for (const item of (order.items || [])) {
         const key = item.vendorProductIdentifier || item.amazonProductIdentifier;
-        const qty = item.orderedQuantity?.amount || 0;
+        // Use acknowledgeQty (accepted quantity) if available
+        const qty = item.acknowledgeQty ?? item.orderedQuantity?.amount ?? 0;
 
         if (!itemMap[key]) {
           // Only show SKU if different from EAN
