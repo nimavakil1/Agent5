@@ -3973,13 +3973,24 @@ router.post('/packing/create-shipment', async (req, res) => {
       return res.status(400).json({ success: false, error: 'At least one parcel is required' });
     }
 
+    // Extract fcPartyId from groupId (format: EU_CDG7_2026-01-22 or FR_CDG7_2026-01-22)
+    const groupParts = groupId.split('_');
+    const fcPartyId = groupParts.length >= 2 ? groupParts[1] : null;
+
+    // Use provided fcAddress, or look up from FC_ADDRESSES if empty/missing
+    let resolvedFcAddress = fcAddress;
+    if (!fcAddress || Object.keys(fcAddress).length === 0 || !fcAddress.city) {
+      resolvedFcAddress = getFCAddress(fcPartyId, fcAddress);
+      console.log(`[VendorAPI] create-shipment: Resolved fcAddress for ${fcPartyId}:`, JSON.stringify(resolvedFcAddress));
+    }
+
     // Create shipment record
     const shipmentId = `PKG-${Date.now()}`;
     const shipment = {
       shipmentId,
       groupId,
       fcName: fcName || '',
-      fcAddress: fcAddress || {},
+      fcAddress: resolvedFcAddress || {},
       purchaseOrders,
       status: 'created',
       parcels: parcels.map((p, idx) => ({
