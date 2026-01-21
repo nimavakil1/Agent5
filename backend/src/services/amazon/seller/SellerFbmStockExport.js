@@ -367,9 +367,11 @@ class SellerFbmStockExport {
       throw new Error('Central Warehouse not configured');
     }
 
+    // IMPORTANT: Odoo has default limit of 100, must specify higher limit
     const products = await this.odoo.searchRead('product.product',
       [['default_code', 'in', odooSkus], ['active', '=', true]],
-      ['id', 'default_code']
+      ['id', 'default_code'],
+      { limit: 10000 }
     );
 
     const productIdToSku = {};
@@ -387,7 +389,8 @@ class SellerFbmStockExport {
         ['product_id', 'in', productIds],
         ['location_id', '=', this.centralLocationId]
       ],
-      ['product_id', 'quantity', 'reserved_quantity']
+      ['product_id', 'quantity', 'reserved_quantity'],
+      { limit: 10000 }
     );
 
     const stockMap = new Map();

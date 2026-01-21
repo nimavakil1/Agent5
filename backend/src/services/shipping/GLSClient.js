@@ -83,6 +83,215 @@ class GLSClient {
   }
 
   /**
+   * Create a multi-parcel shipment (all parcels in one request)
+   * This ensures labels show "Parcel 1 of 3", "Parcel 2 of 3", etc.
+   *
+   * @param {Object} shipment - Shipment data
+   * @param {Object} shipment.sender - Sender address
+   * @param {Object} shipment.receiver - Receiver address
+   * @param {string} shipment.reference - Shipment reference (e.g., PO number)
+   * @param {Array} shipment.parcels - Array of parcels: [{ weight, reference }]
+   * @param {string} shipment.product - GLS product type
+   * @param {string} shipment.service - Optional GLS service
+   * @returns {Object} { success, parcels: [{ trackingNumber, parcelNumber, labelPdf }], error }
+   */
+  async createMultiParcelShipment(shipment) {
+    const result = {
+      success: false,
+      parcels: [],
+      error: null
+    };
+
+    try {
+      const requestBody = this.buildMultiParcelRequest(shipment);
+      const response = await this.sendRequest(requestBody);
+
+      if (response.success) {
+        const parsed = this.parseMultiParcelResponse(response.data);
+        result.success = true;
+        result.parcels = parsed.parcels;
+      } else {
+        result.error = response.error;
+      }
+    } catch (error) {
+      result.error = error.message;
+      console.error('[GLSClient] Error creating multi-parcel shipment:', error);
+    }
+
+    return result;
+  }
+
+  /**
+   * Build SOAP request for multi-parcel shipment
+   */
+  buildMultiParcelRequest(shipment) {
+    const {
+      sender,
+      receiver,
+      reference,
+      parcels = [],
+      product = 'Parcel',
+      service = null,
+      shippingDate = null
+    } = shipment;
+
+    const today = shippingDate || new Date().toISOString().split('T')[0];
+
+    // Build name fields (reuse helper logic)
+    const buildNameFields = (address) => {
+      const GLS_NAME_LIMIT = 39;
+      let name1 = '';
+      let name2 = '';
+
+      if (address.company && address.company.trim()) {
+        name1 = address.company.trim().substring(0, GLS_NAME_LIMIT);
+        if (address.name && address.name.trim()) {
+          name2 = address.name.trim().substring(0, GLS_NAME_LIMIT);
+        }
+      } else {
+        const fullName = (address.name || '').trim();
+        name1 = fullName.substring(0, GLS_NAME_LIMIT);
+        name2 = fullName.length > GLS_NAME_LIMIT
+          ? fullName.substring(GLS_NAME_LIMIT, GLS_NAME_LIMIT * 2)
+          : '';
+      }
+      return { name1, name2 };
+    };
+
+    const buildStreetFields = (address) => {
+      let street = (address.street || '').trim();
+      let streetNumber = (address.streetNumber || '').trim();
+
+      if (streetNumber) {
+        if (street.endsWith(streetNumber)) {
+          street = street.slice(0, -streetNumber.length).trim();
+        }
+        return { street, streetNumber };
+      }
+
+      const match = street.match(/^(.+?)\s+(\d+[\w\-/]*)\s*$/);
+      if (match) {
+        street = match[1].trim();
+        streetNumber = match[2].trim();
+      }
+      return { street, streetNumber };
+    };
+
+    const senderNames = buildNameFields(sender);
+    const receiverNames = buildNameFields(receiver);
+    const senderStreet = buildStreetFields(sender);
+    const receiverStreet = buildStreetFields(receiver);
+
+    let serviceXml = '';
+    if (service) {
+      serviceXml = `
+        <Service>
+          <Service xmlns="http://fpcs.gls-group.eu/v1/Common">
+            <ServiceName>${service}</ServiceName>
+          </Service>
+        </Service>`;
+    }
+
+    // Build multiple ShipmentUnit elements
+    const shipmentUnitsXml = parcels.map((parcel, idx) => `
+        <ShipmentUnit>
+          <ShipmentUnitReference>${parcel.reference || `${reference}-${idx + 1}`}</ShipmentUnitReference>
+          <Weight>${parcel.weight || 1}</Weight>
+          <Service></Service>
+        </ShipmentUnit>`).join('');
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
+  <Body>
+    <ShipmentRequestData xmlns="http://fpcs.gls-group.eu/v1/ShipmentProcessing/types">
+      <Shipment>
+        <ShipmentReference>${reference}</ShipmentReference>
+        <ShippingDate>${today}</ShippingDate>
+        <IncotermCode></IncotermCode>
+        <Identifier></Identifier>
+        <Product>${product}</Product>
+        <Consignee>
+          <ConsigneeID xmlns="http://fpcs.gls-group.eu/v1/Common"></ConsigneeID>
+          <CostCenter xmlns="http://fpcs.gls-group.eu/v1/Common"></CostCenter>
+          <Address xmlns="http://fpcs.gls-group.eu/v1/Common">
+            <Name1>${this.escapeXml(receiverNames.name1)}</Name1>
+            <Name2>${this.escapeXml(receiverNames.name2)}</Name2>
+            <Name3></Name3>
+            <CountryCode>${receiver.countryCode || ''}</CountryCode>
+            <Province>${receiver.province || ''}</Province>
+            <ZIPCode>${receiver.zipCode || ''}</ZIPCode>
+            <City>${this.escapeXml(receiver.city || '')}</City>
+            <Street>${this.escapeXml(receiverStreet.street)}</Street>
+            <StreetNumber>${this.escapeXml(receiverStreet.streetNumber)}</StreetNumber>
+            <eMail>${receiver.email || ''}</eMail>
+            <ContactPerson>${this.escapeXml(receiver.name || receiverNames.name1)}</ContactPerson>
+            <FixedLinePhonenumber></FixedLinePhonenumber>
+            <MobilePhoneNumber>${receiver.phone || ''}</MobilePhoneNumber>
+          </Address>
+        </Consignee>
+        <Shipper>
+          <ContactID xmlns="http://fpcs.gls-group.eu/v1/Common">${this.contactId}</ContactID>
+          <AlternativeShipperAddress xmlns="http://fpcs.gls-group.eu/v1/Common">
+            <Name1>${this.escapeXml(senderNames.name1)}</Name1>
+            <Name2>${this.escapeXml(senderNames.name2)}</Name2>
+            <Name3></Name3>
+            <CountryCode>${sender.countryCode || ''}</CountryCode>
+            <Province>${sender.province || ''}</Province>
+            <ZIPCode>${sender.zipCode || ''}</ZIPCode>
+            <City>${this.escapeXml(sender.city || '')}</City>
+            <Street>${this.escapeXml(senderStreet.street)}</Street>
+            <StreetNumber>${this.escapeXml(senderStreet.streetNumber)}</StreetNumber>
+            <eMail>${sender.email || ''}</eMail>
+            <ContactPerson>${this.escapeXml(sender.name || senderNames.name1)}</ContactPerson>
+            <FixedLinePhonenumber></FixedLinePhonenumber>
+            <MobilePhoneNumber>${sender.phone || ''}</MobilePhoneNumber>
+          </AlternativeShipperAddress>
+        </Shipper>${shipmentUnitsXml}
+        ${serviceXml}
+      </Shipment>
+      <PrintingOptions>
+        <ReturnLabels>
+          <TemplateSet>NONE</TemplateSet>
+          <LabelFormat>PDF</LabelFormat>
+        </ReturnLabels>
+      </PrintingOptions>
+    </ShipmentRequestData>
+  </Body>
+</Envelope>`;
+  }
+
+  /**
+   * Parse multi-parcel response - extracts all tracking numbers and labels
+   */
+  parseMultiParcelResponse(xmlData) {
+    const result = { parcels: [] };
+
+    // Extract all TrackID values
+    const trackIdMatches = xmlData.matchAll(/<TrackID>([^<]+)<\/TrackID>/g);
+    const trackIds = [...trackIdMatches].map(m => m[1]);
+
+    // Extract all ParcelNumber values
+    const parcelMatches = xmlData.matchAll(/<ParcelNumber>([^<]+)<\/ParcelNumber>/g);
+    const parcelNumbers = [...parcelMatches].map(m => m[1]);
+
+    // Extract all label PDF data (base64) - each ShipmentUnit gets its own label
+    const dataMatches = xmlData.matchAll(/<Data>([^<]+)<\/Data>/g);
+    const labelData = [...dataMatches].map(m => Buffer.from(m[1], 'base64'));
+
+    // Combine into parcel objects
+    const count = Math.max(trackIds.length, parcelNumbers.length, labelData.length);
+    for (let i = 0; i < count; i++) {
+      result.parcels.push({
+        trackingNumber: trackIds[i] || null,
+        parcelNumber: parcelNumbers[i] || null,
+        labelPdf: labelData[i] || null
+      });
+    }
+
+    return result;
+  }
+
+  /**
    * Cancel a shipment
    *
    * @param {string} trackingNumber - The tracking number to cancel

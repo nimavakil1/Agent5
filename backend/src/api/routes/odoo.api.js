@@ -654,11 +654,25 @@ router.put('/products/:id', async (req, res) => {
       }
     }
 
-    // Update in Odoo
+    // Update in Odoo (product.product)
     await client.write('product.product', [productId], odooUpdates);
 
-    // If safetyStock was updated, also update MongoDB cache
+    // If safetyStock was updated, also update product.template (for Odoo UI) and MongoDB
     if (updates.safetyStock !== undefined) {
+      try {
+        // Get the product's template ID
+        const productData = await client.read('product.product', [productId], ['product_tmpl_id']);
+        if (productData.length > 0 && productData[0].product_tmpl_id) {
+          const templateId = productData[0].product_tmpl_id[0];
+          // Update product.template so Odoo UI shows the correct value
+          await client.write('product.template', [templateId], { x_safety_stock: updates.safetyStock });
+          console.log(`[ProductUpdate] SafetyStock updated in Odoo product.template ${templateId}: ${updates.safetyStock}`);
+        }
+      } catch (odooErr) {
+        console.error('[ProductUpdate] Failed to update product.template:', odooErr.message);
+        // Continue - product.product was updated
+      }
+
       try {
         await Product.updateOne(
           { odooId: productId },
@@ -1232,8 +1246,19 @@ router.post('/products/safety-stock/bulk', async (req, res) => {
 
         const safetyStock = parseInt(item.safetyStock) || 0;
 
-        // Update Odoo
+        // Update Odoo product.product
         await client.write('product.product', [productId], { x_safety_stock: safetyStock });
+
+        // Also update product.template for Odoo UI
+        try {
+          const productData = await client.read('product.product', [productId], ['product_tmpl_id']);
+          if (productData.length > 0 && productData[0].product_tmpl_id) {
+            const templateId = productData[0].product_tmpl_id[0];
+            await client.write('product.template', [templateId], { x_safety_stock: safetyStock });
+          }
+        } catch (tmplErr) {
+          console.warn(`[SafetyStock Bulk] Failed to update template for product ${productId}:`, tmplErr.message);
+        }
 
         // Update MongoDB
         await Product.updateOne(

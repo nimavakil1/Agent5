@@ -4042,77 +4042,88 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
     const results = [];
     const updatedParcels = [...shipment.parcels];
 
+    // STEP 1: Generate SSCCs for all parcels that don't have one
+    for (let i = 0; i < updatedParcels.length; i++) {
+      const parcel = updatedParcels[i];
+      if (!parcel.sscc) {
+        const ssccResult = await generator.generateSSCC({
+          type: 'carton',
+          purchaseOrderNumber: shipment.purchaseOrders[0] || '',
+          shipmentId: shipment.shipmentId
+        });
+        parcel.sscc = ssccResult.sscc;
+        parcel.ssccFormatted = ssccResult.ssccFormatted;
+        await generator.updateContents(parcel.sscc, parcel.items);
+      }
+    }
+
+    // STEP 2: Generate GLS labels for ALL parcels in ONE request (multi-parcel shipment)
+    // This ensures labels show "Parcel 1 of 3", "Parcel 2 of 3", etc.
+    const parcelsNeedingGLS = updatedParcels.filter(p => !p.glsTrackingNumber);
+
+    if (glsClient && parcelsNeedingGLS.length > 0 && shipment.fcAddress) {
+      console.log(`[VendorAPI] Creating multi-parcel GLS shipment for ${parcelsNeedingGLS.length} parcels`);
+
+      const receiverAddress = {
+        name: shipment.fcAddress.name || shipment.fcName || 'Amazon FC',
+        street: shipment.fcAddress.addressLine1 || shipment.fcAddress.street || '',
+        streetNumber: shipment.fcAddress.streetNumber || '',
+        zipCode: shipment.fcAddress.postalOrZipCode || shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
+        city: shipment.fcAddress.city || '',
+        countryCode: shipment.fcAddress.countryCode || 'FR',
+        email: '',
+        phone: ''
+      };
+
+      const glsResult = await glsClient.createMultiParcelShipment({
+        sender: ACROPAQ_SENDER,
+        receiver: receiverAddress,
+        reference: shipment.shipmentId,
+        parcels: parcelsNeedingGLS.map((parcel, idx) => ({
+          reference: `${shipment.shipmentId}-P${parcel.parcelNumber}`,
+          weight: parcel.weight || 1
+        })),
+        product: 'Parcel'
+      });
+
+      if (glsResult.success && glsResult.parcels.length > 0) {
+        console.log(`[VendorAPI] GLS multi-parcel success: ${glsResult.parcels.length} labels received`);
+        // Map GLS results back to parcels
+        parcelsNeedingGLS.forEach((parcel, idx) => {
+          if (glsResult.parcels[idx]) {
+            const glsParcel = glsResult.parcels[idx];
+            parcel.glsTrackingNumber = glsParcel.trackingNumber;
+            parcel.glsParcelNumber = glsParcel.parcelNumber;
+            parcel.glsLabelPdf = glsParcel.labelPdf ? glsParcel.labelPdf.toString('base64') : null;
+            parcel.carrier = 'gls';
+          }
+        });
+      } else {
+        console.error(`[VendorAPI] GLS multi-parcel failed:`, glsResult.error);
+        // Mark all parcels with the error
+        parcelsNeedingGLS.forEach(parcel => {
+          parcel.glsError = glsResult.error;
+        });
+      }
+    }
+
+    // STEP 3: Build results for response
     for (let i = 0; i < updatedParcels.length; i++) {
       const parcel = updatedParcels[i];
       const parcelResult = {
         parcelNumber: parcel.parcelNumber,
-        sscc: null,
-        ssccFormatted: null,
-        carrierTrackingNumber: null,
-        carrierError: null,
-        // Keep backwards compatibility
-        glsTrackingNumber: null,
-        glsError: null
+        sscc: parcel.sscc,
+        ssccFormatted: parcel.ssccFormatted,
+        carrierTrackingNumber: parcel.glsTrackingNumber || parcel.dachserReference || null,
+        carrierError: parcel.glsError || null,
+        glsTrackingNumber: parcel.glsTrackingNumber || null,
+        glsError: parcel.glsError || null
       };
 
-      try {
-        // Generate SSCC if not already assigned
-        if (!parcel.sscc) {
-          const ssccResult = await generator.generateSSCC({
-            type: 'carton',
-            purchaseOrderNumber: shipment.purchaseOrders[0] || '',
-            shipmentId: shipment.shipmentId
-          });
-          parcel.sscc = ssccResult.sscc;
-          parcel.ssccFormatted = ssccResult.ssccFormatted;
-          parcelResult.sscc = ssccResult.sscc;
-          parcelResult.ssccFormatted = ssccResult.ssccFormatted;
-
-          // Update SSCC contents
-          await generator.updateContents(parcel.sscc, parcel.items);
-        } else {
-          parcelResult.sscc = parcel.sscc;
-          parcelResult.ssccFormatted = parcel.ssccFormatted;
-        }
-
-        // Generate carrier label based on selected carrier
-        console.log(`[VendorAPI] Parcel ${parcel.parcelNumber}: glsClient=${!!glsClient}, glsTrackingNumber=${parcel.glsTrackingNumber}, fcAddress=${!!shipment.fcAddress}`);
-        if (glsClient && !parcel.glsTrackingNumber && shipment.fcAddress) {
-          console.log('[VendorAPI] Calling GLS createShipment...');
-          // GLS parcel shipping - use Amazon's address format (addressLine1, postalOrZipCode, etc.)
-          const receiverAddress = {
-            name: shipment.fcAddress.name || shipment.fcName || 'Amazon FC',
-            street: shipment.fcAddress.addressLine1 || shipment.fcAddress.street || '',
-            streetNumber: shipment.fcAddress.streetNumber || '',
-            zipCode: shipment.fcAddress.postalOrZipCode || shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
-            city: shipment.fcAddress.city || '',
-            countryCode: shipment.fcAddress.countryCode || 'FR',
-            email: '',
-            phone: ''
-          };
-
-          const glsResult = await glsClient.createShipment({
-            sender: ACROPAQ_SENDER,
-            receiver: receiverAddress,
-            reference: `${shipment.shipmentId}-P${parcel.parcelNumber}`,
-            weight: parcel.weight,
-            product: 'Parcel'
-          });
-
-          if (glsResult.success) {
-            parcel.glsTrackingNumber = glsResult.trackingNumber;
-            parcel.glsParcelNumber = glsResult.parcelNumber;
-            parcel.glsLabelPdf = glsResult.labelPdf ? glsResult.labelPdf.toString('base64') : null;
-            parcel.carrier = 'gls';
-            parcelResult.glsTrackingNumber = glsResult.trackingNumber;
-            parcelResult.carrierTrackingNumber = glsResult.trackingNumber;
-          } else {
-            parcelResult.glsError = glsResult.error;
-            parcelResult.carrierError = glsResult.error;
-          }
-        } else if (dachserClient && !parcel.dachserTrackingNumber && shipment.fcAddress) {
-          // Dachser freight shipping - use Amazon's address format
-          const receiverAddress = {
+      // Handle Dachser for freight shipments (still per-parcel for quotes)
+      if (dachserClient && !parcel.dachserTrackingNumber && shipment.fcAddress) {
+        try {
+          const dachserReceiverAddress = {
             name: shipment.fcAddress.name || shipment.fcName || 'Amazon FC',
             street: shipment.fcAddress.addressLine1 || shipment.fcAddress.street || '',
             postalCode: shipment.fcAddress.postalOrZipCode || shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
@@ -4122,12 +4133,10 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
             email: ''
           };
 
-          // For Dachser, we create a quotation first (freight shipments typically need quotes)
-          // Note: Full transport order creation would be done at ship time
           const quoteResult = await dachserClient.getQuotation({
-            receiver: receiverAddress,
+            receiver: dachserReceiverAddress,
             packages: [{
-              packingType: 'EU', // Euro pallet
+              packingType: 'EU',
               quantity: 1,
               weight: parcel.weight,
               length: 120,
@@ -4144,18 +4153,17 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
               transitDays: quoteResult.transitDays
             };
             parcel.carrier = 'dachser';
-            // For Dachser, tracking number comes after actual booking
             parcelResult.carrierTrackingNumber = `DACHSER-${shipment.shipmentId}-P${parcel.parcelNumber}`;
             parcel.dachserReference = parcelResult.carrierTrackingNumber;
           } else {
             parcelResult.carrierError = quoteResult.error || 'Dachser quote failed';
           }
-        } else if (carrier !== 'none' && !glsClient && !dachserClient) {
-          parcelResult.carrierError = `${carrier.toUpperCase()} not configured`;
-          parcelResult.glsError = carrier === 'gls' ? 'GLS not configured' : null;
+        } catch (err) {
+          parcelResult.carrierError = err.message;
         }
-      } catch (err) {
-        parcelResult.error = err.message;
+      } else if (carrier !== 'none' && !glsClient && !dachserClient) {
+        parcelResult.carrierError = `${carrier.toUpperCase()} not configured`;
+        parcelResult.glsError = carrier === 'gls' ? 'GLS not configured' : null;
       }
 
       results.push(parcelResult);
