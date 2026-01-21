@@ -276,6 +276,7 @@ class VendorASNCreator {
    */
   _buildASNPayload(po, picking, shipmentId) {
     const shipmentDate = picking.date_done || picking.scheduled_date || new Date().toISOString();
+    const poNumber = po.sourceIds?.amazonVendorPONumber || po.purchaseOrderNumber;
 
     // Build items from PO items (we ship what was acknowledged)
     // NOTE: Field is "shippedItems" not "shipmentItems" per Amazon API
@@ -287,7 +288,10 @@ class VendorASNCreator {
         vendorProductIdentifier: item.vendorProductIdentifier,
         shippedQuantity: {
           amount: item.acknowledgeQty || item.orderedQuantity?.amount || 0,
-          unitOfMeasure: item.orderedQuantity?.unitOfMeasure || 'Each'
+          unitOfMeasure: 'Eaches'
+        },
+        itemDetails: {
+          purchaseOrderNumber: poNumber
         }
       }));
 
@@ -413,6 +417,9 @@ class VendorASNCreator {
     const shippedItems = [];
     const itemTotals = {};
 
+    // Get the PO number for item details
+    const poNumber = po.sourceIds?.amazonVendorPONumber || po.purchaseOrderNumber;
+
     cartons.forEach(carton => {
       carton.items.forEach(item => {
         const key = item.ean || item.asin;
@@ -428,6 +435,10 @@ class VendorASNCreator {
             shippedQuantity: {
               amount: 0,
               unitOfMeasure: 'Eaches'
+            },
+            // Include purchaseOrderNumber in itemDetails per Amazon API
+            itemDetails: {
+              purchaseOrderNumber: poNumber
             }
           };
         }
