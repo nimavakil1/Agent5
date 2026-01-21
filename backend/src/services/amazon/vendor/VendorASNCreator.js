@@ -48,8 +48,7 @@ const ACROPAQ_WAREHOUSE = {
     name: 'ACROPAQ BV - Central Warehouse',
     addressLine1: 'Patronaatstraat 79',
     city: 'Dendermonde',
-    stateOrRegion: 'Oost-Vlaanderen',
-    postalOrZipCode: '9200',
+    postalCode: '9200',
     countryCode: 'BE'
   }
 };
