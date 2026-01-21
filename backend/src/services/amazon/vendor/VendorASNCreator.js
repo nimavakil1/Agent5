@@ -186,7 +186,8 @@ class VendorASNCreator {
       }
 
       // Submit to Amazon
-      const client = this.getClient(po.marketplaceId);
+      const marketplace = po.amazonVendor?.marketplaceId || po.marketplaceId || 'FR';
+      const client = this.getClient(marketplace);
       await client.init();
 
       const response = await client.submitShipmentConfirmations(asnPayload);
@@ -195,7 +196,7 @@ class VendorASNCreator {
       await this._saveShipment({
         shipmentId,
         purchaseOrderNumber: poNumber,
-        marketplaceId: po.marketplaceId,
+        marketplaceId: marketplace,
         odooPickingId: picking.id,
         odooPickingName: picking.name,
         transactionId: response.transactionId,
@@ -267,7 +268,9 @@ class VendorASNCreator {
    */
   _generateShipmentId(po, _picking) {
     const timestamp = Date.now().toString(36).toUpperCase();
-    return `ASN-${po.purchaseOrderNumber}-${timestamp}`;
+    // Support unified schema (sourceIds) and legacy (purchaseOrderNumber)
+    const poNum = po.sourceIds?.amazonVendorPONumber || po.purchaseOrderNumber;
+    return `ASN-${poNum}-${timestamp}`;
   }
 
   /**
@@ -296,15 +299,15 @@ class VendorASNCreator {
         shipmentType: SHIPMENT_TYPES.SMALL_PARCEL,
         shipmentStructure: 'PalletizedAssortmentCase',
         transportationDetails: {
-          carrierScac: picking.carrier_id ? 'OTHR' : null,
-          carrierShipmentReferenceNumber: picking.carrier_tracking_ref || null,
+          carrierScac: 'OTHR', // Use 'Other' carrier code - always required
+          carrierShipmentReferenceNumber: picking.carrier_tracking_ref || 'N/A',
           transportationMode: TRANSPORTATION_METHODS.ROAD
         },
-        amazonReferenceNumber: po.purchaseOrderNumber,
+        amazonReferenceNumber: po.sourceIds?.amazonVendorPONumber || po.purchaseOrderNumber,
         shipmentDate: new Date(shipmentDate).toISOString(),
         shippedDate: new Date(shipmentDate).toISOString(),
-        estimatedDeliveryDate: po.deliveryWindow?.endDate
-          ? new Date(po.deliveryWindow.endDate).toISOString()
+        estimatedDeliveryDate: (po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate)
+          ? new Date(po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate).toISOString()
           : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         sellingParty: {
           partyId: ACROPAQ_WAREHOUSE.partyId,
@@ -314,11 +317,11 @@ class VendorASNCreator {
           partyId: ACROPAQ_WAREHOUSE.partyId,
           address: ACROPAQ_WAREHOUSE.address
         },
-        shipToParty: po.shipToParty || {
+        shipToParty: po.amazonVendor?.shipToParty || po.shipToParty || {
           partyId: 'AMAZON',
           address: {
             name: 'Amazon Fulfillment Center',
-            countryCode: po.marketplaceId === 'UK' ? 'GB' : po.marketplaceId
+            countryCode: (po.amazonVendor?.marketplaceId || po.marketplaceId) === 'UK' ? 'GB' : (po.amazonVendor?.marketplaceId || po.marketplaceId)
           }
         },
         shipmentItems
@@ -356,11 +359,18 @@ class VendorASNCreator {
     }
 
     // Build carton structures with SSCC
+    // First, build itemSequenceNumber map for proper itemReference values
+    const itemSequenceMap = {};
+    po.items.forEach(pi => {
+      if (pi.vendorProductIdentifier) itemSequenceMap[pi.vendorProductIdentifier] = pi.itemSequenceNumber;
+      if (pi.amazonProductIdentifier) itemSequenceMap[pi.amazonProductIdentifier] = pi.itemSequenceNumber;
+    });
+
     const packedItems = {
       cartons: cartons.map((carton, idx) => ({
         cartonIdentifier: carton.sscc, // SSCC-18
         cartonSequenceNumber: String(idx + 1),
-        items: carton.items.map((item, itemIdx) => {
+        items: carton.items.map((item) => {
           // Find matching PO item
           const poItem = po.items.find(
             pi => pi.vendorProductIdentifier === item.ean ||
@@ -371,8 +381,10 @@ class VendorASNCreator {
           } else {
             console.log(`[VendorASNCreator] Matched carton item ean=${item.ean} to PO item vendorProductIdentifier=${poItem.vendorProductIdentifier}`);
           }
+          // itemReference must match the itemSequenceNumber from shipmentItems
+          const itemRef = itemSequenceMap[item.ean] || itemSequenceMap[item.asin] || poItem?.itemSequenceNumber || '1';
           return {
-            itemReference: String(itemIdx + 1),
+            itemReference: itemRef,
             vendorProductIdentifier: item.ean || poItem?.vendorProductIdentifier,
             amazonProductIdentifier: item.asin || poItem?.amazonProductIdentifier,
             shippedQuantity: {
@@ -434,15 +446,15 @@ class VendorASNCreator {
       shipmentType: pallets.length > 0 ? SHIPMENT_TYPES.LESS_THAN_TRUCK_LOAD : SHIPMENT_TYPES.SMALL_PARCEL,
       shipmentStructure: pallets.length > 0 ? 'PalletizedAssortmentCase' : 'LooseAssortmentCase',
       transportationDetails: {
-        carrierScac: picking.carrier_id ? 'OTHR' : null,
-        carrierShipmentReferenceNumber: picking.carrier_tracking_ref || null,
+        carrierScac: 'OTHR', // Use 'Other' carrier code - always required
+        carrierShipmentReferenceNumber: picking.carrier_tracking_ref || 'N/A',
         transportationMode: TRANSPORTATION_METHODS.ROAD
       },
-      amazonReferenceNumber: po.purchaseOrderNumber,
+      amazonReferenceNumber: po.sourceIds?.amazonVendorPONumber || po.purchaseOrderNumber,
       shipmentDate: new Date(shipmentDate).toISOString(),
       shippedDate: new Date(shipmentDate).toISOString(),
-      estimatedDeliveryDate: po.deliveryWindow?.endDate
-        ? new Date(po.deliveryWindow.endDate).toISOString()
+      estimatedDeliveryDate: (po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate)
+        ? new Date(po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate).toISOString()
         : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       sellingParty: {
         partyId: ACROPAQ_WAREHOUSE.partyId,
@@ -452,11 +464,11 @@ class VendorASNCreator {
         partyId: ACROPAQ_WAREHOUSE.partyId,
         address: ACROPAQ_WAREHOUSE.address
       },
-      shipToParty: po.shipToParty || {
+      shipToParty: po.amazonVendor?.shipToParty || po.shipToParty || {
         partyId: 'AMAZON',
         address: {
           name: 'Amazon Fulfillment Center',
-          countryCode: po.marketplaceId === 'UK' ? 'GB' : po.marketplaceId
+          countryCode: (po.amazonVendor?.marketplaceId || po.marketplaceId) === 'UK' ? 'GB' : (po.amazonVendor?.marketplaceId || po.marketplaceId)
         }
       },
       shipmentItems,
@@ -548,8 +560,9 @@ class VendorASNCreator {
       }
 
       // Submit to Amazon
-      console.log(`[VendorASNCreator] Getting vendor client for marketplace: ${po.marketplaceId}`);
-      const client = this.getClient(po.marketplaceId);
+      const marketplace = po.amazonVendor?.marketplaceId || po.marketplaceId || 'FR';
+      console.log(`[VendorASNCreator] Getting vendor client for marketplace: ${marketplace}`);
+      const client = this.getClient(marketplace);
       await client.init();
 
       console.log(`[VendorASNCreator] Submitting ASN to Amazon Vendor Central...`);
@@ -561,7 +574,7 @@ class VendorASNCreator {
       await this._saveShipment({
         shipmentId,
         purchaseOrderNumber: poNumber,
-        marketplaceId: po.marketplaceId,
+        marketplaceId: marketplace,
         odooPickingId: picking.id,
         odooPickingName: picking.name,
         transactionId: response.transactionId,
@@ -721,7 +734,8 @@ class VendorASNCreator {
     const results = [];
 
     for (const po of readyPOs) {
-      const result = await this.submitASN(po.purchaseOrderNumber, { dryRun });
+      const poNum = po.sourceIds?.amazonVendorPONumber || po.purchaseOrderNumber;
+      const result = await this.submitASN(poNum, { dryRun });
       results.push(result);
     }
 
@@ -766,14 +780,15 @@ class VendorASNCreator {
       state: 'done'
     }));
 
+    const poNum = po.sourceIds?.amazonVendorPONumber || po.purchaseOrderNumber;
     return {
       id: mockPickingId,
-      name: `TEST-WH/OUT/${po.purchaseOrderNumber}`,
+      name: `TEST-WH/OUT/${poNum}`,
       state: 'done',
       date_done: now.toISOString(),
       scheduled_date: now.toISOString(),
       carrier_id: [1, 'Test Carrier'],
-      carrier_tracking_ref: `TEST-TRACK-${po.purchaseOrderNumber}`,
+      carrier_tracking_ref: `TEST-TRACK-${poNum}`,
       move_line_ids: moveLines.map(ml => ml.id),
       move_lines: moveLines,
       _testMode: true,
