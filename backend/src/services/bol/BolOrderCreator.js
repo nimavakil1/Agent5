@@ -19,7 +19,7 @@
 const { getDb } = require('../../db');
 const { CHANNELS, SUB_CHANNELS: _SUB_CHANNELS } = require('../orders/UnifiedOrderService');
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
-const { getAddressCleaner } = require('../amazon/seller/AddressCleaner');
+const { getPartnerCreationService } = require('../orders/PartnerCreationService');
 
 // Collection name for unified orders
 const COLLECTION_NAME = 'unified_orders';
@@ -58,7 +58,7 @@ class BolOrderCreator {
     this.partnerCache = {};
     this.journalCache = {};
     this.shippingProductId = null;
-    this.addressCleaner = null;
+    this.partnerService = null;
   }
 
   /**
@@ -69,8 +69,8 @@ class BolOrderCreator {
       await this.odoo.authenticate();
     }
 
-    // Initialize address cleaner (simple regex-based cleaning)
-    this.addressCleaner = getAddressCleaner();
+    // Initialize unified partner creation service (with AI address cleaning)
+    this.partnerService = await getPartnerCreationService(this.odoo);
 
     // Find or create shipping product
     await this.findShippingProduct();
@@ -375,10 +375,15 @@ class BolOrderCreator {
   }
 
   /**
-   * Find or create customer from shipping details with AI address cleaning
+   * Find or create customer from shipping details using unified PartnerCreationService
+   * Uses AI address cleaning for intelligent parsing
+   * Name format: "Company - PersonName" for B2B, "PersonName" for B2C
+   *
    * @param {object} shipmentDetails - Bol order shipping details
+   * @param {string} orderId - Bol order ID (for logging)
+   * @returns {Promise<number>} Odoo partner ID
    */
-  async findOrCreatePartner(shipmentDetails) {
+  async findOrCreatePartner(shipmentDetails, orderId = null) {
     if (!shipmentDetails) {
       throw new Error('No shipping details provided');
     }
@@ -386,16 +391,13 @@ class BolOrderCreator {
     const firstName = shipmentDetails.firstName || '';
     const surname = shipmentDetails.surname || '';
     const rawName = `${firstName} ${surname}`.trim();
-    const zipCode = shipmentDetails.zipCode || '';
-    const countryCode = shipmentDetails.countryCode || 'NL';
-    // Get company directly from Bol API data (already extracted in buildShipmentDetails)
     const bolCompany = shipmentDetails.company || '';
 
     if (!rawName && !bolCompany) {
       throw new Error('No customer name in shipping details');
     }
 
-    // Build raw street address
+    // Build raw street address for the cleaner
     let rawStreet = shipmentDetails.streetName || '';
     if (shipmentDetails.houseNumber) {
       rawStreet += ' ' + shipmentDetails.houseNumber;
@@ -404,101 +406,38 @@ class BolOrderCreator {
       rawStreet += shipmentDetails.houseNumberExtension;
     }
 
-    // Clean address with AI
-    let cleanedAddress;
-    try {
-      cleanedAddress = await this.addressCleaner.cleanAddress({
-        recipientName: rawName,
-        addressLine1: rawStreet.trim(),
-        addressLine2: shipmentDetails.extraAddressInformation || '',
-        city: shipmentDetails.city || '',
-        postalCode: zipCode,
-        countryCode: countryCode
-      });
-    } catch (err) {
-      console.warn(`[BolOrderCreator] AI cleaning failed, using raw data: ${err.message}`);
-      cleanedAddress = {
-        name: rawName,
-        company: null,
-        street: rawStreet.trim(),
-        street2: null,
-        city: shipmentDetails.city || '',
-        zip: zipCode,
-        country: countryCode
-      };
-    }
+    // Build raw address for unified cleaning service
+    const rawAddress = {
+      name: rawName,
+      firstName: firstName,
+      surname: surname,
+      company: bolCompany,
+      street: rawStreet.trim(),
+      streetName: shipmentDetails.streetName,
+      houseNumber: shipmentDetails.houseNumber,
+      houseNumberExtension: shipmentDetails.houseNumberExtension,
+      street2: shipmentDetails.extraAddressInformation || '',
+      city: shipmentDetails.city || '',
+      postalCode: shipmentDetails.zipCode || '',
+      countryCode: shipmentDetails.countryCode || 'NL',
+      source: 'bol'
+    };
 
-    // Use company from Bol API if available, otherwise use AI-detected company
-    const company = bolCompany || cleanedAddress.company || null;
-    const personalName = cleanedAddress.name || rawName;
-
-    // Build display name: company first, then personal name
-    // Use " - " separator to avoid confusion with Odoo's parent/child comma notation
-    const displayName = company
-      ? (personalName ? `${company} - ${personalName}` : company)
-      : personalName;
-
-    // Check cache first
-    const cacheKey = `${displayName}|${zipCode}`;
-    if (this.partnerCache[cacheKey]) {
-      return this.partnerCache[cacheKey];
-    }
-
-    // Search by cleaned name + postal code
-    const existing = await this.odoo.searchRead('res.partner', [
-      ['name', '=', displayName],
-      ['zip', '=', zipCode]
-    ], ['id', 'name']);
-
-    if (existing.length > 0) {
-      this.partnerCache[cacheKey] = existing[0].id;
-      return existing[0].id;
-    }
-
-    // Also try raw name (in case partner was created before)
-    if (displayName !== rawName) {
-      const existingRaw = await this.odoo.searchRead('res.partner', [
-        ['name', '=', rawName],
-        ['zip', '=', zipCode]
-      ], ['id', 'name']);
-
-      if (existingRaw.length > 0) {
-        // Update existing partner with cleaned address
-        const partnerId = existingRaw[0].id;
-        await this.odoo.write('res.partner', [partnerId], {
-          name: displayName,
-          street: cleanedAddress.street || false,
-          street2: cleanedAddress.street2 || false,
-          city: cleanedAddress.city || false,
-          zip: cleanedAddress.zip || false
-        });
-        console.log(`[BolOrderCreator] Updated partner ${partnerId} with cleaned address: ${displayName}`);
-        this.partnerCache[cacheKey] = partnerId;
-        return partnerId;
-      }
-    }
-
-    // Get country ID
-    const countryId = COUNTRY_IDS[countryCode] || COUNTRY_IDS['NL'];
-
-    // Create new partner with cleaned address
-    const partnerId = await this.odoo.create('res.partner', {
-      name: displayName,
-      street: cleanedAddress.street || rawStreet.trim(),
-      street2: cleanedAddress.street2 || false,
-      zip: cleanedAddress.zip || zipCode,
-      city: cleanedAddress.city || shipmentDetails.city || '',
-      country_id: countryId,
-      email: shipmentDetails.email || '',
-      phone: shipmentDetails.deliveryPhoneNumber || '',
-      customer_rank: 1,
-      type: 'contact'
+    // Use unified PartnerCreationService (with AI cleaning)
+    const result = await this.partnerService.findOrCreatePartner(rawAddress, {
+      email: shipmentDetails.email,
+      phone: shipmentDetails.deliveryPhoneNumber,
+      source: 'bol',
+      orderId: orderId
     });
 
-    this.partnerCache[cacheKey] = partnerId;
-    console.log(`[BolOrderCreator] Created partner ${partnerId}: ${displayName}`);
+    // Cache the result
+    const cacheKey = `${result.displayName}|${shipmentDetails.zipCode || ''}`;
+    this.partnerCache[cacheKey] = result.partnerId;
 
-    return partnerId;
+    console.log(`[BolOrderCreator] ${result.isNew ? 'Created' : 'Found'} partner ${result.partnerId}: ${result.displayName}`);
+
+    return result.partnerId;
   }
 
   /**
@@ -659,7 +598,7 @@ class BolOrderCreator {
 
       // Step 4: Find or create customer
       const shipmentDetails = this.buildShipmentDetails(bolOrder);
-      const partnerId = await this.findOrCreatePartner(shipmentDetails);
+      const partnerId = await this.findOrCreatePartner(shipmentDetails, orderId);
 
       // Step 5: Create single order using helper method
       const createResult = await this.createSingleFulfillmentOrder(
@@ -778,7 +717,7 @@ class BolOrderCreator {
 
       // Find or create customer (shared between both orders)
       const shipmentDetails = this.buildShipmentDetails(bolOrder);
-      const partnerId = await this.findOrCreatePartner(shipmentDetails);
+      const partnerId = await this.findOrCreatePartner(shipmentDetails, orderId);
 
       // Create FBB order if needed and has items
       let fbbResult = null;

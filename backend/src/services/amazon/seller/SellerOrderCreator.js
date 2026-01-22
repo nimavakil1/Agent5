@@ -30,7 +30,8 @@ const {
 const { getItemQuantity } = require('./SellerOrderSchema');
 const { euCountryConfig: _euCountryConfig } = require('../EuCountryConfig');
 const { skuResolver } = require('../SkuResolver');
-const { getAddressCleaner: _getAddressCleaner, LEGAL_TERMS_REGEX } = require('./AddressCleaner');
+const { LEGAL_TERMS_REGEX } = require('./AddressCleaner');
+const { getPartnerCreationService } = require('../../orders/PartnerCreationService');
 
 /**
  * Clean duplicate names like "elodie da cunha, DA CUNHA Elodie"
@@ -678,12 +679,11 @@ class SellerOrderCreator {
   }
 
   /**
-   * Find or create customer and shipping address from order data
-   * Creates real customer with actual shipping address when available,
-   * falls back to generic customer if no address data.
-   * Handles both legacy and unified schema field names.
+   * Find or create customer from order data using unified PartnerCreationService
+   * Creates a single partner with combined name format (like Bol orders)
+   * Name format: "Company - PersonName" for B2B, "PersonName" for B2C
    *
-   * @returns {Object} { customerId, shippingAddressId }
+   * @returns {Object} { customerId, shippingAddressId } (same ID for both)
    */
   async findOrCreateCustomerAndAddress(order, config) {
     const address = order.shippingAddress;
@@ -696,149 +696,46 @@ class SellerOrderCreator {
       return { customerId: genericCustomerId, shippingAddressId: genericCustomerId };
     }
 
-    // Build customer name
-    // Priority: name > buyerName > location-based name > generic
-    let customerName = cleanDuplicateName(address.name);
-
-    // Try buyer name if shipping name is empty (unified: customer.name, legacy: buyerName)
+    // Get buyer info
     const buyerName = order.customer?.name || order.amazonSeller?.buyerName || order.buyerName;
-    if (!customerName && buyerName) {
-      customerName = cleanDuplicateName(buyerName);
-    }
-
-    // For B2B: use "Company - PersonalName" format (same as Bol orders)
-    const isBusinessOrder = order.amazonSeller?.isBusinessOrder || order.isBusinessOrder;
+    const buyerEmail = order.customer?.email || order.amazonSeller?.buyerEmail || order.buyerEmail;
     const buyerCompanyName = order.amazonSeller?.buyerCompanyName || order.buyerCompanyName;
-    if (isBusinessOrder && buyerCompanyName) {
-      const companyName = cleanDuplicateName(buyerCompanyName);
-      // Use "Company - PersonalName" format when both exist, otherwise just company name
-      if (customerName && customerName !== companyName) {
-        customerName = `${companyName} - ${customerName}`;
-      } else {
-        customerName = companyName;
-      }
-    }
 
-    // If still no name, create location-based customer using city/postal code
-    // This is for orders where Amazon doesn't return PII (name)
-    if (!customerName) {
+    // Build raw address for unified cleaning service
+    const rawAddress = {
+      name: cleanDuplicateName(address.name) || cleanDuplicateName(buyerName),
+      company: buyerCompanyName || '',
+      street: address.street || address.addressLine1 || '',
+      street2: address.street2 || address.addressLine2 || '',
+      city: address.city || '',
+      postalCode: address.postalCode || '',
+      countryCode: address.countryCode || config.shipToCountry,
+      buyerCompanyName: buyerCompanyName || '',
+      source: 'amazon'
+    };
+
+    // If still no name, create location-based name
+    if (!rawAddress.name) {
       const city = address.city || 'Unknown';
       const postalCode = address.postalCode || '';
       const countryCode = address.countryCode || config.shipToCountry;
-      customerName = `Amazon Customer (${city}${postalCode ? ' ' + postalCode : ''}, ${countryCode})`;
-      console.log(`[SellerOrderCreator] Using location-based customer name for ${amazonOrderId}: ${customerName}`);
+      rawAddress.name = `Amazon Customer (${city}${postalCode ? ' ' + postalCode : ''}, ${countryCode})`;
+      console.log(`[SellerOrderCreator] Using location-based customer name for ${amazonOrderId}: ${rawAddress.name}`);
     }
 
-    const countryId = address.countryCode ? this.countryCache[address.countryCode.toUpperCase()] || null : null;
-    const buyerEmail = order.customer?.email || order.amazonSeller?.buyerEmail || order.buyerEmail;
+    // Use unified PartnerCreationService
+    const partnerService = await getPartnerCreationService(this.odoo);
+    const result = await partnerService.findOrCreatePartner(rawAddress, {
+      email: buyerEmail,
+      phone: address.phone,
+      source: 'amazon',
+      orderId: amazonOrderId
+    });
 
-    // Check cache for customer
-    const customerCacheKey = `customer|${customerName}|${address.countryCode}`;
-    let customerId = this.partnerCache[customerCacheKey];
+    console.log(`[SellerOrderCreator] ${result.isNew ? 'Created' : 'Found'} partner: ${result.displayName} (ID: ${result.partnerId})`);
 
-    if (!customerId) {
-      // Try to find existing customer by name and country
-      const existingCustomer = await this.odoo.searchRead('res.partner',
-        [
-          ['name', '=', customerName],
-          ['country_id', '=', countryId],
-          ['parent_id', '=', false],  // Must be parent, not child contact
-          ['customer_rank', '>', 0]
-        ],
-        ['id']
-      );
-
-      if (existingCustomer.length > 0) {
-        customerId = existingCustomer[0].id;
-      } else {
-        // Create new customer
-        customerId = await this.odoo.create('res.partner', {
-          name: customerName,
-          company_type: isBusinessOrder ? 'company' : 'person',
-          is_company: isBusinessOrder,
-          customer_rank: 1,
-          country_id: countryId,
-          email: buyerEmail || null,
-          comment: `Amazon customer - created from order ${amazonOrderId}`
-        });
-        console.log(`[SellerOrderCreator] Created customer: ${customerName} (ID: ${customerId})`);
-      }
-
-      this.partnerCache[customerCacheKey] = customerId;
-    }
-
-    // Now create/find the shipping address as a child contact
-    // Use available data for cache key (some orders may not have street address from Amazon)
-    // Note: unified schema uses 'street', legacy uses 'addressLine1'
-    const streetKey = address.street || address.addressLine1 || address.city || 'no-street';
-    const addressCacheKey = `shipping|${customerId}|${address.postalCode || 'no-zip'}|${streetKey}`;
-    let shippingAddressId = this.partnerCache[addressCacheKey];
-
-    if (!shippingAddressId) {
-      // Build search criteria based on available data
-      const searchCriteria = [
-        ['parent_id', '=', customerId],
-        ['type', '=', 'delivery']
-      ];
-
-      // Add zip to search if available
-      if (address.postalCode) {
-        searchCriteria.push(['zip', '=', address.postalCode]);
-      }
-
-      // Add city to search if available (as fallback when no street)
-      if (address.city) {
-        searchCriteria.push(['city', '=', address.city]);
-      }
-
-      // Try to find existing shipping address under this customer
-      const existingAddress = await this.odoo.searchRead('res.partner',
-        searchCriteria,
-        ['id']
-      );
-
-      if (existingAddress.length > 0) {
-        shippingAddressId = existingAddress[0].id;
-      } else {
-        // Create new shipping address as child contact
-        // Use customerName as delivery contact name if address.name is missing
-        // Clean the name to remove duplicates like "John Smith, SMITH John"
-        const deliveryName = cleanDuplicateName(address.name) || customerName;
-
-        // Get company name from buyerCompanyName (Amazon B2B field)
-        // IMPORTANT: company_name must be set for GLS labels (NS Infosystems reads this field)
-        let deliveryCompanyName = buyerCompanyName || null;
-
-        // If no specific company name but parent is a company, use parent name
-        if (!deliveryCompanyName && isBusinessOrder) {
-          deliveryCompanyName = customerName;
-        }
-
-        // Use unified schema field names: 'street' not 'addressLine1'
-        const streetValue = address.street || address.addressLine1 || null;
-        const street2Value = address.street2 || address.addressLine2 || null;
-
-        shippingAddressId = await this.odoo.create('res.partner', {
-          parent_id: customerId,
-          type: 'delivery',
-          name: deliveryName,
-          company_name: deliveryCompanyName,  // Company name for GLS labels
-          street: streetValue,  // May be null if PII not available
-          street2: street2Value,
-          city: address.city || null,
-          zip: address.postalCode || null,
-          country_id: countryId,
-          phone: address.phone || null,
-          email: buyerEmail || null,  // Email for carrier notifications (GLS, etc.)
-          comment: `Shipping address from Amazon order ${amazonOrderId}${!address.name ? ' (PII limited by Amazon)' : ''}`
-        });
-        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (company: ${deliveryCompanyName || 'none'}) (ID: ${shippingAddressId})`);
-      }
-
-      this.partnerCache[addressCacheKey] = shippingAddressId;
-    }
-
-    return { customerId, shippingAddressId };
+    // Return same ID for both - single partner structure (like Bol)
+    return { customerId: result.partnerId, shippingAddressId: result.partnerId };
   }
 
   /**
@@ -1314,15 +1211,18 @@ class SellerOrderCreator {
   }
 
   /**
-   * Find or create customer with support for AI-cleaned address and separate billing address
-   * Enhanced version for TSV-imported orders
+   * Find or create customer for TSV-imported orders using unified PartnerCreationService
+   * Creates a single partner with combined name format (like Bol orders)
+   * Name format: "Company - PersonName" for B2B, "PersonName" for B2C
+   *
+   * If addressCleaningResult exists (from AI), it uses that directly.
+   * Otherwise, it runs AI cleaning via the PartnerCreationService.
    *
    * @param {Object} order - Unified order document
-   * @returns {Object} { customerId, shippingAddressId, invoiceAddressId }
+   * @returns {Object} { customerId, shippingAddressId, invoiceAddressId } (same ID for all)
    */
   async findOrCreateCustomerWithBilling(order) {
     const address = order.shippingAddress;
-    const billingAddress = order.billingAddress;
     const cleanedAddress = order.addressCleaningResult;
     const amazonOrderId = order.sourceIds?.amazonOrderId;
 
@@ -1333,206 +1233,58 @@ class SellerOrderCreator {
       return { customerId: genericCustomerId, shippingAddressId: genericCustomerId, invoiceAddressId: genericCustomerId };
     }
 
-    // Use AI-cleaned address data if available
-    const isCompany = cleanedAddress?.isCompany || order.isBusinessOrder || false;
-
-    // Build customer name - priority: AI company > AI name > buyerCompanyName > customer.name > recipientName
-    let customerName;
-    if (cleanedAddress?.company) {
-      customerName = cleanedAddress.company;
-    } else if (cleanedAddress?.name) {
-      customerName = cleanedAddress.name;
-    } else if (order.buyerCompanyName) {
-      customerName = order.buyerCompanyName;
-    } else if (order.customer?.name) {
-      customerName = cleanDuplicateName(order.customer.name);
-    } else {
-      customerName = cleanDuplicateName(address.name);
-    }
-
-    // If still no name, create location-based customer
-    if (!customerName) {
-      const city = address.city || 'Unknown';
-      const postalCode = address.postalCode || '';
-      const countryCode = address.countryCode || 'DE';
-      customerName = `Amazon Customer (${city}${postalCode ? ' ' + postalCode : ''}, ${countryCode})`;
-      console.log(`[SellerOrderCreator] Using location-based customer name for ${amazonOrderId}: ${customerName}`);
-    }
-
-    const countryId = address.countryCode ? this.countryCache[address.countryCode.toUpperCase()] || null : null;
     const buyerEmail = order.customer?.email;
+    const partnerService = await getPartnerCreationService(this.odoo);
+    let result;
 
-    // Check cache for customer
-    const customerCacheKey = `customer|${customerName}|${address.countryCode}`;
-    let customerId = this.partnerCache[customerCacheKey];
-
-    if (!customerId) {
-      // Try to find existing customer by name and country
-      const existingCustomer = await this.odoo.searchRead('res.partner',
-        [
-          ['name', '=', customerName],
-          ['country_id', '=', countryId],
-          ['parent_id', '=', false],
-          ['customer_rank', '>', 0]
-        ],
-        ['id']
-      );
-
-      if (existingCustomer.length > 0) {
-        customerId = existingCustomer[0].id;
-      } else {
-        // Create new customer
-        customerId = await this.odoo.create('res.partner', {
-          name: customerName,
-          company_type: isCompany ? 'company' : 'person',
-          is_company: isCompany,
-          customer_rank: 1,
-          country_id: countryId,
-          email: buyerEmail || null,
-          comment: `Amazon customer - created from FBM order ${amazonOrderId}`
-        });
-        console.log(`[SellerOrderCreator] Created customer: ${customerName} (ID: ${customerId}, company: ${isCompany})`);
-      }
-
-      this.partnerCache[customerCacheKey] = customerId;
-    }
-
-    // Create/find shipping address (child contact)
-    // IMPORTANT: If AI cleaning was done, use ONLY the AI values - don't fall back to raw data!
-    // The AI moves street from address2 to street when needed, so falling back would duplicate it.
-    let shippingStreet, shippingStreet2, shippingCity, shippingZip;
+    // If we already have AI-cleaned address data, use it directly
     if (cleanedAddress && cleanedAddress.street) {
-      // AI cleaning was done - use AI values exclusively
-      shippingStreet = cleanedAddress.street;
-      shippingStreet2 = cleanedAddress.street2 || null;  // Don't fall back to raw!
-      shippingCity = cleanedAddress.city || address.city;
-      shippingZip = cleanedAddress.zip || address.postalCode;
+      result = await partnerService.findOrCreatePartnerFromCleaned(cleanedAddress, {
+        email: buyerEmail,
+        phone: address.phone,
+        source: 'amazon',
+        orderId: amazonOrderId
+      });
     } else {
-      // No AI cleaning - use raw address data
-      shippingStreet = address.street || address.addressLine1;
-      shippingStreet2 = address.street2 || address.addressLine2;
-      shippingCity = address.city;
-      shippingZip = address.postalCode;
-    }
+      // No pre-cleaned address - let PartnerCreationService run AI cleaning
+      const rawAddress = {
+        name: cleanDuplicateName(address.name) || cleanDuplicateName(order.customer?.name),
+        company: order.buyerCompanyName || '',
+        street: address.street || address.addressLine1 || '',
+        street2: address.street2 || address.addressLine2 || '',
+        city: address.city || '',
+        postalCode: address.postalCode || '',
+        countryCode: address.countryCode || 'DE',
+        buyerCompanyName: order.buyerCompanyName || '',
+        source: 'amazon'
+      };
 
-    // For B2B with company: use person name for delivery contact
-    let deliveryName;
-    if (isCompany && cleanedAddress?.company && cleanedAddress?.name) {
-      deliveryName = cleanedAddress.name; // Person name under company
-    } else {
-      deliveryName = cleanDuplicateName(address.name) || customerName;
-    }
-
-    const addressCacheKey = `shipping|${customerId}|${shippingZip || 'no-zip'}|${shippingCity || 'no-city'}`;
-    let shippingAddressId = this.partnerCache[addressCacheKey];
-
-    if (!shippingAddressId) {
-      // Try to find existing shipping address
-      const searchCriteria = [
-        ['parent_id', '=', customerId],
-        ['type', '=', 'delivery']
-      ];
-      if (shippingZip) searchCriteria.push(['zip', '=', shippingZip]);
-      if (shippingCity) searchCriteria.push(['city', '=', shippingCity]);
-
-      const existingAddress = await this.odoo.searchRead('res.partner', searchCriteria, ['id']);
-
-      if (existingAddress.length > 0) {
-        shippingAddressId = existingAddress[0].id;
-      } else {
-        // Determine company_name for the delivery address
-        // Priority: AI-cleaned company > buyerCompanyName > parent company name (if B2B)
-        // IMPORTANT: company_name must be set for GLS labels (NS Infosystems reads this field)
-        let deliveryCompanyName = cleanedAddress?.company || order.buyerCompanyName || null;
-
-        // If no specific company name but parent is a company, use parent name
-        if (!deliveryCompanyName && isCompany) {
-          deliveryCompanyName = customerName;
-        }
-
-        // Create new shipping address
-        shippingAddressId = await this.odoo.create('res.partner', {
-          parent_id: customerId,
-          type: 'delivery',
-          name: deliveryName,
-          company_name: deliveryCompanyName,  // Company name for GLS labels (NS Infosystems)
-          street: shippingStreet || null,
-          street2: shippingStreet2 || null,
-          city: shippingCity || null,
-          zip: shippingZip || null,
-          country_id: countryId,
-          phone: address.phone || null,
-          email: buyerEmail || null,
-          comment: `Shipping address from Amazon FBM order ${amazonOrderId}`
-        });
-        console.log(`[SellerOrderCreator] Created shipping address: ${deliveryName} (company: ${deliveryCompanyName || 'none'}) (ID: ${shippingAddressId})`);
+      // If still no name, create location-based name
+      if (!rawAddress.name) {
+        const city = address.city || 'Unknown';
+        const postalCode = address.postalCode || '';
+        const countryCode = address.countryCode || 'DE';
+        rawAddress.name = `Amazon Customer (${city}${postalCode ? ' ' + postalCode : ''}, ${countryCode})`;
+        console.log(`[SellerOrderCreator] Using location-based customer name for ${amazonOrderId}: ${rawAddress.name}`);
       }
 
-      this.partnerCache[addressCacheKey] = shippingAddressId;
+      result = await partnerService.findOrCreatePartner(rawAddress, {
+        email: buyerEmail,
+        phone: address.phone,
+        source: 'amazon',
+        orderId: amazonOrderId
+      });
     }
 
-    // Check if billing address is different from shipping
-    let invoiceAddressId = shippingAddressId;
+    console.log(`[SellerOrderCreator] ${result.isNew ? 'Created' : 'Found'} partner: ${result.displayName} (ID: ${result.partnerId})`);
 
-    if (billingAddress && billingAddress.name && billingAddress.street) {
-      const billingIsDifferent =
-        billingAddress.name !== address.name ||
-        billingAddress.street !== address.street ||
-        billingAddress.postalCode !== address.postalCode;
-
-      if (billingIsDifferent) {
-        const billingCountryCode = billingAddress.countryCode || address.countryCode;
-        const billingCountryId = billingCountryCode ? this.countryCache[billingCountryCode.toUpperCase()] || countryId : countryId;
-        const billingCacheKey = `invoice|${customerId}|${billingAddress.postalCode || 'no-zip'}|${billingAddress.city || 'no-city'}`;
-
-        invoiceAddressId = this.partnerCache[billingCacheKey];
-
-        if (!invoiceAddressId) {
-          // Try to find existing billing address
-          const searchCriteria = [
-            ['parent_id', '=', customerId],
-            ['type', '=', 'invoice']
-          ];
-          if (billingAddress.postalCode) searchCriteria.push(['zip', '=', billingAddress.postalCode]);
-          if (billingAddress.city) searchCriteria.push(['city', '=', billingAddress.city]);
-
-          const existingBilling = await this.odoo.searchRead('res.partner', searchCriteria, ['id']);
-
-          if (existingBilling.length > 0) {
-            invoiceAddressId = existingBilling[0].id;
-          } else {
-            // Get company name for billing address
-            // IMPORTANT: company_name must be set for invoices (same as delivery)
-            let billingCompanyName = cleanedAddress?.company || order.buyerCompanyName || null;
-
-            // If no specific company name but parent is a company, use parent name
-            if (!billingCompanyName && isCompany) {
-              billingCompanyName = customerName;
-            }
-
-            // Create new billing address
-            invoiceAddressId = await this.odoo.create('res.partner', {
-              parent_id: customerId,
-              type: 'invoice',
-              name: billingAddress.name,
-              company_name: billingCompanyName,  // Company name for invoices
-              street: billingAddress.street || null,
-              street2: billingAddress.street2 || null,
-              city: billingAddress.city || null,
-              zip: billingAddress.postalCode || null,
-              country_id: billingCountryId,
-              phone: billingAddress.phone || null,
-              comment: `Billing address from Amazon FBM order ${amazonOrderId}`
-            });
-            console.log(`[SellerOrderCreator] Created billing address: ${billingAddress.name} (company: ${billingCompanyName || 'none'}) (ID: ${invoiceAddressId})`);
-          }
-
-          this.partnerCache[billingCacheKey] = invoiceAddressId;
-        }
-      }
-    }
-
-    return { customerId, shippingAddressId, invoiceAddressId };
+    // Return same ID for all - single partner structure (like Bol)
+    // Billing address is same as shipping in this unified model
+    return {
+      customerId: result.partnerId,
+      shippingAddressId: result.partnerId,
+      invoiceAddressId: result.partnerId
+    };
   }
 
   /**
