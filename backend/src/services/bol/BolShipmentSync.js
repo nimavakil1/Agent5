@@ -272,7 +272,8 @@ class BolShipmentSync {
   async processOrder(bolOrder) {
     // Get order ID from unified_orders schema
     const orderId = bolOrder.sourceIds?.bolOrderId || bolOrder.orderId;
-    const isSplitOrder = bolOrder.bol?.isSplitOrder === true;
+    // Note: isSplitOrder is stored in odoo.isSplitOrder, not bol.isSplitOrder
+    const isSplitOrder = bolOrder.odoo?.isSplitOrder === true;
 
     const result = {
       orderId,
@@ -410,7 +411,7 @@ class BolShipmentSync {
           // Split orders (mixed FBB+FBR) - use odooFbrSaleOrderId
           {
             'sourceIds.odooFbrSaleOrderId': { $exists: true, $ne: null },
-            'bol.isSplitOrder': true
+            'odoo.isSplitOrder': true
           }
         ],
         $and: [
