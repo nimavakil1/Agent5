@@ -15,11 +15,13 @@
 const { getDb } = require('../../../db');
 const { getAddressCleanerAI } = require('./AddressCleanerAI');
 const { getUnifiedOrderService, CHANNELS, SUB_CHANNELS } = require('../../orders/UnifiedOrderService');
+const { getSellerAddressEnricher } = require('./SellerAddressEnricher');
 
 class FbmOrderImporter {
   constructor() {
     this.unifiedService = null;
     this.addressCleaner = null;
+    this.addressEnricher = null;
     this.validSkus = null; // Cache of valid product SKUs from database
   }
 
@@ -32,6 +34,9 @@ class FbmOrderImporter {
 
     // Initialize AI address cleaner
     this.addressCleaner = getAddressCleanerAI();
+
+    // Initialize SP-API address enricher (for fetching CompanyName)
+    this.addressEnricher = getSellerAddressEnricher();
 
     // Load valid SKUs from products collection
     await this.loadValidSkus();
@@ -306,15 +311,20 @@ class FbmOrderImporter {
    * @param {string} tsvContent - TSV file content
    * @param {Object} options - Import options
    * @param {string} options.fileName - Original file name for tracking
+   * @param {boolean} options.enrichWithSpApi - Fetch CompanyName from SP-API (default: true)
+   * @param {Function} options.onProgress - Progress callback (current, total, orderId, stage)
    * @returns {Object} Import results with orderIds
    */
   async importToUnifiedOrders(tsvContent, options = {}) {
     await this.init();
 
+    const { enrichWithSpApi = true, onProgress } = options;
+
     const results = {
       parsed: 0,
       imported: 0,
       updated: 0,
+      enriched: 0,
       errors: [],
       orderIds: []
     };
@@ -326,17 +336,60 @@ class FbmOrderImporter {
 
       console.log(`[FbmOrderImporter] Parsed ${orderIds.length} orders from TSV`);
 
-      for (const orderId of orderIds) {
+      for (let i = 0; i < orderIds.length; i++) {
+        const orderId = orderIds[i];
         const order = orderGroups[orderId];
 
+        // Progress callback
+        if (onProgress) {
+          onProgress(i + 1, orderIds.length, orderId, 'processing');
+        }
+
         try {
-          // Use AddressCleanerAI to intelligently parse addresses
+          // Step 1: Fetch CompanyName from SP-API (if enabled)
+          let spApiCompanyName = null;
+          let spApiEnrichment = null;
+
+          if (enrichWithSpApi) {
+            if (onProgress) {
+              onProgress(i + 1, orderIds.length, orderId, 'fetching-address');
+            }
+
+            try {
+              const spApiAddress = await this.addressEnricher.fetchOrderAddress(orderId);
+              if (spApiAddress?.companyName) {
+                spApiCompanyName = spApiAddress.companyName;
+                results.enriched++;
+                console.log(`[FbmOrderImporter] SP-API CompanyName for ${orderId}: "${spApiCompanyName}"`);
+              }
+              spApiEnrichment = {
+                attempted: true,
+                success: !!spApiAddress,
+                companyName: spApiCompanyName,
+                enrichedAt: new Date()
+              };
+            } catch (spApiError) {
+              console.warn(`[FbmOrderImporter] SP-API enrichment failed for ${orderId}:`, spApiError.message);
+              spApiEnrichment = {
+                attempted: true,
+                success: false,
+                error: spApiError.message,
+                attemptedAt: new Date()
+              };
+            }
+          }
+
+          // Step 2: Use AddressCleanerAI to intelligently parse addresses
+          // Now include the SP-API CompanyName if we have it
           let cleanedAddress = null;
           try {
             cleanedAddress = await this.addressCleaner.cleanAddress({
               recipientName: order.recipientName,
               buyerName: order.buyerName,
-              buyerCompanyName: order.buyerCompanyName,
+              // Use SP-API CompanyName if available, otherwise fall back to TSV buyerCompanyName
+              buyerCompanyName: spApiCompanyName || order.buyerCompanyName,
+              // Also pass the SP-API company name separately so AI knows it's the shipping destination company
+              shippingCompanyName: spApiCompanyName,
               addressLine1: order.address1,
               addressLine2: order.address2,
               addressLine3: order.address3,
@@ -344,13 +397,21 @@ class FbmOrderImporter {
               state: order.state,
               postalCode: order.postalCode,
               countryCode: order.country,
-              isBusinessOrder: order.isBusinessOrder
+              isBusinessOrder: order.isBusinessOrder || !!spApiCompanyName
             });
 
             console.log(`[FbmOrderImporter] AI parsed address for ${orderId}: company="${cleanedAddress.company}", name="${cleanedAddress.name}", isCompany=${cleanedAddress.isCompany}, confidence=${cleanedAddress.confidence}`);
           } catch (aiError) {
             console.error(`[FbmOrderImporter] AI address cleaning failed for ${orderId}:`, aiError.message);
-            // Continue without AI-cleaned address
+            // Fallback: use SP-API company name directly if AI fails
+            if (spApiCompanyName) {
+              cleanedAddress = {
+                company: spApiCompanyName,
+                name: order.recipientName,
+                isCompany: true,
+                confidence: 'sp-api-fallback'
+              };
+            }
           }
 
           // Build unified order document
@@ -378,9 +439,10 @@ class FbmOrderImporter {
           // Calculate totals
           const subtotal = items.reduce((sum, item) => sum + (item.lineTotal || 0), 0);
 
-          // Build shipping address
+          // Build shipping address - include SP-API CompanyName if available
           const shippingAddress = {
             name: order.recipientName || null,
+            companyName: spApiCompanyName || null, // From SP-API enrichment
             street: order.address1 || null,
             street2: order.address2 || order.address3 || null,
             city: order.city || null,
@@ -464,9 +526,13 @@ class FbmOrderImporter {
             billingAddress,
             addressCleaningResult,
 
-            // B2B indicators
-            isBusinessOrder: order.isBusinessOrder || false,
+            // B2B indicators - also check if we have a shipping company name from SP-API
+            isBusinessOrder: order.isBusinessOrder || !!spApiCompanyName,
             buyerCompanyName: order.buyerCompanyName || null,
+            shippingCompanyName: spApiCompanyName || null, // From SP-API
+
+            // SP-API enrichment tracking
+            spApiEnrichment: spApiEnrichment || null,
 
             // TSV import tracking
             tsvImport: {

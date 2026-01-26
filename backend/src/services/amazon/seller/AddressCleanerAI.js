@@ -149,6 +149,7 @@ class AddressCleanerAI {
    * @param {string} rawAddress.countryCode - Country code
    * @param {string} rawAddress.buyerName - Buyer name
    * @param {string} rawAddress.buyerCompanyName - Buyer company name (B2B)
+   * @param {string} rawAddress.shippingCompanyName - Shipping company name from SP-API (authoritative)
    * @param {string} rawAddress.purchaseOrderNumber - PO number if any
    * @returns {Promise<Object>} Cleaned and structured address
    */
@@ -178,7 +179,17 @@ class AddressCleanerAI {
       }
 
       const parsed = JSON.parse(jsonMatch[0]);
-      return this._normalizeResponse(parsed);
+      const result = this._normalizeResponse(parsed);
+
+      // If we have SP-API shipping company name, it's authoritative - use it
+      // This overrides AI parsing since SP-API is the source of truth
+      if (rawAddress.shippingCompanyName) {
+        result.company = rawAddress.shippingCompanyName;
+        result.isCompany = true;
+        result.spApiCompanyUsed = true;
+      }
+
+      return result;
 
     } catch (error) {
       console.error('AddressCleanerAI error:', error.message);
@@ -245,6 +256,11 @@ class AddressCleanerAI {
     if (rawAddress.buyerCompanyName) {
       lines.push(`buyer-company-name: "${rawAddress.buyerCompanyName}"`);
     }
+    // SP-API shipping company name - this is the ACTUAL destination company
+    // (different from buyer-company-name which may be Amazon Business EU SARL)
+    if (rawAddress.shippingCompanyName) {
+      lines.push(`shipping-company-name (from SP-API): "${rawAddress.shippingCompanyName}"`);
+    }
     if (rawAddress.purchaseOrderNumber) {
       lines.push(`purchase-order-number: "${rawAddress.purchaseOrderNumber}"`);
     }
@@ -282,10 +298,15 @@ class AddressCleanerAI {
     const LEGAL_TERMS_REGEX = /\b(GmbH|AG|KG|OHG|UG|e\.?V\.?|mbH|Co\.?\s*KG|Ltd\.?|Inc\.?|LLC|SARL|SAS|BV|NV|gGmbH|e\.?K\.?)\b\.?/gi;
 
     const hasLegalTerm = LEGAL_TERMS_REGEX.test(rawAddress.addressLine1 || '') ||
-                         LEGAL_TERMS_REGEX.test(rawAddress.recipientName || '');
+                         LEGAL_TERMS_REGEX.test(rawAddress.recipientName || '') ||
+                         !!rawAddress.shippingCompanyName;
+
+    // Prefer SP-API shipping company name over TSV buyerCompanyName
+    const companyName = rawAddress.shippingCompanyName ||
+                        (hasLegalTerm ? (rawAddress.buyerCompanyName || rawAddress.addressLine1) : null);
 
     return {
-      company: hasLegalTerm ? (rawAddress.buyerCompanyName || rawAddress.addressLine1 || null) : null,
+      company: companyName || null,
       name: rawAddress.recipientName || null,
       street: rawAddress.addressLine1 || null,
       street2: rawAddress.addressLine2 || null,
@@ -293,10 +314,13 @@ class AddressCleanerAI {
       city: rawAddress.city || null,
       state: rawAddress.state || null,
       country: rawAddress.countryCode || null,
-      isCompany: hasLegalTerm,
+      isCompany: hasLegalTerm || !!rawAddress.shippingCompanyName,
       poNumber: rawAddress.purchaseOrderNumber || null,
-      confidence: 'low',
-      notes: 'Fallback parsing used due to AI error'
+      confidence: rawAddress.shippingCompanyName ? 'sp-api-fallback' : 'low',
+      notes: rawAddress.shippingCompanyName
+        ? 'Fallback parsing with SP-API company name'
+        : 'Fallback parsing used due to AI error',
+      spApiCompanyUsed: !!rawAddress.shippingCompanyName
     };
   }
 }

@@ -701,16 +701,36 @@ class SellerOrderCreator {
     const buyerEmail = order.customer?.email || order.amazonSeller?.buyerEmail || order.buyerEmail;
     const buyerCompanyName = order.amazonSeller?.buyerCompanyName || order.buyerCompanyName;
 
+    // Get shipping company name - prefer SP-API enriched data over TSV buyerCompanyName
+    // The SP-API CompanyName is the actual shipping destination company (e.g., "Daimler Truck AG")
+    // The buyerCompanyName from TSV is often just the billing intermediary (e.g., "Amazon Business EU SARL")
+    const shippingCompanyName = address.companyName ||  // From SP-API via shippingAddress
+                                order.shippingCompanyName ||  // Stored at order level
+                                order.spApiEnrichment?.companyName ||  // From enrichment data
+                                order.addressCleaningResult?.company ||  // From AI cleaning
+                                null;
+
+    // Use shipping company name, fall back to buyerCompanyName only if it's not an Amazon billing entity
+    const isAmazonBillingEntity = buyerCompanyName?.toLowerCase().includes('amazon') &&
+                                  (buyerCompanyName?.toLowerCase().includes('business') ||
+                                   buyerCompanyName?.toLowerCase().includes('sarl'));
+    const companyName = shippingCompanyName || (isAmazonBillingEntity ? null : buyerCompanyName) || '';
+
+    if (shippingCompanyName) {
+      console.log(`[SellerOrderCreator] Using SP-API shipping company for ${amazonOrderId}: "${shippingCompanyName}"`);
+    }
+
     // Build raw address for unified cleaning service
     const rawAddress = {
       name: cleanDuplicateName(address.name) || cleanDuplicateName(buyerName),
-      company: buyerCompanyName || '',
+      company: companyName,
       street: address.street || address.addressLine1 || '',
       street2: address.street2 || address.addressLine2 || '',
       city: address.city || '',
       postalCode: address.postalCode || '',
       countryCode: address.countryCode || config.shipToCountry,
       buyerCompanyName: buyerCompanyName || '',
+      shippingCompanyName: shippingCompanyName || '',
       source: 'amazon'
     };
 

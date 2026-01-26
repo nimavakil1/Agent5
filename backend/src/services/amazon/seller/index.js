@@ -56,6 +56,7 @@ const {
   getAddressCleaner: _getAddressCleaner,
   LEGAL_TERMS_REGEX: _LEGAL_TERMS_REGEX
 } = require('./AddressCleaner');
+const { SellerAddressEnricher, getSellerAddressEnricher } = require('./SellerAddressEnricher');
 
 module.exports = {
   // Client
@@ -114,6 +115,10 @@ module.exports = {
   // Fulfillment Centers & MCF
   SellerFulfillmentSync,
   getSellerFulfillmentSync,
+
+  // Address Enrichment (SP-API CompanyName fetch)
+  SellerAddressEnricher,
+  getSellerAddressEnricher,
 
   // Marketplace Config
   MARKETPLACE_IDS,
