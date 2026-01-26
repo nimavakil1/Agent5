@@ -50,8 +50,9 @@ async function enrichExistingOrders() {
   console.log('Connected to MongoDB\n');
 
   // Build query for orders needing enrichment
+  // Note: channel can be 'amazon-seller' or 'amazon_seller' depending on when imported
   let query = {
-    channel: 'amazon_seller',
+    channel: { $in: ['amazon-seller', 'amazon_seller'] },
     'sourceIds.amazonOrderId': { $exists: true, $ne: null }
   };
 
