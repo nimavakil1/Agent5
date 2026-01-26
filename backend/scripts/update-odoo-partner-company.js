@@ -11,7 +11,7 @@
 
 require('dotenv').config();
 const { MongoClient } = require('mongodb');
-const { OdooDirectClient } = require('../src/services/odoo/OdooDirectClient');
+const { getCachedOdooClient } = require('../src/core/agents/integrations/OdooMCP');
 
 const amazonOrderId = process.argv[2];
 
@@ -65,8 +65,7 @@ async function updateOdooPartner() {
 
   // Connect to Odoo
   console.log('\nConnecting to Odoo...');
-  const odoo = new OdooDirectClient();
-  await odoo.connect();
+  const odoo = await getCachedOdooClient();
   console.log('Connected to Odoo');
 
   // Get current partner data
