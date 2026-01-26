@@ -21,7 +21,7 @@ const COUNTRY_IDS = {
   'DE': 57,   // Germany
   'FR': 75,   // France
   'AT': 14,   // Austria
-  'IT': 107,  // Italy
+  'IT': 109,  // Italy (was 107 which is Iran - bug fix)
   'ES': 68,   // Spain
   'PL': 177,  // Poland
   'LU': 126,  // Luxembourg
