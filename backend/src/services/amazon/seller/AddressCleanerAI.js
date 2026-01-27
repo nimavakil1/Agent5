@@ -11,6 +11,7 @@
  */
 
 const Anthropic = require('@anthropic-ai/sdk');
+const { LEGAL_TERMS_REGEX } = require('./AddressCleaner');
 
 // System prompt for address parsing
 const ADDRESS_PARSING_PROMPT = `You are an expert at parsing shipping addresses from e-commerce data. Your task is to take raw address fields from Amazon and structure them correctly for import into an ERP system.
@@ -181,10 +182,21 @@ class AddressCleanerAI {
       const parsed = JSON.parse(jsonMatch[0]);
       const result = this._normalizeResponse(parsed);
 
-      // If we have SP-API shipping company name, it's authoritative - use it
-      // This overrides AI parsing since SP-API is the source of truth
+      // If we have SP-API shipping company name, combine with recipientName to preserve all data
+      // recipientName = main recipient (can be organization), CompanyName = department/attention line
       if (rawAddress.shippingCompanyName) {
-        result.company = rawAddress.shippingCompanyName;
+        // If we have both recipientName and SP-API CompanyName (and they're different), combine them
+        if (rawAddress.recipientName &&
+            rawAddress.recipientName.trim().toLowerCase() !== rawAddress.shippingCompanyName.trim().toLowerCase()) {
+          // Strip legal terms from recipientName before combining
+          const cleanedRecipient = rawAddress.recipientName
+            .replace(LEGAL_TERMS_REGEX, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          result.company = `${cleanedRecipient} - ${rawAddress.shippingCompanyName}`;
+        } else {
+          result.company = rawAddress.shippingCompanyName;
+        }
         result.isCompany = true;
         result.spApiCompanyUsed = true;
       }
@@ -295,19 +307,32 @@ class AddressCleanerAI {
    */
   _fallbackParse(rawAddress) {
     // Simple fallback - just pass through with basic cleaning
-    const LEGAL_TERMS_REGEX = /\b(GmbH|AG|KG|OHG|UG|e\.?V\.?|mbH|Co\.?\s*KG|Ltd\.?|Inc\.?|LLC|SARL|SAS|BV|NV|gGmbH|e\.?K\.?)\b\.?/gi;
-
     const hasLegalTerm = LEGAL_TERMS_REGEX.test(rawAddress.addressLine1 || '') ||
                          LEGAL_TERMS_REGEX.test(rawAddress.recipientName || '') ||
                          !!rawAddress.shippingCompanyName;
 
-    // Prefer SP-API shipping company name over TSV buyerCompanyName
-    const companyName = rawAddress.shippingCompanyName ||
-                        (hasLegalTerm ? (rawAddress.buyerCompanyName || rawAddress.addressLine1) : null);
+    // Build company name - combine recipientName and shippingCompanyName if both exist
+    let companyName = null;
+    if (rawAddress.shippingCompanyName) {
+      // If we have both recipientName and SP-API CompanyName (and they're different), combine them
+      if (rawAddress.recipientName &&
+          rawAddress.recipientName.trim().toLowerCase() !== rawAddress.shippingCompanyName.trim().toLowerCase()) {
+        // Strip legal terms from recipientName before combining
+        const cleanedRecipient = rawAddress.recipientName
+          .replace(LEGAL_TERMS_REGEX, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        companyName = `${cleanedRecipient} - ${rawAddress.shippingCompanyName}`;
+      } else {
+        companyName = rawAddress.shippingCompanyName;
+      }
+    } else if (hasLegalTerm) {
+      companyName = rawAddress.buyerCompanyName || rawAddress.addressLine1;
+    }
 
     return {
       company: companyName || null,
-      name: rawAddress.recipientName || null,
+      name: null, // Contact person - not used when we have combined company name
       street: rawAddress.addressLine1 || null,
       street2: rawAddress.addressLine2 || null,
       zip: rawAddress.postalCode || null,
