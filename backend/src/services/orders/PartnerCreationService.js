@@ -105,6 +105,27 @@ class PartnerCreationService {
   }
 
   /**
+   * Build street2 field, including PO number if available
+   * @param {string|null} street2 - Original street2 value
+   * @param {string|null} poNumber - PO number from address cleaning
+   * @returns {string|false} Street2 value for Odoo (false if empty)
+   * @private
+   */
+  _buildStreet2(street2, poNumber) {
+    const parts = [];
+
+    if (street2?.trim()) {
+      parts.push(street2.trim());
+    }
+
+    if (poNumber?.trim()) {
+      parts.push(`PO: ${poNumber.trim()}`);
+    }
+
+    return parts.length > 0 ? parts.join(' | ') : false;
+  }
+
+  /**
    * Get Odoo country ID from country code
    *
    * @param {string} countryCode - 2-letter country code
@@ -222,7 +243,7 @@ class PartnerCreationService {
     const partnerData = {
       name: displayName,
       street: cleanedAddress.street || false,
-      street2: cleanedAddress.street2 || false,
+      street2: this._buildStreet2(cleanedAddress.street2, cleanedAddress.poNumber),
       zip: cleanedAddress.zip || false,
       city: cleanedAddress.city || false,
       country_id: countryId || false,
@@ -281,7 +302,7 @@ class PartnerCreationService {
     const partnerData = {
       name: displayName,
       street: cleanedAddress.street || false,
-      street2: cleanedAddress.street2 || false,
+      street2: this._buildStreet2(cleanedAddress.street2, cleanedAddress.poNumber),
       zip: cleanedAddress.zip || false,
       city: cleanedAddress.city || false,
       country_id: countryId || false,
