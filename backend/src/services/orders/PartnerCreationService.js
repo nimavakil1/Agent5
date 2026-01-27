@@ -56,6 +56,8 @@ class PartnerCreationService {
    * - B2B: "Company Name - Contact Person"
    * - B2C: "Contact Person"
    *
+   * Also removes duplicate parts (e.g., "Denis - Company - Denis" → "Company - Denis")
+   *
    * @param {string|null} company - Company name
    * @param {string|null} name - Contact person name
    * @returns {string} Display name
@@ -64,15 +66,42 @@ class PartnerCreationService {
     const cleanCompany = company?.trim() || '';
     const cleanName = name?.trim() || '';
 
+    let result;
     if (cleanCompany && cleanName) {
-      return `${cleanCompany} - ${cleanName}`;
+      result = `${cleanCompany} - ${cleanName}`;
     } else if (cleanCompany) {
-      return cleanCompany;
+      result = cleanCompany;
     } else if (cleanName) {
-      return cleanName;
+      result = cleanName;
     } else {
       return 'Unknown Customer';
     }
+
+    // Remove duplicate parts (case-insensitive)
+    // e.g., "Denis Kirilenko - Freiherz GmbH - Denis Kirilenko" → "Freiherz GmbH - Denis Kirilenko"
+    return this._removeDuplicateParts(result);
+  }
+
+  /**
+   * Remove duplicate parts from a name string
+   * @param {string} name - Name with parts separated by " - "
+   * @returns {string} Name with duplicates removed
+   * @private
+   */
+  _removeDuplicateParts(name) {
+    const parts = name.split(' - ').map(p => p.trim()).filter(Boolean);
+    const seen = new Set();
+    const uniqueParts = [];
+
+    for (const part of parts) {
+      const lowerPart = part.toLowerCase();
+      if (!seen.has(lowerPart)) {
+        seen.add(lowerPart);
+        uniqueParts.push(part);
+      }
+    }
+
+    return uniqueParts.join(' - ') || 'Unknown Customer';
   }
 
   /**
