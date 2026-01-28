@@ -13,6 +13,7 @@
 
 const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
 const { getAddressCleaningService } = require('./AddressCleaningService');
+const { LEGAL_TERMS_REGEX } = require('../amazon/seller/AddressCleaner');
 
 // Country code to Odoo country ID mapping
 const COUNTRY_IDS = {
@@ -53,17 +54,31 @@ class PartnerCreationService {
    * Build display name from company and contact person
    *
    * Format:
-   * - B2B: "Company Name - Contact Person"
+   * - B2B: "Company Name - Contact Person - PO: 12345"
    * - B2C: "Contact Person"
    *
-   * Also removes duplicate parts (e.g., "Denis - Company - Denis" → "Company - Denis")
+   * Also:
+   * - Strips legal terms (GmbH, AG, e.V., etc.) from company name
+   * - Removes duplicate parts (e.g., "Denis - Company - Denis" → "Company - Denis")
+   * - Appends PO number if provided
    *
    * @param {string|null} company - Company name
    * @param {string|null} name - Contact person name
+   * @param {string|null} poNumber - Optional PO number to append
    * @returns {string} Display name
    */
-  buildDisplayName(company, name) {
-    const cleanCompany = company?.trim() || '';
+  buildDisplayName(company, name, poNumber = null) {
+    // Strip legal terms from company name
+    let cleanCompany = company?.trim() || '';
+    if (cleanCompany) {
+      cleanCompany = cleanCompany
+        .replace(LEGAL_TERMS_REGEX, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      // Reset regex lastIndex since it's global
+      LEGAL_TERMS_REGEX.lastIndex = 0;
+    }
+
     const cleanName = name?.trim() || '';
 
     let result;
@@ -78,8 +93,14 @@ class PartnerCreationService {
     }
 
     // Remove duplicate parts (case-insensitive)
-    // e.g., "Denis Kirilenko - Freiherz GmbH - Denis Kirilenko" → "Freiherz GmbH - Denis Kirilenko"
-    return this._removeDuplicateParts(result);
+    result = this._removeDuplicateParts(result);
+
+    // Append PO number if provided
+    if (poNumber?.trim()) {
+      result = `${result} - PO: ${poNumber.trim()}`;
+    }
+
+    return result;
   }
 
   /**
@@ -102,27 +123,6 @@ class PartnerCreationService {
     }
 
     return uniqueParts.join(' - ') || 'Unknown Customer';
-  }
-
-  /**
-   * Build street2 field, including PO number if available
-   * @param {string|null} street2 - Original street2 value
-   * @param {string|null} poNumber - PO number from address cleaning
-   * @returns {string|false} Street2 value for Odoo (false if empty)
-   * @private
-   */
-  _buildStreet2(street2, poNumber) {
-    const parts = [];
-
-    if (street2?.trim()) {
-      parts.push(street2.trim());
-    }
-
-    if (poNumber?.trim()) {
-      parts.push(`PO: ${poNumber.trim()}`);
-    }
-
-    return parts.length > 0 ? parts.join(' | ') : false;
   }
 
   /**
@@ -222,12 +222,14 @@ class PartnerCreationService {
       source: source || rawAddress.source
     });
 
-    // Step 2: Build display name
-    const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name);
+    // Step 2: Build display name (without PO for searching)
+    const baseName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name);
 
-    // Step 3: Check for existing partner
-    const existingId = await this.findExistingPartner(displayName, cleanedAddress.zip);
+    // Step 3: Check for existing partner (search without PO number)
+    const existingId = await this.findExistingPartner(baseName, cleanedAddress.zip);
     if (existingId) {
+      // Build full name with PO for the response
+      const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name, cleanedAddress.poNumber);
       return {
         partnerId: existingId,
         displayName,
@@ -239,11 +241,14 @@ class PartnerCreationService {
     // Step 4: Get country ID
     const countryId = await this.getCountryId(cleanedAddress.country);
 
-    // Step 5: Create new partner
+    // Step 5: Build display name with PO number for the partner
+    const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name, cleanedAddress.poNumber);
+
+    // Step 6: Create new partner
     const partnerData = {
       name: displayName,
       street: cleanedAddress.street || false,
-      street2: this._buildStreet2(cleanedAddress.street2, cleanedAddress.poNumber),
+      street2: cleanedAddress.street2 || false,  // PO is now in name, not street2
       zip: cleanedAddress.zip || false,
       city: cleanedAddress.city || false,
       country_id: countryId || false,
@@ -256,8 +261,8 @@ class PartnerCreationService {
 
     const partnerId = await this.odoo.create('res.partner', partnerData);
 
-    // Cache the new partner
-    const cacheKey = `${displayName}|${cleanedAddress.zip || ''}`;
+    // Cache the new partner (cache by base name for future lookups)
+    const cacheKey = `${baseName}|${cleanedAddress.zip || ''}`;
     this.partnerCache[cacheKey] = partnerId;
 
     console.log(`[PartnerCreationService] Created partner ${partnerId}: ${displayName} (${source || 'unknown'})`);
@@ -282,12 +287,14 @@ class PartnerCreationService {
   async findOrCreatePartnerFromCleaned(cleanedAddress, options = {}) {
     const { email, phone, source, orderId } = options;
 
-    // Build display name
-    const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name);
+    // Build base name (without PO) for searching
+    const baseName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name);
 
-    // Check for existing partner
-    const existingId = await this.findExistingPartner(displayName, cleanedAddress.zip);
+    // Check for existing partner (search without PO number)
+    const existingId = await this.findExistingPartner(baseName, cleanedAddress.zip);
     if (existingId) {
+      // Build full name with PO for the response
+      const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name, cleanedAddress.poNumber);
       return {
         partnerId: existingId,
         displayName,
@@ -298,11 +305,14 @@ class PartnerCreationService {
     // Get country ID
     const countryId = await this.getCountryId(cleanedAddress.country);
 
+    // Build display name with PO number for the partner
+    const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name, cleanedAddress.poNumber);
+
     // Create new partner
     const partnerData = {
       name: displayName,
       street: cleanedAddress.street || false,
-      street2: this._buildStreet2(cleanedAddress.street2, cleanedAddress.poNumber),
+      street2: cleanedAddress.street2 || false,  // PO is now in name, not street2
       zip: cleanedAddress.zip || false,
       city: cleanedAddress.city || false,
       country_id: countryId || false,
@@ -315,8 +325,8 @@ class PartnerCreationService {
 
     const partnerId = await this.odoo.create('res.partner', partnerData);
 
-    // Cache the new partner
-    const cacheKey = `${displayName}|${cleanedAddress.zip || ''}`;
+    // Cache the new partner (cache by base name for future lookups)
+    const cacheKey = `${baseName}|${cleanedAddress.zip || ''}`;
     this.partnerCache[cacheKey] = partnerId;
 
     console.log(`[PartnerCreationService] Created partner ${partnerId}: ${displayName} (${source || 'unknown'})`);
@@ -337,7 +347,7 @@ class PartnerCreationService {
    */
   async updatePartnerAddress(partnerId, cleanedAddress) {
     try {
-      const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name);
+      const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name, cleanedAddress.poNumber);
       const countryId = await this.getCountryId(cleanedAddress.country);
 
       await this.odoo.write('res.partner', [partnerId], {
