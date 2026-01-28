@@ -4832,7 +4832,8 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
     for (const poNumber of poNumbers) {
       try {
         // Get PO from MongoDB to find linked Odoo sale order
-        const po = await db.collection('vendor_purchase_orders').findOne({ purchaseOrderNumber: poNumber });
+        // Use unified_orders collection with sourceIds path
+        const po = await db.collection('unified_orders').findOne({ 'sourceIds.amazonVendorPONumber': poNumber });
         if (!po || !po.odoo?.saleOrderId) {
           result.odoo.errors.push(`PO ${poNumber}: No linked Odoo sale order`);
           continue;
@@ -5213,9 +5214,10 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
         updateData.invoiceNumber = invoiceInfo.invoiceNumber;
         updateData.invoiceTransactionId = invoiceInfo.transactionId;
       }
-      await db.collection('vendor_purchase_orders').updateOne(
-        { purchaseOrderNumber: poNumber },
-        { $set: updateData }
+      // Use unified_orders collection with sourceIds path
+      await db.collection('unified_orders').updateOne(
+        { 'sourceIds.amazonVendorPONumber': poNumber },
+        { $set: { 'amazonVendor.shipmentStatus': updateData.shipmentStatus, ...updateData } }
       );
     }
 
