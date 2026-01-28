@@ -182,20 +182,30 @@ class AddressCleanerAI {
       const parsed = JSON.parse(jsonMatch[0]);
       const result = this._normalizeResponse(parsed);
 
-      // If we have SP-API shipping company name, combine with recipientName to preserve all data
-      // recipientName = main recipient (can be organization), CompanyName = department/attention line
+      // If we have SP-API shipping company name, use it intelligently
       if (rawAddress.shippingCompanyName) {
-        // If we have both recipientName and SP-API CompanyName (and they're different), combine them
-        if (rawAddress.recipientName &&
+        // Check if recipientName is an organization (has legal terms like GmbH, e.V., etc.)
+        const recipientHasLegalTerms = rawAddress.recipientName &&
+          LEGAL_TERMS_REGEX.test(rawAddress.recipientName);
+        LEGAL_TERMS_REGEX.lastIndex = 0; // Reset regex
+
+        if (recipientHasLegalTerms &&
             rawAddress.recipientName.trim().toLowerCase() !== rawAddress.shippingCompanyName.trim().toLowerCase()) {
-          // Strip legal terms from recipientName before combining
+          // recipientName is an organization (e.g., "Diakonisches Werk e.V.")
+          // shippingCompanyName is a department (e.g., "Ambulanter Pflegedienst")
+          // Combine them: "Main Org - Department"
           const cleanedRecipient = rawAddress.recipientName
             .replace(LEGAL_TERMS_REGEX, '')
             .replace(/\s+/g, ' ')
             .trim();
           result.company = `${cleanedRecipient} - ${rawAddress.shippingCompanyName}`;
+          result.name = null; // No separate contact person
         } else {
+          // recipientName is a person (e.g., "Ulrike Feegers")
+          // shippingCompanyName is the actual company (e.g., "BurdaVerlag Data Publishing GmbH")
+          // Use shippingCompanyName as company, keep AI's extracted name as contact
           result.company = rawAddress.shippingCompanyName;
+          // Keep result.name from AI parsing (already cleaned, PO stripped)
         }
         result.isCompany = true;
         result.spApiCompanyUsed = true;
@@ -307,32 +317,45 @@ class AddressCleanerAI {
    */
   _fallbackParse(rawAddress) {
     // Simple fallback - just pass through with basic cleaning
-    const hasLegalTerm = LEGAL_TERMS_REGEX.test(rawAddress.addressLine1 || '') ||
-                         LEGAL_TERMS_REGEX.test(rawAddress.recipientName || '') ||
-                         !!rawAddress.shippingCompanyName;
+    const recipientHasLegalTerms = LEGAL_TERMS_REGEX.test(rawAddress.recipientName || '');
+    LEGAL_TERMS_REGEX.lastIndex = 0;
 
-    // Build company name - combine recipientName and shippingCompanyName if both exist
+    const addressHasLegalTerms = LEGAL_TERMS_REGEX.test(rawAddress.addressLine1 || '');
+    LEGAL_TERMS_REGEX.lastIndex = 0;
+
+    const hasLegalTerm = recipientHasLegalTerms || addressHasLegalTerms || !!rawAddress.shippingCompanyName;
+
+    // Build company name and contact
     let companyName = null;
+    let contactName = null;
+
     if (rawAddress.shippingCompanyName) {
-      // If we have both recipientName and SP-API CompanyName (and they're different), combine them
-      if (rawAddress.recipientName &&
+      if (recipientHasLegalTerms &&
           rawAddress.recipientName.trim().toLowerCase() !== rawAddress.shippingCompanyName.trim().toLowerCase()) {
-        // Strip legal terms from recipientName before combining
+        // recipientName is an organization - combine them
         const cleanedRecipient = rawAddress.recipientName
           .replace(LEGAL_TERMS_REGEX, '')
           .replace(/\s+/g, ' ')
           .trim();
         companyName = `${cleanedRecipient} - ${rawAddress.shippingCompanyName}`;
+        contactName = null;
       } else {
+        // recipientName is a person - use shippingCompanyName as company
         companyName = rawAddress.shippingCompanyName;
+        // Try to extract person name (strip PO patterns)
+        contactName = (rawAddress.recipientName || '')
+          .replace(/PO\d+/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim() || null;
       }
     } else if (hasLegalTerm) {
       companyName = rawAddress.buyerCompanyName || rawAddress.addressLine1;
+      contactName = rawAddress.recipientName || null;
     }
 
     return {
       company: companyName || null,
-      name: null, // Contact person - not used when we have combined company name
+      name: contactName,
       street: rawAddress.addressLine1 || null,
       street2: rawAddress.addressLine2 || null,
       zip: rawAddress.postalCode || null,
