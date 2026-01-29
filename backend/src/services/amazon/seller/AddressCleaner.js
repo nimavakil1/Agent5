@@ -8,7 +8,8 @@
  */
 
 // Legal terms to remove from names
-const LEGAL_TERMS_REGEX = /\b(GmbH|AG|KG|OHG|UG|e\.?V\.?|mbH|Co\.?\s*KG|Inhaber|Inh\.|Ltd\.?|Inc\.?|LLC|PLC|SA|SARL|SAS|BV|NV|S\.?A\.?R\.?L\.?|S\.?A\.?S\.?|B\.?V\.?|N\.?V\.?)\b\.?/gi;
+// Note: "GmbH & Co KG" must come BEFORE "GmbH" so the full pattern matches first
+const LEGAL_TERMS_REGEX = /\b(GmbH\s*&\s*Co\.?\s*KG|gGmbH|GmbH|AG|KG|OHG|UG|e\.?V\.?|mbH|Co\.?\s*KG|Inhaber|Inh\.|Ltd\.?|Inc\.?|LLC|PLC|SA|SARL|SAS|BV|NV|S\.?A\.?R\.?L\.?|S\.?A\.?S\.?|B\.?V\.?|N\.?V\.?)\b\.?/gi;
 
 // Amazon billing entities - these are INVOICE recipients, NOT delivery locations
 const AMAZON_BILLING_ENTITIES = [
