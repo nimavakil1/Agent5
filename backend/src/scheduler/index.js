@@ -20,6 +20,7 @@ let _amazonFbaInventoryTimer = null;
 let _amazonFbaReportCheckTimer = null;
 let _safetyStockVerifyCron = null;
 let _amazonFbmListingsRefreshCron = null;
+let _weeklyPricingReportCron = null;
 
 /**
  * Check if current time is within stock sync operating hours
@@ -264,6 +265,16 @@ function start() {
       console.log('[scheduler] Amazon FBM listings refresh initialized (daily at 5:00 AM)');
     }
   } catch (e) { console.error('[scheduler] Amazon stock sync init error', e); }
+
+  // Weekly Pricing Report (Sunday 20:00 Europe/Amsterdam)
+  // Compares prices across Bol.com and Amazon DE/FR/NL/BE
+  try {
+    _weeklyPricingReportCron = cron.schedule('0 20 * * 0', async () => {
+      await runWeeklyPricingReport();
+    }, { timezone: 'Europe/Amsterdam' });
+
+    console.log('[scheduler] Weekly Pricing Report scheduled: Sunday 20:00 (Europe/Amsterdam)');
+  } catch (e) { console.error('[scheduler] Weekly Pricing Report cron init error', e); }
 }
 
 /**
@@ -905,6 +916,29 @@ async function verifySafetyStockSync() {
   }
 }
 
+/**
+ * Run Weekly Pricing Report
+ * Compares prices across Bol.com and Amazon DE/FR/NL/BE
+ * Matches products by cleaned SKU
+ */
+async function runWeeklyPricingReport() {
+  try {
+    const { runWeeklyPricingReport: runReport } = require('../services/reports/WeeklyPricingReportService');
+    const result = await runReport();
+
+    if (result.success) {
+      console.log(`[scheduler] Weekly Pricing Report: ${result.productsCount} products, Excel=${result.excelUrl ? 'Yes' : 'No'}, Teams=${result.teamsNotified}`);
+    } else {
+      console.error(`[scheduler] Weekly Pricing Report failed: ${result.error}`);
+    }
+
+    return result;
+  } catch (e) {
+    console.error('[scheduler] Weekly Pricing Report error:', e?.message || e);
+    return { success: false, error: e?.message || e };
+  }
+}
+
 module.exports = {
   start,
   checkAmazonSettlementReminders,
@@ -923,5 +957,7 @@ module.exports = {
   syncAmazonFbaInventory,
   checkAmazonFbaReports,
   // Safety stock verification
-  verifySafetyStockSync
+  verifySafetyStockSync,
+  // Weekly reports
+  runWeeklyPricingReport
 };

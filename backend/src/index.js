@@ -62,6 +62,7 @@ const ordersRouter = require('./api/routes/orders.api');
 const alertsRouter = require('./api/routes/alerts.api');
 const productsApiRouter = require('./api/routes/products.api');
 const systemRouter = require('./api/routes/system.api');
+const reportsRouter = require('./api/routes/reports.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -469,6 +470,8 @@ app.use('/api/amazon/mappings', requireSession, amazonMappingsRouter);
 app.use('/api/logs', requireSession, logsRouter);
 // System API (job statuses, health checks)
 app.use('/api/system', requireSession, systemRouter);
+// Reports API (pricing reports, etc.)
+app.use('/api/reports', requireSession, reportsRouter);
 // Chat permissions API (superadmin only for management, session for checking)
 app.use('/api/chat-permissions', requireSession, chatPermissionsRouter);
 app.use('/api/chat/my-permissions', requireSession, chatCheckRouter);

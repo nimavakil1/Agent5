@@ -32,6 +32,25 @@ sshpass -p 'Sage2o15@' ssh -o StrictHostKeyChecking=no ubuntu@ai.acropaq.com "pm
 ## Production URL
 **https://ai.acropaq.com** (no /v2 - that's TicketingSDT, not this project)
 
+## Acropaq Odoo Access (odoo.sh)
+
+Agent5 integrates with Acropaq's Odoo which is hosted on odoo.sh. For Odoo code changes (modules, reports, labels):
+
+- **GitHub Repo:** `ninicocolala/acropaq`
+- **Local Path:** `~/acropaq-odoo`
+- **Branch:** `FVL`
+- **Auto-deploy:** odoo.sh automatically deploys when you push to GitHub
+
+**Workflow for Odoo code changes:**
+1. Edit files in `~/acropaq-odoo`
+2. `git add` + `git commit`
+3. `git push origin FVL`
+4. odoo.sh auto-deploys (check odoo.sh dashboard for status)
+
+**Key modules:**
+- `gls_shipping_ns/` - GLS carrier integration (labels, API requests)
+- `acr_*` - Acropaq-specific modules
+
 ## Pending Testing
 
 **IMPORTANT:** There is a testing plan that needs to be completed:
