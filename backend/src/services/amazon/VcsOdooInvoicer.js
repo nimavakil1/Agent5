@@ -920,48 +920,37 @@ class VcsOdooInvoicer {
     // Get or create Amazon customer partner
     const _partnerId = await this.getOrCreateAmazonPartner();
 
-    for (let i = 0; i < orders.length; i++) {
-      const order = orders[i];
-      result.processed++;
-
-      // Send progress update
+    // Track progress across parallel operations
+    let completedCount = 0;
+    const updateProgress = () => {
       onProgress({
         phase: 'processing',
-        current: i + 1,
+        current: completedCount,
         total,
-        orderId: order.orderId,
         created: result.created,
         skipped: result.skipped,
         manualRequired: result.manualRequired,
         errors: result.errors.length,
       });
+    };
 
+    // Process a single order - returns result object
+    const processOrder = async (order) => {
       try {
         // Skip orders that shouldn't be invoiced
         if (this.shouldSkipOrder(order)) {
-          result.skipped++;
-          result.skippedOrders.push({
+          await this.markOrderSkipped(order._id, 'Not invoiceable');
+          return {
+            type: 'skipped',
             orderId: order.orderId,
             reason: 'Not invoiceable (cancelled or return)',
             customerName: order.buyerName || null,
-          });
-          await this.markOrderSkipped(order._id, 'Not invoiceable');
-          continue;
+          };
         }
 
         // Check if order requires manual invoice creation
-        // (e.g., Amazon couldn't invoice due to defective VAT registration)
         const manualCheck = this.requiresManualInvoice(order);
         if (manualCheck) {
-          result.manualRequired++;
-          result.manualRequiredOrders.push({
-            orderId: order.orderId,
-            mongoId: order._id.toString(),
-            customerName: order.buyerName || null,
-            orderDate: order.orderDate,
-            ...manualCheck,
-          });
-          // Mark as manual_required in MongoDB
           await db.collection('amazon_vcs_orders').updateOne(
             { _id: order._id },
             {
@@ -973,51 +962,51 @@ class VcsOdooInvoicer {
             }
           );
           console.log(`[VcsOdooInvoicer] Order ${order.orderId} requires manual invoice: ${manualCheck.reasons.join(', ')}`);
-          continue;
+          return {
+            type: 'manualRequired',
+            orderId: order.orderId,
+            mongoId: order._id.toString(),
+            customerName: order.buyerName || null,
+            orderDate: order.orderDate,
+            ...manualCheck,
+          };
         }
 
         // Find existing Odoo order or create one from VCS data
         let odooOrderData = await this.findOdooOrder(order);
         if (!odooOrderData) {
-          // No existing order - create one from VCS data
           console.log(`[VcsOdooInvoicer] No Odoo order found for ${order.orderId}, creating from VCS data...`);
           try {
             odooOrderData = await this.createOrderFromVcs(order);
             console.log(`[VcsOdooInvoicer] Created order ${odooOrderData.saleOrder.name} for ${order.orderId}`);
           } catch (createError) {
-            result.skipped++;
             await this.markOrderSkipped(order._id, `Failed to create order: ${createError.message}`);
-            result.errors.push({
+            return {
+              type: 'error',
               orderId: order.orderId,
               error: `Failed to create order: ${createError.message}`,
-            });
-            continue;
+            };
           }
         }
 
         const { saleOrder, orderLines } = odooOrderData;
 
-        // STEP 1: Update sale order line prices from VCS data if they are 0
-        // This must happen BEFORE checking for existing invoices
+        // Update sale order line prices from VCS data
         const priceUpdateResult = await this.updateSaleOrderLinePricesFromVcs(order, saleOrder, orderLines);
         const orderPricesUpdated = priceUpdateResult.updated > 0;
-        if (orderPricesUpdated) {
-          result.pricesUpdated++;
-        }
 
-        // STEP 2: Check if invoice already exists in Odoo for this sale order
+        // Check if invoice already exists
         const existingInvoice = await this.findExistingInvoice(saleOrder.name);
         if (existingInvoice) {
-          result.skipped++;
-          result.skippedOrders.push({
+          await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
+          return {
+            type: 'skipped',
             orderId: order.orderId,
             reason: `Invoice already exists: ${existingInvoice.name}`,
             customerName: order.buyerName || null,
             odooOrderName: saleOrder.name,
-            pricesUpdated: orderPricesUpdated,  // Track if prices were updated even though invoice was skipped
-          });
-          await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
-          continue;
+            pricesUpdated: orderPricesUpdated,
+          };
         }
 
         if (dryRun) {
@@ -1028,12 +1017,13 @@ class VcsOdooInvoicer {
           const expectedJournal = this.getExpectedJournalCode(order);
           const expectedFiscalPosition = this.getExpectedFiscalPositionKey(order);
 
-          result.invoices.push({
+          return {
+            type: 'dryRun',
             orderId: order.orderId,
             dryRun: true,
             odooOrderName: saleOrder.name,
             odooOrderId: saleOrder.id,
-            pricesUpdated: orderPricesUpdated,  // Track if sale order line prices were updated
+            pricesUpdated: orderPricesUpdated,
             preview: {
               invoiceDate: invoiceData.invoice_date,
               journalName: journalName || `Not found (expected: ${expectedJournal})`,
@@ -1049,19 +1039,15 @@ class VcsOdooInvoicer {
               vatInvoiceNumber: order.vatInvoiceNumber,
             },
             wouldCreate: invoiceData,
-          });
-          result.created++;
-          continue;
+          };
         }
 
         // Create invoice linked to sale order
         const partnerId = await this.determinePartner(order, saleOrder);
         const invoice = await this.createInvoice(order, partnerId, saleOrder, orderLines);
-        invoice.pricesUpdated = orderPricesUpdated;  // Track if sale order line prices were updated
-        result.created++;
-        result.invoices.push(invoice);
+        invoice.pricesUpdated = orderPricesUpdated;
 
-        // Mark order as invoiced (with retry logic)
+        // Mark order as invoiced
         await withRetry(
           () => db.collection('amazon_vcs_orders').updateOne(
             { _id: order._id },
@@ -1079,17 +1065,60 @@ class VcsOdooInvoicer {
           `markOrderInvoiced(${order.orderId})`
         );
 
-        // Rate limiting
-        await new Promise(resolve => setTimeout(resolve, 150));
+        return {
+          type: 'created',
+          invoice,
+          pricesUpdated: orderPricesUpdated,
+        };
 
       } catch (error) {
-        result.errors.push({
+        console.error(`[VcsOdooInvoicer] Error processing ${order.orderId}:`, error);
+        return {
+          type: 'error',
           orderId: order.orderId,
           error: error.message,
-        });
-        console.error(`[VcsOdooInvoicer] Error processing ${order.orderId}:`, error);
+        };
       }
-    }
+    };
+
+    // Process orders in parallel with concurrency limit
+    console.log(`[VcsOdooInvoicer] Processing ${orders.length} orders with concurrency limit of ${CONCURRENCY_LIMIT}...`);
+    onProgress({ phase: 'processing', message: `Processing ${orders.length} orders (${CONCURRENCY_LIMIT} parallel)...`, current: 0, total });
+
+    const orderResults = await processWithConcurrency(orders, async (order) => {
+      const orderResult = await processOrder(order);
+      completedCount++;
+
+      // Update result counters and send progress
+      result.processed++;
+      switch (orderResult.type) {
+        case 'created':
+          result.created++;
+          result.invoices.push(orderResult.invoice);
+          if (orderResult.pricesUpdated) result.pricesUpdated++;
+          break;
+        case 'dryRun':
+          result.created++;
+          result.invoices.push(orderResult);
+          if (orderResult.pricesUpdated) result.pricesUpdated++;
+          break;
+        case 'skipped':
+          result.skipped++;
+          result.skippedOrders.push(orderResult);
+          if (orderResult.pricesUpdated) result.pricesUpdated++;
+          break;
+        case 'manualRequired':
+          result.manualRequired++;
+          result.manualRequiredOrders.push(orderResult);
+          break;
+        case 'error':
+          result.errors.push(orderResult);
+          break;
+      }
+      updateProgress();
+
+      return orderResult;
+    }, CONCURRENCY_LIMIT);
 
     return result;
   }
