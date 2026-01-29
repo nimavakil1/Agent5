@@ -41,13 +41,20 @@ RULES FOR PARSING:
 
 3. HANDLING PO NUMBERS IN NAMES:
    - Pattern "NamePO12345" or "NamePOABC" - split the PO number out
+   - IMPORTANT: The PO number is EVERYTHING after "PO" until the end of that text block
+   - Example: "CompanyPORouter JHZ & Gefü Büro" → PO is "Router JHZ & Gefü Büro" (not just "Router")
    - The PO should go in a separate field, not be part of the name
 
-4. HANDLING ATTENTION/CONTACT INFO:
+4. HANDLING DEPARTMENT/OFFICE/BUILDING INFO:
+   - Text like "JHZ & Gefü Büro", "Abteilung X", "Gebäude B", "Haus 3" is department/building info
+   - This should go in street2, NOT be lost
+   - If it appears in the recipient name after extracting the PO, put it in street2
+
+5. HANDLING ATTENTION/CONTACT INFO:
    - "z.Hd." or "c/o" or "Attn:" indicates a contact person
    - "- Name" at the end of a company name often indicates the contact person
 
-5. AMAZON BILLING ENTITIES (IGNORE these as buyer):
+6. AMAZON BILLING ENTITIES (IGNORE these as buyer):
    - "Amazon Business EU SARL"
    - "Amazon EU SARL"
    - "Amazon EU S.a.r.l"
@@ -120,6 +127,31 @@ Output:
   "po_number": "OPB",
   "confidence": "high",
   "notes": "Extracted PO number 'OPB' from concatenated recipient name, corrected name order"
+}
+
+Input:
+recipient-name: "Jugendhof Obermeyer Lena SchutenPORouter JHZ & Gefü Büro"
+ship-address-1: "Heggestraße 11"
+ship-address-2: ""
+ship-city: "Hagen Am Teutoburger Wald"
+ship-postal-code: "49170"
+ship-country: "DE"
+buyer-company-name: ""
+
+Output:
+{
+  "company_name": "Jugendhof Obermeyer",
+  "contact_person": "Lena Schuten",
+  "street": "Heggestraße 11",
+  "street2": "JHZ & Gefü Büro",
+  "zip": "49170",
+  "city": "Hagen Am Teutoburger Wald",
+  "state": null,
+  "country": "DE",
+  "is_business": true,
+  "po_number": "Router JHZ & Gefü Büro",
+  "confidence": "high",
+  "notes": "Jugendhof indicates youth organization. PO number is FULL text after 'PO': 'Router JHZ & Gefü Büro'. Department info 'JHZ & Gefü Büro' placed in street2."
 }
 
 Now parse the following address:`;
