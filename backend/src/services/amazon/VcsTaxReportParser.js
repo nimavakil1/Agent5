@@ -203,7 +203,7 @@ class VcsTaxReportParser {
   /**
    * Group transactions by order ID for invoice/credit note creation
    * @param {Array} transactions
-   * @returns {Object} { shipments: Map, returns: Map } - Orders grouped by order ID
+   * @returns {Object} { shipments: Map, returns: Map } - Orders grouped by shipment (not just order ID)
    */
   groupByOrder(transactions) {
     const shipments = new Map();
@@ -216,14 +216,25 @@ class VcsTaxReportParser {
       const isReturn = tx.transactionType === 'RETURN';
       const ordersMap = isReturn ? returns : shipments;
 
-      // For returns, create a unique key combining orderId and return date
-      // (same order can have multiple returns on different dates)
-      const orderKey = isReturn ? `${tx.orderId}_${tx.shipmentDate || tx.orderDate}` : tx.orderId;
+      // IMPORTANT: Group by SHIPMENT, not just order ID
+      // Same order can have items shipped from different warehouses (e.g., FR and DE)
+      // Each shipment needs its own invoice with correct VAT treatment
+      // Use shipmentId if available, otherwise fall back to orderId + shipFromCountry
+      let orderKey;
+      if (isReturn) {
+        // For returns, combine orderId and return date (same order can have multiple returns)
+        orderKey = `${tx.orderId}_${tx.shipmentDate || tx.orderDate}`;
+      } else {
+        // For shipments, use shipmentId or orderId + shipFromCountry to ensure
+        // items from different warehouses are invoiced separately
+        orderKey = tx.shipmentId || `${tx.orderId}_${tx.shipFromCountry || 'UNKNOWN'}`;
+      }
 
       if (!ordersMap.has(orderKey)) {
         ordersMap.set(orderKey, {
           orderId: tx.orderId,
           orderKey: orderKey,
+          shipmentId: tx.shipmentId || null,
           transactionType: tx.transactionType,
           orderDate: tx.orderDate,
           shipmentDate: tx.shipmentDate,

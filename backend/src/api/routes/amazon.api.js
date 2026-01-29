@@ -3788,6 +3788,64 @@ router.get('/returns/reports', async (req, res) => {
   }
 });
 
+// ==================== VCS ODOO SETUP ====================
+
+/**
+ * @route POST /api/amazon/vcs/setup/create-shipment-id-field
+ * @desc Create the x_amazon_shipment_id custom field on sale.order in Odoo
+ * @note This should only be run once during initial setup
+ */
+router.post('/vcs/setup/create-shipment-id-field', async (req, res) => {
+  try {
+    // Check Odoo credentials
+    if (!process.env.ODOO_URL || !process.env.ODOO_DB || !process.env.ODOO_USERNAME || !process.env.ODOO_PASSWORD) {
+      return res.status(400).json({ error: 'Odoo credentials not configured' });
+    }
+
+    const { OdooDirectClient } = require('../../core/agents/integrations/OdooMCP');
+    const client = new OdooDirectClient();
+    await client.authenticate();
+
+    // Check if field already exists
+    const existingField = await client.searchRead('ir.model.fields', [
+      ['model', '=', 'sale.order'],
+      ['name', '=', 'x_amazon_shipment_id']
+    ], ['id', 'name']);
+
+    if (existingField.length > 0) {
+      return res.json({
+        success: true,
+        message: 'Field x_amazon_shipment_id already exists on sale.order',
+        fieldId: existingField[0].id
+      });
+    }
+
+    // Create the field
+    const fieldId = await client.create('ir.model.fields', {
+      name: 'x_amazon_shipment_id',
+      field_description: 'Amazon Shipment ID',
+      model_id: (await client.searchRead('ir.model', [['model', '=', 'sale.order']], ['id']))[0].id,
+      ttype: 'char',
+      state: 'manual',
+      index: true, // Index for fast lookups
+    });
+
+    console.log(`[VCS Setup] Created field x_amazon_shipment_id on sale.order (ID: ${fieldId})`);
+
+    res.json({
+      success: true,
+      message: 'Created field x_amazon_shipment_id on sale.order',
+      fieldId
+    });
+  } catch (error) {
+    console.error('[VCS Setup] Error creating shipment ID field:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // ==================== VCS ODOO INVOICE CREATION ====================
 
 /**

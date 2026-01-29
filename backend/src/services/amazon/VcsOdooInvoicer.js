@@ -344,30 +344,52 @@ class VcsOdooInvoicer {
     console.log(`[VcsOdooInvoicer] Prefetching ${amazonOrderIds.length} orders from Odoo...`);
     const startTime = Date.now();
 
-    // Generate all possible variations of order IDs (raw, FBA, FBM)
-    // VCS provides raw IDs like "205-1829787-5409110" but Odoo stores them as "FBA205-1829787-5409110"
-    const allSearchIds = [];
-    for (const orderId of amazonOrderIds) {
-      // Add raw ID
-      allSearchIds.push(orderId);
-      // Add with FBA prefix if not already present
-      if (!orderId.startsWith('FBA')) {
-        allSearchIds.push('FBA' + orderId);
+    // Build a map of orderId -> shipFromCountries for generating search IDs
+    const orderShipFromMap = {};
+    for (const order of vcsOrders) {
+      if (!orderShipFromMap[order.orderId]) {
+        orderShipFromMap[order.orderId] = new Set();
       }
-      // Add with FBM prefix if not already present
-      if (!orderId.startsWith('FBM')) {
-        allSearchIds.push('FBM' + orderId);
+      if (order.shipFromCountry) {
+        orderShipFromMap[order.orderId].add(order.shipFromCountry);
       }
     }
+
+    // Also collect shipment IDs for direct lookup
+    const shipmentIds = vcsOrders.map(o => o.shipmentId).filter(Boolean);
+
+    // Generate all possible variations of order IDs:
+    // - Raw ID: "205-1829787-5409110"
+    // - Old format: "FBA205-1829787-5409110", "FBM205-1829787-5409110"
+    // - New format with country: "FBADE205-1829787-5409110", "FBMBE205-1829787-5409110"
+    const allSearchIds = new Set();
+    for (const orderId of amazonOrderIds) {
+      // Add raw ID
+      allSearchIds.add(orderId);
+      // Add old format (without country code) for backwards compatibility
+      if (!orderId.startsWith('FBA')) {
+        allSearchIds.add('FBA' + orderId);
+      }
+      if (!orderId.startsWith('FBM')) {
+        allSearchIds.add('FBM' + orderId);
+      }
+      // Add new format with country code based on VCS data
+      const shipFromCountries = orderShipFromMap[orderId] || new Set(['BE']);
+      for (const country of shipFromCountries) {
+        allSearchIds.add(`FBA${country}${orderId}`);
+        allSearchIds.add(`FBM${country}${orderId}`);
+      }
+    }
+    const allSearchIdsArray = [...allSearchIds];
 
     // Fetch all orders in batches (Odoo can handle large 'in' queries, but let's batch for safety)
     // Search by BOTH client_order_ref AND name to catch all variations
     const BATCH_SIZE = 500;
     const allOrders = [];
 
-    for (let i = 0; i < allSearchIds.length; i += BATCH_SIZE) {
-      const batchIds = allSearchIds.slice(i, i + BATCH_SIZE);
-      console.log(`[VcsOdooInvoicer] Fetching batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allSearchIds.length / BATCH_SIZE)}...`);
+    for (let i = 0; i < allSearchIdsArray.length; i += BATCH_SIZE) {
+      const batchIds = allSearchIdsArray.slice(i, i + BATCH_SIZE);
+      console.log(`[VcsOdooInvoicer] Fetching batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allSearchIdsArray.length / BATCH_SIZE)}...`);
 
       // Search by client_order_ref OR name to catch all orders regardless of how they were created
       const orders = await this.odoo.searchRead('sale.order',
@@ -376,9 +398,27 @@ class VcsOdooInvoicer {
           ['client_order_ref', 'in', batchIds],
           ['name', 'in', batchIds]
         ],
-        ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id']
+        ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id', 'x_amazon_shipment_id']
       );
       allOrders.push(...orders);
+    }
+
+    // Also fetch orders by shipmentId if available
+    if (shipmentIds.length > 0) {
+      console.log(`[VcsOdooInvoicer] Also searching by ${shipmentIds.length} shipment IDs...`);
+      for (let i = 0; i < shipmentIds.length; i += BATCH_SIZE) {
+        const batchIds = shipmentIds.slice(i, i + BATCH_SIZE);
+        const orders = await this.odoo.searchRead('sale.order',
+          [['x_amazon_shipment_id', 'in', batchIds]],
+          ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id', 'x_amazon_shipment_id']
+        );
+        // Only add if not already in allOrders (avoid duplicates)
+        for (const order of orders) {
+          if (!allOrders.find(o => o.id === order.id)) {
+            allOrders.push(order);
+          }
+        }
+      }
     }
 
     console.log(`[VcsOdooInvoicer] Found ${allOrders.length} Odoo orders`);
@@ -435,32 +475,45 @@ class VcsOdooInvoicer {
     }
 
     // Build the order cache - map Amazon order ID to Odoo order data
-    // Handle multiple orders for same Amazon ID (FBA/FBM split)
-    // Store by BOTH the Odoo format (FBA...) AND the raw VCS format for easy lookup
+    // Handle multiple orders for same Amazon ID (different shipments from different warehouses)
+    // Store by BOTH the Odoo format (FBADE..., FBA...) AND the raw VCS format for easy lookup
     const ordersByAmazonId = {};
     for (const order of allOrders) {
       const amazonId = order.client_order_ref;
-      // Extract the raw order ID without FBA/FBM prefix
-      const rawOrderId = amazonId.replace(/^(FBA|FBM)/, '');
+      // Extract the raw order ID without FBA/FBM prefix and optional country code
+      // Handles: FBADE123-456, FBA123-456, FBM123-456, FBMBE123-456 -> 123-456
+      const rawOrderId = amazonId.replace(/^(FBA|FBM)([A-Z]{2})?/, '');
 
-      // Add to grouping by Odoo format
+      const orderData = {
+        saleOrder: order,
+        orderLines: orderLinesByOrderId[order.id] || []
+      };
+
+      // Add to grouping by client_order_ref (Amazon order ID stored by Odoo)
       if (!ordersByAmazonId[amazonId]) {
         ordersByAmazonId[amazonId] = [];
       }
-      ordersByAmazonId[amazonId].push({
-        saleOrder: order,
-        orderLines: orderLinesByOrderId[order.id] || []
-      });
+      ordersByAmazonId[amazonId].push(orderData);
 
       // Also add to grouping by raw VCS format (for lookup from VCS orders)
       if (rawOrderId !== amazonId) {
         if (!ordersByAmazonId[rawOrderId]) {
           ordersByAmazonId[rawOrderId] = [];
         }
-        ordersByAmazonId[rawOrderId].push({
-          saleOrder: order,
-          orderLines: orderLinesByOrderId[order.id] || []
-        });
+        ordersByAmazonId[rawOrderId].push(orderData);
+      }
+
+      // Also add to grouping by Odoo order name (e.g., FBADE123-456-789)
+      if (order.name && !ordersByAmazonId[order.name]) {
+        ordersByAmazonId[order.name] = [orderData];
+      }
+
+      // Also index by shipmentId if available
+      if (order.x_amazon_shipment_id) {
+        if (!ordersByAmazonId[order.x_amazon_shipment_id]) {
+          ordersByAmazonId[order.x_amazon_shipment_id] = [];
+        }
+        ordersByAmazonId[order.x_amazon_shipment_id].push(orderData);
       }
     }
 
@@ -1026,17 +1079,27 @@ class VcsOdooInvoicer {
     // Cache miss - fall back to individual API call (for orders not in the batch)
     console.log(`[VcsOdooInvoicer] Cache miss for ${amazonOrderId}, fetching from Odoo...`);
 
-    // Search for sale.order by client_order_ref OR by FBA/FBM name pattern
-    // This catches orders created by different import sources
+    // Determine ship-from country for new naming pattern
+    const shipFrom = vcsOrder.shipFromCountry || 'BE';
+
+    // Search for sale.order by multiple patterns:
+    // 1. New pattern with country: FBADE123-456-789, FBMBE123-456-789
+    // 2. Old pattern without country: FBA123-456-789, FBM123-456-789 (backwards compatibility)
+    // 3. By client_order_ref (Amazon order ID)
+    // 4. By x_amazon_shipment_id if available
+    const searchDomain = [
+      '|', '|', '|', '|', '|',
+      ['name', '=', `FBA${shipFrom}${amazonOrderId}`],  // New FBA pattern
+      ['name', '=', `FBM${shipFrom}${amazonOrderId}`],  // New FBM pattern
+      ['name', '=', `FBA${amazonOrderId}`],              // Old FBA pattern
+      ['name', '=', `FBM${amazonOrderId}`],              // Old FBM pattern
+      ['client_order_ref', '=', amazonOrderId],          // By Amazon order ID
+      ...(vcsOrder.shipmentId ? [['x_amazon_shipment_id', '=', vcsOrder.shipmentId]] : [['id', '>', 0]]) // By shipment ID
+    ];
+
     const orders = await this.odoo.searchRead('sale.order',
-      [
-        '|',
-        ['client_order_ref', '=', amazonOrderId],
-        '|',
-        ['name', '=', `FBA${amazonOrderId}`],
-        ['name', '=', `FBM${amazonOrderId}`]
-      ],
-      ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id']
+      searchDomain,
+      ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id', 'x_amazon_shipment_id']
     );
 
     if (orders.length === 0) {
@@ -1050,25 +1113,41 @@ class VcsOdooInvoicer {
       return { saleOrder: order, orderLines };
     }
 
-    // Multiple orders found (FBA/FBM split) - need to match by SKU
-    const vcsSku = vcsOrder.items?.[0]?.sku;
-    if (!vcsSku) {
-      // No SKU in VCS, just use first order
-      const order = orders[0];
-      const orderLines = await this.getOrderLines(order.order_line);
-      return { saleOrder: order, orderLines };
+    // Multiple orders found - prioritize matching by:
+    // 1. Exact shipmentId match
+    // 2. Exact name match with country code (FBADE, FBMBE, etc.)
+    // 3. SKU match
+    // 4. Fall back to first order
+
+    // Priority 1: Match by shipmentId
+    if (vcsOrder.shipmentId) {
+      const shipmentMatch = orders.find(o => o.x_amazon_shipment_id === vcsOrder.shipmentId);
+      if (shipmentMatch) {
+        const orderLines = await this.getOrderLines(shipmentMatch.order_line);
+        return { saleOrder: shipmentMatch, orderLines };
+      }
     }
 
-    const transformedSku = this.transformSku(vcsSku);
+    // Priority 2: Match by exact name with country code
+    const expectedNameFBA = `FBA${shipFrom}${amazonOrderId}`;
+    const expectedNameFBM = `FBM${shipFrom}${amazonOrderId}`;
+    const exactNameMatch = orders.find(o => o.name === expectedNameFBA || o.name === expectedNameFBM);
+    if (exactNameMatch) {
+      const orderLines = await this.getOrderLines(exactNameMatch.order_line);
+      return { saleOrder: exactNameMatch, orderLines };
+    }
 
-    // Check each order's lines for matching SKU
-    for (const order of orders) {
-      const orderLines = await this.getOrderLines(order.order_line);
-
-      for (const line of orderLines) {
-        const productSku = line.product_default_code || '';
-        if (productSku === transformedSku || productSku === vcsSku) {
-          return { saleOrder: order, orderLines };
+    // Priority 3: Match by SKU
+    const vcsSku = vcsOrder.items?.[0]?.sku;
+    if (vcsSku) {
+      const transformedSku = this.transformSku(vcsSku);
+      for (const order of orders) {
+        const orderLines = await this.getOrderLines(order.order_line);
+        for (const line of orderLines) {
+          const productSku = line.product_default_code || '';
+          if (productSku === transformedSku || productSku === vcsSku) {
+            return { saleOrder: order, orderLines };
+          }
         }
       }
     }
@@ -1166,17 +1245,27 @@ class VcsOdooInvoicer {
   async createOrderFromVcs(vcsOrder) {
     const amazonOrderId = vcsOrder.orderId;
 
-    // DUPLICATE PREVENTION: Check again right before creating
-    // This prevents race conditions where another process may have created the order
+    // Determine if FBA or FBM based on ship-from country
+    // FBM ships from BE (our warehouse), FBA ships from Amazon warehouses (DE, FR, etc.)
+    const shipFromCountry = vcsOrder.shipFromCountry || 'BE';
+    const isFBA = shipFromCountry !== 'BE';
+    const orderPrefix = isFBA ? 'FBA' : 'FBM';
+    // Include country code in order name: FBADE123-456-789, FBMBE123-456-789
+    // This ensures orders shipped from different warehouses get unique names
+    const orderName = `${orderPrefix}${shipFromCountry}${amazonOrderId}`;
+
+    // DUPLICATE PREVENTION: Check for exact order name or shipmentId match
+    // Note: Multiple orders with same amazonOrderId but different shipFrom are VALID (different shipments)
+    // So we only check for the exact name we're about to create, not any order with that Amazon ID
+    const duplicateCheckDomain = [
+      '|',
+      ['name', '=', orderName],
+      ...(vcsOrder.shipmentId ? [['x_amazon_shipment_id', '=', vcsOrder.shipmentId]] : [['name', '=', orderName]])
+    ];
+
     const existingOrders = await this.odoo.searchRead('sale.order',
-      [
-        '|',
-        ['client_order_ref', '=', amazonOrderId],
-        '|',
-        ['name', '=', `FBA${amazonOrderId}`],
-        ['name', '=', `FBM${amazonOrderId}`]
-      ],
-      ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id']
+      duplicateCheckDomain,
+      ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id', 'x_amazon_shipment_id']
     );
 
     if (existingOrders.length > 0) {
@@ -1185,13 +1274,6 @@ class VcsOdooInvoicer {
       const orderLines = await this.getOrderLines(order.order_line);
       return { saleOrder: order, orderLines };
     }
-
-    // Determine if FBA or FBM based on ship-from country
-    // FBM ships from BE (our warehouse), FBA ships from Amazon warehouses (DE, FR, etc.)
-    const shipFromCountry = vcsOrder.shipFromCountry || 'BE';
-    const isFBA = shipFromCountry !== 'BE';
-    const orderPrefix = isFBA ? 'FBA' : 'FBM';
-    const orderName = `${orderPrefix}${amazonOrderId}`;
 
     // Determine partner from VCS data
     const partnerId = await this.determinePartner(vcsOrder, null);
@@ -1273,7 +1355,7 @@ class VcsOdooInvoicer {
     const fiscalPositionId = this.determineFiscalPosition(vcsOrder);
 
     // Create the sale order
-    const saleOrderId = await this.odoo.create('sale.order', {
+    const orderData = {
       name: orderName,
       partner_id: partnerId,
       partner_invoice_id: partnerId,
@@ -1284,7 +1366,14 @@ class VcsOdooInvoicer {
       order_line: orderLines,
       team_id: teamId, // Marketplace-specific team (e.g., Amazon DE = 17)
       fiscal_position_id: fiscalPositionId, // OSS/domestic/export based on VCS data
-    });
+    };
+
+    // Store Amazon shipment ID if available (for traceability and API uploads)
+    if (vcsOrder.shipmentId) {
+      orderData.x_amazon_shipment_id = vcsOrder.shipmentId;
+    }
+
+    const saleOrderId = await this.odoo.create('sale.order', orderData);
 
     console.log(`[VcsOdooInvoicer] Created sale order ${orderName} (ID: ${saleOrderId})`);
 
