@@ -406,6 +406,7 @@ class WeeklyPricingReportService {
 
   /**
    * Load all Odoo SKUs and product names from MongoDB cache
+   * Excludes products with "GEN_AMZ" in their name (auto-generated Amazon placeholders)
    */
   async loadOdooSkus() {
     if (this.odooSkuSet) return; // Already loaded
@@ -418,16 +419,25 @@ class WeeklyPricingReportService {
 
       this.odooSkuSet = new Set();
       this.odooSkuToName = new Map();
+      let genAmzExcluded = 0;
 
       for (const p of products) {
         const skuUpper = p.sku.toUpperCase();
+
+        // Skip products with "GEN_AMZ" in name - these are auto-generated Amazon placeholders
+        // and should not be considered as valid Odoo SKUs for matching
+        if (p.name && p.name.includes('GEN_AMZ')) {
+          genAmzExcluded++;
+          continue;
+        }
+
         this.odooSkuSet.add(skuUpper);
         if (p.name) {
           this.odooSkuToName.set(skuUpper, p.name);
         }
       }
 
-      console.log(`[WeeklyPricingReport] Loaded ${this.odooSkuSet.size} Odoo SKUs for matching`);
+      console.log(`[WeeklyPricingReport] Loaded ${this.odooSkuSet.size} Odoo SKUs for matching (excluded ${genAmzExcluded} GEN_AMZ placeholders)`);
     } catch (error) {
       console.error('[WeeklyPricingReport] Failed to load Odoo SKUs:', error.message);
       this.odooSkuSet = new Set();
