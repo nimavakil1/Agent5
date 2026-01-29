@@ -367,19 +367,63 @@ class WeeklyPricingReportService {
    * Clean up SKU for matching
    * Uses SkuResolver to normalize SKUs
    */
+  /**
+   * Clean up SKU for matching across marketplaces
+   * Handles various suffixes and prefixes used by Amazon and Bol.com
+   *
+   * Examples:
+   *   P0028-TEMP → 00028
+   *   42035-STICKERLES → 42035
+   *   P0044K.A-FBM-JHF0OJR → 0044K
+   *   18011-FBM → 18011
+   *   18011-FBMA → 18011
+   */
   cleanSku(sku) {
     if (!sku) return '';
 
-    // Ensure SkuResolver is loaded
-    if (!skuResolver.loaded) {
-      // Return basic cleanup if not loaded
-      return sku.trim().toUpperCase()
-        .replace(/-FBM[A]?$/i, '')
-        .replace(/-FBBA?$/i, '');
+    let cleaned = sku.trim().toUpperCase();
+
+    // Step 1: Remove everything after -FBM or -FBB (including random suffixes like -JHF0OJR)
+    // This handles: P0044K.A-FBM-JHF0OJR → P0044K.A
+    cleaned = cleaned.replace(/-FBM[A]?.*$/i, '');
+    cleaned = cleaned.replace(/-FBB[A]?.*$/i, '');
+
+    // Step 2: Remove known suffixes (including partial/truncated versions)
+    // -STICKERLESS, -STICKERLES, -STICKER, etc.
+    cleaned = cleaned.replace(/-STICKER(LESS|LES)?$/i, '');
+    cleaned = cleaned.replace(/-BUNDLE.*$/i, '');
+    cleaned = cleaned.replace(/-NEW$/i, '');
+    cleaned = cleaned.replace(/-REFURB.*$/i, '');
+    cleaned = cleaned.replace(/-TEMP$/i, '');
+
+    // Step 3: Remove .A, .B, .C etc. suffixes (variation markers)
+    // P0044K.A → P0044K
+    cleaned = cleaned.replace(/\.[A-Z]$/i, '');
+
+    // Step 4: Remove trailing letter suffixes that Amazon adds for variations
+    // But only for numeric SKUs: 18011A → 18011, but keep 0044K as is
+    if (/^\d+[A-Z]$/.test(cleaned)) {
+      cleaned = cleaned.slice(0, -1);
     }
 
-    const resolved = skuResolver.resolve(sku);
-    return resolved.odooSku?.toUpperCase() || sku.trim().toUpperCase();
+    // Step 5: Remove P prefix if followed by digits (Bol.com pattern)
+    // P0028 → 0028, P0044K → 0044K
+    if (/^P\d/.test(cleaned)) {
+      cleaned = cleaned.slice(1);
+    }
+
+    // Step 6: Pad numeric SKUs to 5 digits
+    // 1006 → 01006, 28 → 00028
+    if (/^\d{1,4}$/.test(cleaned)) {
+      cleaned = cleaned.padStart(5, '0');
+    }
+
+    // Step 7: If SkuResolver has custom mappings, check those too
+    if (skuResolver.loaded && skuResolver.customMappings.has(cleaned)) {
+      return skuResolver.customMappings.get(cleaned);
+    }
+
+    return cleaned;
   }
 
   /**
