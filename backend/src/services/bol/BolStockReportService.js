@@ -13,6 +13,8 @@
 const ExcelJS = require('exceljs');
 const https = require('https');
 const url = require('url');
+const path = require('path');
+const fs = require('fs').promises;
 const oneDriveService = require('../onedriveService');
 
 // Report folder in OneDrive
@@ -165,6 +167,31 @@ class BolStockReportService {
 
     // Generate buffer
     return workbook.xlsx.writeBuffer();
+  }
+
+  /**
+   * Save Excel report locally as fallback when OneDrive fails
+   * @param {Buffer} buffer - Excel file buffer
+   * @param {string} filename - Filename for the report
+   * @returns {Object} { success, url, error }
+   */
+  async saveLocally(buffer, filename) {
+    try {
+      const uploadsDir = path.join(__dirname, '..', '..', 'public', 'uploads', 'bol-reports');
+      await fs.mkdir(uploadsDir, { recursive: true });
+
+      const filePath = path.join(uploadsDir, filename);
+      await fs.writeFile(filePath, buffer);
+
+      const baseUrl = process.env.APP_BASE_URL || 'https://ai.acropaq.com';
+      const url = `${baseUrl}/uploads/bol-reports/${filename}`;
+
+      console.log(`[BolStockReportService] Report saved locally: ${filePath}`);
+      return { success: true, url };
+    } catch (error) {
+      console.error('[BolStockReportService] Local save failed:', error.message);
+      return { success: false, error: error.message };
+    }
   }
 
   /**
@@ -538,13 +565,21 @@ class BolStockReportService {
 
         const excelBuffer = await this.generateExcel(syncResults);
 
-        // Upload to OneDrive (primary storage)
+        // Try OneDrive first (primary storage)
         const uploadResult = await this.uploadToOneDrive(excelBuffer, filename);
         if (uploadResult.success) {
           reportUrl = uploadResult.url;
           result.excelUrl = reportUrl;
         } else {
-          console.warn('[BolStockReportService] OneDrive upload failed, report not saved:', uploadResult.error);
+          // Fallback to local storage
+          console.warn('[BolStockReportService] OneDrive upload failed, trying local fallback:', uploadResult.error);
+          const localResult = await this.saveLocally(excelBuffer, filename);
+          if (localResult.success) {
+            reportUrl = localResult.url;
+            result.excelUrl = reportUrl;
+          } else {
+            console.error('[BolStockReportService] Both OneDrive and local save failed');
+          }
         }
       }
 
