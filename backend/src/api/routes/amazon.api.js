@@ -3318,6 +3318,287 @@ router.get('/vcs/uploads/:uploadId/logs', async (req, res) => {
 });
 
 /**
+ * @route GET /api/amazon/vcs/uploads/:uploadId/sessions
+ * @desc List all processing sessions for an upload with aggregate stats
+ */
+router.get('/vcs/uploads/:uploadId/sessions', async (req, res) => {
+  try {
+    const db = getDb();
+    const uploadId = req.params.uploadId;
+
+    const upload = await db.collection('amazon_vcs_uploads').findOne(
+      { _id: new ObjectId(uploadId) },
+      { projection: { processingRuns: 1, filename: 1 } }
+    );
+
+    if (!upload) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    const runs = upload.processingRuns || [];
+
+    // Group runs by sessionId
+    const sessionMap = new Map();
+    for (const run of runs) {
+      const sid = run.sessionId || run.runId; // Fallback for old runs without sessionId
+      if (!sessionMap.has(sid)) {
+        sessionMap.set(sid, {
+          sessionId: sid,
+          sessionName: run.sessionName || null,
+          batches: [],
+          totalBatches: run.totalBatches || null,
+          dryRun: run.dryRun,
+          startedAt: run.startedAt,
+          completedAt: run.completedAt,
+          // Aggregate totals
+          totalOrders: 0,
+          totalProcessed: 0,
+          totalCreated: 0,
+          totalSkipped: 0,
+          totalErrors: 0,
+          totalManualRequired: 0,
+          totalDurationMs: 0,
+        });
+      }
+
+      const session = sessionMap.get(sid);
+      session.batches.push({
+        runId: run.runId,
+        batchNumber: run.batchNumber,
+        orderCount: run.orderCount,
+        result: run.result,
+        startedAt: run.startedAt,
+        completedAt: run.completedAt,
+        durationMs: run.durationMs,
+      });
+
+      // Update aggregates
+      session.totalOrders += run.orderCount || 0;
+      session.totalProcessed += run.result?.processed || 0;
+      session.totalCreated += run.result?.created || 0;
+      session.totalSkipped += run.result?.skipped || 0;
+      session.totalErrors += run.result?.errors || 0;
+      session.totalManualRequired += run.result?.manualRequired || 0;
+      session.totalDurationMs += run.durationMs || 0;
+
+      // Update time range
+      if (run.startedAt && (!session.startedAt || new Date(run.startedAt) < new Date(session.startedAt))) {
+        session.startedAt = run.startedAt;
+      }
+      if (run.completedAt && (!session.completedAt || new Date(run.completedAt) > new Date(session.completedAt))) {
+        session.completedAt = run.completedAt;
+      }
+    }
+
+    // Convert to array and sort by most recent first
+    const sessions = Array.from(sessionMap.values())
+      .map(s => ({
+        ...s,
+        batchCount: s.batches.length,
+        completedBatches: s.batches.filter(b => b.completedAt).length,
+        progress: s.totalBatches ? `${s.batches.length}/${s.totalBatches}` : `${s.batches.length} batches`,
+      }))
+      .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+
+    res.json({
+      success: true,
+      uploadId,
+      filename: upload.filename,
+      sessionCount: sessions.length,
+      sessions,
+    });
+
+  } catch (error) {
+    console.error('[VCS Sessions] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/uploads/:uploadId/sessions/:sessionId
+ * @desc Get detailed aggregate stats for a specific session
+ */
+router.get('/vcs/uploads/:uploadId/sessions/:sessionId', async (req, res) => {
+  try {
+    const db = getDb();
+    const { uploadId, sessionId } = req.params;
+    const includeLogs = req.query.includeLogs === 'true';
+
+    const upload = await db.collection('amazon_vcs_uploads').findOne(
+      { _id: new ObjectId(uploadId) },
+      { projection: { processingRuns: 1, filename: 1 } }
+    );
+
+    if (!upload) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    // Filter runs for this session
+    const sessionRuns = (upload.processingRuns || []).filter(
+      run => (run.sessionId || run.runId) === sessionId
+    );
+
+    if (sessionRuns.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Calculate aggregates
+    const aggregate = {
+      sessionId,
+      sessionName: sessionRuns[0].sessionName || null,
+      dryRun: sessionRuns[0].dryRun,
+      totalBatches: sessionRuns[0].totalBatches || sessionRuns.length,
+      completedBatches: sessionRuns.length,
+      startedAt: null,
+      completedAt: null,
+      totalDurationMs: 0,
+      totalOrders: 0,
+      totalProcessed: 0,
+      totalCreated: 0,
+      totalSkipped: 0,
+      totalErrors: 0,
+      totalManualRequired: 0,
+      batches: [],
+      allLogs: includeLogs ? [] : undefined,
+    };
+
+    for (const run of sessionRuns) {
+      aggregate.totalOrders += run.orderCount || 0;
+      aggregate.totalProcessed += run.result?.processed || 0;
+      aggregate.totalCreated += run.result?.created || 0;
+      aggregate.totalSkipped += run.result?.skipped || 0;
+      aggregate.totalErrors += run.result?.errors || 0;
+      aggregate.totalManualRequired += run.result?.manualRequired || 0;
+      aggregate.totalDurationMs += run.durationMs || 0;
+
+      if (run.startedAt && (!aggregate.startedAt || new Date(run.startedAt) < new Date(aggregate.startedAt))) {
+        aggregate.startedAt = run.startedAt;
+      }
+      if (run.completedAt && (!aggregate.completedAt || new Date(run.completedAt) > new Date(aggregate.completedAt))) {
+        aggregate.completedAt = run.completedAt;
+      }
+
+      aggregate.batches.push({
+        runId: run.runId,
+        batchNumber: run.batchNumber,
+        orderCount: run.orderCount,
+        result: run.result,
+        startedAt: run.startedAt,
+        completedAt: run.completedAt,
+        durationMs: run.durationMs,
+        logCount: run.logs?.length || 0,
+      });
+
+      if (includeLogs && run.logs) {
+        aggregate.allLogs.push(...run.logs.map(log => ({
+          ...log,
+          batchNumber: run.batchNumber,
+          runId: run.runId,
+        })));
+      }
+    }
+
+    // Sort batches by batch number
+    aggregate.batches.sort((a, b) => (a.batchNumber || 0) - (b.batchNumber || 0));
+
+    // Calculate progress percentage
+    aggregate.progress = {
+      percentage: aggregate.totalOrders > 0
+        ? Math.round((aggregate.totalProcessed / aggregate.totalOrders) * 100)
+        : 0,
+      text: `${aggregate.totalProcessed}/${aggregate.totalOrders} orders processed`,
+      batchProgress: `${aggregate.completedBatches}/${aggregate.totalBatches} batches`,
+    };
+
+    // Summary stats
+    aggregate.summary = {
+      successRate: aggregate.totalProcessed > 0
+        ? Math.round((aggregate.totalCreated / aggregate.totalProcessed) * 100)
+        : 0,
+      created: aggregate.totalCreated,
+      skipped: aggregate.totalSkipped,
+      errors: aggregate.totalErrors,
+      manualRequired: aggregate.totalManualRequired,
+      avgBatchDuration: aggregate.completedBatches > 0
+        ? Math.round(aggregate.totalDurationMs / aggregate.completedBatches)
+        : 0,
+    };
+
+    res.json({
+      success: true,
+      uploadId,
+      filename: upload.filename,
+      ...aggregate,
+    });
+
+  } catch (error) {
+    console.error('[VCS Session Detail] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route GET /api/amazon/vcs/failed-orders
+ * @desc Get orders that failed processing and can be retried
+ * @query uploadId - Optional filter by upload ID
+ */
+router.get('/vcs/failed-orders', async (req, res) => {
+  try {
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(500).json({ error: 'Odoo client not available' });
+    }
+    const invoicer = new VcsOdooInvoicer(odooClient);
+
+    const uploadId = req.query.uploadId || null;
+    const failedOrders = await invoicer.getRetryableOrders(uploadId);
+
+    res.json({
+      success: true,
+      count: failedOrders.length,
+      orders: failedOrders,
+    });
+
+  } catch (error) {
+    console.error('[VCS Failed Orders] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/amazon/vcs/reset-failed-orders
+ * @desc Reset failed orders to pending status for retry
+ * @body orderIds - Array of MongoDB order IDs to reset
+ */
+router.post('/vcs/reset-failed-orders', async (req, res) => {
+  try {
+    const { orderIds } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: 'orderIds array is required' });
+    }
+
+    const odooClient = req.app.get('odooClient');
+    if (!odooClient) {
+      return res.status(500).json({ error: 'Odoo client not available' });
+    }
+    const invoicer = new VcsOdooInvoicer(odooClient);
+
+    const result = await invoicer.resetFailedOrders(orderIds);
+
+    res.json({
+      success: true,
+      ...result,
+      message: `Reset ${result.resetCount} of ${result.requestedCount} orders to pending status`,
+    });
+
+  } catch (error) {
+    console.error('[VCS Reset Failed Orders] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * @route GET /api/amazon/vcs/reports/:reportId/orders
  * @desc Get orders from a specific VCS report
  */
@@ -3885,7 +4166,13 @@ router.post('/vcs/setup/create-shipment-id-field', async (req, res) => {
 /**
  * @route POST /api/amazon/vcs/create-invoices
  * @desc Create Odoo invoices from selected VCS orders
- * @body { orderIds, dryRun, uploadId }
+ * @body { orderIds, dryRun, uploadId, sessionId, sessionName, batchNumber, totalBatches }
+ *
+ * Session grouping:
+ * - sessionId: Groups multiple batches together (auto-generated if not provided)
+ * - sessionName: Human-readable name for the session (e.g., "December 2024 VCS Import")
+ * - batchNumber: Current batch number (1-based)
+ * - totalBatches: Total number of batches in this session
  */
 router.post('/vcs/create-invoices', async (req, res) => {
   const db = getDb();
@@ -3905,9 +4192,23 @@ router.post('/vcs/create-invoices', async (req, res) => {
   };
 
   try {
-    const { orderIds = [], dryRun = true, uploadId = null } = req.body;
+    const {
+      orderIds = [],
+      dryRun = true,
+      uploadId = null,
+      sessionId = new ObjectId().toString(), // Auto-generate if not provided
+      sessionName = null,
+      batchNumber = null,
+      totalBatches = null
+    } = req.body;
 
-    addLog('info', `Starting invoice creation`, { orderCount: orderIds.length, dryRun, uploadId });
+    addLog('info', `Starting invoice creation`, {
+      orderCount: orderIds.length,
+      dryRun,
+      uploadId,
+      sessionId,
+      batchNumber: batchNumber ? `${batchNumber}/${totalBatches}` : 'single batch'
+    });
 
     if (!orderIds || orderIds.length === 0) {
       addLog('error', 'No orders selected');
@@ -3958,6 +4259,10 @@ router.post('/vcs/create-invoices', async (req, res) => {
       const endTime = new Date();
       const processingRun = {
         runId: new ObjectId().toString(),
+        sessionId,  // Links batches together
+        sessionName: sessionName || null,
+        batchNumber: batchNumber || null,
+        totalBatches: totalBatches || null,
         startedAt: startTime,
         completedAt: endTime,
         durationMs: endTime - startTime,
@@ -3986,6 +4291,7 @@ router.post('/vcs/create-invoices', async (req, res) => {
     res.json({
       success: true,
       dryRun,
+      sessionId,  // Return sessionId so client can use it for subsequent batches
       ...result,
       logs // Also return logs in response for immediate display
     });

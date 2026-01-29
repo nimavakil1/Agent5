@@ -316,6 +316,27 @@ const FISCAL_POSITIONS = {
   'DOMESTIC_BE': 'Belgium Domestic',
 };
 
+/**
+ * Processing steps for atomicity/transaction tracking
+ * Each step represents a checkpoint in the invoice creation process.
+ * If processing fails, we can resume from the last successful step.
+ */
+const PROCESSING_STEPS = {
+  PENDING: 'pending',                           // Initial state
+  VALIDATING: 'validating',                     // Checking if order should be processed
+  FINDING_ODOO_ORDER: 'finding_odoo_order',     // Looking for existing Odoo order
+  CREATING_ODOO_ORDER: 'creating_odoo_order',   // Creating new order in Odoo
+  ODOO_ORDER_CREATED: 'odoo_order_created',     // Order exists/created in Odoo
+  UPDATING_PRICES: 'updating_prices',           // Updating sale order line prices from VCS
+  CHECKING_INVOICE: 'checking_invoice',         // Checking for existing invoice
+  CREATING_INVOICE: 'creating_invoice',         // Creating invoice in Odoo
+  UPDATING_INVOICE_LINES: 'updating_invoice_lines', // Adding/updating service lines
+  COMPLETED: 'completed',                       // Successfully completed
+  FAILED: 'failed',                             // Failed at some step
+  SKIPPED: 'skipped',                           // Skipped (not invoiceable, already exists, etc.)
+  MANUAL_REQUIRED: 'manual_required',           // Requires manual intervention
+};
+
 class VcsOdooInvoicer {
   constructor(odooClient, options = {}) {
     this.odoo = odooClient;
@@ -593,6 +614,9 @@ class VcsOdooInvoicer {
       const orderNum = `${result.processed}/${orders.length}`;
 
       try {
+        // STEP: VALIDATING - Check if order should be processed
+        await this.updateProcessingStatus(order._id, PROCESSING_STEPS.VALIDATING);
+
         // Skip orders that shouldn't be invoiced
         if (this.shouldSkipOrder(order)) {
           result.skipped++;
@@ -618,25 +642,21 @@ class VcsOdooInvoicer {
             orderDate: order.orderDate,
             ...manualCheck,
           });
-          // Mark as manual_required in MongoDB
-          await db.collection('amazon_vcs_orders').updateOne(
-            { _id: order._id },
-            {
-              $set: {
-                status: 'manual_required',
-                manualRequiredReason: manualCheck.reasons.join('; '),
-                manualRequiredAt: new Date(),
-              }
-            }
-          );
+          // Mark as manual_required in MongoDB with processing step
+          await this.updateProcessingStatus(order._id, PROCESSING_STEPS.MANUAL_REQUIRED, {
+            manualRequiredReason: manualCheck.reasons.join('; '),
+          });
           log('warn', `[${orderNum}] ${order.orderId}: Requires manual invoice`, { reasons: manualCheck.reasons });
           continue;
         }
 
-        // Find existing Odoo order or create one from VCS data
+        // STEP: FINDING_ODOO_ORDER - Look for existing Odoo order
+        await this.updateProcessingStatus(order._id, PROCESSING_STEPS.FINDING_ODOO_ORDER);
         let odooOrderData = await this.findOdooOrder(order);
+
         if (!odooOrderData) {
-          // No existing order - create one from VCS data
+          // STEP: CREATING_ODOO_ORDER - Create new order in Odoo
+          await this.updateProcessingStatus(order._id, PROCESSING_STEPS.CREATING_ODOO_ORDER);
           log('info', `[${orderNum}] ${order.orderId}: No Odoo order found, creating...`, {
             shipFrom: order.shipFromCountry,
             shipTo: order.shipToCountry,
@@ -647,7 +667,12 @@ class VcsOdooInvoicer {
             log('success', `[${orderNum}] ${order.orderId}: Created Odoo order ${odooOrderData.saleOrder.name}`);
           } catch (createError) {
             result.skipped++;
-            await this.markOrderSkipped(order._id, `Failed to create order: ${createError.message}`);
+            // Mark as failed with the specific step where it failed
+            await this.updateProcessingStatus(order._id, PROCESSING_STEPS.FAILED, {
+              failedStep: PROCESSING_STEPS.CREATING_ODOO_ORDER,
+              failedError: createError.message,
+              skipReason: `Failed to create order: ${createError.message}`,
+            });
             result.errors.push({
               orderId: order.orderId,
               error: `Failed to create order: ${createError.message}`,
@@ -659,17 +684,24 @@ class VcsOdooInvoicer {
           log('info', `[${orderNum}] ${order.orderId}: Found existing Odoo order ${odooOrderData.saleOrder.name}`);
         }
 
+        // STEP: ODOO_ORDER_CREATED - Order exists in Odoo, record the link
+        await this.updateProcessingStatus(order._id, PROCESSING_STEPS.ODOO_ORDER_CREATED, {
+          odooSaleOrderId: odooOrderData.saleOrder.id,
+          odooSaleOrderName: odooOrderData.saleOrder.name,
+        });
+
         const { saleOrder, orderLines } = odooOrderData;
 
-        // STEP 1: Update sale order line prices from VCS data if they are 0
-        // This must happen BEFORE checking for existing invoices
+        // STEP: UPDATING_PRICES - Update sale order line prices from VCS data
+        await this.updateProcessingStatus(order._id, PROCESSING_STEPS.UPDATING_PRICES);
         const priceUpdateResult = await this.updateSaleOrderLinePricesFromVcs(order, saleOrder, orderLines);
         const orderPricesUpdated = priceUpdateResult.updated > 0;
         if (orderPricesUpdated) {
           result.pricesUpdated++;
         }
 
-        // STEP 2: Check if invoice already exists in Odoo for this sale order
+        // STEP: CHECKING_INVOICE - Check if invoice already exists
+        await this.updateProcessingStatus(order._id, PROCESSING_STEPS.CHECKING_INVOICE);
         const existingInvoice = await this.findExistingInvoice(saleOrder.name);
         if (existingInvoice) {
           result.skipped++;
@@ -727,7 +759,8 @@ class VcsOdooInvoicer {
           continue;
         }
 
-        // Create invoice linked to sale order
+        // STEP: CREATING_INVOICE - Create invoice in Odoo
+        await this.updateProcessingStatus(order._id, PROCESSING_STEPS.CREATING_INVOICE);
         log('info', `[${orderNum}] ${order.orderId}: Creating invoice...`);
         const partnerId = await this.determinePartner(order, saleOrder);
         const invoice = await this.createInvoice(order, partnerId, saleOrder, orderLines);
@@ -740,25 +773,24 @@ class VcsOdooInvoicer {
           total: invoice.amountTotal
         });
 
-        // Mark order as invoiced
-        await db.collection('amazon_vcs_orders').updateOne(
-          { _id: order._id },
-          {
-            $set: {
-              status: 'invoiced',
-              odooInvoiceId: invoice.id,
-              odooInvoiceName: invoice.name,
-              odooSaleOrderId: saleOrder.id,
-              odooSaleOrderName: saleOrder.name,
-              invoicedAt: new Date(),
-            }
-          }
-        );
+        // STEP: COMPLETED - Mark order as successfully invoiced
+        await this.updateProcessingStatus(order._id, PROCESSING_STEPS.COMPLETED, {
+          odooInvoiceId: invoice.id,
+          odooInvoiceName: invoice.name,
+        });
 
         // Rate limiting: add delay between invoice creations to prevent Odoo overload
         await new Promise(resolve => setTimeout(resolve, 150));
 
       } catch (error) {
+        // STEP: FAILED - Mark order as failed with error details
+        await this.updateProcessingStatus(order._id, PROCESSING_STEPS.FAILED, {
+          failedStep: order.processingStep || 'unknown',
+          failedError: error.message,
+        }).catch(updateErr => {
+          // Don't throw if status update fails - log and continue
+          console.error(`[VcsOdooInvoicer] Failed to update processing status for ${order.orderId}:`, updateErr.message);
+        });
         result.errors.push({
           orderId: order.orderId,
           error: error.message,
@@ -1607,6 +1639,7 @@ class VcsOdooInvoicer {
         {
           $set: {
             status: 'skipped',
+            processingStep: PROCESSING_STEPS.SKIPPED,
             skipReason: reason,
             skippedAt: new Date(),
           }
@@ -1614,6 +1647,78 @@ class VcsOdooInvoicer {
       ),
       `markOrderSkipped(${orderId})`
     );
+  }
+
+  /**
+   * Update processing status atomically for transaction-like tracking
+   * This allows resuming from the last successful step if processing fails
+   * @param {ObjectId} orderId - MongoDB order ID
+   * @param {string} step - Current processing step (from PROCESSING_STEPS)
+   * @param {object} additionalData - Optional additional data to store
+   */
+  async updateProcessingStatus(orderId, step, additionalData = {}) {
+    const db = getDb();
+    const updateData = {
+      processingStep: step,
+      processingUpdatedAt: new Date(),
+      ...additionalData,
+    };
+
+    // If this is a failure step, also update status
+    if (step === PROCESSING_STEPS.FAILED) {
+      updateData.status = 'failed';
+      updateData.failedAt = new Date();
+    } else if (step === PROCESSING_STEPS.COMPLETED) {
+      updateData.status = 'invoiced';
+      updateData.invoicedAt = new Date();
+    } else if (step === PROCESSING_STEPS.MANUAL_REQUIRED) {
+      updateData.status = 'manual_required';
+      updateData.manualRequiredAt = new Date();
+    }
+
+    await withRetry(
+      () => db.collection('amazon_vcs_orders').updateOne(
+        { _id: orderId },
+        { $set: updateData }
+      ),
+      `updateProcessingStatus(${orderId}, ${step})`
+    );
+  }
+
+  /**
+   * Check if an order can be resumed from a previous failed state
+   * @param {object} order - The VCS order object
+   * @returns {object|null} Resume info if resumable, null otherwise
+   */
+  canResumeFromStep(order) {
+    const step = order.processingStep;
+    if (!step || step === PROCESSING_STEPS.PENDING) {
+      return null; // No previous processing or fresh start
+    }
+
+    // These steps indicate we can potentially resume
+    const resumableSteps = [
+      PROCESSING_STEPS.ODOO_ORDER_CREATED,  // Order exists, can continue to invoice
+      PROCESSING_STEPS.UPDATING_PRICES,     // Prices may have been updated
+      PROCESSING_STEPS.CHECKING_INVOICE,    // Was checking for invoice
+      PROCESSING_STEPS.CREATING_INVOICE,    // Invoice creation may have partially succeeded
+      PROCESSING_STEPS.UPDATING_INVOICE_LINES, // Invoice exists, was updating lines
+      PROCESSING_STEPS.FAILED,              // Explicit failure, can retry
+    ];
+
+    if (resumableSteps.includes(step)) {
+      return {
+        lastStep: step,
+        odooOrderId: order.odooSaleOrderId,
+        odooOrderName: order.odooSaleOrderName,
+        odooInvoiceId: order.odooInvoiceId,
+        odooInvoiceName: order.odooInvoiceName,
+        failedStep: order.failedStep,
+        failedError: order.failedError,
+      };
+    }
+
+    return null;
   }
 
   /**
@@ -2425,7 +2530,7 @@ class VcsOdooInvoicer {
       }
     }
 
-    // Update shipping line if present
+    // Handle shipping line - UPDATE if exists, CREATE if VCS has amount but line missing
     if (order.totalShipping && order.totalShipping !== 0) {
       // Find shipping line by looking for product with SHIP or shipping in name
       const shippingLine = invoiceLines.find(line => {
@@ -2437,18 +2542,25 @@ class VcsOdooInvoicer {
 
       if (shippingLine) {
         const shippingUpdate = { price_unit: order.totalShipping };
-        // ALWAYS apply correct tax from VCS (OSS, domestic, or export)
         if (correctTaxId) {
           shippingUpdate.tax_ids = [[6, 0, [correctTaxId]]];
         }
         await this.odoo.execute('account.move.line', 'write', [[shippingLine.id], shippingUpdate]);
         console.log(`[VcsOdooInvoicer] Updated shipping line: price=${order.totalShipping}, tax_id=${correctTaxId}`);
+      } else {
+        // CREATE shipping line - VCS has shipping but invoice doesn't have it
+        const shippingProductId = await this.getShippingProductId();
+        if (shippingProductId) {
+          await this.createInvoiceLine(invoiceId, shippingProductId, 'Amazon Shipping', order.totalShipping, correctTaxId);
+          console.log(`[VcsOdooInvoicer] CREATED shipping line: price=${order.totalShipping}`);
+        } else {
+          console.warn(`[VcsOdooInvoicer] VCS has shipping ${order.totalShipping} but no shipping product found in Odoo`);
+        }
       }
     }
 
-    // Update shipping discount line if present
+    // Handle shipping discount line - UPDATE if exists, CREATE if VCS has amount but line missing
     if (order.totalShippingPromo && order.totalShippingPromo !== 0) {
-      // Find shipping discount line
       const shippingDiscountLine = invoiceLines.find(line => {
         const productName = (line.name || '').toLowerCase();
         return productName.includes('shipment discount') || productName.includes('shipping discount');
@@ -2456,28 +2568,86 @@ class VcsOdooInvoicer {
 
       if (shippingDiscountLine) {
         const discountUpdate = { price_unit: -Math.abs(order.totalShippingPromo) };
-        // ALWAYS apply correct tax from VCS (OSS, domestic, or export)
         if (correctTaxId) {
           discountUpdate.tax_ids = [[6, 0, [correctTaxId]]];
         }
         await this.odoo.execute('account.move.line', 'write', [[shippingDiscountLine.id], discountUpdate]);
-        console.log(`[VcsOdooInvoicer] Updated shipping discount line: price=-${Math.abs(order.totalShippingPromo)}, tax_id=${correctTaxId}`);
+        console.log(`[VcsOdooInvoicer] Updated shipping discount line: price=-${Math.abs(order.totalShippingPromo)}`);
+      } else {
+        // CREATE shipping discount line
+        const shippingDiscountProductId = await this.getShippingDiscountProductId();
+        if (shippingDiscountProductId) {
+          await this.createInvoiceLine(invoiceId, shippingDiscountProductId, 'Shipment Discount', -Math.abs(order.totalShippingPromo), correctTaxId);
+          console.log(`[VcsOdooInvoicer] CREATED shipping discount line: price=-${Math.abs(order.totalShippingPromo)}`);
+        } else {
+          console.warn(`[VcsOdooInvoicer] VCS has shipping promo ${order.totalShippingPromo} but no shipping discount product found`);
+        }
       }
     }
 
-    // Update promotion discount line if present - ensure tax matches the invoice's fiscal position
-    // This fixes the bug where promotion discount lines kept BE*VAT tax instead of OSS tax
-    if (correctTaxId) {
+    // Handle gift wrap line - UPDATE if exists, CREATE if VCS has amount but line missing
+    if (order.totalGiftWrap && order.totalGiftWrap !== 0) {
+      const giftWrapLine = invoiceLines.find(line => {
+        const productName = (line.name || '').toLowerCase();
+        return productName.includes('gift') || productName.includes('wrap');
+      });
+
+      if (giftWrapLine) {
+        const giftWrapUpdate = { price_unit: order.totalGiftWrap };
+        if (correctTaxId) {
+          giftWrapUpdate.tax_ids = [[6, 0, [correctTaxId]]];
+        }
+        await this.odoo.execute('account.move.line', 'write', [[giftWrapLine.id], giftWrapUpdate]);
+        console.log(`[VcsOdooInvoicer] Updated gift wrap line: price=${order.totalGiftWrap}`);
+      } else {
+        // CREATE gift wrap line
+        const giftWrapProductId = await this.getGiftWrapProductId();
+        if (giftWrapProductId) {
+          await this.createInvoiceLine(invoiceId, giftWrapProductId, 'Gift Wrap Fee', order.totalGiftWrap, correctTaxId);
+          console.log(`[VcsOdooInvoicer] CREATED gift wrap line: price=${order.totalGiftWrap}`);
+        } else {
+          console.warn(`[VcsOdooInvoicer] VCS has gift wrap ${order.totalGiftWrap} but no gift wrap product found`);
+        }
+      }
+    }
+
+    // Handle promotion discount line - UPDATE tax if exists, or CREATE if VCS has promo but line missing
+    // Calculate total promo from items
+    const totalPromo = (order.items || []).reduce((sum, item) => sum + (item.promoAmount || 0), 0);
+    if (totalPromo && totalPromo !== 0) {
       const promotionDiscountLine = invoiceLines.find(line => {
         const productName = (line.name || '').toLowerCase();
         return productName.includes('promotion discount') || productName.includes('promo discount');
       });
 
       if (promotionDiscountLine) {
-        // Check if current tax is different from correct tax
+        // Update existing promo line
+        const promoUpdate = { price_unit: -Math.abs(totalPromo) };
+        if (correctTaxId) {
+          promoUpdate.tax_ids = [[6, 0, [correctTaxId]]];
+        }
+        await this.odoo.execute('account.move.line', 'write', [[promotionDiscountLine.id], promoUpdate]);
+        console.log(`[VcsOdooInvoicer] Updated promotion discount line: price=-${Math.abs(totalPromo)}, tax_id=${correctTaxId}`);
+      } else {
+        // CREATE promo discount line
+        const promoProductId = await this.getPromoDiscountProductId();
+        if (promoProductId) {
+          await this.createInvoiceLine(invoiceId, promoProductId, 'Promotion Discount', -Math.abs(totalPromo), correctTaxId);
+          console.log(`[VcsOdooInvoicer] CREATED promotion discount line: price=-${Math.abs(totalPromo)}`);
+        } else {
+          console.warn(`[VcsOdooInvoicer] VCS has promo ${totalPromo} but no promo discount product found`);
+        }
+      }
+    } else if (correctTaxId) {
+      // Just update tax on existing promo line if any
+      const promotionDiscountLine = invoiceLines.find(line => {
+        const productName = (line.name || '').toLowerCase();
+        return productName.includes('promotion discount') || productName.includes('promo discount');
+      });
+
+      if (promotionDiscountLine) {
         const currentTaxIds = promotionDiscountLine.tax_ids || [];
         const needsUpdate = !currentTaxIds.includes(correctTaxId);
-
         if (needsUpdate) {
           await this.odoo.execute('account.move.line', 'write', [[promotionDiscountLine.id], {
             tax_ids: [[6, 0, [correctTaxId]]]
@@ -2516,6 +2686,180 @@ class VcsOdooInvoicer {
 
     // Note: Odoo will automatically recompute totals when lines are modified
     // No need to call _compute_amount explicitly
+  }
+
+  /**
+   * Find or get cached shipping product ID
+   * @returns {number|null} Product ID or null if not found
+   */
+  async getShippingProductId() {
+    if (this.serviceProductCache?.shipping) {
+      return this.serviceProductCache.shipping;
+    }
+
+    // Initialize cache if needed
+    if (!this.serviceProductCache) {
+      this.serviceProductCache = {};
+    }
+
+    // Search by patterns
+    const patterns = ['SHIP AMAZON', 'Amazon Shipping', 'Shipping'];
+    for (const pattern of patterns) {
+      const products = await this.odoo.searchRead('product.product',
+        [['name', 'ilike', pattern], ['type', '=', 'service']],
+        ['id']
+      );
+      if (products.length > 0) {
+        this.serviceProductCache.shipping = products[0].id;
+        return products[0].id;
+      }
+    }
+
+    // Fallback to known product ID 16401
+    const fallback = await this.odoo.searchRead('product.product', [['id', '=', 16401]], ['id']);
+    if (fallback.length > 0) {
+      this.serviceProductCache.shipping = 16401;
+      return 16401;
+    }
+
+    return null;
+  }
+
+  /**
+   * Find or get cached shipping discount product ID
+   * @returns {number|null} Product ID or null if not found
+   */
+  async getShippingDiscountProductId() {
+    if (this.serviceProductCache?.shippingDiscount) {
+      return this.serviceProductCache.shippingDiscount;
+    }
+
+    if (!this.serviceProductCache) {
+      this.serviceProductCache = {};
+    }
+
+    const patterns = ['Shipment Discount', 'Shipping Discount'];
+    for (const pattern of patterns) {
+      const products = await this.odoo.searchRead('product.product',
+        [['name', 'ilike', pattern], ['type', '=', 'service']],
+        ['id']
+      );
+      if (products.length > 0) {
+        this.serviceProductCache.shippingDiscount = products[0].id;
+        return products[0].id;
+      }
+    }
+
+    // Fallback to known product ID 16405
+    const fallback = await this.odoo.searchRead('product.product', [['id', '=', 16405]], ['id']);
+    if (fallback.length > 0) {
+      this.serviceProductCache.shippingDiscount = 16405;
+      return 16405;
+    }
+
+    return null;
+  }
+
+  /**
+   * Find or get cached promotion discount product ID
+   * @returns {number|null} Product ID or null if not found
+   */
+  async getPromoDiscountProductId() {
+    if (this.serviceProductCache?.promoDiscount) {
+      return this.serviceProductCache.promoDiscount;
+    }
+
+    if (!this.serviceProductCache) {
+      this.serviceProductCache = {};
+    }
+
+    const patterns = ['Promotion Discount', 'Promo Discount', 'Amazon Promo'];
+    for (const pattern of patterns) {
+      const products = await this.odoo.searchRead('product.product',
+        [['name', 'ilike', pattern], ['type', '=', 'service']],
+        ['id']
+      );
+      if (products.length > 0) {
+        this.serviceProductCache.promoDiscount = products[0].id;
+        return products[0].id;
+      }
+    }
+
+    // Fallback to known product ID 16404
+    const fallback = await this.odoo.searchRead('product.product', [['id', '=', 16404]], ['id']);
+    if (fallback.length > 0) {
+      this.serviceProductCache.promoDiscount = 16404;
+      return 16404;
+    }
+
+    return null;
+  }
+
+  /**
+   * Find or get cached gift wrap product ID
+   * @returns {number|null} Product ID or null if not found
+   */
+  async getGiftWrapProductId() {
+    if (this.serviceProductCache?.giftWrap) {
+      return this.serviceProductCache.giftWrap;
+    }
+
+    if (!this.serviceProductCache) {
+      this.serviceProductCache = {};
+    }
+
+    const patterns = ['Gift Wrap', 'GIFT WRAPPER', 'Gift Wrapper Fee'];
+    for (const pattern of patterns) {
+      const products = await this.odoo.searchRead('product.product',
+        [['name', 'ilike', pattern], ['type', '=', 'service']],
+        ['id']
+      );
+      if (products.length > 0) {
+        this.serviceProductCache.giftWrap = products[0].id;
+        return products[0].id;
+      }
+    }
+
+    // Fallback to known product ID 16403
+    const fallback = await this.odoo.searchRead('product.product', [['id', '=', 16403]], ['id']);
+    if (fallback.length > 0) {
+      this.serviceProductCache.giftWrap = 16403;
+      return 16403;
+    }
+
+    return null;
+  }
+
+  /**
+   * Create an invoice line for a service (shipping, promo, gift wrap)
+   * @param {number} invoiceId - The invoice ID
+   * @param {number} productId - The product ID
+   * @param {string} name - Line description
+   * @param {number} priceUnit - Unit price (can be negative for discounts)
+   * @param {number} taxId - Tax ID to apply
+   * @returns {number|null} Created line ID or null if failed
+   */
+  async createInvoiceLine(invoiceId, productId, name, priceUnit, taxId) {
+    try {
+      const lineData = {
+        move_id: invoiceId,
+        product_id: productId,
+        name: name,
+        quantity: 1,
+        price_unit: priceUnit,
+      };
+
+      if (taxId) {
+        lineData.tax_ids = [[6, 0, [taxId]]];
+      }
+
+      const lineId = await this.odoo.create('account.move.line', lineData);
+      console.log(`[VcsOdooInvoicer] Created invoice line: ${name}, price=${priceUnit}, id=${lineId}`);
+      return lineId;
+    } catch (error) {
+      console.error(`[VcsOdooInvoicer] Failed to create invoice line ${name}:`, error.message);
+      return null;
+    }
   }
 
   /**
@@ -2988,6 +3332,118 @@ class VcsOdooInvoicer {
       skipped: statusCounts.find(s => s._id === 'skipped')?.count || 0,
     };
   }
+
+  /**
+   * Get orders that failed and can be retried
+   * Returns orders with status='failed' along with diagnostic info
+   * @param {string} uploadId - The upload ID to filter by (optional)
+   * @returns {Promise<object[]>} Array of failed orders with retry info
+   */
+  async getRetryableOrders(uploadId = null) {
+    const db = getDb();
+    const query = {
+      status: 'failed',
+    };
+
+    if (uploadId) {
+      query.uploadId = new ObjectId(uploadId);
+    }
+
+    const failedOrders = await db.collection('amazon_vcs_orders')
+      .find(query)
+      .project({
+        orderId: 1,
+        orderDate: 1,
+        shipFromCountry: 1,
+        shipToCountry: 1,
+        totalInclusive: 1,
+        processingStep: 1,
+        failedStep: 1,
+        failedError: 1,
+        failedAt: 1,
+        odooSaleOrderId: 1,
+        odooSaleOrderName: 1,
+        odooInvoiceId: 1,
+        odooInvoiceName: 1,
+      })
+      .sort({ failedAt: -1 })
+      .toArray();
+
+    return failedOrders.map(order => ({
+      ...order,
+      canRetry: true,
+      retryInfo: {
+        lastStep: order.failedStep,
+        error: order.failedError,
+        hasOdooOrder: !!order.odooSaleOrderId,
+        hasOdooInvoice: !!order.odooInvoiceId,
+        suggestion: this.getRetrySuggestion(order),
+      },
+    }));
+  }
+
+  /**
+   * Get suggestion for retrying a failed order
+   * @param {object} order - The failed order
+   * @returns {string} Suggestion text
+   */
+  getRetrySuggestion(order) {
+    const step = order.failedStep || order.processingStep;
+
+    if (step === PROCESSING_STEPS.CREATING_ODOO_ORDER) {
+      return 'Order creation failed. Check if products exist in Odoo and retry.';
+    }
+    if (step === PROCESSING_STEPS.UPDATING_PRICES) {
+      return 'Price update failed. The order may exist in Odoo. Check and retry.';
+    }
+    if (step === PROCESSING_STEPS.CREATING_INVOICE) {
+      if (order.odooSaleOrderId) {
+        return `Sale order ${order.odooSaleOrderName} exists. Invoice creation failed. Retry will attempt to create invoice.`;
+      }
+      return 'Invoice creation failed. Check Odoo for the order and retry.';
+    }
+    if (step === PROCESSING_STEPS.UPDATING_INVOICE_LINES) {
+      if (order.odooInvoiceId) {
+        return `Invoice ${order.odooInvoiceName} was created but line update failed. Manual review recommended.`;
+      }
+      return 'Invoice line update failed. Manual review recommended.';
+    }
+
+    return 'Unknown failure point. Manual review recommended before retrying.';
+  }
+
+  /**
+   * Reset failed orders to pending status for retry
+   * @param {string[]} orderIds - MongoDB order IDs to reset
+   * @returns {Promise<object>} Result with count of reset orders
+   */
+  async resetFailedOrders(orderIds) {
+    const db = getDb();
+
+    const result = await db.collection('amazon_vcs_orders').updateMany(
+      {
+        _id: { $in: orderIds.map(id => new ObjectId(id)) },
+        status: 'failed',
+      },
+      {
+        $set: {
+          status: 'pending',
+          processingStep: PROCESSING_STEPS.PENDING,
+          resetAt: new Date(),
+        },
+        $unset: {
+          failedStep: '',
+          failedError: '',
+          failedAt: '',
+        },
+      }
+    );
+
+    return {
+      resetCount: result.modifiedCount,
+      requestedCount: orderIds.length,
+    };
+  }
 }
 
-module.exports = { VcsOdooInvoicer, MARKETPLACE_JOURNALS, FISCAL_POSITIONS, SKU_TRANSFORMATIONS, MARKETPLACE_RECEIVABLE_ACCOUNTS };
+module.exports = { VcsOdooInvoicer, MARKETPLACE_JOURNALS, FISCAL_POSITIONS, SKU_TRANSFORMATIONS, MARKETPLACE_RECEIVABLE_ACCOUNTS, PROCESSING_STEPS };
