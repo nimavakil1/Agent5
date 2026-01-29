@@ -531,11 +531,22 @@ class VcsOdooInvoicer {
    * @param {object} options
    * @param {string[]} options.orderIds - MongoDB IDs of orders to process
    * @param {boolean} options.dryRun - If true, don't create invoices
+   * @param {function} options.logCallback - Optional callback for logging (level, message, details)
    * @returns {object} Results
    */
   async createInvoices(options = {}) {
-    const { orderIds = [], dryRun = false } = options;
+    const { orderIds = [], dryRun = false, logCallback = null } = options;
     const db = getDb();
+
+    // Helper function for logging
+    const log = (level, message, details = null) => {
+      if (logCallback) {
+        logCallback(level, message, details);
+      }
+      // Also log to console
+      const detailStr = details ? ` ${JSON.stringify(details)}` : '';
+      console.log(`[VcsOdooInvoicer] [${level.toUpperCase()}] ${message}${detailStr}`);
+    };
 
     const result = {
       processed: 0,
@@ -550,8 +561,11 @@ class VcsOdooInvoicer {
     };
 
     if (orderIds.length === 0) {
+      log('warn', 'No orders selected');
       return { ...result, message: 'No orders selected' };
     }
+
+    log('info', `Fetching ${orderIds.length} orders from MongoDB`);
 
     // Get selected orders by their MongoDB IDs
     const orders = await db.collection('amazon_vcs_orders')
@@ -559,19 +573,24 @@ class VcsOdooInvoicer {
       .toArray();
 
     if (orders.length === 0) {
+      log('warn', 'No orders found for the given IDs');
       return { ...result, message: 'No orders found for the given IDs' };
     }
 
+    log('info', `Found ${orders.length} orders in MongoDB`);
+
     // PERFORMANCE OPTIMIZATION: Prefetch all Odoo orders in batch
     // This reduces thousands of individual API calls to just a few batch calls
-    console.log(`[VcsOdooInvoicer] Processing ${orders.length} VCS orders...`);
+    log('info', `Prefetching Odoo orders...`);
     await this.prefetchOrders(orders);
+    log('info', `Prefetch complete, cached ${this.orderCache.size} orders`);
 
     // Get or create Amazon customer partner
     const _partnerId = await this.getOrCreateAmazonPartner();
 
     for (const order of orders) {
       result.processed++;
+      const orderNum = `${result.processed}/${orders.length}`;
 
       try {
         // Skip orders that shouldn't be invoiced
@@ -583,6 +602,7 @@ class VcsOdooInvoicer {
             customerName: order.buyerName || null,
           });
           await this.markOrderSkipped(order._id, 'Not invoiceable');
+          log('info', `[${orderNum}] ${order.orderId}: Skipped (not invoiceable)`);
           continue;
         }
 
@@ -609,7 +629,7 @@ class VcsOdooInvoicer {
               }
             }
           );
-          console.log(`[VcsOdooInvoicer] Order ${order.orderId} requires manual invoice: ${manualCheck.reasons.join(', ')}`);
+          log('warn', `[${orderNum}] ${order.orderId}: Requires manual invoice`, { reasons: manualCheck.reasons });
           continue;
         }
 
@@ -617,10 +637,14 @@ class VcsOdooInvoicer {
         let odooOrderData = await this.findOdooOrder(order);
         if (!odooOrderData) {
           // No existing order - create one from VCS data
-          console.log(`[VcsOdooInvoicer] No Odoo order found for ${order.orderId}, creating from VCS data...`);
+          log('info', `[${orderNum}] ${order.orderId}: No Odoo order found, creating...`, {
+            shipFrom: order.shipFromCountry,
+            shipTo: order.shipToCountry,
+            shipmentId: order.shipmentId
+          });
           try {
             odooOrderData = await this.createOrderFromVcs(order);
-            console.log(`[VcsOdooInvoicer] Created order ${odooOrderData.saleOrder.name} for ${order.orderId}`);
+            log('success', `[${orderNum}] ${order.orderId}: Created Odoo order ${odooOrderData.saleOrder.name}`);
           } catch (createError) {
             result.skipped++;
             await this.markOrderSkipped(order._id, `Failed to create order: ${createError.message}`);
@@ -628,8 +652,11 @@ class VcsOdooInvoicer {
               orderId: order.orderId,
               error: `Failed to create order: ${createError.message}`,
             });
+            log('error', `[${orderNum}] ${order.orderId}: Failed to create order`, { error: createError.message });
             continue;
           }
+        } else {
+          log('info', `[${orderNum}] ${order.orderId}: Found existing Odoo order ${odooOrderData.saleOrder.name}`);
         }
 
         const { saleOrder, orderLines } = odooOrderData;
@@ -654,7 +681,7 @@ class VcsOdooInvoicer {
             pricesUpdated: orderPricesUpdated,  // Track if prices were updated even though invoice was skipped
           });
           await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
-          console.log(`[VcsOdooInvoicer] Invoice already exists for ${order.orderId}: ${existingInvoice.name}`);
+          log('info', `[${orderNum}] ${order.orderId}: Skipped - invoice already exists: ${existingInvoice.name}`);
           continue;
         }
 
@@ -691,15 +718,27 @@ class VcsOdooInvoicer {
             },
             wouldCreate: invoiceData,
           });
+          log('info', `[${orderNum}] ${order.orderId}: [DRY RUN] Would create invoice`, {
+            odooOrder: saleOrder.name,
+            journal: journalName || expectedJournal,
+            fiscalPosition: fiscalPositionName || expectedFiscalPosition,
+            total: order.totalInclusive
+          });
           continue;
         }
 
         // Create invoice linked to sale order
+        log('info', `[${orderNum}] ${order.orderId}: Creating invoice...`);
         const partnerId = await this.determinePartner(order, saleOrder);
         const invoice = await this.createInvoice(order, partnerId, saleOrder, orderLines);
         invoice.pricesUpdated = orderPricesUpdated;  // Track if sale order line prices were updated
         result.created++;
         result.invoices.push(invoice);
+        log('success', `[${orderNum}] ${order.orderId}: Created invoice ${invoice.name}`, {
+          odooOrder: saleOrder.name,
+          invoiceId: invoice.id,
+          total: invoice.amountTotal
+        });
 
         // Mark order as invoiced
         await db.collection('amazon_vcs_orders').updateOne(
@@ -724,9 +763,18 @@ class VcsOdooInvoicer {
           orderId: order.orderId,
           error: error.message,
         });
-        console.error(`[VcsOdooInvoicer] Error processing ${order.orderId}:`, error);
+        log('error', `[${orderNum}] ${order.orderId}: Error processing order`, { error: error.message });
       }
     }
+
+    // Final summary log
+    log('info', `Processing complete`, {
+      processed: result.processed,
+      created: result.created,
+      skipped: result.skipped,
+      manualRequired: result.manualRequired,
+      errors: result.errors.length
+    });
 
     return result;
   }

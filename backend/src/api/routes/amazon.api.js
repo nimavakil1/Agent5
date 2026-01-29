@@ -3284,6 +3284,40 @@ router.delete('/vcs/uploads/:uploadId', async (req, res) => {
 });
 
 /**
+ * @route GET /api/amazon/vcs/uploads/:uploadId/logs
+ * @desc Get processing logs for a specific VCS upload
+ */
+router.get('/vcs/uploads/:uploadId/logs', async (req, res) => {
+  try {
+    const db = getDb();
+    const uploadId = req.params.uploadId;
+
+    const upload = await db.collection('amazon_vcs_uploads').findOne(
+      { _id: new ObjectId(uploadId) },
+      { projection: { processingRuns: 1, filename: 1, uploadedAt: 1, lastProcessedAt: 1 } }
+    );
+
+    if (!upload) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    res.json({
+      success: true,
+      uploadId,
+      filename: upload.filename,
+      uploadedAt: upload.uploadedAt,
+      lastProcessedAt: upload.lastProcessedAt,
+      processingRuns: upload.processingRuns || [],
+      totalRuns: (upload.processingRuns || []).length
+    });
+
+  } catch (error) {
+    console.error('[VCS Logs] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * @route GET /api/amazon/vcs/reports/:reportId/orders
  * @desc Get orders from a specific VCS report
  */
@@ -3851,18 +3885,38 @@ router.post('/vcs/setup/create-shipment-id-field', async (req, res) => {
 /**
  * @route POST /api/amazon/vcs/create-invoices
  * @desc Create Odoo invoices from selected VCS orders
- * @body { orderIds, dryRun }
+ * @body { orderIds, dryRun, uploadId }
  */
 router.post('/vcs/create-invoices', async (req, res) => {
+  const db = getDb();
+  const logs = [];
+  const startTime = new Date();
+
+  // Helper to add log entry
+  const addLog = (level, message, details = null) => {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      level, // 'info', 'warn', 'error', 'success'
+      message,
+      ...(details && { details })
+    };
+    logs.push(entry);
+    console.log(`[VCS Invoices] [${level.toUpperCase()}] ${message}`, details || '');
+  };
+
   try {
-    const { orderIds = [], dryRun = true } = req.body;
+    const { orderIds = [], dryRun = true, uploadId = null } = req.body;
+
+    addLog('info', `Starting invoice creation`, { orderCount: orderIds.length, dryRun, uploadId });
 
     if (!orderIds || orderIds.length === 0) {
+      addLog('error', 'No orders selected');
       return res.status(400).json({ error: 'No orders selected' });
     }
 
     // Check Odoo credentials - ALWAYS needed (even for preview, to find existing orders)
     if (!process.env.ODOO_URL || !process.env.ODOO_DB || !process.env.ODOO_USERNAME || !process.env.ODOO_PASSWORD) {
+      addLog('error', 'Odoo not configured');
       return res.status(400).json({
         error: 'Odoo not configured. Set ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD environment variables.',
         missingEnvVars: ['ODOO_URL', 'ODOO_DB', 'ODOO_USERNAME', 'ODOO_PASSWORD'].filter(key => !process.env[key])
@@ -3872,22 +3926,74 @@ router.post('/vcs/create-invoices', async (req, res) => {
     // Initialize Odoo client - always needed to find existing orders
     const odooClient = new OdooDirectClient();
     await odooClient.authenticate();
-    console.log('[VCS Invoices] Connected to Odoo');
+    addLog('info', 'Connected to Odoo');
 
     const invoicer = new VcsOdooInvoicer(odooClient);
     await invoicer.loadCache();
+    addLog('info', 'Loaded VCS cache');
 
-    const result = await invoicer.createInvoices({ orderIds, dryRun });
+    // Pass log callback to invoicer
+    const result = await invoicer.createInvoices({ orderIds, dryRun, logCallback: addLog });
+
+    // Log summary
+    addLog('success', `Invoice creation completed`, {
+      processed: result.processed,
+      created: result.created,
+      skipped: result.skipped,
+      errors: result.errors?.length || 0,
+      dryRun
+    });
+
+    // If uploadId provided, save logs to the upload record
+    // Otherwise, try to get uploadId from the first order
+    let targetUploadId = uploadId;
+    if (!targetUploadId && orderIds.length > 0) {
+      const firstOrder = await db.collection('amazon_vcs_orders').findOne({
+        _id: new ObjectId(orderIds[0])
+      });
+      targetUploadId = firstOrder?.uploadId;
+    }
+
+    if (targetUploadId) {
+      const endTime = new Date();
+      const processingRun = {
+        runId: new ObjectId().toString(),
+        startedAt: startTime,
+        completedAt: endTime,
+        durationMs: endTime - startTime,
+        dryRun,
+        orderCount: orderIds.length,
+        result: {
+          processed: result.processed,
+          created: result.created,
+          skipped: result.skipped,
+          errors: result.errors?.length || 0,
+          manualRequired: result.manualRequired || 0
+        },
+        logs
+      };
+
+      await db.collection('amazon_vcs_uploads').updateOne(
+        { _id: new ObjectId(targetUploadId) },
+        {
+          $push: { processingRuns: processingRun },
+          $set: { lastProcessedAt: endTime }
+        }
+      );
+      addLog('info', `Saved processing logs to upload ${targetUploadId}`);
+    }
 
     res.json({
       success: true,
       dryRun,
-      ...result
+      ...result,
+      logs // Also return logs in response for immediate display
     });
 
   } catch (error) {
+    addLog('error', `Fatal error: ${error.message}`, { stack: error.stack });
     console.error('[VCS Invoices] Error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, logs });
   }
 });
 
