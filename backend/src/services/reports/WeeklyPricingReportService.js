@@ -18,6 +18,7 @@ const fs = require('fs').promises;
 const { skuResolver } = require('../amazon/SkuResolver');
 const { getSellerClient } = require('../amazon/seller/SellerClient');
 const { MARKETPLACE_IDS, getMarketplaceConfig } = require('../amazon/seller/SellerMarketplaceConfig');
+const Product = require('../../models/Product');
 
 // Target Amazon marketplaces for pricing
 const TARGET_MARKETPLACES = {
@@ -38,6 +39,7 @@ class WeeklyPricingReportService {
   constructor() {
     this.webhookUrl = process.env.TEAMS_PRICING_REPORT_WEBHOOK_URL;
     this.sellerClient = null;
+    this.odooSkuSet = null; // Set of all Odoo SKUs (default_code) for fast lookup
   }
 
   /**
@@ -368,61 +370,144 @@ class WeeklyPricingReportService {
    * Uses SkuResolver to normalize SKUs
    */
   /**
+   * Load all Odoo SKUs (default_code) from MongoDB cache for fast lookup
+   */
+  async loadOdooSkus() {
+    if (this.odooSkuSet) return; // Already loaded
+
+    try {
+      const products = await Product.find(
+        { sku: { $exists: true, $ne: null, $ne: '' } },
+        { sku: 1, _id: 0 }
+      ).lean();
+
+      this.odooSkuSet = new Set(products.map(p => p.sku.toUpperCase()));
+      console.log(`[WeeklyPricingReport] Loaded ${this.odooSkuSet.size} Odoo SKUs for matching`);
+    } catch (error) {
+      console.error('[WeeklyPricingReport] Failed to load Odoo SKUs:', error.message);
+      this.odooSkuSet = new Set();
+    }
+  }
+
+  /**
+   * Check if a SKU exists in Odoo
+   */
+  skuExistsInOdoo(sku) {
+    if (!sku || !this.odooSkuSet) return false;
+    return this.odooSkuSet.has(sku.toUpperCase());
+  }
+
+  /**
    * Clean up SKU for matching across marketplaces
-   * Handles various suffixes and prefixes used by Amazon and Bol.com
    *
-   * Examples:
+   * Strategy:
+   * 1. First check if raw SKU exists in Odoo - if yes, use it
+   * 2. If not, apply cleanup rules and check again
+   *
+   * Handles:
+   *   AMZN.GR.10005K-45XMTLPODKMG_JZKPRY4G4-GD → 10005K
+   *   AMZN.GR.P0044K → 0044K
    *   P0028-TEMP → 00028
    *   42035-STICKERLES → 42035
    *   P0044K.A-FBM-JHF0OJR → 0044K
-   *   18011-FBM → 18011
-   *   18011-FBMA → 18011
    */
   cleanSku(sku) {
     if (!sku) return '';
 
-    let cleaned = sku.trim().toUpperCase();
+    const original = sku.trim().toUpperCase();
 
-    // Step 1: Remove everything after -FBM or -FBB (including random suffixes like -JHF0OJR)
-    // This handles: P0044K.A-FBM-JHF0OJR → P0044K.A
+    // Step 0: If raw SKU exists in Odoo, use it as-is
+    if (this.skuExistsInOdoo(original)) {
+      return original;
+    }
+
+    let cleaned = original;
+
+    // Step 1: Handle AMZN.GR. prefix (Amazon gratis/promotional SKUs)
+    // AMZN.GR.10005K-45XMTLPODKMG_JZKPRY4G4-GD → 10005K
+    // AMZN.GR.P0044K → P0044K
+    if (cleaned.startsWith('AMZN.GR.')) {
+      cleaned = cleaned.replace(/^AMZN\.GR\./, '');
+
+      // After removing AMZN.GR., check if the remainder has a random suffix
+      // Pattern: <sku>-<random_chars> where random is long alphanumeric
+      // 10005K-45XMTLPODKMG_JZKPRY4G4-GD → 10005K
+      // But keep: 83008W (no suffix)
+      const amznMatch = cleaned.match(/^([A-Z0-9]+?)(-[A-Z0-9_]{10,}.*)?$/i);
+      if (amznMatch && amznMatch[2]) {
+        cleaned = amznMatch[1];
+      }
+    }
+
+    // Check if cleaned version exists in Odoo
+    if (this.skuExistsInOdoo(cleaned)) {
+      return cleaned;
+    }
+
+    // Step 2: Remove everything after -FBM or -FBB (including random suffixes)
+    // P0044K.A-FBM-JHF0OJR → P0044K.A
     cleaned = cleaned.replace(/-FBM[A]?.*$/i, '');
     cleaned = cleaned.replace(/-FBB[A]?.*$/i, '');
 
-    // Step 2: Remove known suffixes (including partial/truncated versions)
-    // -STICKERLESS, -STICKERLES, -STICKER, etc.
+    if (this.skuExistsInOdoo(cleaned)) {
+      return cleaned;
+    }
+
+    // Step 3: Remove known suffixes (including partial/truncated versions)
     cleaned = cleaned.replace(/-STICKER(LESS|LES)?$/i, '');
     cleaned = cleaned.replace(/-BUNDLE.*$/i, '');
     cleaned = cleaned.replace(/-NEW$/i, '');
     cleaned = cleaned.replace(/-REFURB.*$/i, '');
     cleaned = cleaned.replace(/-TEMP$/i, '');
 
-    // Step 3: Remove .A, .B, .C etc. suffixes (variation markers)
+    if (this.skuExistsInOdoo(cleaned)) {
+      return cleaned;
+    }
+
+    // Step 4: Remove .A, .B, .C etc. suffixes (variation markers)
     // P0044K.A → P0044K
     cleaned = cleaned.replace(/\.[A-Z]$/i, '');
 
-    // Step 4: Remove trailing letter suffixes that Amazon adds for variations
-    // But only for numeric SKUs: 18011A → 18011, but keep 0044K as is
-    if (/^\d+[A-Z]$/.test(cleaned)) {
-      cleaned = cleaned.slice(0, -1);
+    if (this.skuExistsInOdoo(cleaned)) {
+      return cleaned;
     }
 
-    // Step 5: Remove P prefix if followed by digits (Bol.com pattern)
+    // Step 5: Remove trailing letter suffixes for numeric SKUs
+    // 18011A → 18011, but keep 0044K as is
+    if (/^\d+[A-Z]$/.test(cleaned)) {
+      const withoutSuffix = cleaned.slice(0, -1);
+      if (this.skuExistsInOdoo(withoutSuffix)) {
+        return withoutSuffix;
+      }
+      cleaned = withoutSuffix;
+    }
+
+    // Step 6: Remove P prefix if followed by digits (Bol.com pattern)
     // P0028 → 0028, P0044K → 0044K
     if (/^P\d/.test(cleaned)) {
-      cleaned = cleaned.slice(1);
+      const withoutP = cleaned.slice(1);
+      if (this.skuExistsInOdoo(withoutP)) {
+        return withoutP;
+      }
+      cleaned = withoutP;
     }
 
-    // Step 6: Pad numeric SKUs to 5 digits
+    // Step 7: Pad numeric SKUs to 5 digits
     // 1006 → 01006, 28 → 00028
     if (/^\d{1,4}$/.test(cleaned)) {
-      cleaned = cleaned.padStart(5, '0');
+      const padded = cleaned.padStart(5, '0');
+      if (this.skuExistsInOdoo(padded)) {
+        return padded;
+      }
+      cleaned = padded;
     }
 
-    // Step 7: If SkuResolver has custom mappings, check those too
+    // Step 8: Check SkuResolver custom mappings
     if (skuResolver.loaded && skuResolver.customMappings.has(cleaned)) {
       return skuResolver.customMappings.get(cleaned);
     }
 
+    // Return cleaned SKU even if not found in Odoo
     return cleaned;
   }
 
@@ -434,6 +519,9 @@ class WeeklyPricingReportService {
 
     // Load SKU resolver mappings
     await skuResolver.load();
+
+    // Load Odoo SKUs for matching (must be done before cleanSku calls)
+    await this.loadOdooSkus();
 
     // Fetch Bol.com offers
     const bolOffers = await this.getBolOffers();
