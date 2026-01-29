@@ -168,7 +168,7 @@ class WeeklyPricingReportService {
 
   /**
    * Parse Bol.com offer export CSV
-   * Returns offers with SKU (referenceCode), EAN, price
+   * Returns ONLY ACTIVE offers (stock > 0, not on hold, has price)
    */
   parseBolOfferCsv(csv) {
     const lines = csv.trim().split('\n');
@@ -176,6 +176,7 @@ class WeeklyPricingReportService {
 
     const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
     const offers = [];
+    let skippedInactive = 0;
 
     // Find column indices
     const offerIdIdx = headers.indexOf('offerId');
@@ -183,8 +184,10 @@ class WeeklyPricingReportService {
     const refIdx = headers.indexOf('referenceCode');
     const priceIdx = headers.indexOf('bundlePricesPrice');
     const fulfillmentIdx = headers.indexOf('fulfilmentType');
+    const stockIdx = headers.indexOf('stockAmount');
+    const onHoldIdx = headers.indexOf('onHoldByRetailer');
 
-    console.log(`[WeeklyPricingReport] CSV columns: offerId=${offerIdIdx}, ean=${eanIdx}, ref=${refIdx}, price=${priceIdx}`);
+    console.log(`[WeeklyPricingReport] CSV columns: offerId=${offerIdIdx}, ean=${eanIdx}, ref=${refIdx}, price=${priceIdx}, stock=${stockIdx}, onHold=${onHoldIdx}`);
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
@@ -195,19 +198,28 @@ class WeeklyPricingReportService {
       const reference = values[refIdx] || '';
       const price = parseFloat(values[priceIdx]) || 0;
       const fulfillmentType = values[fulfillmentIdx] || '';
+      const stock = parseInt(values[stockIdx]) || 0;
+      const onHold = values[onHoldIdx] === 'true';
 
       if (!offerId || !ean) continue;
+
+      // Skip inactive offers (no stock, on hold, or no price)
+      if (stock <= 0 || onHold || price <= 0) {
+        skippedInactive++;
+        continue;
+      }
 
       offers.push({
         offerId,
         ean,
         sku: reference,
         price,
-        fulfillmentType
+        fulfillmentType,
+        stock
       });
     }
 
-    console.log(`[WeeklyPricingReport] Parsed ${offers.length} Bol.com offers with prices`);
+    console.log(`[WeeklyPricingReport] Parsed ${offers.length} ACTIVE Bol.com offers (skipped ${skippedInactive} inactive)`);
     return offers;
   }
 
@@ -312,10 +324,14 @@ class WeeklyPricingReportService {
   /**
    * Parse Amazon listings report (TSV format)
    * Returns Map of SKU -> { asin, price, title }
+   * ONLY includes active listings (has price, not a PARENT SKU)
    */
   parseAmazonListingsReport(tsvData, country) {
     const results = new Map();
     const lines = tsvData.trim().split('\n');
+    let skippedInactive = 0;
+    let skippedParent = 0;
+    let skippedInvalid = 0;
 
     if (lines.length < 2) return results;
 
@@ -326,8 +342,10 @@ class WeeklyPricingReportService {
     const asinIdx = headers.findIndex(h => h === 'asin1' || h === 'asin');
     const priceIdx = headers.findIndex(h => h === 'price');
     const titleIdx = headers.findIndex(h => h === 'item-name' || h === 'title');
+    const qtyIdx = headers.findIndex(h => h === 'quantity' || h === 'quantity-available');
+    const statusIdx = headers.findIndex(h => h === 'status' || h === 'listing-status');
 
-    console.log(`[WeeklyPricingReport] Amazon ${country} report columns: sku=${skuIdx}, asin=${asinIdx}, price=${priceIdx}`);
+    console.log(`[WeeklyPricingReport] Amazon ${country} report columns: sku=${skuIdx}, asin=${asinIdx}, price=${priceIdx}, qty=${qtyIdx}`);
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split('\t');
@@ -337,13 +355,34 @@ class WeeklyPricingReportService {
       const asin = values[asinIdx]?.trim();
       const price = parseFloat(values[priceIdx]) || 0;
       const title = values[titleIdx]?.trim() || '';
+      const qty = qtyIdx >= 0 ? parseInt(values[qtyIdx]) || 0 : null;
+      const status = statusIdx >= 0 ? values[statusIdx]?.trim() : null;
 
       if (!sku) continue;
 
-      results.set(sku, { asin, price, title });
+      // Skip PARENT SKUs (these are not actual listings)
+      if (sku.includes('-PARENT') || sku.endsWith('PARENT')) {
+        skippedParent++;
+        continue;
+      }
+
+      // Skip SKUs that look like random Amazon-generated IDs (no real product)
+      // Pattern: short random alphanumeric like KX-IVJL-A6I1, 4R-UXRH-WTRT
+      if (/^[A-Z0-9]{2,4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(sku)) {
+        skippedInvalid++;
+        continue;
+      }
+
+      // Skip inactive listings (no price)
+      if (price <= 0) {
+        skippedInactive++;
+        continue;
+      }
+
+      results.set(sku, { asin, price, title, qty });
     }
 
-    console.log(`[WeeklyPricingReport] Amazon ${country}: ${results.size} listings with prices`);
+    console.log(`[WeeklyPricingReport] Amazon ${country}: ${results.size} active listings (skipped: ${skippedInactive} no price, ${skippedParent} PARENT, ${skippedInvalid} invalid SKU)`);
     return results;
   }
 
@@ -365,10 +404,6 @@ class WeeklyPricingReportService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  /**
-   * Clean up SKU for matching
-   * Uses SkuResolver to normalize SKUs
-   */
   /**
    * Load all Odoo SKUs (default_code) from MongoDB cache for fast lookup
    */
@@ -406,10 +441,11 @@ class WeeklyPricingReportService {
    *
    * Handles:
    *   AMZN.GR.10005K-45XMTLPODKMG_JZKPRY4G4-GD → 10005K
-   *   AMZN.GR.P0044K → 0044K
+   *   10005K-NMZUSYGJT-DRGQZ4AGFSI_-GD → 10005K
+   *   0044K.A-4PDIKLJDCC3GUR9KLIQT-AC → 0044K
+   *   B42030.B40.BLACK → B42030
+   *   S14022-USED → S14022
    *   P0028-TEMP → 00028
-   *   42035-STICKERLES → 42035
-   *   P0044K.A-FBM-JHF0OJR → 0044K
    */
   cleanSku(sku) {
     if (!sku) return '';
@@ -424,19 +460,8 @@ class WeeklyPricingReportService {
     let cleaned = original;
 
     // Step 1: Handle AMZN.GR. prefix (Amazon gratis/promotional SKUs)
-    // AMZN.GR.10005K-45XMTLPODKMG_JZKPRY4G4-GD → 10005K
-    // AMZN.GR.P0044K → P0044K
     if (cleaned.startsWith('AMZN.GR.')) {
       cleaned = cleaned.replace(/^AMZN\.GR\./, '');
-
-      // After removing AMZN.GR., check if the remainder has a random suffix
-      // Pattern: <sku>-<random_chars> where random is long alphanumeric
-      // 10005K-45XMTLPODKMG_JZKPRY4G4-GD → 10005K
-      // But keep: 83008W (no suffix)
-      const amznMatch = cleaned.match(/^([A-Z0-9]+?)(-[A-Z0-9_]{10,}.*)?$/i);
-      if (amznMatch && amznMatch[2]) {
-        cleaned = amznMatch[1];
-      }
     }
 
     // Check if cleaned version exists in Odoo
@@ -444,35 +469,54 @@ class WeeklyPricingReportService {
       return cleaned;
     }
 
-    // Step 2: Remove everything after -FBM or -FBB (including random suffixes)
-    // P0044K.A-FBM-JHF0OJR → P0044K.A
-    cleaned = cleaned.replace(/-FBM[A]?.*$/i, '');
-    cleaned = cleaned.replace(/-FBB[A]?.*$/i, '');
+    // Step 2: Remove Amazon random suffixes
+    // Pattern: <sku>-<random_chars_6+>-<2letter> like 10005K-NMZUSYGJT-DRGQZ4AGFSI_-GD
+    // Also handles: 0044-RGXTMT-X6UGO0JXZKEBMRVX-VG → 0044
+    // The random part is usually 6+ chars with alphanumeric and underscores
+    const randomSuffixMatch = cleaned.match(/^([A-Z0-9.]+?)-[A-Z0-9_]{5,}.*-[A-Z]{2}$/i);
+    if (randomSuffixMatch) {
+      cleaned = randomSuffixMatch[1];
+      if (this.skuExistsInOdoo(cleaned)) {
+        return cleaned;
+      }
+    }
 
+    // Step 3: Remove color/variant suffixes like .B40.BLACK, .BLACK, .WHITE
+    cleaned = cleaned.replace(/\.(B\d+\.)?[A-Z]{3,}$/i, '');
     if (this.skuExistsInOdoo(cleaned)) {
       return cleaned;
     }
 
-    // Step 3: Remove known suffixes (including partial/truncated versions)
+    // Step 4: Remove -USED suffix
+    cleaned = cleaned.replace(/-USED$/i, '');
+    if (this.skuExistsInOdoo(cleaned)) {
+      return cleaned;
+    }
+
+    // Step 5: Remove everything after -FBM or -FBB (including random suffixes)
+    cleaned = cleaned.replace(/-FBM[A]?.*$/i, '');
+    cleaned = cleaned.replace(/-FBB[A]?.*$/i, '');
+    if (this.skuExistsInOdoo(cleaned)) {
+      return cleaned;
+    }
+
+    // Step 6: Remove known suffixes (including partial/truncated versions)
     cleaned = cleaned.replace(/-STICKER(LESS|LES)?$/i, '');
     cleaned = cleaned.replace(/-BUNDLE.*$/i, '');
     cleaned = cleaned.replace(/-NEW$/i, '');
     cleaned = cleaned.replace(/-REFURB.*$/i, '');
     cleaned = cleaned.replace(/-TEMP$/i, '');
-
     if (this.skuExistsInOdoo(cleaned)) {
       return cleaned;
     }
 
-    // Step 4: Remove .A, .B, .C etc. suffixes (variation markers)
-    // P0044K.A → P0044K
+    // Step 8: Remove .A, .B, .C etc. suffixes (variation markers)
     cleaned = cleaned.replace(/\.[A-Z]$/i, '');
-
     if (this.skuExistsInOdoo(cleaned)) {
       return cleaned;
     }
 
-    // Step 5: Remove trailing letter suffixes for numeric SKUs
+    // Step 9: Remove trailing letter suffixes for numeric SKUs
     // 18011A → 18011, but keep 0044K as is
     if (/^\d+[A-Z]$/.test(cleaned)) {
       const withoutSuffix = cleaned.slice(0, -1);
@@ -482,7 +526,7 @@ class WeeklyPricingReportService {
       cleaned = withoutSuffix;
     }
 
-    // Step 6: Remove P prefix if followed by digits (Bol.com pattern)
+    // Step 10: Remove P prefix if followed by digits (Bol.com pattern)
     // P0028 → 0028, P0044K → 0044K
     if (/^P\d/.test(cleaned)) {
       const withoutP = cleaned.slice(1);
@@ -492,7 +536,7 @@ class WeeklyPricingReportService {
       cleaned = withoutP;
     }
 
-    // Step 7: Pad numeric SKUs to 5 digits
+    // Step 11: Pad numeric SKUs to 5 digits
     // 1006 → 01006, 28 → 00028
     if (/^\d{1,4}$/.test(cleaned)) {
       const padded = cleaned.padStart(5, '0');
@@ -502,13 +546,14 @@ class WeeklyPricingReportService {
       cleaned = padded;
     }
 
-    // Step 8: Check SkuResolver custom mappings
+    // Step 12: Check SkuResolver custom mappings
     if (skuResolver.loaded && skuResolver.customMappings.has(cleaned)) {
       return skuResolver.customMappings.get(cleaned);
     }
 
-    // Return cleaned SKU even if not found in Odoo
-    return cleaned;
+    // Return null if SKU doesn't exist in Odoo after all cleanup attempts
+    // This will filter out unmatched SKUs from the report
+    return this.skuExistsInOdoo(cleaned) ? cleaned : null;
   }
 
   /**
