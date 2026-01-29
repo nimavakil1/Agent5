@@ -154,6 +154,11 @@ class VcsTaxReportParser {
       // Shipping promo (discount)
       shippingPromoExclusive: parseFloat(row[COLUMN_MAP.shippingPromoExclusive]) || 0,
 
+      // Gift wrap
+      giftWrapInclusive: parseFloat(row[COLUMN_MAP.giftWrapInclusive]) || 0,
+      giftWrapTax: parseFloat(row[COLUMN_MAP.giftWrapTax]) || 0,
+      giftWrapExclusive: parseFloat(row[COLUMN_MAP.giftWrapExclusive]) || 0,
+
       // Tax registration
       sellerTaxRegistration: row[COLUMN_MAP.sellerTaxRegistration],
       sellerTaxJurisdiction: row[COLUMN_MAP.sellerTaxJurisdiction],
@@ -260,6 +265,8 @@ class VcsTaxReportParser {
           totalShipping: 0,
           totalShippingTax: 0,
           totalShippingPromo: 0,
+          totalGiftWrap: 0,
+          totalGiftWrapTax: 0,
         });
       }
 
@@ -277,6 +284,8 @@ class VcsTaxReportParser {
         promoAmount: tx.promoAmount,
         shippingExclusive: tx.shippingExclusive,
         shippingTax: tx.shippingTax,
+        giftWrapExclusive: tx.giftWrapExclusive,
+        giftWrapTax: tx.giftWrapTax,
       });
 
       // Update totals
@@ -286,6 +295,8 @@ class VcsTaxReportParser {
       order.totalShipping += tx.shippingExclusive;
       order.totalShippingTax += tx.shippingTax;
       order.totalShippingPromo += tx.shippingPromoExclusive;
+      order.totalGiftWrap += tx.giftWrapExclusive;
+      order.totalGiftWrapTax += tx.giftWrapTax;
     }
 
     // For backwards compatibility, also return combined result

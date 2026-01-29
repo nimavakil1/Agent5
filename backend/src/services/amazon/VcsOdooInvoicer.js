@@ -1328,6 +1328,9 @@ class VcsOdooInvoicer {
 
     // Resolve products from VCS items
     const orderLines = [];
+    const missingProducts = []; // Track products not found in Odoo
+    const totalVcsItems = (vcsOrder.items || []).length;
+
     for (const item of (vcsOrder.items || [])) {
       const sku = item.sku;
       const transformedSku = this.transformSku(sku);
@@ -1348,6 +1351,7 @@ class VcsOdooInvoicer {
 
       if (products.length === 0) {
         console.warn(`[VcsOdooInvoicer] Product not found for SKU: ${sku} (transformed: ${transformedSku})`);
+        missingProducts.push({ sku, transformedSku, asin: item.asin, quantity: item.quantity });
         continue;
       }
 
@@ -1384,7 +1388,12 @@ class VcsOdooInvoicer {
     }
 
     if (orderLines.length === 0) {
-      throw new Error(`No products found for order ${amazonOrderId}`);
+      throw new Error(`No products found for order ${amazonOrderId}. Missing SKUs: ${missingProducts.map(p => p.sku).join(', ')}`);
+    }
+
+    // Warn if order is partial (some products missing)
+    if (missingProducts.length > 0) {
+      console.warn(`[VcsOdooInvoicer] PARTIAL ORDER ${amazonOrderId}: ${orderLines.length}/${totalVcsItems} products found. Missing: ${missingProducts.map(p => p.sku).join(', ')}`);
     }
 
     // Determine warehouse
