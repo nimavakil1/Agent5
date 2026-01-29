@@ -405,7 +405,7 @@ class WeeklyPricingReportService {
   }
 
   /**
-   * Load all Odoo SKUs (default_code) from MongoDB cache for fast lookup
+   * Load all Odoo SKUs and product names from MongoDB cache
    */
   async loadOdooSkus() {
     if (this.odooSkuSet) return; // Already loaded
@@ -413,15 +413,34 @@ class WeeklyPricingReportService {
     try {
       const products = await Product.find(
         { sku: { $exists: true, $ne: null, $ne: '' } },
-        { sku: 1, _id: 0 }
+        { sku: 1, name: 1, _id: 0 }
       ).lean();
 
-      this.odooSkuSet = new Set(products.map(p => p.sku.toUpperCase()));
+      this.odooSkuSet = new Set();
+      this.odooSkuToName = new Map();
+
+      for (const p of products) {
+        const skuUpper = p.sku.toUpperCase();
+        this.odooSkuSet.add(skuUpper);
+        if (p.name) {
+          this.odooSkuToName.set(skuUpper, p.name);
+        }
+      }
+
       console.log(`[WeeklyPricingReport] Loaded ${this.odooSkuSet.size} Odoo SKUs for matching`);
     } catch (error) {
       console.error('[WeeklyPricingReport] Failed to load Odoo SKUs:', error.message);
       this.odooSkuSet = new Set();
+      this.odooSkuToName = new Map();
     }
+  }
+
+  /**
+   * Get product name from Odoo by SKU
+   */
+  getProductName(sku) {
+    if (!sku || !this.odooSkuToName) return '';
+    return this.odooSkuToName.get(sku.toUpperCase()) || '';
   }
 
   /**
@@ -588,11 +607,13 @@ class WeeklyPricingReportService {
       if (!cleanedSku) continue;
 
       if (!products.has(cleanedSku)) {
+        // Get product name from Odoo
+        const odooName = this.getProductName(cleanedSku);
         products.set(cleanedSku, {
           cleanedSku,
           originalSku: offer.sku,
           ean: offer.ean,
-          title: '',
+          title: odooName,
           bolPrice: offer.price,
           amazonDE: null,
           amazonFR: null,
@@ -618,11 +639,13 @@ class WeeklyPricingReportService {
         if (!cleanedSku) continue;
 
         if (!products.has(cleanedSku)) {
+          // Get product name from Odoo (preferred) or Amazon
+          const odooName = this.getProductName(cleanedSku);
           products.set(cleanedSku, {
             cleanedSku,
             originalSku: amazonSku,
             ean: '',
-            title: data.title || '',
+            title: odooName || data.title || '',
             bolPrice: null,
             amazonDE: null,
             amazonFR: null,
@@ -634,7 +657,7 @@ class WeeklyPricingReportService {
         const product = products.get(cleanedSku);
         product[`amazon${country}`] = data.price;
 
-        // Update title if we have one
+        // Update title from Amazon only if we don't have one yet
         if (data.title && !product.title) {
           product.title = data.title;
         }
