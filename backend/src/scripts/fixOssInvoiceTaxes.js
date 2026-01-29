@@ -150,8 +150,22 @@ async function main() {
           // Need to reset to draft, update, then re-post
           // First check if invoice is posted
           if (invoice.state === 'posted') {
-            // Reset to draft
-            await odoo.execute('account.move', 'button_draft', [[invId]]);
+            // Reset to draft - execute may return None which causes XML-RPC error
+            // We catch and ignore "cannot marshal None" errors as they indicate success
+            try {
+              await odoo.execute('account.move', 'button_draft', [[invId]]);
+            } catch (draftErr) {
+              if (!draftErr.message?.includes('cannot marshal None')) {
+                throw draftErr;
+              }
+              // None return means success, continue
+            }
+          }
+
+          // Verify invoice is now in draft
+          const [checkInv] = await odoo.searchRead('account.move', [['id', '=', invId]], ['state']);
+          if (checkInv.state !== 'draft') {
+            throw new Error(`Invoice still in ${checkInv.state} state after reset`);
           }
 
           // Update the line's tax
@@ -159,11 +173,24 @@ async function main() {
             tax_ids: [[6, 0, [taxMapping.destId]]]
           });
 
-          // Re-post the invoice
-          await odoo.execute('account.move', 'action_post', [[invId]]);
+          // Re-post the invoice - also may return None
+          try {
+            await odoo.execute('account.move', 'action_post', [[invId]]);
+          } catch (postErr) {
+            if (!postErr.message?.includes('cannot marshal None')) {
+              throw postErr;
+            }
+          }
 
-          console.log(`      FIXED`);
-          totalFixed++;
+          // Verify posted
+          const [finalInv] = await odoo.searchRead('account.move', [['id', '=', invId]], ['state']);
+          if (finalInv.state === 'posted') {
+            console.log(`      FIXED`);
+            totalFixed++;
+          } else {
+            console.log(`      WARNING: Invoice in ${finalInv.state} state after fix`);
+            totalErrors++;
+          }
         } catch (err) {
           console.log(`      ERROR: ${err.message}`);
           totalErrors++;
