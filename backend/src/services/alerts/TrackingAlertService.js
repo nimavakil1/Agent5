@@ -732,7 +732,7 @@ class TrackingAlertService {
           cells: [
             { type: 'TableCell', items: [{ type: 'TextBlock', text: 'Channel', weight: 'bolder' }] },
             { type: 'TableCell', items: [{ type: 'TextBlock', text: 'Order', weight: 'bolder' }] },
-            { type: 'TableCell', items: [{ type: 'TextBlock', text: 'Hours', weight: 'bolder' }] },
+            { type: 'TableCell', items: [{ type: 'TextBlock', text: 'Stuck', weight: 'bolder' }] },
             { type: 'TableCell', items: [{ type: 'TextBlock', text: 'Tracking', weight: 'bolder' }] }
           ]
         }
@@ -762,7 +762,7 @@ class TrackingAlertService {
         type: 'Table',
         gridStyle: 'accent',
         firstRowAsHeader: true,
-        columns: [{ width: 1 }, { width: 2 }, { width: 1 }, { width: 1 }],
+        columns: [{ width: 2 }, { width: 3 }, { width: 1 }, { width: 2 }],
         rows
       });
     }
