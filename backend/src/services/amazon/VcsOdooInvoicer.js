@@ -29,6 +29,37 @@ const RETRY_CONFIG = {
   maxDelayMs: 10000,
 };
 
+// Concurrency configuration for parallel processing
+const CONCURRENCY_LIMIT = 5; // Process 5 orders in parallel
+
+/**
+ * Simple concurrency limiter for parallel processing
+ * Processes items in batches with a concurrency limit
+ * @param {Array} items - Items to process
+ * @param {Function} processor - Async function to process each item
+ * @param {number} limit - Maximum concurrent operations
+ * @returns {Promise<Array>} Results array
+ */
+async function processWithConcurrency(items, processor, limit = CONCURRENCY_LIMIT) {
+  const results = [];
+  const executing = new Set();
+
+  for (const [index, item] of items.entries()) {
+    const promise = processor(item, index).then(result => {
+      executing.delete(promise);
+      return result;
+    });
+    results.push(promise);
+    executing.add(promise);
+
+    if (executing.size >= limit) {
+      await Promise.race(executing);
+    }
+  }
+
+  return Promise.all(results);
+}
+
 /**
  * Retry wrapper with exponential backoff for MongoDB operations
  * @param {Function} operation - Async function to retry
@@ -609,9 +640,14 @@ class VcsOdooInvoicer {
     // Get or create Amazon customer partner
     const _partnerId = await this.getOrCreateAmazonPartner();
 
-    for (const order of orders) {
-      result.processed++;
-      const orderNum = `${result.processed}/${orders.length}`;
+    // Process orders in parallel with concurrency limit for better performance
+    // This significantly reduces total processing time by overlapping Odoo API calls
+    const totalOrders = orders.length;
+    let processedCount = 0;
+
+    const processOrder = async (order) => {
+      processedCount++;
+      const orderNum = `${processedCount}/${totalOrders}`;
 
       try {
         // STEP: VALIDATING - Check if order should be processed
@@ -619,35 +655,33 @@ class VcsOdooInvoicer {
 
         // Skip orders that shouldn't be invoiced
         if (this.shouldSkipOrder(order)) {
-          result.skipped++;
-          result.skippedOrders.push({
+          await this.markOrderSkipped(order._id, 'Not invoiceable');
+          log('info', `[${orderNum}] ${order.orderId}: Skipped (not invoiceable)`);
+          return {
+            type: 'skipped',
             orderId: order.orderId,
             reason: 'Not invoiceable (cancelled or return)',
             customerName: order.buyerName || null,
-          });
-          await this.markOrderSkipped(order._id, 'Not invoiceable');
-          log('info', `[${orderNum}] ${order.orderId}: Skipped (not invoiceable)`);
-          continue;
+          };
         }
 
         // Check if order requires manual invoice creation
         // (e.g., Amazon couldn't invoice due to defective VAT registration)
         const manualCheck = this.requiresManualInvoice(order);
         if (manualCheck) {
-          result.manualRequired++;
-          result.manualRequiredOrders.push({
-            orderId: order.orderId,
-            mongoId: order._id.toString(),
-            customerName: order.buyerName || null,
-            orderDate: order.orderDate,
-            ...manualCheck,
-          });
           // Mark as manual_required in MongoDB with processing step
           await this.updateProcessingStatus(order._id, PROCESSING_STEPS.MANUAL_REQUIRED, {
             manualRequiredReason: manualCheck.reasons.join('; '),
           });
           log('warn', `[${orderNum}] ${order.orderId}: Requires manual invoice`, { reasons: manualCheck.reasons });
-          continue;
+          return {
+            type: 'manualRequired',
+            orderId: order.orderId,
+            mongoId: order._id.toString(),
+            customerName: order.buyerName || null,
+            orderDate: order.orderDate,
+            ...manualCheck,
+          };
         }
 
         // STEP: FINDING_ODOO_ORDER - Look for existing Odoo order
@@ -666,19 +700,18 @@ class VcsOdooInvoicer {
             odooOrderData = await this.createOrderFromVcs(order);
             log('success', `[${orderNum}] ${order.orderId}: Created Odoo order ${odooOrderData.saleOrder.name}`);
           } catch (createError) {
-            result.skipped++;
             // Mark as failed with the specific step where it failed
             await this.updateProcessingStatus(order._id, PROCESSING_STEPS.FAILED, {
               failedStep: PROCESSING_STEPS.CREATING_ODOO_ORDER,
               failedError: createError.message,
               skipReason: `Failed to create order: ${createError.message}`,
             });
-            result.errors.push({
+            log('error', `[${orderNum}] ${order.orderId}: Failed to create order`, { error: createError.message });
+            return {
+              type: 'error',
               orderId: order.orderId,
               error: `Failed to create order: ${createError.message}`,
-            });
-            log('error', `[${orderNum}] ${order.orderId}: Failed to create order`, { error: createError.message });
-            continue;
+            };
           }
         } else {
           log('info', `[${orderNum}] ${order.orderId}: Found existing Odoo order ${odooOrderData.saleOrder.name}`);
@@ -696,25 +729,21 @@ class VcsOdooInvoicer {
         await this.updateProcessingStatus(order._id, PROCESSING_STEPS.UPDATING_PRICES);
         const priceUpdateResult = await this.updateSaleOrderLinePricesFromVcs(order, saleOrder, orderLines);
         const orderPricesUpdated = priceUpdateResult.updated > 0;
-        if (orderPricesUpdated) {
-          result.pricesUpdated++;
-        }
 
         // STEP: CHECKING_INVOICE - Check if invoice already exists
         await this.updateProcessingStatus(order._id, PROCESSING_STEPS.CHECKING_INVOICE);
         const existingInvoice = await this.findExistingInvoice(saleOrder.name);
         if (existingInvoice) {
-          result.skipped++;
-          result.skippedOrders.push({
+          await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
+          log('info', `[${orderNum}] ${order.orderId}: Skipped - invoice already exists: ${existingInvoice.name}`);
+          return {
+            type: 'skipped',
             orderId: order.orderId,
             reason: `Invoice already exists: ${existingInvoice.name}`,
             customerName: order.buyerName || null,
             odooOrderName: saleOrder.name,
-            pricesUpdated: orderPricesUpdated,  // Track if prices were updated even though invoice was skipped
-          });
-          await this.markOrderSkipped(order._id, `Invoice already exists: ${existingInvoice.name}`);
-          log('info', `[${orderNum}] ${order.orderId}: Skipped - invoice already exists: ${existingInvoice.name}`);
-          continue;
+            pricesUpdated: orderPricesUpdated,
+          };
         }
 
         if (dryRun) {
@@ -727,13 +756,19 @@ class VcsOdooInvoicer {
           const expectedJournal = this.getExpectedJournalCode(order);
           const expectedFiscalPosition = this.getExpectedFiscalPositionKey(order);
 
-          result.invoices.push({
+          log('info', `[${orderNum}] ${order.orderId}: [DRY RUN] Would create invoice`, {
+            odooOrder: saleOrder.name,
+            journal: journalName || expectedJournal,
+            fiscalPosition: fiscalPositionName || expectedFiscalPosition,
+            total: order.totalInclusive
+          });
+          return {
+            type: 'dryRun',
             orderId: order.orderId,
             dryRun: true,
             odooOrderName: saleOrder.name,
             odooOrderId: saleOrder.id,
-            pricesUpdated: orderPricesUpdated,  // Track if sale order line prices were updated
-            // Human-readable preview fields
+            pricesUpdated: orderPricesUpdated,
             preview: {
               invoiceDate: invoiceData.invoice_date,
               journalName: journalName || `Not found (expected: ${expectedJournal})`,
@@ -749,14 +784,7 @@ class VcsOdooInvoicer {
               vatInvoiceNumber: order.vatInvoiceNumber,
             },
             wouldCreate: invoiceData,
-          });
-          log('info', `[${orderNum}] ${order.orderId}: [DRY RUN] Would create invoice`, {
-            odooOrder: saleOrder.name,
-            journal: journalName || expectedJournal,
-            fiscalPosition: fiscalPositionName || expectedFiscalPosition,
-            total: order.totalInclusive
-          });
-          continue;
+          };
         }
 
         // STEP: CREATING_INVOICE - Create invoice in Odoo
@@ -764,9 +792,7 @@ class VcsOdooInvoicer {
         log('info', `[${orderNum}] ${order.orderId}: Creating invoice...`);
         const partnerId = await this.determinePartner(order, saleOrder);
         const invoice = await this.createInvoice(order, partnerId, saleOrder, orderLines);
-        invoice.pricesUpdated = orderPricesUpdated;  // Track if sale order line prices were updated
-        result.created++;
-        result.invoices.push(invoice);
+        invoice.pricesUpdated = orderPricesUpdated;
         log('success', `[${orderNum}] ${order.orderId}: Created invoice ${invoice.name}`, {
           odooOrder: saleOrder.name,
           invoiceId: invoice.id,
@@ -779,8 +805,11 @@ class VcsOdooInvoicer {
           odooInvoiceName: invoice.name,
         });
 
-        // Rate limiting: add delay between invoice creations to prevent Odoo overload
-        await new Promise(resolve => setTimeout(resolve, 150));
+        return {
+          type: 'created',
+          invoice,
+          pricesUpdated: orderPricesUpdated,
+        };
 
       } catch (error) {
         // STEP: FAILED - Mark order as failed with error details
@@ -788,14 +817,46 @@ class VcsOdooInvoicer {
           failedStep: order.processingStep || 'unknown',
           failedError: error.message,
         }).catch(updateErr => {
-          // Don't throw if status update fails - log and continue
           console.error(`[VcsOdooInvoicer] Failed to update processing status for ${order.orderId}:`, updateErr.message);
         });
-        result.errors.push({
+        log('error', `[${orderNum}] ${order.orderId}: Error processing order`, { error: error.message });
+        return {
+          type: 'error',
           orderId: order.orderId,
           error: error.message,
-        });
-        log('error', `[${orderNum}] ${order.orderId}: Error processing order`, { error: error.message });
+        };
+      }
+    };
+
+    // Process orders in parallel with concurrency limit
+    log('info', `Processing ${orders.length} orders with concurrency limit of ${CONCURRENCY_LIMIT}...`);
+    const orderResults = await processWithConcurrency(orders, processOrder, CONCURRENCY_LIMIT);
+
+    // Aggregate results from parallel processing
+    for (const orderResult of orderResults) {
+      result.processed++;
+      switch (orderResult.type) {
+        case 'created':
+          result.created++;
+          result.invoices.push(orderResult.invoice);
+          if (orderResult.pricesUpdated) result.pricesUpdated++;
+          break;
+        case 'dryRun':
+          result.invoices.push(orderResult);
+          if (orderResult.pricesUpdated) result.pricesUpdated++;
+          break;
+        case 'skipped':
+          result.skipped++;
+          result.skippedOrders.push(orderResult);
+          if (orderResult.pricesUpdated) result.pricesUpdated++;
+          break;
+        case 'manualRequired':
+          result.manualRequired++;
+          result.manualRequiredOrders.push(orderResult);
+          break;
+        case 'error':
+          result.errors.push(orderResult);
+          break;
       }
     }
 
