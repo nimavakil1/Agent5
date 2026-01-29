@@ -676,18 +676,29 @@ class WeeklyPricingReportService {
 
     console.log(`[WeeklyPricingReport] Consolidated ${products.size} unique products by SKU`);
 
+    // Filter: only include products with stock on at least one marketplace
+    // (stock indicated by having a price - no price means no active listing)
+    const productsWithStock = Array.from(products.values()).filter(p => {
+      return p.bolPrice || p.amazonDE || p.amazonFR || p.amazonNL || p.amazonBE;
+    });
+
+    console.log(`[WeeklyPricingReport] Filtered to ${productsWithStock.length} products with stock on at least one marketplace`);
+
+    // Sort by SKU ascending
+    productsWithStock.sort((a, b) => a.cleanedSku.localeCompare(b.cleanedSku));
+
     // Generate Excel report
-    const excelBuffer = await this.generateExcel(Array.from(products.values()));
+    const excelBuffer = await this.generateExcel(productsWithStock);
 
     // Save locally
     const saveResult = await this.saveLocally(excelBuffer);
 
     // Send Teams notification
-    const teamsResult = await this.sendToTeams(products.size, saveResult.url);
+    const teamsResult = await this.sendToTeams(productsWithStock.length, saveResult.url);
 
     return {
       success: true,
-      productsCount: products.size,
+      productsCount: productsWithStock.length,
       bolOffersCount: bolOffers.length,
       amazonMarketplaces: Object.keys(amazonPrices),
       excelUrl: saveResult.url,
