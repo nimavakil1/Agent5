@@ -2353,6 +2353,13 @@ class VcsOdooInvoicer {
 
     // Build invoice line data from order lines
     const invoiceLines = [];
+
+    // Get the correct tax ID from VCS data BEFORE creating invoice lines
+    // This ensures ALL lines get the correct OSS/export/domestic tax from the start
+    // Previously, we used line.tax_id from the sale order (BE*VAT 21%) which was WRONG for OSS invoices
+    const correctTaxId = this.getTaxIdFromVCS(order);
+    console.log(`[VcsOdooInvoicer] Using VCS tax ID ${correctTaxId} for all invoice lines (shipFrom=${order.shipFromCountry}, shipTo=${order.shipToCountry}, scheme=${order.taxReportingScheme})`);
+
     for (const line of orderLineDetails) {
       if (!line.product_id) continue;
 
@@ -2364,7 +2371,9 @@ class VcsOdooInvoicer {
         name: line.name,
         quantity: qty,
         price_unit: line.price_unit,
-        tax_ids: line.tax_id ? [[6, 0, line.tax_id]] : false,
+        // Use the correct tax from VCS data, NOT from sale order line
+        // This fixes OSS invoices being created with BE*VAT instead of correct OSS tax (e.g., DE*OSS 19%)
+        tax_ids: correctTaxId ? [[6, 0, [correctTaxId]]] : (line.tax_id ? [[6, 0, line.tax_id]] : false),
         sale_line_ids: [[4, line.id]], // Link to sale order line
       }]);
     }
