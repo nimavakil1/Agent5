@@ -470,8 +470,8 @@ app.use('/api/amazon/mappings', requireSession, amazonMappingsRouter);
 app.use('/api/logs', requireSession, logsRouter);
 // System API (job statuses, health checks)
 app.use('/api/system', requireSession, systemRouter);
-// Reports API (pricing reports, etc.)
-app.use('/api/reports', requireSession, reportsRouter);
+// Reports API (pricing reports, etc.) - handles auth internally for internal localhost calls
+app.use('/api/reports', reportsRouter);
 // Chat permissions API (superadmin only for management, session for checking)
 app.use('/api/chat-permissions', requireSession, chatPermissionsRouter);
 app.use('/api/chat/my-permissions', requireSession, chatCheckRouter);
