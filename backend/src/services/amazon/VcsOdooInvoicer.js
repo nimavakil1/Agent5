@@ -2227,6 +2227,14 @@ class VcsOdooInvoicer {
 
     // 2. Explicit OSS scheme OR cross-border EU sale
     if (isOSS || isCrossBorderEU) {
+      // CRITICAL: If VCS reports 0% tax (isAmazonInvoiced=true), Amazon already collected VAT
+      // We must use 0% tax to avoid double taxation!
+      if (vcsRatePercent === 0) {
+        console.log(`[VcsOdooInvoicer] OSS/Cross-border EU with 0% VCS tax (Amazon invoiced) - using BE 0% tax`);
+        const beTaxes = DOMESTIC_TAXES['BE'];
+        return beTaxes?.[0] || null; // BE*VAT | 0% (ID 8)
+      }
+
       console.log(`[VcsOdooInvoicer] OSS/Cross-border EU - using OSS taxes for ${shipTo}`);
       const countryTaxes = OSS_TAXES[shipTo];
       if (countryTaxes) {
@@ -2251,6 +2259,19 @@ class VcsOdooInvoicer {
 
     // 3. Domestic sale (same country) - use domestic VAT
     if (isDomestic) {
+      // CRITICAL: If VCS reports 0% tax (isAmazonInvoiced=true), Amazon already collected VAT
+      // We must use 0% tax to avoid double taxation!
+      if (vcsRatePercent === 0) {
+        console.log(`[VcsOdooInvoicer] Domestic sale with 0% VCS tax (Amazon invoiced) - using ${shipTo} or BE 0% tax`);
+        const countryTaxes = DOMESTIC_TAXES[shipTo];
+        if (countryTaxes?.[0]) {
+          return countryTaxes[0];
+        }
+        // Fallback to BE 0% if this country doesn't have 0% configured
+        const beTaxes = DOMESTIC_TAXES['BE'];
+        return beTaxes?.[0] || null;
+      }
+
       console.log(`[VcsOdooInvoicer] Domestic sale in ${shipTo} - using domestic VAT`);
       const countryTaxes = DOMESTIC_TAXES[shipTo];
       if (countryTaxes) {
