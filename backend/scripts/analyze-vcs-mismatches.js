@@ -25,9 +25,9 @@ async function main() {
     console.log('Analyzing January 2026 VCS invoices...\n');
 
     // Get all orders with invoices from January 2026
-    const orders = await db.collection('vcs_orders').find({
+    const orders = await db.collection('amazon_vcs_orders').find({
       odooInvoiceId: { $exists: true, $ne: null },
-      invoiceDate: { $gte: new Date('2026-01-01'), $lt: new Date('2026-02-01') }
+      createdAt: { $gte: new Date('2026-01-01'), $lt: new Date('2026-02-01') }
     }).toArray();
 
     console.log(`Found ${orders.length} invoiced orders from January 2026\n`);
