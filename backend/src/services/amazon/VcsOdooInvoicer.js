@@ -2561,20 +2561,43 @@ class VcsOdooInvoicer {
     // Get final invoice details
     const invoice = await this.odoo.searchRead('account.move',
       [['id', '=', invoiceId]],
-      ['name', 'amount_total', 'amount_tax', 'state']
+      ['name', 'amount_total', 'amount_untaxed', 'amount_tax', 'state']
     );
 
     // Draft invoices have name "/", show ID instead for UI
     const invoiceName = invoice[0]?.name === '/' ? `Draft #${invoiceId}` : invoice[0]?.name;
 
+    // VALIDATION: Check if Odoo invoice total matches VCS expected total
+    // VCS totalInclusive is the authoritative source
+    const vcsExpectedTotal = (order.totalInclusive || 0) +
+      (order.totalShipping || 0) + (order.totalShippingTax || 0) +
+      (order.totalGiftWrap || 0) + (order.totalGiftWrapTax || 0) -
+      (order.totalShippingPromo || 0);
+    const odooTotal = invoice[0]?.amount_total || 0;
+    const totalDiff = Math.abs(odooTotal - vcsExpectedTotal);
+
+    if (totalDiff > 0.05) {  // Allow 5 cents tolerance for rounding
+      console.warn(`[VcsOdooInvoicer] ⚠️  TOTAL MISMATCH for ${order.orderId}:`);
+      console.warn(`  VCS Expected: ${vcsExpectedTotal.toFixed(2)} (inclusive=${order.totalInclusive}, shipping=${order.totalShipping}, shippingTax=${order.totalShippingTax})`);
+      console.warn(`  Odoo Total: ${odooTotal.toFixed(2)} (untaxed=${invoice[0]?.amount_untaxed}, tax=${invoice[0]?.amount_tax})`);
+      console.warn(`  Difference: ${totalDiff.toFixed(2)}`);
+      console.warn(`  VCS Tax: ${order.totalTax}, isAmazonInvoiced: ${order.isAmazonInvoiced}`);
+    } else {
+      console.log(`[VcsOdooInvoicer] ✓ Total validated: Odoo ${odooTotal.toFixed(2)} matches VCS ${vcsExpectedTotal.toFixed(2)}`);
+    }
+
       console.log(`[VcsOdooInvoicer] Invoice ${invoiceName} (ID: ${invoiceId}) updated. Total: ${invoice[0]?.amount_total}, Tax: ${invoice[0]?.amount_tax}`);
 
-      op.complete({ invoiceId, invoiceName, amountTotal: invoice[0]?.amount_total });
+      const hasTotalMismatch = totalDiff > 0.05;
+      op.complete({ invoiceId, invoiceName, amountTotal: invoice[0]?.amount_total, hasTotalMismatch });
       return {
         id: invoiceId,
         name: invoiceName || `Draft #${invoiceId}`,
         amountTotal: invoice[0]?.amount_total,
         amountTax: invoice[0]?.amount_tax,
+        vcsExpectedTotal,
+        hasTotalMismatch,
+        totalDiff: hasTotalMismatch ? totalDiff : 0,
         orderId: order.orderId,
         saleOrderName: saleOrder.name,
         saleOrderId: saleOrder.id,
