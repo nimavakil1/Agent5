@@ -473,11 +473,27 @@ class VcsOdooInvoicer {
       }
     }
 
-    console.log(`[VcsOdooInvoicer] Found ${allOrders.length} Odoo orders`);
+    console.log(`[VcsOdooInvoicer] Found ${allOrders.length} Odoo orders (before filtering)`);
+
+    // IMPORTANT: Filter out non-Amazon orders to prevent false matches
+    // BOL orders (FBBC..., FBB...) and direct sales (S...) may have client_order_ref
+    // containing an Amazon order ID, causing incorrect matches
+    const amazonOrdersOnly = allOrders.filter(order => {
+      const name = order.name || '';
+      // Only keep orders that start with FBA or FBM (Amazon orders)
+      // This excludes BOL orders (FBB, FBBC), direct sales (S), and other channels
+      return name.startsWith('FBA') || name.startsWith('FBM');
+    });
+
+    const filteredOut = allOrders.length - amazonOrdersOnly.length;
+    if (filteredOut > 0) {
+      console.log(`[VcsOdooInvoicer] Filtered out ${filteredOut} non-Amazon orders (BOL, direct sales, etc.)`);
+    }
+    console.log(`[VcsOdooInvoicer] Using ${amazonOrdersOnly.length} Amazon orders`);
 
     // Collect all order line IDs
     const allOrderLineIds = [];
-    for (const order of allOrders) {
+    for (const order of amazonOrdersOnly) {
       if (order.order_line && order.order_line.length > 0) {
         allOrderLineIds.push(...order.order_line);
       }
@@ -530,7 +546,7 @@ class VcsOdooInvoicer {
     // Handle multiple orders for same Amazon ID (different shipments from different warehouses)
     // Store by BOTH the Odoo format (FBADE..., FBA...) AND the raw VCS format for easy lookup
     const ordersByAmazonId = {};
-    for (const order of allOrders) {
+    for (const order of amazonOrdersOnly) {
       const amazonId = order.client_order_ref;
       // Extract the raw order ID without FBA/FBM prefix and optional country code
       // Handles: FBADE123-456, FBA123-456, FBM123-456, FBMBE123-456 -> 123-456
@@ -1267,10 +1283,17 @@ class VcsOdooInvoicer {
       ...(vcsOrder.shipmentId ? [['x_amazon_shipment_id', '=', vcsOrder.shipmentId]] : [['id', '>', 0]]) // By shipment ID
     ];
 
-    const orders = await this.odoo.searchRead('sale.order',
+    const ordersRaw = await this.odoo.searchRead('sale.order',
       searchDomain,
       ['id', 'name', 'client_order_ref', 'order_line', 'partner_id', 'state', 'team_id', 'x_amazon_shipment_id']
     );
+
+    // Filter out non-Amazon orders (BOL orders like FBBC..., direct sales like S...)
+    // These may have client_order_ref containing Amazon order IDs, causing false matches
+    const orders = ordersRaw.filter(order => {
+      const name = order.name || '';
+      return name.startsWith('FBA') || name.startsWith('FBM');
+    });
 
     if (orders.length === 0) {
       return null;
