@@ -102,7 +102,9 @@ async function main() {
 
     // Also reset the orders that were already deleted from Odoo
     const existingIds = new Set(existing.map(e => e.id));
-    const deletedFromOdoo = vatIssueOrders.filter(o => !existingIds.has(o.odooInvoiceId));
+    const deletedFromOdoo = vatIssueOrders.filter(o => {
+      return existingIds.has(o.odooInvoiceId) === false;
+    });
     console.log('\nResetting', deletedFromOdoo.length, 'orders whose invoices were already deleted...');
     const deletedRefs = deletedFromOdoo.map(o => o.orderId);
     await db.collection('amazon_vcs_orders').updateMany(
@@ -110,11 +112,22 @@ async function main() {
       { $unset: { odooInvoiceId: '', odooInvoiceName: '', invoicedAt: '' }, $set: { status: 'pending' } }
     );
 
-    console.log('\nDone! All VAT issue invoices deleted and orders reset for reprocessing.');
-
     // Count how many orders are now pending
     const pendingCount = await db.collection('amazon_vcs_orders').countDocuments({ status: 'pending' });
     console.log('Total orders now pending for processing:', pendingCount);
+
+    // Summary of what's left (tax-locked posted invoices)
+    const remainingPosted = existing.filter(i => i.state === 'posted').length;
+    if (remainingPosted > 0) {
+      console.log('\n=== TAX-LOCKED INVOICES ===');
+      console.log('Posted invoices still remaining:', remainingPosted);
+      console.log('These are dated before the tax lock date and cannot be deleted.');
+      console.log('Options:');
+      console.log('1. Create credit notes to reverse the incorrect amounts');
+      console.log('2. Change the tax lock date in Odoo Settings > Accounting > Lock Dates');
+    } else {
+      console.log('\nDone! All VAT issue invoices deleted and orders reset for reprocessing.');
+    }
 
   } finally {
     await mongo.close();
