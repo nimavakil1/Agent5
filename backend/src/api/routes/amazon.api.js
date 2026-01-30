@@ -3318,6 +3318,48 @@ router.get('/vcs/uploads/:uploadId/logs', async (req, res) => {
 });
 
 /**
+ * @route GET /api/amazon/vcs/uploads/:uploadId/runs/:runId/download-log
+ * @desc Download the detailed log file for a specific processing run
+ */
+router.get('/vcs/uploads/:uploadId/runs/:runId/download-log', async (req, res) => {
+  try {
+    const db = getDb();
+    const { uploadId, runId } = req.params;
+
+    const upload = await db.collection('amazon_vcs_uploads').findOne(
+      { _id: new ObjectId(uploadId) },
+      { projection: { processingRuns: 1, originalFilename: 1 } }
+    );
+
+    if (!upload) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    const run = upload.processingRuns?.find(r => r.runId === runId);
+    if (!run) {
+      return res.status(404).json({ error: 'Processing run not found' });
+    }
+
+    if (!run.logFileName) {
+      return res.status(404).json({ error: 'No log file for this run' });
+    }
+
+    const logFilePath = path.join(__dirname, '../../../uploads/vcs/logs', run.logFileName);
+    if (!fs.existsSync(logFilePath)) {
+      return res.status(404).json({ error: 'Log file not found on disk' });
+    }
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="${run.logFileName}"`);
+    res.sendFile(logFilePath);
+
+  } catch (error) {
+    console.error('[VCS Download Log] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * @route GET /api/amazon/vcs/uploads/:uploadId/sessions
  * @desc List all processing sessions for an upload with aggregate stats
  */
@@ -4399,8 +4441,45 @@ router.post('/vcs/create-invoices-stream', async (req, res) => {
 
         if (upload) {
           const endTime = new Date();
+          const runId = new ObjectId().toString();
+
+          // Save detailed order logs to a file
+          let logFileName = null;
+          if (result.orderLogs && result.orderLogs.length > 0) {
+            const logsDir = path.join(__dirname, '../../../uploads/vcs/logs');
+            if (!fs.existsSync(logsDir)) {
+              fs.mkdirSync(logsDir, { recursive: true });
+            }
+
+            // Generate log file content
+            const logLines = [
+              `VCS Processing Log`,
+              `==================`,
+              `Run ID: ${runId}`,
+              `Date: ${endTime.toISOString()}`,
+              `Upload: ${upload.originalFilename || upload._id}`,
+              `Orders processed: ${result.processed}`,
+              `Created: ${result.created}, Skipped: ${result.skipped}, Errors: ${result.errors?.length || 0}`,
+              `Dry run: ${dryRun}`,
+              ``,
+              `Detailed Results:`,
+              `-----------------`,
+            ];
+
+            for (const log of result.orderLogs) {
+              const line = `${log.timestamp} | ${log.orderId} | ${log.country || 'N/A'} | €${log.amount?.toFixed(2) || '0.00'} | ${log.status.toUpperCase()} | ${log.message}`;
+              logLines.push(line);
+            }
+
+            const logContent = logLines.join('\n');
+            logFileName = `vcs_log_${runId}.txt`;
+            const logFilePath = path.join(logsDir, logFileName);
+            fs.writeFileSync(logFilePath, logContent);
+            console.log(`[VCS Invoices Stream] Saved log file: ${logFilePath}`);
+          }
+
           const processingRun = {
-            runId: new ObjectId().toString(),
+            runId,
             startedAt: startTime,
             completedAt: endTime,
             durationMs: endTime - startTime,
@@ -4413,6 +4492,7 @@ router.post('/vcs/create-invoices-stream', async (req, res) => {
               errors: result.errors?.length || 0,
               manualRequired: result.manualRequired || 0
             },
+            logFileName,
             logs
           };
 

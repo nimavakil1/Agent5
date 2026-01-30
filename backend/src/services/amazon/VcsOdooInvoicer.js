@@ -1101,9 +1101,22 @@ class VcsOdooInvoicer {
     console.log(`[VcsOdooInvoicer] Processing ${orders.length} orders with concurrency limit of ${CONCURRENCY_LIMIT}...`);
     onProgress({ phase: 'processing', message: `Processing ${orders.length} orders (${CONCURRENCY_LIMIT} parallel)...`, current: 0, total });
 
+    // Collect detailed per-record logs
+    const orderLogs = [];
+
     const orderResults = await processWithConcurrency(orders, async (order) => {
       const orderResult = await processOrder(order);
       completedCount++;
+
+      // Create detailed log entry for this order
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        orderId: order.orderId,
+        orderDate: order.orderDate,
+        country: order.shipFromCountry,
+        amount: order.totalInclusive,
+        status: orderResult.type,
+      };
 
       // Update result counters and send progress
       result.processed++;
@@ -1112,29 +1125,44 @@ class VcsOdooInvoicer {
           result.created++;
           result.invoices.push(orderResult.invoice);
           if (orderResult.pricesUpdated) result.pricesUpdated++;
+          logEntry.invoiceId = orderResult.invoice?.id;
+          logEntry.invoiceName = orderResult.invoice?.name;
+          logEntry.message = `Created invoice ${orderResult.invoice?.name || 'N/A'}`;
           break;
         case 'dryRun':
           result.created++;
           result.invoices.push(orderResult);
           if (orderResult.pricesUpdated) result.pricesUpdated++;
+          logEntry.message = `Would create invoice (dry run)`;
           break;
         case 'skipped':
           result.skipped++;
           result.skippedOrders.push(orderResult);
           if (orderResult.pricesUpdated) result.pricesUpdated++;
+          logEntry.reason = orderResult.reason;
+          logEntry.message = `Skipped: ${orderResult.reason}`;
           break;
         case 'manualRequired':
           result.manualRequired++;
           result.manualRequiredOrders.push(orderResult);
+          logEntry.reasons = orderResult.reasons;
+          logEntry.message = `Manual required: ${orderResult.reasons?.join(', ')}`;
           break;
         case 'error':
           result.errors.push(orderResult);
+          logEntry.error = orderResult.error;
+          logEntry.message = `Error: ${orderResult.error}`;
           break;
       }
+
+      orderLogs.push(logEntry);
       updateProgress();
 
       return orderResult;
     }, CONCURRENCY_LIMIT);
+
+    // Add orderLogs to result for saving
+    result.orderLogs = orderLogs;
 
     return result;
   }
