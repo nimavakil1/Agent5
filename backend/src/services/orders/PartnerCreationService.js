@@ -259,6 +259,13 @@ class PartnerCreationService {
       comment: this._buildComment(source, orderId, cleanedAddress)
     };
 
+    // Set company_name field when there's a company (for B2B orders)
+    // This ensures the company name is visible in Odoo even when the
+    // partner name is "Company - Contact Person" format
+    if (cleanedAddress.company) {
+      partnerData.company_name = cleanedAddress.company;
+    }
+
     const partnerId = await this.odoo.create('res.partner', partnerData);
 
     // Cache the new partner (cache by base name for future lookups)
@@ -322,6 +329,13 @@ class PartnerCreationService {
       type: 'contact',
       comment: this._buildComment(source, orderId, cleanedAddress)
     };
+
+    // Set company_name field when there's a company (for B2B orders)
+    // This ensures the company name is visible in Odoo even when the
+    // partner name is "Company - Contact Person" format
+    if (cleanedAddress.company) {
+      partnerData.company_name = cleanedAddress.company;
+    }
 
     const partnerId = await this.odoo.create('res.partner', partnerData);
 
