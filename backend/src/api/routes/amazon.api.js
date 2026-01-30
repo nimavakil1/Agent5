@@ -4353,13 +4353,63 @@ router.post('/vcs/create-invoices-stream', async (req, res) => {
     await invoicer.loadCache();
     sendEvent('progress', { message: 'Cache loaded', phase: 'init' });
 
+    const startTime = new Date();
+    const logs = [];
+    const addLog = (level, message) => {
+      logs.push({ timestamp: new Date().toISOString(), level, message });
+    };
+
+    addLog('info', `Starting invoice creation for ${orderIds.length} orders`);
+
     // Create invoices with progress callback
     const result = await invoicer.createInvoicesWithProgress(
       { orderIds, dryRun },
       (progressData) => {
         sendEvent('progress', progressData);
+        if (progressData.message) {
+          addLog('info', progressData.message);
+        }
       }
     );
+
+    addLog('info', `Complete: ${result.created} created, ${result.skipped} skipped, ${result.errors?.length || 0} errors`);
+
+    // Save processing run to upload record (like regular endpoint)
+    const db = getDb();
+    if (orderIds.length > 0) {
+      const firstOrder = await db.collection('amazon_vcs_orders').findOne({
+        _id: new ObjectId(orderIds[0])
+      });
+      const uploadId = firstOrder?.uploadId;
+
+      if (uploadId) {
+        const endTime = new Date();
+        const processingRun = {
+          runId: new ObjectId().toString(),
+          startedAt: startTime,
+          completedAt: endTime,
+          durationMs: endTime - startTime,
+          dryRun,
+          orderCount: orderIds.length,
+          result: {
+            processed: result.processed,
+            created: result.created,
+            skipped: result.skipped,
+            errors: result.errors?.length || 0,
+            manualRequired: result.manualRequired || 0
+          },
+          logs
+        };
+
+        await db.collection('amazon_vcs_uploads').updateOne(
+          { _id: new ObjectId(uploadId) },
+          {
+            $push: { processingRuns: processingRun },
+            $set: { lastProcessedAt: endTime }
+          }
+        );
+      }
+    }
 
     // Send final result
     sendEvent('complete', {
