@@ -63,7 +63,7 @@ async function main() {
     const response = await fetch(`${apiUrl}/api/amazon/vcs/create-invoices`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: mongoIds }),
+      body: JSON.stringify({ orderIds: mongoIds, dryRun: false }),
     });
 
     const result = await response.json();
