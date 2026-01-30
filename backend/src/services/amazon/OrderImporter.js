@@ -289,6 +289,8 @@ class OrderImporter {
 
   /**
    * Find warehouse for the order
+   * IMPORTANT: For FBA orders, we must use the correct FBA warehouse.
+   * Never fall back to Central Warehouse for FBA orders.
    */
   async findWarehouse(fulfillmentType, shipFromCountry) {
     let warehouseCode;
@@ -306,7 +308,11 @@ class OrderImporter {
     ], { limit: 1 });
 
     if (warehouses.length === 0) {
-      // Fallback to default warehouse
+      if (fulfillmentType === 'FBA') {
+        // FBA orders must use correct FBA warehouse - never fall back to Central Warehouse
+        throw new Error(`FBA warehouse '${warehouseCode}' not found in Odoo. Please create it before processing orders from ${shipFromCountry}.`);
+      }
+      // For FBM, fallback to default warehouse is acceptable
       const defaultWh = await this.odoo.search('stock.warehouse', [], { limit: 1 });
       return defaultWh[0];
     }

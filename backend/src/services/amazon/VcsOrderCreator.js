@@ -364,6 +364,8 @@ class VcsOrderCreator {
 
   /**
    * Find warehouse by code
+   * IMPORTANT: For FBA orders, we must use the correct FBA warehouse.
+   * Never fall back to Central Warehouse for FBA orders.
    */
   async findWarehouse(warehouseCode) {
     if (this.warehouseCache[warehouseCode]) {
@@ -380,14 +382,9 @@ class VcsOrderCreator {
       return warehouses[0].id;
     }
 
-    // Fallback to first warehouse
-    const defaultWh = await this.odoo.searchRead('stock.warehouse', [], ['id', 'name'], 0, 1);
-    if (defaultWh.length > 0) {
-      this.warehouseCache[warehouseCode] = defaultWh[0].id;
-      return defaultWh[0].id;
-    }
-
-    return null;
+    // FBA warehouses follow pattern: xx1 (de1, fr1, cz1, etc.)
+    // If not found, throw error - do NOT fall back to Central Warehouse
+    throw new Error(`FBA warehouse '${warehouseCode}' not found in Odoo. Please create it before processing orders from this country.`);
   }
 
   /**
