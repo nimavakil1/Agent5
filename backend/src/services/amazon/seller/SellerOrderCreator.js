@@ -1257,13 +1257,14 @@ class SellerOrderCreator {
     const partnerService = await getPartnerCreationService(this.odoo);
     let result;
 
-    // If we already have AI-cleaned address data, use it directly
+    // If we already have AI-cleaned address data, use it directly (skip cleaning)
     if (cleanedAddress && cleanedAddress.street) {
-      result = await partnerService.findOrCreatePartnerFromCleaned(cleanedAddress, {
+      result = await partnerService.findOrCreatePartner(cleanedAddress, {
         email: buyerEmail,
         phone: address.phone,
         source: 'amazon',
-        orderId: amazonOrderId
+        orderId: amazonOrderId,
+        skipCleaning: true
       });
     } else {
       // No pre-cleaned address - let PartnerCreationService run AI cleaning

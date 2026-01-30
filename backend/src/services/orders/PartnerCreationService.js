@@ -198,34 +198,58 @@ class PartnerCreationService {
   }
 
   /**
-   * Find or create a partner from raw address data
+   * Find or create a partner from address data
    *
    * This is the main entry point. It:
-   * 1. Cleans the address using AI
+   * 1. Cleans the address using AI (unless skipCleaning is true)
    * 2. Searches for existing partner
    * 3. Creates new partner if not found
    *
-   * @param {Object} rawAddress - Raw address data from marketplace
+   * @param {Object} addressData - Address data (raw or already cleaned)
    * @param {Object} options - Additional options
    * @param {string} options.email - Customer email
    * @param {string} options.phone - Customer phone
    * @param {string} options.source - Source marketplace (amazon, bol, etc.)
    * @param {string} options.orderId - Order ID for comments
+   * @param {boolean} options.skipCleaning - If true, skip AI address cleaning (address already cleaned)
    * @returns {Promise<Object>} { partnerId, displayName, isNew, cleanedAddress }
    */
-  async findOrCreatePartner(rawAddress, options = {}) {
+  async findOrCreatePartner(addressData, options = {}) {
+    const { email, phone, source, orderId, skipCleaning = false } = options;
+
+    // Step 1: Clean address using AI (unless already cleaned)
+    const cleanedAddress = skipCleaning
+      ? addressData
+      : await this.addressCleaner.cleanAddress({
+          ...addressData,
+          source: source || addressData.source
+        });
+
+    // Step 2: Find or create the partner using cleaned address
+    return this._findOrCreateFromCleanedAddress(cleanedAddress, { email, phone, source, orderId });
+  }
+
+  /**
+   * @deprecated Use findOrCreatePartner(address, { skipCleaning: true }) instead
+   * Kept for backward compatibility - will be removed in future version
+   */
+  async findOrCreatePartnerFromCleaned(cleanedAddress, options = {}) {
+    console.warn('[PartnerCreationService] findOrCreatePartnerFromCleaned is deprecated. Use findOrCreatePartner(address, { skipCleaning: true }) instead.');
+    return this.findOrCreatePartner(cleanedAddress, { ...options, skipCleaning: true });
+  }
+
+  /**
+   * Internal method: Find or create partner from cleaned address data
+   * Single source of truth for all partner creation logic
+   * @private
+   */
+  async _findOrCreateFromCleanedAddress(cleanedAddress, options = {}) {
     const { email, phone, source, orderId } = options;
 
-    // Step 1: Clean address using AI
-    const cleanedAddress = await this.addressCleaner.cleanAddress({
-      ...rawAddress,
-      source: source || rawAddress.source
-    });
-
-    // Step 2: Build display name (without PO for searching)
+    // Build base name (without PO) for searching
     const baseName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name);
 
-    // Step 3: Check for existing partner (search without PO number)
+    // Check for existing partner (search without PO number)
     const existingId = await this.findExistingPartner(baseName, cleanedAddress.zip);
     if (existingId) {
       // Build full name with PO for the response
@@ -238,17 +262,17 @@ class PartnerCreationService {
       };
     }
 
-    // Step 4: Get country ID
+    // Get country ID
     const countryId = await this.getCountryId(cleanedAddress.country);
 
-    // Step 5: Build display name with PO number for the partner
+    // Build display name with PO number for the partner
     const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name, cleanedAddress.poNumber);
 
-    // Step 6: Create new partner
+    // Create new partner
     const partnerData = {
       name: displayName,
       street: cleanedAddress.street || false,
-      street2: cleanedAddress.street2 || false,  // PO is now in name, not street2
+      street2: cleanedAddress.street2 || false,
       zip: cleanedAddress.zip || false,
       city: cleanedAddress.city || false,
       country_id: countryId || false,
@@ -279,76 +303,6 @@ class PartnerCreationService {
       displayName,
       isNew: true,
       cleanedAddress
-    };
-  }
-
-  /**
-   * Find or create a partner from already-cleaned address data
-   *
-   * Use this when address is already cleaned (e.g., from stored cleanedAddress).
-   *
-   * @param {Object} cleanedAddress - Already cleaned address
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} { partnerId, displayName, isNew }
-   */
-  async findOrCreatePartnerFromCleaned(cleanedAddress, options = {}) {
-    const { email, phone, source, orderId } = options;
-
-    // Build base name (without PO) for searching
-    const baseName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name);
-
-    // Check for existing partner (search without PO number)
-    const existingId = await this.findExistingPartner(baseName, cleanedAddress.zip);
-    if (existingId) {
-      // Build full name with PO for the response
-      const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name, cleanedAddress.poNumber);
-      return {
-        partnerId: existingId,
-        displayName,
-        isNew: false
-      };
-    }
-
-    // Get country ID
-    const countryId = await this.getCountryId(cleanedAddress.country);
-
-    // Build display name with PO number for the partner
-    const displayName = this.buildDisplayName(cleanedAddress.company, cleanedAddress.name, cleanedAddress.poNumber);
-
-    // Create new partner
-    const partnerData = {
-      name: displayName,
-      street: cleanedAddress.street || false,
-      street2: cleanedAddress.street2 || false,  // PO is now in name, not street2
-      zip: cleanedAddress.zip || false,
-      city: cleanedAddress.city || false,
-      country_id: countryId || false,
-      email: email || false,
-      phone: phone || false,
-      customer_rank: 1,
-      type: 'contact',
-      comment: this._buildComment(source, orderId, cleanedAddress)
-    };
-
-    // Set company_name field when there's a company (for B2B orders)
-    // This ensures the company name is visible in Odoo even when the
-    // partner name is "Company - Contact Person" format
-    if (cleanedAddress.company) {
-      partnerData.company_name = cleanedAddress.company;
-    }
-
-    const partnerId = await this.odoo.create('res.partner', partnerData);
-
-    // Cache the new partner (cache by base name for future lookups)
-    const cacheKey = `${baseName}|${cleanedAddress.zip || ''}`;
-    this.partnerCache[cacheKey] = partnerId;
-
-    console.log(`[PartnerCreationService] Created partner ${partnerId}: ${displayName} (${source || 'unknown'})`);
-
-    return {
-      partnerId,
-      displayName,
-      isNew: true
     };
   }
 
