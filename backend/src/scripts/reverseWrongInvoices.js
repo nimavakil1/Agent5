@@ -61,7 +61,7 @@ async function reverseInvoices() {
       // Get current invoice data
       const invoices = await odoo.searchRead('account.move',
         [['id', '=', inv.invoiceId]],
-        ['id', 'name', 'state', 'payment_state', 'amount_total', 'reversed_entry_id']
+        ['id', 'name', 'state', 'payment_state', 'amount_total', 'reversed_entry_id', 'journal_id']
       );
 
       if (invoices.length === 0) {
@@ -87,13 +87,14 @@ async function reverseInvoices() {
       if (fix) {
         // Create reversal (credit note) using Odoo's reverse wizard
         console.log(`  Creating credit note...`);
+        console.log(`  Using journal: ${invoice.journal_id[1]} (ID: ${invoice.journal_id[0]})`);
 
         // Use the account.move.reversal wizard
         const wizardId = await odoo.create('account.move.reversal', {
           move_ids: [[6, 0, [inv.invoiceId]]],
           date: CREDIT_NOTE_DATE,
           reason: `Reversal - wrong order link (Amazon: ${inv.amazonOrderId})`,
-          journal_id: false,  // Use same journal as original
+          journal_id: invoice.journal_id[0],  // Use same journal as original
         });
 
         // Execute the reversal
