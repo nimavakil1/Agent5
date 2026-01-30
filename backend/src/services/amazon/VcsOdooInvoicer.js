@@ -30,7 +30,7 @@ const RETRY_CONFIG = {
 };
 
 // Concurrency configuration for parallel processing
-const CONCURRENCY_LIMIT = 5; // Process 5 orders in parallel
+const CONCURRENCY_LIMIT = 10; // Process 10 orders in parallel
 
 /**
  * Simple concurrency limiter for parallel processing
