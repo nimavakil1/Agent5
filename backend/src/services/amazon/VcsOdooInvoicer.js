@@ -1904,10 +1904,37 @@ class VcsOdooInvoicer {
    * partner does NOT need to match the order partner for qty_invoiced to update.
    *
    * @param {object} order - VCS order data
-   * @param {object} saleOrder - Odoo sale.order (not used for partner, only for reference)
+   * @param {object} saleOrder - Odoo sale.order (used to get existing partner)
    * @returns {Promise<number>} Partner ID
    */
-  async determinePartner(order, _saleOrder) {
+  async determinePartner(order, saleOrder) {
+    // If we have an existing sale order, use its partner (has full customer details)
+    // Only update the VAT number if VCS provides one and partner doesn't have it
+    if (saleOrder && saleOrder.partner_id) {
+      const partnerId = Array.isArray(saleOrder.partner_id) ? saleOrder.partner_id[0] : saleOrder.partner_id;
+      const partnerName = Array.isArray(saleOrder.partner_id) ? saleOrder.partner_id[1] : null;
+
+      // If VCS has a VAT number, check if we should update the partner
+      const buyerVat = order.buyerTaxRegistration?.trim().toUpperCase();
+      if (buyerVat && this.isValidEuVatFormat(buyerVat)) {
+        // Check if partner already has this VAT
+        const partner = await this.odoo.searchRead('res.partner',
+          [['id', '=', partnerId]],
+          ['id', 'vat', 'name']
+        );
+
+        if (partner.length > 0 && !partner[0].vat) {
+          // Partner doesn't have VAT, update it
+          await this.odoo.execute('res.partner', 'write', [[partnerId], { vat: buyerVat }]);
+          console.log(`[VcsOdooInvoicer] Updated partner ${partner[0].name} (ID: ${partnerId}) with VAT: ${buyerVat}`);
+        }
+      }
+
+      console.log(`[VcsOdooInvoicer] Using existing partner from sale order: ${partnerName || partnerId}`);
+      return partnerId;
+    }
+
+    // No existing sale order - fall back to VCS-based partner creation
     return await this.findOrCreatePartnerFromVcs(order);
   }
 
