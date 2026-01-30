@@ -4316,6 +4316,15 @@ router.post('/vcs/create-invoices-stream', async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
   res.flushHeaders();
 
+  // Keep-alive ping to prevent nginx timeout (every 30 seconds)
+  const keepAliveInterval = setInterval(() => {
+    try {
+      res.write(': keep-alive\n\n'); // SSE comment, ignored by client but keeps connection alive
+    } catch (e) {
+      clearInterval(keepAliveInterval);
+    }
+  }, 30000);
+
   const sendEvent = (event, data) => {
     try {
       res.write(`event: ${event}\n`);
@@ -4422,6 +4431,7 @@ router.post('/vcs/create-invoices-stream', async (req, res) => {
     console.error('[VCS Invoices Stream] Error:', error);
     sendEvent('error', { message: error.message });
   } finally {
+    clearInterval(keepAliveInterval);
     res.end();
   }
 });
