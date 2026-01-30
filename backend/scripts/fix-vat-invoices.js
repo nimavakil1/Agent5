@@ -65,27 +65,36 @@ async function main() {
 
     // Cancel then delete posted invoices
     if (posted.length > 0) {
-      console.log('\nCancelling', posted.length, 'posted invoices...');
+      console.log('\nTrying to cancel', posted.length, 'posted invoices...');
       const postedIds = posted.map(i => i.id);
 
-      // First, reset to draft
-      await odoo.execute('account.move', 'button_draft', [postedIds]);
-      console.log('Reset to draft');
+      try {
+        // First, reset to draft
+        await odoo.execute('account.move', 'button_draft', [postedIds]);
+        console.log('Reset to draft');
 
-      // Then delete
-      await odoo.execute('account.move', 'unlink', [postedIds]);
-      console.log('Deleted former posted invoices');
+        // Then delete
+        await odoo.execute('account.move', 'unlink', [postedIds]);
+        console.log('Deleted former posted invoices');
 
-      // Reset MongoDB
-      const postedRefs = posted.map(i => i.ref).filter(r => r);
-      await db.collection('amazon_vcs_orders').updateMany(
-        { orderId: { $in: postedRefs } },
-        { $unset: { odooInvoiceId: '', odooInvoiceName: '', invoicedAt: '' }, $set: { status: 'pending' } }
-      );
-      console.log('Reset MongoDB records');
+        // Reset MongoDB
+        const postedRefs = posted.map(i => i.ref).filter(r => r);
+        await db.collection('amazon_vcs_orders').updateMany(
+          { orderId: { $in: postedRefs } },
+          { $unset: { odooInvoiceId: '', odooInvoiceName: '', invoicedAt: '' }, $set: { status: 'pending' } }
+        );
+        console.log('Reset MongoDB records');
+      } catch (error) {
+        if (error.message.includes('tax statement') || error.message.includes('tax lock')) {
+          console.log('⚠️  Posted invoices are tax-locked and cannot be cancelled.');
+          console.log('   These invoices are from before the tax lock date (31/12/2025).');
+        } else {
+          throw error;
+        }
+      }
     }
 
-    // Delete cancelled invoices
+    // Delete cancelled invoices FIRST (before trying to cancel posted)
     if (cancelled.length > 0) {
       console.log('\nDeleting', cancelled.length, 'cancelled invoices...');
       const cancelledIds = cancelled.map(i => i.id);
@@ -98,6 +107,8 @@ async function main() {
         { orderId: { $in: cancelledRefs } },
         { $unset: { odooInvoiceId: '', odooInvoiceName: '', invoicedAt: '' }, $set: { status: 'pending' } }
       );
+      // Remove cancelled from existing for later counting
+      cancelled.forEach(c => existing.splice(existing.findIndex(e => e.id === c.id), 1));
     }
 
     // Also reset the orders that were already deleted from Odoo
