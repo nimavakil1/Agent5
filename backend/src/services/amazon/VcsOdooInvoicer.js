@@ -306,6 +306,49 @@ const DOMESTIC_FISCAL_POSITIONS = {
   'GB': 67,  // GB*VAT | Régime National
 };
 
+// B2B Intra-Community Fiscal Position ID (BE*VAT | Régime Intra-Communautaire)
+// Used for B2B cross-border sales with reverse charge
+const B2B_INTRA_COMMUNITY_FISCAL_POSITION_ID = 4;
+
+// =============================================================================
+// ITALIAN EXCEPTION HANDLER
+// =============================================================================
+// Temporary workaround for orders from Italian FBA where Amazon couldn't invoice
+// due to defective Italian VAT registration. These orders have:
+// - shipFromCountry = 'IT'
+// - isAmazonInvoiced = false
+// - vatInvoiceNumber = 'N/A'
+//
+// Treatment:
+// - B2C domestic (IT->IT): OSS with IT 22% VAT
+// - B2C cross-border: OSS with destination country VAT
+// - B2B cross-border: BE VAT + 0% Intra-Community (reverse charge)
+// - B2B domestic (IT->IT): Manual review required (only ~10 orders)
+//
+// TODO: Remove this handler when Italian VAT registration is fixed in Amazon
+// =============================================================================
+
+/**
+ * Check if this is an Italian exception order
+ * (shipped from IT FBA but Amazon couldn't invoice due to defective IT VAT)
+ * @param {object} order - VCS order data
+ * @returns {boolean}
+ */
+function isItalianExceptionOrder(order) {
+  return order.shipFromCountry === 'IT' &&
+         order.isAmazonInvoiced === false &&
+         (order.vatInvoiceNumber === 'N/A' || !order.vatInvoiceNumber);
+}
+
+/**
+ * Check if order is B2B (has buyer VAT registration)
+ * @param {object} order - VCS order data
+ * @returns {boolean}
+ */
+function isB2BOrder(order) {
+  return !!(order.buyerTaxRegistration && order.buyerTaxRegistration.trim());
+}
+
 // Marketplace-specific receivable account IDs
 // These are used for B2C Amazon marketplace sales, where Amazon collects payment
 // Format: { marketplaceCountry: accountId }
@@ -2243,6 +2286,50 @@ class VcsOdooInvoicer {
     const isDomestic = shipFrom === shipTo && EU_COUNTRIES.includes(shipTo);
     const isCrossBorderEU = shipFrom !== shipTo && EU_COUNTRIES.includes(shipFrom) && EU_COUNTRIES.includes(shipTo);
 
+    // ITALIAN EXCEPTION: Orders from IT FBA where Amazon couldn't invoice
+    // These need proper VAT applied (not 0%) since Amazon did NOT collect VAT
+    if (isItalianExceptionOrder(order)) {
+      const isB2B = isB2BOrder(order);
+
+      // Check for export first (IT->GB, IT->CH, etc.)
+      if (isExport) {
+        console.log(`[VcsOdooInvoicer] ITALIAN EXCEPTION: Export IT->${shipTo} - using BE 0% export tax`);
+        const beTaxes = DOMESTIC_TAXES['BE'];
+        return beTaxes?.[0] || null; // BE*VAT | 0% (ID 8)
+      } else if (isB2B && !isDomestic) {
+        // B2B cross-border EU: Use BE 0% Intra-Community (reverse charge)
+        console.log(`[VcsOdooInvoicer] ITALIAN EXCEPTION: B2B cross-border IT->${shipTo} - using BE 0% Intra-Community`);
+        const beTaxes = DOMESTIC_TAXES['BE'];
+        return beTaxes?.[0] || null; // BE*VAT | 0% (ID 8)
+      } else if (isB2B && isDomestic) {
+        // B2B domestic Italy: Problem case - log warning, use IT 22% for now
+        console.warn(`[VcsOdooInvoicer] ITALIAN EXCEPTION: B2B domestic IT->IT - MANUAL REVIEW REQUIRED (order ${order.orderId})`);
+        // Use IT OSS 22% as fallback (buyer may not be able to recover VAT properly)
+        return OSS_TAXES['IT']?.[22] || null;
+      } else if (isDomestic) {
+        // B2C domestic Italy: Use IT 22% via OSS
+        console.log(`[VcsOdooInvoicer] ITALIAN EXCEPTION: B2C domestic IT->IT - using IT*OSS 22%`);
+        return OSS_TAXES['IT']?.[22] || null;
+      } else {
+        // B2C cross-border EU: Use destination country OSS VAT
+        console.log(`[VcsOdooInvoicer] ITALIAN EXCEPTION: B2C cross-border IT->${shipTo} - using ${shipTo}*OSS standard rate`);
+        const standardRate = STANDARD_VAT_RATES[shipTo];
+        const countryTaxes = OSS_TAXES[shipTo];
+        if (countryTaxes && standardRate && countryTaxes[standardRate]) {
+          return countryTaxes[standardRate];
+        }
+        // Fallback to first available rate for this country
+        if (countryTaxes) {
+          const rates = Object.keys(countryTaxes);
+          if (rates.length > 0) {
+            return countryTaxes[rates[0]];
+          }
+        }
+        console.warn(`[VcsOdooInvoicer] ITALIAN EXCEPTION: No OSS tax found for ${shipTo}`);
+        return null;
+      }
+    }
+
     // 1. Export orders - use BE 0% export tax (must match BE export fiscal position)
     // IMPORTANT: We always use BE's export fiscal position (ID 3), so we must use BE's 0% tax
     // to avoid "tax not compatible with fiscal position" errors
@@ -2382,6 +2469,30 @@ class VcsOdooInvoicer {
   determineFiscalPosition(order) {
     const shipFrom = order.shipFromCountry;
     const shipTo = order.shipToCountry;
+
+    // ITALIAN EXCEPTION: Orders from IT FBA where Amazon couldn't invoice
+    if (isItalianExceptionOrder(order)) {
+      const isB2B = isB2BOrder(order);
+      const isDomestic = shipFrom === shipTo;
+
+      // Check for export first (IT->GB, IT->CH, etc.)
+      if (this.isExportOrder(order)) {
+        console.log(`[VcsOdooInvoicer] ITALIAN EXCEPTION: Export IT->${shipTo} - using BE export fiscal position`);
+        return EXPORT_FISCAL_POSITION_ID; // ID 3
+      } else if (isB2B && !isDomestic) {
+        // B2B cross-border EU: Use BE Intra-Community fiscal position (reverse charge)
+        console.log(`[VcsOdooInvoicer] ITALIAN EXCEPTION: B2B cross-border IT->${shipTo} - using BE Intra-Community fiscal position`);
+        return B2B_INTRA_COMMUNITY_FISCAL_POSITION_ID; // ID 4
+      } else {
+        // B2C (domestic or cross-border EU) and B2B domestic: Use OSS fiscal position
+        const ossFiscalPositionId = OSS_FISCAL_POSITIONS[shipTo];
+        if (ossFiscalPositionId) {
+          console.log(`[VcsOdooInvoicer] ITALIAN EXCEPTION: Using OSS fiscal position for ${shipTo}: ${ossFiscalPositionId}`);
+          return ossFiscalPositionId;
+        }
+        console.warn(`[VcsOdooInvoicer] ITALIAN EXCEPTION: No OSS fiscal position for ${shipTo}`);
+      }
+    }
 
     // Export orders use the export fiscal position directly (ID 3)
     // This ensures proper VAT grid mapping (Grid 47) for exports
