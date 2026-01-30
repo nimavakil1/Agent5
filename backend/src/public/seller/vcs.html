@@ -184,6 +184,20 @@
     .progress-modal-stats .errors { color: #f87171; }
     .progress-modal-order { font-size: 11px; color: #52525b; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .hidden { display: none !important; }
+
+    /* Processing Runs Table */
+    .runs-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .runs-table th, .runs-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #252532; }
+    .runs-table th { color: #71717a; font-weight: 500; font-size: 12px; text-transform: uppercase; }
+    .runs-table td { font-size: 13px; color: #e4e4e7; }
+    .runs-table .stat-created { color: #4ade80; font-weight: 600; }
+    .runs-table .stat-updated { color: #60a5fa; font-weight: 600; }
+    .runs-table .stat-skipped { color: #71717a; }
+    .runs-table .stat-failed { color: #f87171; font-weight: 600; }
+    .runs-table .no-log { color: #52525b; }
+    .runs-table .btn-sm { padding: 4px 8px; font-size: 12px; }
+    .runs-table .btn-sm .material-symbols-outlined { font-size: 16px; }
+    .no-runs { text-align: center; color: #71717a; padding: 32px; }
   </style>
 </head>
 <body>
@@ -1255,8 +1269,11 @@
                 <div class="report-stats">
                   <span class="stat-pending">${report.pendingOrders || 0} pending</span>
                   <span class="stat-returns">${report.pendingReturns || 0} returns</span>
-                  <span class="stat-invoiced">${report.invoicedCount || 0} invoiced</span>
+                  <span class="stat-invoiced">${report.invoicedOrders || report.invoicedCount || 0} invoiced</span>
                 </div>
+                <button onclick="event.stopPropagation(); viewProcessingRuns('${report.uploadId || report._id}', '${(report.filename || report.originalFilename || 'VCS Report').replace(/'/g, "\\'")}')" class="btn btn-secondary btn-sm" title="View processing history">
+                  <span class="material-symbols-outlined">history</span>Runs
+                </button>
                 <button onclick="event.stopPropagation(); downloadReportCsv('${report.uploadId || report._id}')" class="btn btn-secondary btn-sm">
                   <span class="material-symbols-outlined">download</span>CSV
                 </button>
@@ -1271,6 +1288,90 @@
 
     function downloadReportCsv(uploadId) {
       window.location.href = `/api/amazon/vcs/uploads/${uploadId}/download`;
+    }
+
+    async function viewProcessingRuns(uploadId, filename) {
+      try {
+        const response = await fetch(`/api/amazon/vcs/uploads/${uploadId}/logs`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch processing runs');
+        }
+
+        const runs = data.processingRuns || [];
+
+        // Build modal HTML
+        let runsHtml;
+        if (runs.length === 0) {
+          runsHtml = '<p class="no-runs">No processing runs yet for this report.</p>';
+        } else {
+          runsHtml = `
+            <table class="runs-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Processed</th>
+                  <th>Created</th>
+                  <th>Updated</th>
+                  <th>Skipped</th>
+                  <th>Failed</th>
+                  <th>Log</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${runs.map(run => \`
+                  <tr>
+                    <td>\${new Date(run.processedAt).toLocaleString()}</td>
+                    <td>\${run.processed || 0}</td>
+                    <td class="stat-created">\${run.created || 0}</td>
+                    <td class="stat-updated">\${run.updated || 0}</td>
+                    <td class="stat-skipped">\${run.skipped || 0}</td>
+                    <td class="stat-failed">\${run.failed || 0}</td>
+                    <td>
+                      \${run.logFileName
+                        ? \`<a href="/api/amazon/vcs/uploads/\${uploadId}/runs/\${run.runId}/download-log"
+                             class="btn btn-sm btn-secondary"
+                             title="Download log file">
+                             <span class="material-symbols-outlined">download</span>
+                           </a>\`
+                        : '<span class="no-log">-</span>'}
+                    </td>
+                  </tr>
+                \`).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = \`
+          <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+              <div>
+                <h3 class="modal-title">Processing History</h3>
+                <span class="modal-subtitle">\${filename}</span>
+              </div>
+              <button onclick="this.closest('.modal').remove()" class="modal-close">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div class="modal-body">
+              \${runsHtml}
+            </div>
+            <div class="modal-footer">
+              <button onclick="this.closest('.modal').remove()" class="btn btn-secondary">Close</button>
+            </div>
+          </div>
+        \`;
+
+        document.body.appendChild(modal);
+
+      } catch (error) {
+        console.error('Error fetching processing runs:', error);
+        alert('Failed to load processing runs: ' + error.message);
+      }
     }
 
     function selectReport(reportId) {
