@@ -67,10 +67,12 @@ async function main() {
           const odooTax = inv.amount_tax || 0;
 
           // Calculate VCS expected total
+          // Note: totalShippingPromo is ALREADY negative when it's a discount
+          const shippingPromo = order.totalShippingPromo || 0;
           const vcsTotal = (order.totalInclusive || 0) +
             (order.totalShipping || 0) + (order.totalShippingTax || 0) +
-            (order.totalGiftWrap || 0) + (order.totalGiftWrapTax || 0) -
-            (order.totalShippingPromo || 0);
+            (order.totalGiftWrap || 0) + (order.totalGiftWrapTax || 0) +
+            shippingPromo; // Add directly since it's already negative
 
           const vcsTax = order.totalTax || 0;
           const diff = Math.abs(odooTotal - vcsTotal);
@@ -98,6 +100,8 @@ async function main() {
               isAmazonInvoiced: order.isAmazonInvoiced
             });
           } else if (odooTotal > vcsTotal) {
+            // Sub-categorize: is this due to VAT being added when VCS shows 0%?
+            const vatAddedWhenVcsSaysZero = vcsTax === 0 && odooTax > 0.01;
             results.odooHigher.push({
               orderId: order.orderId,
               invoiceName: inv.name,
@@ -110,7 +114,9 @@ async function main() {
               shipFrom: order.shipFromCountry,
               shipTo: order.shipToCountry,
               taxScheme: order.taxReportingScheme,
-              isAmazonInvoiced: order.isAmazonInvoiced
+              isAmazonInvoiced: order.isAmazonInvoiced,
+              vatAddedWhenVcsSaysZero,
+              vcsItemCount: order.items?.length || 0
             });
           } else {
             results.odooLower.push({
@@ -125,7 +131,9 @@ async function main() {
               shipFrom: order.shipFromCountry,
               shipTo: order.shipToCountry,
               taxScheme: order.taxReportingScheme,
-              isAmazonInvoiced: order.isAmazonInvoiced
+              isAmazonInvoiced: order.isAmazonInvoiced,
+              vcsItemCount: order.items?.length || 0,
+              hasShippingPromo: Math.abs(shippingPromo) > 0
             });
           }
         } catch (err) {
@@ -188,14 +196,17 @@ async function main() {
       console.log('\n=== PATTERN ANALYSIS: ODOO HIGHER ===');
       const byScheme = {};
       const byRoute = {};
+      let vatAddedCount = 0;
       results.odooHigher.forEach(r => {
         const scheme = r.taxScheme || 'unknown';
         const route = `${r.shipFrom}->${r.shipTo}`;
         byScheme[scheme] = (byScheme[scheme] || 0) + 1;
         byRoute[route] = (byRoute[route] || 0) + 1;
+        if (r.vatAddedWhenVcsSaysZero) vatAddedCount++;
       });
       console.log('By tax scheme:', byScheme);
       console.log('Top routes:', Object.entries(byRoute).sort((a,b) => b[1] - a[1]).slice(0, 10));
+      console.log(`VAT added when VCS shows 0%: ${vatAddedCount} of ${results.odooHigher.length}`);
     }
 
     // Analyze patterns in Odoo Lower
@@ -203,15 +214,33 @@ async function main() {
       console.log('\n=== PATTERN ANALYSIS: ODOO LOWER ===');
       const byScheme = {};
       const byRoute = {};
+      let multiItemCount = 0;
+      let withShippingPromo = 0;
       results.odooLower.forEach(r => {
         const scheme = r.taxScheme || 'unknown';
         const route = `${r.shipFrom}->${r.shipTo}`;
         byScheme[scheme] = (byScheme[scheme] || 0) + 1;
         byRoute[route] = (byRoute[route] || 0) + 1;
+        if (r.vcsItemCount > 1) multiItemCount++;
+        if (r.hasShippingPromo) withShippingPromo++;
       });
       console.log('By tax scheme:', byScheme);
       console.log('Top routes:', Object.entries(byRoute).sort((a,b) => b[1] - a[1]).slice(0, 10));
+      console.log(`Multi-item VCS orders: ${multiItemCount} of ${results.odooLower.length}`);
+      console.log(`Orders with shipping promo: ${withShippingPromo} of ${results.odooLower.length}`);
     }
+
+    // Summary of all issues
+    console.log('\n=== SUMMARY OF ISSUES ===');
+    const totalMismatches = results.amazonInvoicedWithVat.length + results.odooHigher.length + results.odooLower.length;
+    console.log(`Total mismatched invoices: ${totalMismatches}`);
+    console.log(`  - Amazon-invoiced with wrong VAT: ${results.amazonInvoicedWithVat.length}`);
+    console.log(`  - Odoo Higher (VAT added when VCS=0): ${results.odooHigher.filter(r => r.vatAddedWhenVcsSaysZero).length}`);
+    console.log(`  - Odoo Higher (other): ${results.odooHigher.filter(r => !r.vatAddedWhenVcsSaysZero).length}`);
+    console.log(`  - Odoo Lower: ${results.odooLower.length}`);
+    console.log(`\nInvoices that need to be deleted and recreated (VAT issues):`);
+    const vatIssues = results.amazonInvoicedWithVat.length + results.odooHigher.filter(r => r.vatAddedWhenVcsSaysZero).length;
+    console.log(`  ${vatIssues} invoices`);
 
     // Save full results to file
     const fs = require('fs');
