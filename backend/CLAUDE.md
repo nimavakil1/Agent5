@@ -69,6 +69,37 @@ When the user mentions testing or asks about what needs to be done, refer to thi
 - Odoo invoice creation from VCS data (`/services/amazon/VcsOdooInvoicer.js`)
 - UI pages: `/public/app/amazon-vcs.html`, `/public/app/amazon-reports.html`
 
+### VCS Invoicing - CRITICAL Business Rules
+
+**Full documentation:** `/services/amazon/VCS_INVOICING.md`
+
+**Key concepts:**
+
+1. **"isAmazonInvoiced = true"** = Amazon printed invoice ON BEHALF of Acropaq
+   - Invoice shows ACROPAQ as seller with VAT BE0476248323
+   - Amazon collected VAT at correct OSS rate (19%, 20%, 22%, etc.)
+   - This VAT IS Acropaq's liability - use SAME tax rate in Odoo
+   - **DO NOT use 0% tax** - that would be wrong!
+
+2. **"isAmazonInvoiced = false"** = Italian exceptions
+   - Amazon couldn't invoice due to IT VAT issue
+   - Acropaq must create invoice with correct OSS tax
+
+3. **Warehouse mapping** (based on shipFromCountry):
+   - BE → CW, NL → nl1, DE → de1, FR → fr1
+   - PL → pl1, IT → it1, CZ → cz1, GB → uk1
+   - Acropaq has VAT in: BE, NL, DE, FR, PL, IT, CZ, GB
+
+4. **Sales processing:**
+   - If no Odoo order → auto-create from VCS data
+   - Create invoice linked to order
+   - Apply VCS tax rates
+
+5. **Returns processing - CRITICAL:**
+   - **NEVER create new sale orders for returns!**
+   - Creating an order would increase stock (wrong!)
+   - Must find ORIGINAL order and create credit note against it
+
 ### Odoo Credentials (in .env)
 ```
 ODOO_URL=https://acropaq.odoo.com

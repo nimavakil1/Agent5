@@ -1215,11 +1215,44 @@ class VcsOdooInvoicer {
    * @param {object} order
    * @returns {boolean}
    */
+  /**
+   * Check if order should be skipped from INVOICE creation
+   * IMPORTANT: Returns/refunds should be processed via createCreditNotes(), not createInvoices()
+   */
   shouldSkipOrder(order) {
     // NOTE: DEEMED_RESELLER and CH_VOEC orders are NOT skipped!
     // Even though Amazon handles VAT for these, we still need to record the revenue.
     // They will be processed with 0% VAT (Amazon handles VAT collection).
 
+    // CRITICAL: Skip RETURNS - they must use createCreditNotes(), NOT createInvoices()
+    // Creating a sale order for a return would incorrectly increase stock!
+    if (order.transactionType === 'RETURN') {
+      return true;
+    }
+
+    // Also skip if totalExclusive is negative (another indicator of returns)
+    if ((order.totalExclusive || 0) < 0) {
+      return true;
+    }
+
+    // Skip if no items
+    if (!order.items || order.items.length === 0) {
+      return true;
+    }
+
+    // Skip if total is 0
+    if (order.totalExclusive === 0 && order.totalInclusive === 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if return order should be skipped from CREDIT NOTE creation
+   * Different from shouldSkipOrder - this is for returns/refunds
+   */
+  shouldSkipReturn(order) {
     // Skip if no items
     if (!order.items || order.items.length === 0) {
       return true;
@@ -3395,14 +3428,16 @@ class VcsOdooInvoicer {
       result.processed++;
 
       try {
-        // Skip orders that shouldn't create credit notes
-        if (this.shouldSkipOrder(order)) {
+        // Skip returns that shouldn't create credit notes
+        // NOTE: Use shouldSkipReturn (NOT shouldSkipOrder) - returns have negative totals
+        if (this.shouldSkipReturn(order)) {
           result.skipped++;
           await this.markOrderSkipped(order._id, 'Not refundable');
           continue;
         }
 
         // Find existing Odoo order (required for proper linking)
+        // IMPORTANT: Do NOT create orders for returns - that would incorrectly increase stock!
         const odooOrderData = await this.findOdooOrder(order);
         if (!odooOrderData) {
           result.skipped++;
