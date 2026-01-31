@@ -91,6 +91,9 @@ class AccountingAssistant extends LLMAgent {
 
       // Load tools manually since super.init won't be called fully
       await this._loadTools();
+
+      // Build tool definitions for LLM (from LLMAgent)
+      this._buildToolDefinitions();
     } else {
       await super.init(platform);
     }
