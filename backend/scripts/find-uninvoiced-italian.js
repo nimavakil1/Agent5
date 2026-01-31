@@ -26,7 +26,7 @@ async function main() {
   let noInvoiceOrders = [];
   for (const order of italianOrders) {
     const odooOrders = await odoo.searchRead('sale.order',
-      [['x_amazon_order_id', '=', order.orderId]],
+      [['client_order_ref', '=', order.orderId]],
       ['id', 'name', 'invoice_ids']
     );
 
