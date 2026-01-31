@@ -344,6 +344,7 @@ app.get('/dashboard-test.html', requireSession, (req, res) => {
 
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+app.use('/exports', requireSession, express.static(path.join(__dirname, 'public', 'exports')));
 
 // Public warehouse dashboard (no auth required - for big screen display)
 app.get('/warehouse', (req, res) => {

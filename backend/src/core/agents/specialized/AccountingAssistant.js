@@ -20,6 +20,9 @@ const { OdooDirectClient } = require('../integrations/OdooMCP');
 const AccountingKnowledge = require('../../../models/AccountingKnowledge');
 const AccountingApproval = require('../../../models/AccountingApproval');
 const { getEmbeddingService } = require('../../../services/accounting/EmbeddingService');
+const ExcelJS = require('exceljs');
+const path = require('path');
+const fs = require('fs').promises;
 
 class AccountingAssistant extends LLMAgent {
   constructor(config = {}) {
@@ -339,6 +342,45 @@ class AccountingAssistant extends LLMAgent {
           type: { type: 'string', description: 'Filter by approval type' },
           limit: { type: 'number', default: 20 },
         },
+      },
+    });
+
+    // ============ Export Tools ============
+
+    this.registerTool('export_to_excel', this._exportToExcel.bind(this), {
+      description: 'Generate an Excel report from accounting data. Use this when the user asks for Excel, spreadsheet, or downloadable reports.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          report_type: {
+            type: 'string',
+            enum: ['payables_due', 'receivables', 'aging_ap', 'aging_ar', 'cash_flow', 'vat_summary', 'custom'],
+            description: 'Type of report to generate',
+          },
+          title: { type: 'string', description: 'Report title' },
+          data: {
+            type: 'array',
+            description: 'For custom reports: array of objects with the data to export',
+            items: { type: 'object' },
+          },
+          columns: {
+            type: 'array',
+            description: 'For custom reports: column definitions [{key, header, width}]',
+            items: {
+              type: 'object',
+              properties: {
+                key: { type: 'string' },
+                header: { type: 'string' },
+                width: { type: 'number' },
+              },
+            },
+          },
+          filters: {
+            type: 'object',
+            description: 'Filters to apply (period, date_from, date_to, etc.)',
+          },
+        },
+        required: ['report_type', 'title'],
       },
     });
 
@@ -1480,6 +1522,220 @@ ${this.ragContext}`;
         expiresAt: a.expiresAt,
         risk: a.risk,
       })),
+    };
+  }
+
+  // ============ Excel Export ============
+
+  async _exportToExcel(params) {
+    const { report_type, title, data, columns, filters } = params;
+
+    // Generate filename
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+    const filename = `${safeTitle}_${timestamp}.xlsx`;
+
+    // Ensure exports directory exists
+    const exportsDir = path.join(__dirname, '../../../../public/exports');
+    try {
+      await fs.mkdir(exportsDir, { recursive: true });
+    } catch (e) {
+      // Directory might already exist
+    }
+
+    const filePath = path.join(exportsDir, filename);
+
+    // Create workbook
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Acropaq Accounting Assistant';
+    workbook.created = new Date();
+
+    let reportData;
+    let reportColumns;
+
+    // Get data based on report type
+    switch (report_type) {
+      case 'payables_due':
+        const payables = await this._getPayablesDue(filters || { period: 'this_week', include_overdue: true });
+        reportData = payables.invoices;
+        reportColumns = [
+          { key: 'supplier', header: 'Supplier', width: 30 },
+          { key: 'number', header: 'Invoice Number', width: 20 },
+          { key: 'reference', header: 'Reference', width: 25 },
+          { key: 'remaining', header: 'Amount (EUR)', width: 15, style: { numFmt: '#,##0.00' } },
+          { key: 'dueDate', header: 'Due Date', width: 12 },
+          { key: 'daysUntilDue', header: 'Days Until Due', width: 15 },
+          { key: 'isOverdue', header: 'Overdue', width: 10 },
+        ];
+        break;
+
+      case 'receivables':
+        const receivables = await this._getReceivablesStatus(filters || { status: 'all' });
+        reportData = receivables.invoices;
+        reportColumns = [
+          { key: 'customer', header: 'Customer', width: 30 },
+          { key: 'number', header: 'Invoice Number', width: 20 },
+          { key: 'remaining', header: 'Amount (EUR)', width: 15, style: { numFmt: '#,##0.00' } },
+          { key: 'dueDate', header: 'Due Date', width: 12 },
+          { key: 'daysOverdue', header: 'Days Overdue', width: 15 },
+          { key: 'paymentState', header: 'Status', width: 15 },
+        ];
+        break;
+
+      case 'aging_ap':
+        const agingAP = await this._getAgingReport({ type: 'ap', ...filters });
+        reportData = [
+          { bucket: 'Current', count: agingAP.buckets.current.count, amount: agingAP.buckets.current.amount },
+          { bucket: '1-30 days', count: agingAP.buckets['1-30'].count, amount: agingAP.buckets['1-30'].amount },
+          { bucket: '31-60 days', count: agingAP.buckets['31-60'].count, amount: agingAP.buckets['31-60'].amount },
+          { bucket: '61-90 days', count: agingAP.buckets['61-90'].count, amount: agingAP.buckets['61-90'].amount },
+          { bucket: '90+ days', count: agingAP.buckets['90+'].count, amount: agingAP.buckets['90+'].amount },
+          { bucket: 'TOTAL', count: agingAP.totalCount, amount: agingAP.totalAmount },
+        ];
+        reportColumns = [
+          { key: 'bucket', header: 'Aging Bucket', width: 15 },
+          { key: 'count', header: 'Count', width: 10 },
+          { key: 'amount', header: 'Amount (EUR)', width: 15, style: { numFmt: '#,##0.00' } },
+        ];
+        break;
+
+      case 'aging_ar':
+        const agingAR = await this._getAgingReport({ type: 'ar', ...filters });
+        reportData = [
+          { bucket: 'Current', count: agingAR.buckets.current.count, amount: agingAR.buckets.current.amount },
+          { bucket: '1-30 days', count: agingAR.buckets['1-30'].count, amount: agingAR.buckets['1-30'].amount },
+          { bucket: '31-60 days', count: agingAR.buckets['31-60'].count, amount: agingAR.buckets['31-60'].amount },
+          { bucket: '61-90 days', count: agingAR.buckets['61-90'].count, amount: agingAR.buckets['61-90'].amount },
+          { bucket: '90+ days', count: agingAR.buckets['90+'].count, amount: agingAR.buckets['90+'].amount },
+          { bucket: 'TOTAL', count: agingAR.totalCount, amount: agingAR.totalAmount },
+        ];
+        reportColumns = [
+          { key: 'bucket', header: 'Aging Bucket', width: 15 },
+          { key: 'count', header: 'Count', width: 10 },
+          { key: 'amount', header: 'Amount (EUR)', width: 15, style: { numFmt: '#,##0.00' } },
+        ];
+        break;
+
+      case 'cash_flow':
+        const cashFlow = await this._forecastCashFlow(filters || { days: 30, granularity: 'weekly' });
+        reportData = cashFlow.forecast;
+        reportColumns = [
+          { key: 'weekStart', header: 'Week Start', width: 12 },
+          { key: 'weekEnd', header: 'Week End', width: 12 },
+          { key: 'inflows', header: 'Inflows (EUR)', width: 15, style: { numFmt: '#,##0.00' } },
+          { key: 'outflows', header: 'Outflows (EUR)', width: 15, style: { numFmt: '#,##0.00' } },
+          { key: 'net', header: 'Net (EUR)', width: 15, style: { numFmt: '#,##0.00' } },
+          { key: 'balance', header: 'Balance (EUR)', width: 15, style: { numFmt: '#,##0.00' } },
+        ];
+        break;
+
+      case 'custom':
+        if (!data || !columns) {
+          return { success: false, error: 'Custom reports require data and columns parameters' };
+        }
+        reportData = data;
+        reportColumns = columns;
+        break;
+
+      default:
+        return { success: false, error: `Unknown report type: ${report_type}` };
+    }
+
+    // Create worksheet
+    const worksheet = workbook.addWorksheet(title.substring(0, 31));
+
+    // Add title row
+    worksheet.mergeCells(1, 1, 1, reportColumns.length);
+    const titleCell = worksheet.getCell(1, 1);
+    titleCell.value = title;
+    titleCell.font = { bold: true, size: 14 };
+    titleCell.alignment = { horizontal: 'center' };
+
+    // Add date row
+    worksheet.mergeCells(2, 1, 2, reportColumns.length);
+    const dateCell = worksheet.getCell(2, 1);
+    dateCell.value = `Generated: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/Brussels' })}`;
+    dateCell.font = { italic: true, size: 10 };
+    dateCell.alignment = { horizontal: 'center' };
+
+    // Add empty row
+    worksheet.getRow(3).values = [];
+
+    // Set up columns starting at row 4
+    worksheet.columns = reportColumns.map(col => ({
+      key: col.key,
+      width: col.width || 15,
+    }));
+
+    // Add header row
+    const headerRow = worksheet.getRow(4);
+    reportColumns.forEach((col, idx) => {
+      const cell = headerRow.getCell(idx + 1);
+      cell.value = col.header;
+      cell.font = { bold: true };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4472C4' },
+      };
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.border = {
+        bottom: { style: 'thin' },
+      };
+    });
+
+    // Add data rows starting at row 5
+    reportData.forEach((row, rowIdx) => {
+      const dataRow = worksheet.getRow(5 + rowIdx);
+      reportColumns.forEach((col, colIdx) => {
+        const cell = dataRow.getCell(colIdx + 1);
+        cell.value = row[col.key];
+
+        // Apply number format if specified
+        if (col.style?.numFmt) {
+          cell.numFmt = col.style.numFmt;
+        }
+
+        // Alternate row colors
+        if (rowIdx % 2 === 1) {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF2F2F2' },
+          };
+        }
+      });
+    });
+
+    // Add totals row for payables/receivables
+    if (['payables_due', 'receivables'].includes(report_type) && reportData.length > 0) {
+      const totalRow = worksheet.getRow(5 + reportData.length + 1);
+      totalRow.getCell(1).value = 'TOTAL';
+      totalRow.getCell(1).font = { bold: true };
+
+      const amountColIdx = reportColumns.findIndex(c => c.key === 'remaining') + 1;
+      if (amountColIdx > 0) {
+        const total = reportData.reduce((sum, row) => sum + (row.remaining || 0), 0);
+        const totalCell = totalRow.getCell(amountColIdx);
+        totalCell.value = total;
+        totalCell.font = { bold: true };
+        totalCell.numFmt = '#,##0.00';
+      }
+    }
+
+    // Save workbook
+    await workbook.xlsx.writeFile(filePath);
+
+    // Return download URL
+    const downloadUrl = `/exports/${filename}`;
+
+    return {
+      success: true,
+      filename,
+      downloadUrl,
+      fullUrl: `https://ai.acropaq.com${downloadUrl}`,
+      rowCount: reportData.length,
+      message: `Excel report generated with ${reportData.length} rows`,
     };
   }
 }
