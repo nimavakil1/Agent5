@@ -345,6 +345,46 @@ class AccountingAssistant extends LLMAgent {
     this.logger.debug({ toolCount: this.tools.size }, 'AccountingAssistant tools loaded');
   }
 
+  /**
+   * Override _buildSystemPrompt to NOT include text-based tool descriptions
+   * The tools are passed via Claude API's tools parameter, so we don't need
+   * to describe them in the system prompt (which confuses the model)
+   */
+  _buildSystemPrompt() {
+    let prompt = this.llmConfig.systemPrompt;
+
+    prompt += `
+
+## Your Identity
+- Agent ID: ${this.id}
+- Agent Name: ${this.name}
+- Agent Role: ${this.role}
+- Current Time: ${new Date().toISOString()}`;
+
+    // Add company context if available
+    if (this.companyContext) {
+      prompt += `
+
+## Company Context
+${this.companyContext}`;
+    }
+
+    // Add RAG context for current task
+    if (this.ragContext) {
+      prompt += `
+
+## Relevant Knowledge from Memory
+${this.ragContext}`;
+    }
+
+    // Note: We intentionally do NOT add "## Available Tools" section here
+    // because tools are passed via the Claude API's tools parameter.
+    // Adding text-based tool descriptions confuses the model into outputting
+    // tool calls as JSON text instead of using tool_use content blocks.
+
+    return prompt;
+  }
+
   // ============ Chat Interface ============
 
   /**

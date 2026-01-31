@@ -9,11 +9,9 @@ const { OdooDirectClient } = require('../src/core/agents/integrations/OdooMCP');
 const { VcsOdooInvoicer } = require('../src/services/amazon/VcsOdooInvoicer');
 const { connectDb, getDb } = require('../src/db');
 
-// Orders to reset and recreate (covering different scenarios)
+// Orders to reset and recreate (Jan 2026 invoices - after tax lock)
 const ORDERS_TO_RESET = [
-  { orderId: '406-0898893-1998741', invoice: 'VIT/2025/02909', scenario: 'B2C domestic IT->IT' },
-  { orderId: '305-1858902-3925127', invoice: 'VIT/2025/03147', scenario: 'B2C cross-border IT->DE' },
-  { orderId: '405-4567449-9705122', invoice: 'VIT/2025/02918', scenario: 'B2B domestic IT->IT' },
+  { orderId: '171-7671171-4112317', scenario: 'B2C domestic IT->IT' },
 ];
 
 async function main() {
