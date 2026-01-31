@@ -80,10 +80,10 @@ async function main() {
       targetFpName = 'BE*VAT | Régime Intra-Communautaire';
     } else if (isB2B && isDomestic) {
       scenario = `B2B domestic IT->IT`;
-      targetFpName = 'IT*OSS | B2C Italie'; // Best effort
+      targetFpName = 'IT*OSS | B2C Italy'; // Best effort
     } else if (isDomestic) {
       scenario = `B2C domestic IT->IT`;
-      targetFpName = 'IT*OSS | B2C Italie';
+      targetFpName = 'IT*OSS | B2C Italy';
     } else {
       scenario = `B2C cross-border IT->${order.shipToCountry}`;
       // Find OSS fiscal position for destination country
@@ -208,14 +208,15 @@ async function main() {
 }
 
 function getCountryName(code) {
+  // Use English names to match Odoo fiscal position naming
   const names = {
-    'AT': 'Autriche', 'BE': 'Belgique', 'BG': 'Bulgarie', 'HR': 'Croatie',
-    'CY': 'Chypre', 'CZ': 'Tchéquie', 'DK': 'Danemark', 'EE': 'Estonie',
-    'FI': 'Finlande', 'FR': 'France', 'DE': 'Allemagne', 'GR': 'Grèce',
-    'HU': 'Hongrie', 'IE': 'Irlande', 'IT': 'Italie', 'LV': 'Lettonie',
-    'LT': 'Lituanie', 'LU': 'Luxembourg', 'MT': 'Malte', 'NL': 'Pays-Bas',
-    'PL': 'Pologne', 'PT': 'Portugal', 'RO': 'Roumanie', 'SK': 'Slovaquie',
-    'SI': 'Slovénie', 'ES': 'Espagne', 'SE': 'Suède'
+    'AT': 'Austria', 'BE': 'Belgium', 'BG': 'Bulgaria', 'HR': 'Croatia',
+    'CY': 'Cyprus', 'CZ': 'Czech Republic', 'DK': 'Denmark', 'EE': 'Estonia',
+    'FI': 'Finland', 'FR': 'France', 'DE': 'Germany', 'GR': 'Greece',
+    'HU': 'Hungary', 'IE': 'Ireland', 'IT': 'Italy', 'LV': 'Latvia',
+    'LT': 'Lithuania', 'LU': 'Luxembourg', 'MT': 'Malta', 'NL': 'Netherlands',
+    'PL': 'Poland', 'PT': 'Portugal', 'RO': 'Romania', 'SK': 'Slovakia',
+    'SI': 'Slovenia', 'ES': 'Spain', 'SE': 'Sweden'
   };
   return names[code] || code;
 }
