@@ -31,18 +31,34 @@ These are Acropaq's taxes that Amazon collected on their behalf. The Odoo invoic
 
 ## Warehouse Mapping
 
-Based on shipFromCountry (where Amazon FBA shipped from):
+**CRITICAL: Warehouse is determined by FULFILLMENT CHANNEL, not just country!**
+
+- **FBM (MFN)** = Merchant Fulfilled → Always **CW** (Central Warehouse in Ternat)
+- **FBA (AFN)** = Amazon Fulfilled → Warehouse based on **shipFromCountry**
+
+### FBA Warehouse Codes
 
 | Country | Warehouse Code | Description |
 |---------|----------------|-------------|
-| BE | CW | Central Warehouse (FBM) |
-| NL | nl1 | FBA Netherlands |
 | DE | de1 | FBA Germany |
 | FR | fr1 | FBA France |
-| PL | pl1 | FBA Poland |
 | IT | it1 | FBA Italy |
+| PL | pl1 | FBA Poland |
 | CZ | cz1 | FBA Czech |
+| NL | nl1 | FBA Netherlands |
 | GB | uk1 | FBA UK |
+| BE | be1 | FBA Belgium (future) |
+
+### Determining Fulfillment Channel
+
+The system uses a cascading approach:
+
+1. **Batch enrichment** - Call `enrichFulfillmentChannels()` before processing to fetch from SP-API
+2. **Cached data** - Check `fulfillmentChannel` field in MongoDB (from previous enrichment)
+3. **On-demand SP-API call** - Fetch from Amazon if not cached
+4. **Default assumption** (last resort):
+   - BE → assume FBM (CW)
+   - Other countries → assume FBA
 
 **Acropaq has VAT registration in: BE, NL, DE, FR, PL, IT, CZ, GB**
 

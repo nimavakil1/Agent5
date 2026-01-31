@@ -1645,8 +1645,8 @@ class VcsOdooInvoicer {
       console.warn(`[VcsOdooInvoicer] PARTIAL ORDER ${amazonOrderId}: ${orderLines.length}/${totalVcsItems} products found. Missing: ${missingProducts.map(p => p.sku).join(', ')}`);
     }
 
-    // Determine warehouse
-    const warehouseId = await this.getWarehouseForOrder(shipFromCountry, isFBA);
+    // Determine warehouse based on fulfillment channel (FBA vs FBM)
+    const warehouseId = await this.getWarehouseForOrder(vcsOrder);
 
     // Get order date
     const orderDate = vcsOrder.orderDate || vcsOrder.shipmentDate || new Date().toISOString();
@@ -1734,15 +1734,25 @@ class VcsOdooInvoicer {
   }
 
   /**
-   * Get warehouse ID for order based on ship-from country
-   * @param {string} shipFromCountry - Country code
-   * @param {boolean} isFBA - Whether this is an FBA order
+   * Get warehouse ID for order based on fulfillment channel
+   *
+   * Logic:
+   * - FBM (MFN) → Always CW (Central Warehouse in Ternat)
+   * - FBA (AFN) → Warehouse based on shipFromCountry
+   *
+   * Fulfillment channel is determined by (in order):
+   * 1. Cached fulfillmentChannel in VCS order data
+   * 2. On-demand SP-API lookup (fallback)
+   * 3. Default assumption based on country (last resort)
+   *
+   * @param {object} vcsOrder - VCS order object
    * @returns {number} Warehouse ID
    */
-  async getWarehouseForOrder(shipFromCountry, _isFBA) {
-    // Warehouse mapping - countries where Acropaq has VAT registration and stores products
-    const warehouseMap = {
-      'BE': 'CW',  // Central Warehouse (FBM)
+  async getWarehouseForOrder(vcsOrder) {
+    const shipFromCountry = vcsOrder.shipFromCountry || 'BE';
+
+    // FBA warehouse mapping by country
+    const fbaWarehouseMap = {
       'DE': 'de1', // FBA Germany
       'FR': 'fr1', // FBA France
       'IT': 'it1', // FBA Italy
@@ -1750,9 +1760,41 @@ class VcsOdooInvoicer {
       'CZ': 'cz1', // FBA Czech
       'NL': 'nl1', // FBA Netherlands
       'GB': 'uk1', // FBA UK
+      'BE': 'be1', // FBA Belgium (for future Amazon BE FC)
     };
 
-    const warehouseCode = warehouseMap[shipFromCountry] || 'CW';
+    // Determine fulfillment channel
+    let fulfillmentChannel = vcsOrder.fulfillmentChannel;
+
+    if (!fulfillmentChannel) {
+      // Try to get from SP-API (on-demand lookup)
+      fulfillmentChannel = await this.getFulfillmentChannel(vcsOrder.orderId);
+    }
+
+    // Determine warehouse code
+    let warehouseCode;
+
+    if (fulfillmentChannel === 'MFN') {
+      // FBM = Always Central Warehouse (Ternat)
+      warehouseCode = 'CW';
+      console.log(`[VcsOdooInvoicer] Order ${vcsOrder.orderId}: FBM → warehouse CW`);
+    } else if (fulfillmentChannel === 'AFN') {
+      // FBA = Warehouse based on shipFromCountry
+      warehouseCode = fbaWarehouseMap[shipFromCountry] || 'CW';
+      console.log(`[VcsOdooInvoicer] Order ${vcsOrder.orderId}: FBA from ${shipFromCountry} → warehouse ${warehouseCode}`);
+    } else {
+      // Unknown fulfillment channel - use default assumption
+      // This is a fallback and should be rare
+      if (shipFromCountry === 'BE') {
+        // BE without fulfillment info → assume FBM (CW)
+        warehouseCode = 'CW';
+        console.warn(`[VcsOdooInvoicer] Order ${vcsOrder.orderId}: Unknown fulfillment, BE → assuming FBM (CW)`);
+      } else {
+        // Non-BE without fulfillment info → assume FBA
+        warehouseCode = fbaWarehouseMap[shipFromCountry] || 'CW';
+        console.warn(`[VcsOdooInvoicer] Order ${vcsOrder.orderId}: Unknown fulfillment, ${shipFromCountry} → assuming FBA (${warehouseCode})`);
+      }
+    }
 
     // Find warehouse in Odoo
     const warehouses = await this.odoo.searchRead('stock.warehouse',
@@ -1764,9 +1806,118 @@ class VcsOdooInvoicer {
       return warehouses[0].id;
     }
 
-    // Fallback to first warehouse
+    // Fallback to CW if specific warehouse not found
+    console.warn(`[VcsOdooInvoicer] Warehouse ${warehouseCode} not found in Odoo, falling back to CW`);
+    const cwWarehouse = await this.odoo.searchRead('stock.warehouse',
+      [['code', '=', 'CW']],
+      ['id']
+    );
+
+    if (cwWarehouse.length > 0) {
+      return cwWarehouse[0].id;
+    }
+
+    // Last resort fallback
     const defaultWh = await this.odoo.searchRead('stock.warehouse', [], ['id'], 1);
     return defaultWh[0]?.id || 1;
+  }
+
+  /**
+   * Get fulfillment channel from SP-API for an order
+   * Returns 'AFN' (FBA) or 'MFN' (FBM)
+   *
+   * @param {string} orderId - Amazon order ID
+   * @returns {string|null} 'AFN', 'MFN', or null if not found
+   */
+  async getFulfillmentChannel(orderId) {
+    try {
+      // Lazy load SellerClient to avoid circular dependencies
+      const { SellerClient } = require('./seller/SellerClient');
+      const sellerClient = new SellerClient();
+
+      const orderData = await sellerClient.getOrder(orderId);
+
+      if (orderData && orderData.FulfillmentChannel) {
+        const channel = orderData.FulfillmentChannel;
+        console.log(`[VcsOdooInvoicer] SP-API: Order ${orderId} fulfillmentChannel = ${channel}`);
+
+        // Cache the result in MongoDB for future use
+        const db = getDb();
+        await db.collection('amazon_vcs_orders').updateMany(
+          { orderId: orderId },
+          { $set: { fulfillmentChannel: channel } }
+        );
+
+        return channel;
+      }
+    } catch (error) {
+      console.warn(`[VcsOdooInvoicer] Failed to get fulfillment channel from SP-API for ${orderId}: ${error.message}`);
+    }
+
+    return null;
+  }
+
+  /**
+   * Batch enrich VCS orders with fulfillment channel from SP-API
+   * Call this before processing to minimize API calls
+   *
+   * @param {string[]} orderIds - Array of Amazon order IDs to enrich
+   * @returns {object} { enriched: number, failed: number, skipped: number }
+   */
+  async enrichFulfillmentChannels(orderIds) {
+    const db = getDb();
+    const result = { enriched: 0, failed: 0, skipped: 0 };
+
+    // Find orders that don't have fulfillmentChannel yet
+    const ordersToEnrich = await db.collection('amazon_vcs_orders').find({
+      orderId: { $in: orderIds },
+      $or: [
+        { fulfillmentChannel: { $exists: false } },
+        { fulfillmentChannel: null }
+      ]
+    }).toArray();
+
+    // Get unique order IDs
+    const uniqueOrderIds = [...new Set(ordersToEnrich.map(o => o.orderId))];
+
+    console.log(`[VcsOdooInvoicer] Enriching ${uniqueOrderIds.length} orders with fulfillment channel...`);
+
+    // Lazy load SellerClient
+    const { SellerClient } = require('./seller/SellerClient');
+    const sellerClient = new SellerClient();
+
+    // Process in batches to respect rate limits
+    const batchSize = 10;
+    for (let i = 0; i < uniqueOrderIds.length; i += batchSize) {
+      const batch = uniqueOrderIds.slice(i, i + batchSize);
+
+      await Promise.all(batch.map(async (orderId) => {
+        try {
+          const orderData = await sellerClient.getOrder(orderId);
+
+          if (orderData && orderData.FulfillmentChannel) {
+            await db.collection('amazon_vcs_orders').updateMany(
+              { orderId: orderId },
+              { $set: { fulfillmentChannel: orderData.FulfillmentChannel } }
+            );
+            result.enriched++;
+          } else {
+            result.skipped++;
+          }
+        } catch (error) {
+          console.warn(`[VcsOdooInvoicer] Failed to enrich ${orderId}: ${error.message}`);
+          result.failed++;
+        }
+      }));
+
+      // Small delay between batches to respect rate limits
+      if (i + batchSize < uniqueOrderIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    console.log(`[VcsOdooInvoicer] Enrichment complete: ${result.enriched} enriched, ${result.failed} failed, ${result.skipped} skipped`);
+    return result;
   }
 
   /**
