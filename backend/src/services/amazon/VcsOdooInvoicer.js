@@ -1707,16 +1707,16 @@ class VcsOdooInvoicer {
    * @returns {number} Warehouse ID
    */
   async getWarehouseForOrder(shipFromCountry, _isFBA) {
-    // Warehouse mapping
+    // Warehouse mapping - countries where Acropaq has VAT registration and stores products
     const warehouseMap = {
       'BE': 'CW',  // Central Warehouse (FBM)
       'DE': 'de1', // FBA Germany
       'FR': 'fr1', // FBA France
       'IT': 'it1', // FBA Italy
-      'ES': 'es1', // FBA Spain
       'PL': 'pl1', // FBA Poland
       'CZ': 'cz1', // FBA Czech
       'NL': 'nl1', // FBA Netherlands
+      'GB': 'uk1', // FBA UK
     };
 
     const warehouseCode = warehouseMap[shipFromCountry] || 'CW';
