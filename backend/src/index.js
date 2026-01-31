@@ -52,6 +52,7 @@ const printRouter = require('./api/routes/print.api');
 const shippingRouter = require('./api/routes/shipping.api');
 const fulfillmentRouter = require('./api/routes/fulfillment.api');
 const accountingRouter = require('./api/routes/accounting.api');
+const accountingAssistantRouter = require('./api/routes/accounting-assistant.api');
 const amazonMappingsRouter = require('./api/routes/amazonMappings.api');
 const logsRouter = require('./api/routes/logs.api');
 const odooMirrorRouter = require('./api/routes/odoo-sync.api');
@@ -465,6 +466,8 @@ app.use('/api/shipping', requireSession, shippingRouter);
 app.use('/api/fulfillment', requireSession, fulfillmentRouter);
 // Accounting Agent module
 app.use('/api/accounting', requireSession, accountingRouter);
+// Accounting Assistant - conversational AI with memory
+app.use('/api/accounting-assistant', requireSession, accountingAssistantRouter);
 app.use('/api/amazon/mappings', requireSession, amazonMappingsRouter);
 // Module logs API (SSE streaming for real-time logs)
 app.use('/api/logs', requireSession, logsRouter);

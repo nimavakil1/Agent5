@@ -24,6 +24,9 @@ const {
   processReconciliationQueue,
 } = require('./PaymentReconciliationEngine');
 
+const { EmbeddingService, getEmbeddingService } = require('./EmbeddingService');
+const { seedAll: seedAcropaqKnowledge, ACROPAQ_KNOWLEDGE } = require('./seedAcropaqKnowledge');
+
 module.exports = {
   // Classes
   InvoiceParser,
@@ -46,4 +49,10 @@ module.exports = {
   reconcilePayment,
   executeReconciliation,
   processReconciliationQueue,
+
+  // Embedding and knowledge services
+  EmbeddingService,
+  getEmbeddingService,
+  seedAcropaqKnowledge,
+  ACROPAQ_KNOWLEDGE,
 };

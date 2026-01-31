@@ -32,6 +32,9 @@ const { MeetingIntelligenceAgent, MeetingType, MeetingStatus, ActionPriority, En
 // Specialized agents - Phase 4: Accounting Agent
 const { AccountingAgent, InvoiceProcessingStatus, TransactionType } = require('./specialized/AccountingAgent');
 
+// Specialized agents - Phase 5: Accounting Assistant (conversational AI with memory)
+const { AccountingAssistant } = require('./specialized/AccountingAssistant');
+
 // Integrations - Phase 1
 const { createOdooMCPConfig, OdooDirectClient } = require('./integrations/OdooMCP');
 
@@ -119,6 +122,9 @@ module.exports = {
   AccountingAgent,
   InvoiceProcessingStatus,
   TransactionType,
+
+  // Specialized Agents - Phase 5: Accounting Assistant
+  AccountingAssistant,
 
   // Integrations - Odoo
   createOdooMCPConfig,
