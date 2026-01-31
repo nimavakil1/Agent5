@@ -78,7 +78,22 @@ class AccountingAssistant extends LLMAgent {
    * Initialize the agent
    */
   async init(platform) {
-    await super.init(platform);
+    // Create fallback logger if no platform provided
+    if (!platform) {
+      this.logger = {
+        info: (msg, data) => console.log(`[AccountingAssistant] ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`, data || ''),
+        warn: (msg, data) => console.warn(`[AccountingAssistant] ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`, data || ''),
+        error: (msg, data) => console.error(`[AccountingAssistant] ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`, data || ''),
+        debug: (msg, data) => console.log(`[AccountingAssistant:debug] ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`, data || ''),
+        child: () => this.logger,
+      };
+      this.platform = null;
+
+      // Load tools manually since super.init won't be called fully
+      await this._loadTools();
+    } else {
+      await super.init(platform);
+    }
 
     // Initialize Odoo client
     try {
