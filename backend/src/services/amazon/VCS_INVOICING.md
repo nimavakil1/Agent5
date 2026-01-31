@@ -71,7 +71,16 @@ Creating an order would:
 Correct flow:
 1. Find the ORIGINAL sale order (the order being returned)
 2. Create CREDIT NOTE linked to that order
-3. If original order not found → skip or create standalone credit note
+3. If original order NOT found → create **STANDALONE credit note**
+
+### Standalone Credit Notes
+
+When a return has no original order in Odoo (e.g., old orders from 2023-2024):
+- System creates a credit note NOT linked to any sale order
+- Products are found directly by SKU from VCS data
+- Tax rates come from VCS data (just like regular credit notes)
+- Amazon order ID is stored in the `ref` field
+- Narration indicates it's standalone: "Standalone - no original order in Odoo"
 
 ## Fiscal Positions
 
