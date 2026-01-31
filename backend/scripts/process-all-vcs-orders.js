@@ -84,8 +84,8 @@ async function main() {
   console.log(`  Returns: ${returnOrders.length}`);
   console.log('');
 
-  // Phase 1: Enrich fulfillment channels if needed
-  if (enrichOnly || execute) {
+  // Phase 1: Enrich fulfillment channels only if --enrich flag is set
+  if (enrichOnly) {
     const ordersWithoutChannel = allPendingOrders.filter(o => !o.fulfillmentChannel);
     console.log(`Orders without fulfillment channel: ${ordersWithoutChannel.length}`);
 
@@ -97,6 +97,7 @@ async function main() {
     }
     console.log('');
 
+    // Exit after enrichment
     if (enrichOnly) {
       console.log('Enrichment complete. Exiting.');
       process.exit(0);
