@@ -31,6 +31,9 @@ class LLMAgent extends BaseAgent {
     // Tool definitions cache
     this.toolDefinitions = [];
 
+    // Track last tool call for continuation
+    this._lastToolCall = null;
+
     // RAG context (injected from knowledge base)
     this.ragContext = null;
 
@@ -75,8 +78,21 @@ class LLMAgent extends BaseAgent {
     // Get tool list for provider
     const tools = this._getToolsForProvider();
 
-    // Call LLM with tools
-    const response = await this.llmProvider.chatWithTools(messages, tools);
+    // Check if we're continuing from a tool call
+    let response;
+    if (this._lastToolCall && previousResult) {
+      // Use continueWithToolResult to properly handle tool results
+      response = await this.llmProvider.continueWithToolResult(
+        messages,
+        this._lastToolCall.id,
+        previousResult.result || previousResult,
+        tools
+      );
+      this._lastToolCall = null; // Clear after use
+    } else {
+      // Regular chat with tools
+      response = await this.llmProvider.chatWithTools(messages, tools);
+    }
 
     // Log thinking if extended thinking was used
     if (response.thinking) {
@@ -89,6 +105,13 @@ class LLMAgent extends BaseAgent {
         tool: response.toolCall.name,
         params: response.toolCall.input,
       }, 'LLM requested tool');
+
+      // Store the tool call for continuation
+      this._lastToolCall = {
+        id: response.toolCall.id,
+        name: response.toolCall.name,
+        input: response.toolCall.input,
+      };
 
       return {
         action: 'tool',
@@ -165,8 +188,12 @@ class LLMAgent extends BaseAgent {
       },
     ];
 
-    // Add memory context
+    // Add memory context (but skip entries that are tool results - those are handled separately)
     for (const mem of this.memory.slice(-10)) {
+      // Skip if this is a tool result entry (we handle that via continueWithToolResult)
+      if (mem.toolResult && this._lastToolCall) {
+        continue;
+      }
       messages.push({
         role: mem.role,
         content: typeof mem.content === 'string' ? mem.content : JSON.stringify(mem.content),
@@ -179,11 +206,16 @@ class LLMAgent extends BaseAgent {
       content: this._formatTask(task),
     });
 
-    // Add previous result if any
-    if (previousResult) {
+    // If we're continuing from a tool call, add the assistant's tool_use block
+    // (This is needed before the tool_result for proper Claude API sequence)
+    if (this._lastToolCall && previousResult) {
       messages.push({
         role: 'assistant',
-        content: `Previous action result: ${JSON.stringify(previousResult)}`,
+        toolCall: {
+          id: this._lastToolCall.id,
+          name: this._lastToolCall.name,
+          input: this._lastToolCall.input || {},
+        },
       });
     }
 
