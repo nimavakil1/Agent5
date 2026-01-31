@@ -12,6 +12,7 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const { connectDb, getDb } = require('../src/db');
 const { VcsOdooInvoicer } = require('../src/services/amazon/VcsOdooInvoicer');
+const { OdooDirectClient } = require('../src/core/agents/integrations/OdooMCP');
 
 async function main() {
   const args = process.argv.slice(2);
@@ -44,9 +45,13 @@ async function main() {
 
   await connectDb();
   const db = getDb();
-  const invoicer = new VcsOdooInvoicer();
-  await invoicer.initialize();
-  console.log('Initialized VcsOdooInvoicer\n');
+  const odoo = new OdooDirectClient();
+  await odoo.authenticate();
+  console.log('Connected to Odoo and MongoDB');
+
+  const invoicer = new VcsOdooInvoicer(odoo);
+  await invoicer.loadCache();
+  console.log('VcsOdooInvoicer cache loaded\n');
 
   // Get all pending orders (sales and returns)
   const pendingQuery = { status: 'pending' };
