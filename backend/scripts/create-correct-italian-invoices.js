@@ -126,71 +126,101 @@ async function main() {
     }
 
     try {
-      // Update sale order fiscal position
+      // Update sale order fiscal position first
       if (targetFpId && (!so.fiscal_position_id || so.fiscal_position_id[0] !== targetFpId)) {
         console.log(`  Updating SO fiscal position...`);
         await odoo.write('sale.order', [so.id], { fiscal_position_id: targetFpId });
       }
 
-      // Create invoice using Odoo's standard method
-      console.log(`  Creating invoice...`);
-
-      // Use the sale order's create invoice action
-      const wizardId = await odoo.create('sale.advance.payment.inv', {
-        advance_payment_method: 'delivered'
-      });
-
-      // Execute the wizard in context of this sale order
-      const result = await odoo.execute('sale.advance.payment.inv', 'create_invoices', [[wizardId]], {
-        active_ids: [so.id],
-        active_model: 'sale.order'
-      });
-
-      // Get the newly created invoice
-      const updatedSo = await odoo.searchRead('sale.order',
-        [['id', '=', so.id]],
-        ['invoice_ids']
+      // Get sale order lines
+      const soLines = await odoo.searchRead('sale.order.line',
+        [['order_id', '=', so.id]],
+        ['id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'tax_id', 'discount']
       );
 
-      const newInvoiceIds = updatedSo[0].invoice_ids.filter(id => !so.invoice_ids?.includes(id));
+      if (soLines.length === 0) {
+        console.log(`  ERROR: No sale order lines found!`);
+        failed++;
+        continue;
+      }
 
-      if (newInvoiceIds.length > 0) {
-        const newInvoice = await odoo.searchRead('account.move',
-          [['id', 'in', newInvoiceIds]],
-          ['id', 'name', 'state', 'fiscal_position_id']
+      // Get partner and other SO data
+      const soFull = await odoo.searchRead('sale.order',
+        [['id', '=', so.id]],
+        ['partner_id', 'partner_invoice_id', 'currency_id', 'pricelist_id', 'date_order']
+      );
+      const soData = soFull[0];
+
+      // Build invoice lines
+      const invoiceLines = [];
+      for (const line of soLines) {
+        // Get the correct tax based on fiscal position
+        let taxIds = line.tax_id || [];
+
+        // Map tax through fiscal position if set
+        if (targetFpId && taxIds.length > 0) {
+          const mappedTax = await odoo.searchRead('account.fiscal.position.tax',
+            [['position_id', '=', targetFpId], ['tax_src_id', 'in', taxIds]],
+            ['tax_dest_id']
+          );
+          if (mappedTax.length > 0 && mappedTax[0].tax_dest_id) {
+            taxIds = [mappedTax[0].tax_dest_id[0]];
+          }
+        }
+
+        invoiceLines.push([0, 0, {
+          product_id: line.product_id ? line.product_id[0] : false,
+          name: line.name,
+          quantity: line.product_uom_qty,
+          price_unit: line.price_unit,
+          tax_ids: [[6, 0, taxIds]],
+          discount: line.discount || 0,
+          sale_line_ids: [[6, 0, [line.id]]]
+        }]);
+      }
+
+      // Create the invoice directly
+      console.log(`  Creating invoice...`);
+      const invoiceId = await odoo.create('account.move', {
+        move_type: 'out_invoice',
+        partner_id: soData.partner_invoice_id ? soData.partner_invoice_id[0] : soData.partner_id[0],
+        currency_id: soData.currency_id ? soData.currency_id[0] : false,
+        fiscal_position_id: targetFpId || false,
+        invoice_origin: so.name,
+        invoice_line_ids: invoiceLines
+      });
+
+      // Get invoice details
+      const newInvoice = await odoo.searchRead('account.move',
+        [['id', '=', invoiceId]],
+        ['id', 'name', 'state', 'fiscal_position_id', 'amount_total']
+      );
+
+      if (newInvoice.length > 0) {
+        console.log(`  Created invoice: ${newInvoice[0].name} (total: ${newInvoice[0].amount_total})`);
+
+        // Post the invoice
+        if (newInvoice[0].state === 'draft') {
+          console.log(`  Posting invoice...`);
+          await odoo.execute('account.move', 'action_post', [[invoiceId]]);
+        }
+
+        // Update MongoDB
+        await db.collection('amazon_vcs_orders').updateOne(
+          { _id: order._id },
+          {
+            $set: {
+              odooInvoiceId: invoiceId,
+              odooInvoiceName: newInvoice[0].name,
+              invoicedAt: new Date(),
+              status: 'invoiced'
+            }
+          }
         );
 
-        if (newInvoice.length > 0) {
-          console.log(`  Created invoice: ${newInvoice[0].name}`);
-
-          // Update invoice fiscal position if needed
-          if (targetFpId) {
-            await odoo.write('account.move', [newInvoice[0].id], { fiscal_position_id: targetFpId });
-          }
-
-          // Post the invoice
-          if (newInvoice[0].state === 'draft') {
-            console.log(`  Posting invoice...`);
-            await odoo.execute('account.move', 'action_post', [[newInvoice[0].id]]);
-          }
-
-          // Update MongoDB
-          await db.collection('amazon_vcs_orders').updateOne(
-            { _id: order._id },
-            {
-              $set: {
-                odooInvoiceId: newInvoice[0].id,
-                odooInvoiceName: newInvoice[0].name,
-                invoicedAt: new Date(),
-                status: 'invoiced'
-              }
-            }
-          );
-
-          created++;
-        }
+        created++;
       } else {
-        console.log(`  No new invoice created (wizard may have failed)`);
+        console.log(`  ERROR: Invoice created but not found!`);
         failed++;
       }
     } catch (err) {
