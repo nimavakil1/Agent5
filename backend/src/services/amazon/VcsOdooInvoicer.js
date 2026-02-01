@@ -3707,9 +3707,10 @@ class VcsOdooInvoicer {
               status: 'credit_noted',
               odooCreditNoteId: creditNote.id,
               odooCreditNoteName: creditNote.name,
-              odooSaleOrderId: saleOrder.id,
-              odooSaleOrderName: saleOrder.name,
+              odooSaleOrderId: saleOrder?.id || null,
+              odooSaleOrderName: saleOrder?.name || null,
               creditNotedAt: new Date(),
+              standalone: creditNote.standalone || false,
             }
           }
         );
