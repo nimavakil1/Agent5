@@ -3622,10 +3622,13 @@ class VcsOdooInvoicer {
         const odooOrderData = await this.findOdooOrder(order);
 
         let creditNote;
+        let saleOrder = null;
+        let orderLines = null;
 
         if (odooOrderData) {
           // Has original order - create linked credit note
-          const { saleOrder, orderLines } = odooOrderData;
+          saleOrder = odooOrderData.saleOrder;
+          orderLines = odooOrderData.orderLines;
 
           // Check if credit note already exists
           const existingCreditNote = await this.findExistingCreditNote(saleOrder.name, order.returnDate);
