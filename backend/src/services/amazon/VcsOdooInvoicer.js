@@ -2911,19 +2911,49 @@ class VcsOdooInvoicer {
       console.log(`[VcsOdooInvoicer] Invoice ${invoiceName} (ID: ${invoiceId}) updated. Total: ${invoice[0]?.amount_total}, Tax: ${invoice[0]?.amount_tax}`);
 
       const hasTotalMismatch = totalDiff > 0.05;
-      op.complete({ invoiceId, invoiceName, amountTotal: invoice[0]?.amount_total, hasTotalMismatch });
-      return {
-        id: invoiceId,
-        name: invoiceName || `Draft #${invoiceId}`,
-        amountTotal: invoice[0]?.amount_total,
-        amountTax: invoice[0]?.amount_tax,
-        vcsExpectedTotal,
-        hasTotalMismatch,
-        totalDiff: hasTotalMismatch ? totalDiff : 0,
-        orderId: order.orderId,
-        saleOrderName: saleOrder.name,
-        saleOrderId: saleOrder.id,
-      };
+
+      // Post the invoice to finalize it
+      try {
+        await this.odoo.execute('account.move', 'action_post', [[invoiceId]]);
+        // Refresh invoice data after posting to get the final name
+        const postedInvoice = await this.odoo.searchRead('account.move',
+          [['id', '=', invoiceId]],
+          ['name', 'state']
+        );
+        const finalInvoiceName = postedInvoice[0]?.name || invoiceName;
+        console.log(`[VcsOdooInvoicer] Invoice posted: ${finalInvoiceName}`);
+        op.complete({ invoiceId, invoiceName: finalInvoiceName, amountTotal: invoice[0]?.amount_total, hasTotalMismatch });
+        return {
+          id: invoiceId,
+          name: finalInvoiceName,
+          amountTotal: invoice[0]?.amount_total,
+          amountTax: invoice[0]?.amount_tax,
+          vcsExpectedTotal,
+          hasTotalMismatch,
+          totalDiff: hasTotalMismatch ? totalDiff : 0,
+          orderId: order.orderId,
+          saleOrderName: saleOrder.name,
+          saleOrderId: saleOrder.id,
+        };
+      } catch (postError) {
+        console.error(`[VcsOdooInvoicer] Failed to post invoice ${invoiceId}: ${postError.message}`);
+        // Return the draft invoice instead of failing completely
+        op.complete({ invoiceId, invoiceName, amountTotal: invoice[0]?.amount_total, hasTotalMismatch, posted: false, postError: postError.message });
+        return {
+          id: invoiceId,
+          name: invoiceName,
+          amountTotal: invoice[0]?.amount_total,
+          amountTax: invoice[0]?.amount_tax,
+          vcsExpectedTotal,
+          hasTotalMismatch,
+          totalDiff: hasTotalMismatch ? totalDiff : 0,
+          orderId: order.orderId,
+          saleOrderName: saleOrder.name,
+          saleOrderId: saleOrder.id,
+          posted: false,
+          postError: postError.message,
+        };
+      }
     } catch (error) {
       op.fail(error);
       throw error;
@@ -3847,15 +3877,39 @@ class VcsOdooInvoicer {
 
     console.log(`[VcsOdooInvoicer] Credit note ${creditNote[0]?.name} created. Total: ${creditNote[0]?.amount_total}`);
 
-    return {
-      id: creditNoteId,
-      name: creditNote[0]?.name || `RINV-${creditNoteId}`,
-      amountTotal: creditNote[0]?.amount_total,
-      amountTax: creditNote[0]?.amount_tax,
-      orderId: order.orderId,
-      saleOrderName: saleOrder.name,
-      saleOrderId: saleOrder.id,
-    };
+    // Post the credit note
+    try {
+      await this.odoo.execute('account.move', 'action_post', [[creditNoteId]]);
+      const postedCreditNote = await this.odoo.searchRead('account.move',
+        [['id', '=', creditNoteId]],
+        ['name', 'state']
+      );
+      const finalName = postedCreditNote[0]?.name || creditNote[0]?.name;
+      console.log(`[VcsOdooInvoicer] Credit note posted: ${finalName}`);
+
+      return {
+        id: creditNoteId,
+        name: finalName,
+        amountTotal: creditNote[0]?.amount_total,
+        amountTax: creditNote[0]?.amount_tax,
+        orderId: order.orderId,
+        saleOrderName: saleOrder.name,
+        saleOrderId: saleOrder.id,
+      };
+    } catch (postError) {
+      console.error(`[VcsOdooInvoicer] Failed to post credit note ${creditNoteId}: ${postError.message}`);
+      return {
+        id: creditNoteId,
+        name: creditNote[0]?.name || `RINV-${creditNoteId}`,
+        amountTotal: creditNote[0]?.amount_total,
+        amountTax: creditNote[0]?.amount_tax,
+        orderId: order.orderId,
+        saleOrderName: saleOrder.name,
+        saleOrderId: saleOrder.id,
+        posted: false,
+        postError: postError.message,
+      };
+    }
   }
 
   /**
@@ -3973,16 +4027,41 @@ class VcsOdooInvoicer {
 
     console.log(`[VcsOdooInvoicer] Standalone credit note ${creditNote[0]?.name} created. Total: ${creditNote[0]?.amount_total}`);
 
-    return {
-      id: creditNoteId,
-      name: creditNote[0]?.name || `RINV-${creditNoteId}`,
-      amountTotal: creditNote[0]?.amount_total,
-      amountTax: creditNote[0]?.amount_tax,
-      orderId: order.orderId,
-      standalone: true,
-      saleOrderName: null,
-      saleOrderId: null,
-    };
+    // Post the credit note
+    try {
+      await this.odoo.execute('account.move', 'action_post', [[creditNoteId]]);
+      const postedCreditNote = await this.odoo.searchRead('account.move',
+        [['id', '=', creditNoteId]],
+        ['name', 'state']
+      );
+      const finalName = postedCreditNote[0]?.name || creditNote[0]?.name;
+      console.log(`[VcsOdooInvoicer] Standalone credit note posted: ${finalName}`);
+
+      return {
+        id: creditNoteId,
+        name: finalName,
+        amountTotal: creditNote[0]?.amount_total,
+        amountTax: creditNote[0]?.amount_tax,
+        orderId: order.orderId,
+        standalone: true,
+        saleOrderName: null,
+        saleOrderId: null,
+      };
+    } catch (postError) {
+      console.error(`[VcsOdooInvoicer] Failed to post standalone credit note ${creditNoteId}: ${postError.message}`);
+      return {
+        id: creditNoteId,
+        name: creditNote[0]?.name || `RINV-${creditNoteId}`,
+        amountTotal: creditNote[0]?.amount_total,
+        amountTax: creditNote[0]?.amount_tax,
+        orderId: order.orderId,
+        standalone: true,
+        saleOrderName: null,
+        saleOrderId: null,
+        posted: false,
+        postError: postError.message,
+      };
+    }
   }
 
   /**
