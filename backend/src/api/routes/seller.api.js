@@ -431,9 +431,25 @@ router.post('/orders/import-fbm-stream', uploadFbm.single('file'), async (req, r
     const orderIds = Object.keys(orderGroups);
     sendEvent({ type: 'parsing', count: orderIds.length, message: `Found ${orderIds.length} orders in TSV` });
 
-    // Step 2: Import to unified_orders
-    sendEvent({ type: 'status', message: 'Storing orders to database...' });
-    const importResult = await importer.importToUnifiedOrders(tsvContent, { fileName });
+    // Step 2: Import to unified_orders with progress tracking
+    sendEvent({ type: 'status', message: 'Storing orders to database (with AI address parsing)...', total: orderIds.length });
+    const importResult = await importer.importToUnifiedOrders(tsvContent, {
+      fileName,
+      onProgress: (current, total, orderId, step) => {
+        const percent = Math.round((current / total) * 100);
+        const orderData = orderGroups[orderId];
+        sendEvent({
+          type: 'importing',
+          step,
+          orderId,
+          customer: orderData?.recipientName || 'Unknown',
+          current,
+          total,
+          percent,
+          message: `${step === 'fetching-address' ? 'Fetching address' : step === 'ai-parsing' ? 'AI parsing address' : 'Processing'} ${orderId} (${current}/${total})`
+        });
+      }
+    });
     sendEvent({
       type: 'imported',
       count: importResult.imported + importResult.updated,

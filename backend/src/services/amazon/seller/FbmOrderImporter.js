@@ -381,6 +381,10 @@ class FbmOrderImporter {
 
           // Step 2: Use AddressCleanerAI to intelligently parse addresses
           // Now include the SP-API CompanyName if we have it
+          if (onProgress) {
+            onProgress(i + 1, orderIds.length, orderId, 'ai-parsing');
+          }
+
           let cleanedAddress = null;
           try {
             cleanedAddress = await this.addressCleaner.cleanAddress({

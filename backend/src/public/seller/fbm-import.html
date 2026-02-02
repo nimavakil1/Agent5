@@ -506,6 +506,13 @@
               addLogEntry('database', 'log-status', data.message);
               break;
 
+            case 'importing':
+              document.getElementById('progress-current').textContent = data.current;
+              document.getElementById('progress-total').textContent = data.total;
+              document.getElementById('progress-fill').style.width = (data.percent / 2) + '%'; // First half for import
+              addLogEntry('sync', 'log-progress', data.message);
+              break;
+
             case 'progress':
               document.getElementById('progress-current').textContent = data.current;
               document.getElementById('progress-total').textContent = data.total;
