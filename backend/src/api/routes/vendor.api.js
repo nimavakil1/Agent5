@@ -4960,11 +4960,12 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
       });
 
       // Build carrier info for small parcel shipment
-      // Note: transportationMode = Road (how it travels), shipmentType = SmallParcel (set automatically based on pallets)
+      // Note: transportationMode = Road (how it travels), shipmentType is set automatically based on pallets
+      // SCAC codes: GLSFR (France), GLSO (Germany), GLSP (Poland), GLSN (Netherlands)
       const carrier = {
-        scac: 'GLSO', // GLS SCAC code
+        scac: 'GLSFR', // GLS France - use country-specific SCAC
         name: 'GLS',
-        mode: 'Road', // transportationMode: Air, Ocean, Road only - shipmentType is set separately
+        mode: 'Road', // transportationMode: Air, Ocean, Road only
         trackingNumber: masterTrackingNumber
       };
 
