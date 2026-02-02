@@ -4960,10 +4960,11 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
       });
 
       // Build carrier info for small parcel shipment
+      // Note: transportationMode = Road (how it travels), shipmentType = SmallParcel (set automatically based on pallets)
       const carrier = {
         scac: 'GLSO', // GLS SCAC code
         name: 'GLS',
-        mode: 'SmallParcel', // IMPORTANT: SmallParcel instead of Road/LTL
+        mode: 'Road', // transportationMode: Air, Ocean, Road only - shipmentType is set separately
         trackingNumber: masterTrackingNumber
       };
 
