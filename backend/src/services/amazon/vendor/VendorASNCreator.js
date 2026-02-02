@@ -339,8 +339,9 @@ class VendorASNCreator {
    * @param {Object} packingData - Carton/pallet packing data from UI
    * @param {Array} packingData.cartons - Array of carton objects with SSCC and items
    * @param {Array} packingData.pallets - Array of pallet objects with SSCC and carton SSCCs
+   * @param {string} confirmationType - 'Original' or 'Replace'
    */
-  _buildASNPayloadWithSSCC(po, picking, shipmentId, packingData = {}) {
+  _buildASNPayloadWithSSCC(po, picking, shipmentId, packingData = {}, confirmationType = 'Original') {
     const shipmentDate = picking.date_done || picking.scheduled_date || new Date().toISOString();
     const { cartons = [], pallets = [], carrier = {}, measurements = {} } = packingData;
 
@@ -469,7 +470,7 @@ class VendorASNCreator {
     // Build confirmation with correct Amazon API field names
     const confirmation = {
       shipmentIdentifier: shipmentId,
-      shipmentConfirmationType: 'Original',
+      shipmentConfirmationType: confirmationType,
       shipmentType: pallets.length > 0 ? SHIPMENT_TYPES.LESS_THAN_TRUCK_LOAD : SHIPMENT_TYPES.SMALL_PARCEL,
       shipmentConfirmationDate: new Date(shipmentDate).toISOString(),
       shippedDate: new Date(shipmentDate).toISOString(),
@@ -552,9 +553,10 @@ class VendorASNCreator {
    * @param {Object} packingData.carrier - Carrier info { scac, name, trackingNumber }
    * @param {Object} packingData.measurements - { totalWeight, weightUnit, totalVolume, volumeUnit }
    * @param {Object} options - Additional options
+   * @param {string} options.replaceShipmentId - If provided, sends a Replace ASN instead of Original
    */
   async submitASNWithSSCC(poNumber, packingData, options = {}) {
-    const { odooPickingId, dryRun = false } = options;
+    const { odooPickingId, dryRun = false, replaceShipmentId = null } = options;
 
     const result = {
       success: false,
@@ -603,13 +605,14 @@ class VendorASNCreator {
         result.warnings.push('No Odoo delivery found - using manual shipment date');
       }
 
-      // Generate shipment ID
-      const shipmentId = this._generateShipmentId(po, picking);
-      console.log(`[VendorASNCreator] Generated shipmentId: ${shipmentId}`);
+      // Generate shipment ID (or use existing for Replace)
+      const shipmentId = replaceShipmentId || this._generateShipmentId(po, picking);
+      const confirmationType = replaceShipmentId ? 'Replace' : 'Original';
+      console.log(`[VendorASNCreator] ShipmentId: ${shipmentId} (${confirmationType})`);
 
       // Build ASN payload with SSCCs
-      console.log(`[VendorASNCreator] Building ASN payload...`);
-      const asnPayload = this._buildASNPayloadWithSSCC(po, picking, shipmentId, packingData);
+      console.log(`[VendorASNCreator] Building ASN payload (${confirmationType})...`);
+      const asnPayload = this._buildASNPayloadWithSSCC(po, picking, shipmentId, packingData, confirmationType);
       console.log(`[VendorASNCreator] ASN payload built. Items: ${asnPayload.shipmentConfirmations?.[0]?.shipmentItems?.length || 0}`);
 
       if (dryRun) {
@@ -632,8 +635,8 @@ class VendorASNCreator {
       const response = await client.submitShipmentConfirmations(asnPayload);
       console.log(`[VendorASNCreator] Amazon response:`, JSON.stringify(response));
 
-      // Store in MongoDB
-      await this._saveShipment({
+      // Store in MongoDB (upsert for Replace ASNs)
+      const shipmentData = {
         shipmentId,
         purchaseOrderNumber: poNumber,
         marketplaceId: marketplace,
@@ -654,8 +657,22 @@ class VendorASNCreator {
           sscc: p.sscc,
           cartonCount: p.cartonSSCCs?.length || 0
         })) || [],
-        items: asnPayload.shipmentConfirmations[0].shipmentItems
-      });
+        items: asnPayload.shipmentConfirmations[0].shipmentItems,
+        confirmationType: confirmationType
+      };
+
+      if (replaceShipmentId) {
+        // Update existing shipment record for Replace
+        await this.db.collection(SHIPMENT_COLLECTION).updateOne(
+          { shipmentId: replaceShipmentId },
+          {
+            $set: { ...shipmentData, updatedAt: new Date() },
+            $push: { replaceHistory: { transactionId: response.transactionId, submittedAt: new Date() } }
+          }
+        );
+      } else {
+        await this._saveShipment(shipmentData);
+      }
 
       // Update PO
       await this.db.collection(PO_COLLECTION).updateOne(
