@@ -247,7 +247,11 @@ class VendorInvoiceSubmitter {
       }
 
       // Check if PO is acknowledged (either locally or by Amazon)
-      const isAcknowledged = po.acknowledgment?.acknowledged || po.purchaseOrderState === 'Acknowledged';
+      // Support both legacy (po.acknowledgment) and unified schema (po.amazonVendor.acknowledgment)
+      const isAcknowledged = po.acknowledgment?.acknowledged ||
+                             po.amazonVendor?.acknowledgment?.acknowledged ||
+                             po.purchaseOrderState === 'Acknowledged' ||
+                             po.amazonVendor?.purchaseOrderState === 'Acknowledged';
       if (!isAcknowledged) {
         result.errors.push('PO must be acknowledged before invoicing');
         return result;
