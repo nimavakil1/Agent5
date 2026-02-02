@@ -2771,6 +2771,103 @@ router.post('/shipments/:poNumber/create-asn', async (req, res) => {
 });
 
 /**
+ * @route POST /api/vendor/shipments/:poNumber/replace-asn
+ * @desc Submit a Replace ASN to correct shipment details
+ * @body shipmentId - Required: the original shipmentId to replace
+ * @body dryRun - Optional: simulate without sending (default false)
+ */
+router.post('/shipments/:poNumber/replace-asn', async (req, res) => {
+  try {
+    const { shipmentId, dryRun = false } = req.body;
+
+    if (!shipmentId) {
+      return res.status(400).json({ success: false, error: 'shipmentId is required' });
+    }
+
+    const db = getDb();
+    const asnCreator = await getVendorASNCreator();
+
+    // Get original shipment to get carton data
+    const originalShipment = await db.collection('vendor_shipments').findOne({
+      shipmentId: shipmentId
+    });
+
+    if (!originalShipment) {
+      return res.status(404).json({ success: false, error: `Original shipment not found: ${shipmentId}` });
+    }
+
+    // Get packing shipment for full carton data
+    const packingShipment = await db.collection('packing_shipments').findOne({
+      purchaseOrders: req.params.poNumber
+    });
+
+    if (!packingShipment) {
+      return res.status(404).json({ success: false, error: 'Packing shipment not found' });
+    }
+
+    // Build carton data from parcels
+    const cartons = packingShipment.parcels.map(parcel => ({
+      sscc: parcel.sscc,
+      trackingNumber: parcel.glsTrackingNumber || parcel.trackingNumber || null,
+      weight: parcel.weight || parcel.estimatedWeight || null,
+      items: (parcel.items || []).map(item => ({
+        ean: item.ean,
+        sku: item.sku,
+        quantity: item.quantity
+      }))
+    }));
+
+    const totalWeight = packingShipment.parcels.reduce((sum, p) => sum + (p.weight || p.estimatedWeight || 0), 0);
+    const masterTrackingNumber = packingShipment.trackingNumber ||
+      (packingShipment.parcels.find(p => p.glsTrackingNumber || p.trackingNumber)?.glsTrackingNumber) ||
+      (packingShipment.parcels.find(p => p.glsTrackingNumber || p.trackingNumber)?.trackingNumber) ||
+      null;
+
+    const carrier = {
+      scac: 'GLSFR',
+      name: 'GLS',
+      mode: 'Road',
+      trackingNumber: masterTrackingNumber
+    };
+
+    const measurements = {
+      totalWeight: totalWeight,
+      weightUnit: 'Kg'
+    };
+
+    console.log(`[VendorAPI] Submitting Replace ASN for PO ${req.params.poNumber}, shipmentId: ${shipmentId}`);
+
+    const result = await asnCreator.submitASNWithSSCC(req.params.poNumber, { cartons, carrier, measurements }, {
+      dryRun: dryRun,
+      replaceShipmentId: shipmentId
+    });
+
+    if (!result.success && result.errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        errors: result.errors,
+        warnings: result.warnings
+      });
+    }
+
+    res.json({
+      success: true,
+      submitted: !dryRun,
+      dryRun: dryRun,
+      purchaseOrderNumber: req.params.poNumber,
+      shipmentId: result.shipmentId,
+      transactionId: result.transactionId,
+      confirmationType: 'Replace',
+      warnings: result.warnings,
+      ...(result.payload && { payload: result.payload })
+    });
+  } catch (error) {
+    console.error('[VendorAPI] POST /shipments/:poNumber/replace-asn error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route GET /api/vendor/shipments/ready
  * @desc Get POs that are ready to ship (acknowledged but no ASN sent)
  * NOTE: This route MUST be defined before /shipments/:shipmentId to avoid matching "ready" as a shipmentId
