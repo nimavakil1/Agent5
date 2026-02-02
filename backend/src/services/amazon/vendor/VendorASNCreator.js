@@ -26,7 +26,7 @@ const { isTestMode, wrapWithTestMode } = require('./TestMode');
 const SHIPMENT_TYPES = {
   TRUCK_LOAD: 'TruckLoad',
   LESS_THAN_TRUCK_LOAD: 'LessThanTruckLoad',
-  SMALL_PARCEL: 'Small parcel'  // Must match Amazon's expected format exactly
+  SMALL_PARCEL: 'SmallParcel'  // API value - displays as "Small parcel" on Amazon UI
 };
 
 /**
