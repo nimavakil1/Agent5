@@ -1,11 +1,12 @@
 /**
  * Check ASN Transaction Status with Amazon
  */
-const { getDb } = require('../db');
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
+const { connectDb, getDb } = require('../db');
 const { VendorClient } = require('../services/amazon/vendor/VendorClient');
 
 async function main() {
-  await getDb();
+  await connectDb();
   const db = getDb();
 
   // Find the most recent consolidated shipment for 58AIYHEC
