@@ -4970,7 +4970,7 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
       // Build measurements
       const measurements = {
         totalWeight: totalWeight,
-        weightUnit: 'KG'
+        weightUnit: 'Kg'  // Amazon API is case-sensitive
       };
 
       // Submit ASN for each PO
