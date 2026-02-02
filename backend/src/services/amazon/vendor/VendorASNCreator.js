@@ -21,6 +21,17 @@ const { OdooDirectClient } = require('../../../core/agents/integrations/OdooMCP'
 const { isTestMode, wrapWithTestMode } = require('./TestMode');
 
 /**
+ * Vendor code to token key mapping
+ * IMPORTANT: The API credentials must match the vendor code (partyId) on the PO
+ * Using the wrong credentials results in error: "sellingParty partyId is not in authorized vendor group"
+ */
+const VENDOR_CODE_TO_TOKEN = {
+  'C86K8': 'FR',   // Acropaq FR Office Products
+  '5O6JS': 'DE',   // Acropaq DE Office Products
+  'HN6VB': 'NL'    // Acropaq NL Office Products
+};
+
+/**
  * Shipment types
  */
 const SHIPMENT_TYPES = {
@@ -182,8 +193,11 @@ class VendorASNCreator {
         return result;
       }
 
-      // Submit to Amazon
-      const marketplace = po.amazonVendor?.marketplaceId || po.marketplaceId || 'FR';
+      // Submit to Amazon using the correct API credentials for the vendor code
+      const vendorCode = po.amazonVendor?.sellingParty?.partyId || po.sellingParty?.partyId;
+      const tokenKey = VENDOR_CODE_TO_TOKEN[vendorCode];
+      const marketplace = tokenKey || po.amazonVendor?.marketplaceId || po.marketplaceId || 'FR';
+      console.log(`[VendorASNCreator] Submitting ASN for vendor code ${vendorCode}, using token: ${tokenKey || 'fallback to ' + marketplace}`);
       const client = this.getClient(marketplace);
       await client.init();
 
@@ -194,6 +208,7 @@ class VendorASNCreator {
         shipmentId,
         purchaseOrderNumber: poNumber,
         marketplaceId: marketplace,
+        vendorCode: vendorCode,
         odooPickingId: picking.id,
         odooPickingName: picking.name,
         transactionId: response.transactionId,
@@ -630,9 +645,13 @@ class VendorASNCreator {
         return result;
       }
 
-      // Submit to Amazon
-      const marketplace = po.amazonVendor?.marketplaceId || po.marketplaceId || 'FR';
-      console.log(`[VendorASNCreator] Getting vendor client for marketplace: ${marketplace}`);
+      // Submit to Amazon using the correct API credentials for the vendor code
+      // IMPORTANT: Must use token that matches the sellingParty.partyId (vendor code)
+      const vendorCode = po.amazonVendor?.sellingParty?.partyId || po.sellingParty?.partyId;
+      const tokenKey = VENDOR_CODE_TO_TOKEN[vendorCode];
+      const marketplace = tokenKey || po.amazonVendor?.marketplaceId || po.marketplaceId || 'FR';
+
+      console.log(`[VendorASNCreator] Getting vendor client for vendor code ${vendorCode}, using token: ${tokenKey || 'fallback to ' + marketplace}`);
       const client = this.getClient(marketplace);
       await client.init();
 
@@ -646,6 +665,7 @@ class VendorASNCreator {
         shipmentId,
         purchaseOrderNumber: poNumber,
         marketplaceId: marketplace,
+        vendorCode: vendorCode,
         odooPickingId: picking.id,
         odooPickingName: picking.name,
         transactionId: response.transactionId,
@@ -789,10 +809,19 @@ class VendorASNCreator {
         return result;
       }
 
-      // Submit to Amazon using the primary PO's marketplace
-      const marketplace = primaryPO.amazonVendor?.marketplaceId || primaryPO.marketplaceId || 'FR';
-      console.log(`[VendorASNCreator] Submitting consolidated ASN to marketplace: ${marketplace}`);
-      const client = this.getClient(marketplace);
+      // Submit to Amazon using the correct API credentials for the vendor code
+      // IMPORTANT: Must use token that matches the sellingParty.partyId (vendor code)
+      const vendorCode = primaryPO.amazonVendor?.sellingParty?.partyId || primaryPO.sellingParty?.partyId;
+      const tokenKey = VENDOR_CODE_TO_TOKEN[vendorCode];
+
+      if (!tokenKey) {
+        result.errors.push(`Unknown vendor code: ${vendorCode}. Cannot determine which API credentials to use.`);
+        console.error(`[VendorASNCreator] Unknown vendor code: ${vendorCode}`);
+        return result;
+      }
+
+      console.log(`[VendorASNCreator] Submitting consolidated ASN using ${tokenKey} credentials for vendor code ${vendorCode}`);
+      const client = this.getClient(tokenKey);
       await client.init();
 
       console.log(`[VendorASNCreator] Consolidated ASN Payload:`, JSON.stringify(asnPayload, null, 2));
@@ -803,7 +832,8 @@ class VendorASNCreator {
       const shipmentData = {
         shipmentId,
         purchaseOrderNumbers: poNumbers,
-        marketplaceId: marketplace,
+        marketplaceId: tokenKey,  // Store which credentials were used
+        vendorCode: vendorCode,
         transactionId: response.transactionId,
         status: 'submitted',
         submittedAt: new Date(),
