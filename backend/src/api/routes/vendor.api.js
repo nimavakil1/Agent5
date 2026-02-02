@@ -5077,13 +5077,29 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
     }
 
     // ========================================
-    // STEP 3: Submit ASN to Amazon
+    // STEP 3: Submit SINGLE consolidated ASN to Amazon for ALL POs
+    // Per Amazon API: one shipment confirmation can contain multiple POs
+    // Each item specifies its purchaseOrderNumber in itemDetails
     // ========================================
     try {
-      console.log(`[VendorAPI] STEP 3: Submit ASN to Amazon for ${poNumbers.length} PO(s)`);
+      console.log(`[VendorAPI] STEP 3: Submit CONSOLIDATED ASN to Amazon for ${poNumbers.length} PO(s): ${poNumbers.join(', ')}`);
       const asnCreator = await getVendorASNCreator();
 
-      // Build carton data from parcels - include weight and tracking
+      // Build EAN -> PO mapping from all POs
+      const eanToPOMap = {};
+      for (const poNumber of poNumbers) {
+        const po = await db.collection('unified_orders').findOne({ 'sourceIds.amazonVendorPONumber': poNumber });
+        if (po?.items) {
+          for (const item of po.items) {
+            if (item.vendorProductIdentifier) {
+              eanToPOMap[item.vendorProductIdentifier] = poNumber;
+            }
+          }
+        }
+      }
+      console.log(`[VendorAPI] EAN to PO mapping:`, eanToPOMap);
+
+      // Build carton data from parcels - include weight, tracking, AND poNumber per item
       const cartons = shipment.parcels.map(parcel => ({
         sscc: parcel.sscc,
         trackingNumber: parcel.glsTrackingNumber || parcel.trackingNumber || null,
@@ -5091,7 +5107,8 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
         items: (parcel.items || []).map(item => ({
           ean: item.ean,
           sku: item.sku,
-          quantity: item.quantity
+          quantity: item.quantity,
+          poNumber: eanToPOMap[item.ean] || poNumbers[0] // Look up which PO this item belongs to
         }))
       }));
 
@@ -5104,82 +5121,53 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
         (shipment.parcels.find(p => p.glsTrackingNumber || p.trackingNumber)?.trackingNumber) ||
         null;
 
-      console.log(`[VendorAPI] ASN carton data: ${cartons.length} carton(s), totalWeight=${totalWeight}kg, tracking=${masterTrackingNumber}`);
+      console.log(`[VendorAPI] Consolidated ASN carton data: ${cartons.length} carton(s), totalWeight=${totalWeight}kg, tracking=${masterTrackingNumber}`);
       cartons.forEach((c, i) => {
-        console.log(`[VendorAPI]   Carton ${i + 1}: SSCC=${c.sscc}, weight=${c.weight}kg, tracking=${c.trackingNumber}, items=${c.items.length}, total_qty=${c.items.reduce((s, it) => s + it.quantity, 0)}`);
-        c.items.forEach(it => console.log(`[VendorAPI]     - EAN=${it.ean}, SKU=${it.sku}, qty=${it.quantity}`));
+        console.log(`[VendorAPI]   Carton ${i + 1}: SSCC=${c.sscc}, weight=${c.weight}kg, tracking=${c.trackingNumber}`);
+        c.items.forEach(it => console.log(`[VendorAPI]     - EAN=${it.ean}, SKU=${it.sku}, qty=${it.quantity}, PO=${it.poNumber}`));
       });
 
-      // Build carrier info for small parcel shipment
-      // Note: transportationMode = Road (how it travels), shipmentType is set automatically based on pallets
-      // SCAC codes: GLSFR (France), GLSO (Germany), GLSP (Poland), GLSN (Netherlands)
+      // Build carrier info
       const carrier = {
-        scac: 'GLSFR', // GLS France - use country-specific SCAC
+        scac: 'GLSFR',
         name: 'GLS',
-        mode: 'Road', // transportationMode: Air, Ocean, Road only
+        mode: 'Road',
         trackingNumber: masterTrackingNumber
       };
 
       // Build measurements
       const measurements = {
         totalWeight: totalWeight,
-        weightUnit: 'Kg'  // Amazon API is case-sensitive
+        weightUnit: 'Kg'
       };
 
-      // Submit ASN for each PO
-      for (const poNumber of poNumbers) {
-        console.log(`[VendorAPI] Submitting ASN for PO: ${poNumber}`);
-        try {
-          // Get PO to filter cartons to only items belonging to this PO
-          const po = await db.collection('unified_orders').findOne({ 'sourceIds.amazonVendorPONumber': poNumber });
-          const poItemEANs = new Set((po?.items || []).map(item => item.vendorProductIdentifier).filter(Boolean));
-          console.log(`[VendorAPI] PO ${poNumber} has items with EANs:`, [...poItemEANs]);
+      // Submit ONE consolidated ASN for ALL POs
+      const asnResult = await asnCreator.submitConsolidatedASN(poNumbers, { cartons, carrier, measurements }, {
+        dryRun: false
+      });
 
-          // Filter cartons to only include items that belong to this PO
-          const filteredCartons = cartons.map(carton => ({
-            ...carton,
-            items: carton.items.filter(item => poItemEANs.has(item.ean))
-          })).filter(carton => carton.items.length > 0); // Remove empty cartons
+      console.log(`[VendorAPI] Consolidated ASN result:`, JSON.stringify({
+        success: asnResult.success,
+        shipmentId: asnResult.shipmentId,
+        transactionId: asnResult.transactionId,
+        errors: asnResult.errors,
+        warnings: asnResult.warnings
+      }));
 
-          console.log(`[VendorAPI] Filtered cartons for PO ${poNumber}: ${filteredCartons.length} carton(s) with items`);
-          filteredCartons.forEach((c, i) => {
-            console.log(`[VendorAPI]   Carton ${i + 1}: SSCC=${c.sscc}, items=${c.items.length}, EANs=${c.items.map(it => it.ean).join(',')}`);
-          });
-
-          if (filteredCartons.length === 0) {
-            result.amazon.errors.push(`PO ${poNumber}: No cartons contain items for this PO`);
-            continue;
-          }
-
-          const asnResult = await asnCreator.submitASNWithSSCC(poNumber, { cartons: filteredCartons, carrier, measurements }, {
-            dryRun: false
-          });
-
-          console.log(`[VendorAPI] ASN result for ${poNumber}:`, JSON.stringify({
-            success: asnResult.success,
-            shipmentId: asnResult.shipmentId,
+      if (asnResult.success) {
+        result.amazon.asnSubmitted = true;
+        if (asnResult.transactionId) {
+          result.amazon.transactionIds.push({
+            poNumbers: poNumbers,
             transactionId: asnResult.transactionId,
-            errors: asnResult.errors,
-            warnings: asnResult.warnings
-          }));
-
-          if (asnResult.success) {
-            result.amazon.asnSubmitted = true;
-            if (asnResult.transactionId) {
-              result.amazon.transactionIds.push({
-                poNumber,
-                transactionId: asnResult.transactionId,
-                shipmentId: asnResult.shipmentId
-              });
-            }
-          } else {
-            result.amazon.errors.push(`PO ${poNumber}: ${asnResult.errors.join(', ')}`);
-          }
-        } catch (asnErr) {
-          console.error(`[VendorAPI] ASN exception for ${poNumber}:`, asnErr);
-          result.amazon.errors.push(`PO ${poNumber}: ${asnErr.message}`);
+            shipmentId: asnResult.shipmentId,
+            consolidated: true
+          });
         }
+      } else {
+        result.amazon.errors.push(`Consolidated ASN: ${asnResult.errors.join(', ')}`);
       }
+
     } catch (amazonErr) {
       console.error('[VendorAPI] Amazon ASN fatal error:', amazonErr);
       result.amazon.errors.push(`Amazon ASN: ${amazonErr.message}`);

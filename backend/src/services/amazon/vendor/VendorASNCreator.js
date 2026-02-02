@@ -715,6 +715,277 @@ class VendorASNCreator {
   }
 
   /**
+   * Submit a SINGLE consolidated ASN for multiple POs in one shipment
+   * This is the correct approach per Amazon API - one shipment confirmation can contain multiple POs
+   * Each item in the cartons specifies its purchaseOrderNumber in itemDetails
+   *
+   * @param {Array} poNumbers - Array of purchase order numbers in this shipment
+   * @param {Object} packingData - Carton/pallet data from UI
+   * @param {Array} packingData.cartons - Carton data with SSCC, items (each item has ean, sku, quantity, poNumber)
+   * @param {Object} packingData.carrier - Carrier info { scac, name, trackingNumber }
+   * @param {Object} packingData.measurements - { totalWeight, weightUnit }
+   * @param {Object} options - Additional options
+   */
+  async submitConsolidatedASN(poNumbers, packingData, options = {}) {
+    const { dryRun = false, shipmentId: providedShipmentId = null } = options;
+
+    const result = {
+      success: false,
+      purchaseOrderNumbers: poNumbers,
+      shipmentId: null,
+      transactionId: null,
+      cartonCount: packingData.cartons?.length || 0,
+      errors: [],
+      warnings: []
+    };
+
+    console.log(`[VendorASNCreator] submitConsolidatedASN called for ${poNumbers.length} POs: ${poNumbers.join(', ')}`);
+
+    try {
+      // Fetch ALL POs from MongoDB
+      const pos = [];
+      const poItemsMap = {}; // Map EAN -> { poNumber, item }
+      let primaryPO = null;
+
+      for (const poNumber of poNumbers) {
+        const po = await this.importer.getPurchaseOrder(poNumber);
+        if (!po) {
+          result.warnings.push(`PO not found: ${poNumber}`);
+          continue;
+        }
+        pos.push(po);
+        if (!primaryPO) primaryPO = po; // Use first PO for shipment-level details
+
+        // Build map of EAN -> PO for item lookup
+        for (const item of (po.items || [])) {
+          if (item.vendorProductIdentifier) {
+            poItemsMap[item.vendorProductIdentifier] = { poNumber, item };
+          }
+          if (item.amazonProductIdentifier) {
+            poItemsMap[item.amazonProductIdentifier] = { poNumber, item };
+          }
+        }
+      }
+
+      if (pos.length === 0) {
+        result.errors.push('No valid POs found');
+        return result;
+      }
+
+      console.log(`[VendorASNCreator] Found ${pos.length} POs with ${Object.keys(poItemsMap).length} unique items`);
+
+      // Generate shipment ID
+      const shipmentId = providedShipmentId || `CONS-${Date.now()}-${poNumbers.join('-').substring(0, 20)}`;
+      result.shipmentId = shipmentId;
+
+      // Build the consolidated ASN payload
+      const asnPayload = this._buildConsolidatedASNPayload(pos, poItemsMap, shipmentId, packingData);
+
+      if (dryRun) {
+        console.log(`[VendorASNCreator] Dry run - not submitting to Amazon`);
+        result.success = true;
+        result.dryRun = true;
+        result.payload = asnPayload;
+        return result;
+      }
+
+      // Submit to Amazon using the primary PO's marketplace
+      const marketplace = primaryPO.amazonVendor?.marketplaceId || primaryPO.marketplaceId || 'FR';
+      console.log(`[VendorASNCreator] Submitting consolidated ASN to marketplace: ${marketplace}`);
+      const client = this.getClient(marketplace);
+      await client.init();
+
+      console.log(`[VendorASNCreator] Consolidated ASN Payload:`, JSON.stringify(asnPayload, null, 2));
+      const response = await client.submitShipmentConfirmations(asnPayload);
+      console.log(`[VendorASNCreator] Amazon response:`, JSON.stringify(response));
+
+      // Store consolidated shipment in MongoDB
+      const shipmentData = {
+        shipmentId,
+        purchaseOrderNumbers: poNumbers,
+        marketplaceId: marketplace,
+        transactionId: response.transactionId,
+        status: 'submitted',
+        submittedAt: new Date(),
+        cartons: packingData.cartons?.map(c => ({
+          sscc: c.sscc,
+          trackingNumber: c.trackingNumber,
+          items: c.items?.map(i => ({
+            ean: i.ean,
+            sku: i.sku,
+            quantity: i.quantity,
+            poNumber: i.poNumber
+          }))
+        })) || [],
+        isConsolidated: true
+      };
+
+      await this._saveShipment(shipmentData);
+
+      // Update all POs
+      for (const poNumber of poNumbers) {
+        await this.db.collection(PO_COLLECTION).updateOne(
+          { 'sourceIds.amazonVendorPONumber': poNumber },
+          {
+            $set: {
+              'amazonVendor.shipmentStatus': 'shipped',
+              'amazonVendor.lastShipmentId': shipmentId,
+              updatedAt: new Date()
+            }
+          }
+        );
+      }
+
+      result.success = true;
+      result.transactionId = response.transactionId;
+      console.log(`[VendorASNCreator] Consolidated ASN submitted! transactionId: ${response.transactionId}`);
+
+    } catch (error) {
+      console.error(`[VendorASNCreator] Consolidated ASN submission failed:`, error.message);
+      result.errors.push(error.message);
+    }
+
+    return result;
+  }
+
+  /**
+   * Build consolidated ASN payload for multiple POs
+   * Key difference: each carton item includes itemDetails.purchaseOrderNumber
+   */
+  _buildConsolidatedASNPayload(pos, poItemsMap, shipmentId, packingData) {
+    const { cartons = [], carrier = {}, measurements = {} } = packingData;
+    const primaryPO = pos[0];
+    const shipmentDate = new Date().toISOString();
+
+    // Build shippedItems from ALL carton items, grouped by EAN+PO
+    const shippedItemsMap = {};
+    let itemSequence = 1;
+
+    cartons.forEach(carton => {
+      carton.items.forEach(item => {
+        // Look up which PO this item belongs to
+        const poInfo = poItemsMap[item.ean] || poItemsMap[item.asin];
+        const poNumber = item.poNumber || poInfo?.poNumber || pos[0].sourceIds?.amazonVendorPONumber;
+
+        // Key by EAN+PO to handle same item in multiple POs
+        const key = `${item.ean}:${poNumber}`;
+
+        if (!shippedItemsMap[key]) {
+          shippedItemsMap[key] = {
+            itemSequenceNumber: String(itemSequence++),
+            amazonProductIdentifier: poInfo?.item?.amazonProductIdentifier || item.asin,
+            vendorProductIdentifier: item.ean,
+            shippedQuantity: {
+              amount: 0,
+              unitOfMeasure: 'Eaches'
+            },
+            itemDetails: {
+              purchaseOrderNumber: poNumber
+            }
+          };
+        }
+        shippedItemsMap[key].shippedQuantity.amount += item.quantity;
+      });
+    });
+
+    const shippedItems = Object.values(shippedItemsMap);
+    console.log(`[VendorASNCreator] Consolidated shippedItems (${shippedItems.length}):`,
+      shippedItems.map(i => ({ seq: i.itemSequenceNumber, ean: i.vendorProductIdentifier, qty: i.shippedQuantity.amount, po: i.itemDetails.purchaseOrderNumber })));
+
+    // Build carton data with itemDetails.purchaseOrderNumber for each item
+    const cartonData = cartons.map((carton, idx) => {
+      const cartonObj = {
+        cartonIdentifiers: [{
+          containerIdentificationType: 'SSCC',
+          containerIdentificationNumber: carton.sscc
+        }],
+        cartonSequenceNumber: String(idx + 1),
+        items: carton.items.map(item => {
+          const poInfo = poItemsMap[item.ean] || poItemsMap[item.asin];
+          const poNumber = item.poNumber || poInfo?.poNumber || pos[0].sourceIds?.amazonVendorPONumber;
+
+          // Find the matching shippedItem to get itemReference
+          const key = `${item.ean}:${poNumber}`;
+          const shippedItem = shippedItemsMap[key];
+
+          return {
+            itemReference: shippedItem?.itemSequenceNumber || '1',
+            shippedQuantity: {
+              amount: item.quantity,
+              unitOfMeasure: 'Eaches'
+            },
+            itemDetails: {
+              purchaseOrderNumber: poNumber
+            }
+          };
+        })
+      };
+
+      if (carton.trackingNumber) {
+        cartonObj.trackingNumber = carton.trackingNumber;
+      }
+      if (carton.weight) {
+        cartonObj.weight = {
+          unitOfMeasure: 'Kg',
+          value: String(carton.weight)
+        };
+      }
+
+      return cartonObj;
+    });
+
+    // Build the confirmation
+    const confirmation = {
+      shipmentIdentifier: shipmentId,
+      shipmentConfirmationType: 'Original',
+      shipmentType: SHIPMENT_TYPES.SMALL_PARCEL,
+      shipmentStructure: 'LooseAssortmentCase',
+      shipmentConfirmationDate: shipmentDate,
+      shippedDate: shipmentDate,
+      estimatedDeliveryDate: (primaryPO.amazonVendor?.deliveryWindow?.endDate || primaryPO.deliveryWindow?.endDate)
+        ? new Date(primaryPO.amazonVendor?.deliveryWindow?.endDate || primaryPO.deliveryWindow?.endDate).toISOString()
+        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      sellingParty: {
+        partyId: primaryPO.amazonVendor?.sellingParty?.partyId || primaryPO.sellingParty?.partyId,
+        address: ACROPAQ_WAREHOUSE_ADDRESS
+      },
+      shipFromParty: {
+        partyId: primaryPO.amazonVendor?.sellingParty?.partyId || primaryPO.sellingParty?.partyId,
+        address: ACROPAQ_WAREHOUSE_ADDRESS
+      },
+      shipToParty: primaryPO.amazonVendor?.shipToParty || primaryPO.shipToParty || {
+        partyId: 'AMAZON'
+      },
+      shippedItems,
+      cartons: cartonData
+    };
+
+    // Add transportation details if carrier provided
+    if (carrier.scac || carrier.name) {
+      confirmation.transportationDetails = {
+        carrierScac: carrier.scac || 'GLSFR',
+        carrierShipmentReferenceNumber: carrier.trackingNumber || null,
+        transportationMode: carrier.mode || 'Road'
+      };
+    }
+
+    // Add shipment measurements
+    const totalWeight = measurements.totalWeight || cartons.reduce((sum, c) => sum + (c.weight || 0), 0);
+    confirmation.shipmentMeasurements = {
+      grossShipmentWeight: {
+        unitOfMeasure: 'Kg',
+        value: String(totalWeight || cartons.length * 5)
+      },
+      cartonCount: cartons.length,
+      palletCount: 0
+    };
+
+    return {
+      shipmentConfirmations: [confirmation]
+    };
+  }
+
+  /**
    * Save shipment to MongoDB
    */
   async _saveShipment(shipment) {
