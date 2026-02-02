@@ -4857,13 +4857,13 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
             // Get move lines for this picking
             const moves = await odoo.searchRead('stock.move',
               [['picking_id', '=', picking.id]],
-              ['id', 'product_id', 'product_uom_qty', 'quantity']
+              ['id', 'product_id', 'product_uom_qty', 'quantity_done']
             );
 
             // Set quantity done on each move
             for (const move of moves) {
               await odoo.write('stock.move', [move.id], {
-                quantity: move.product_uom_qty
+                quantity_done: move.product_uom_qty
               });
             }
 
