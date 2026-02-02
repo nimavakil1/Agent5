@@ -87,6 +87,13 @@ async function main() {
     console.log('  amazonVendor.sellingParty:', JSON.stringify(importerPO.amazonVendor?.sellingParty));
     console.log('  shipToParty:', JSON.stringify(importerPO.amazonVendor?.shipToParty));
     console.log('  importDetails:', JSON.stringify(importerPO.amazonVendor?.importDetails));
+    console.log('  purchaseOrderType:', importerPO.amazonVendor?.purchaseOrderType);
+    console.log('  shipmentType in PO:', importerPO.amazonVendor?.shipmentType);
+    console.log('  Full raw PO keys:', Object.keys(importerPO.amazonVendor || {}));
+    // Check for any routing/shipment method info
+    if (importerPO.amazonVendor?.raw) {
+      console.log('  Raw PO data keys:', Object.keys(importerPO.amazonVendor.raw));
+    }
   } else {
     console.log('Importer returned null for PO 58AIYHEC');
   }
