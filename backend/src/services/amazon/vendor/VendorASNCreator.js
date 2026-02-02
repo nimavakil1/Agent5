@@ -547,12 +547,17 @@ class VendorASNCreator {
     }
 
     if (carrierScac || trackingNumber) {
+      // Generate BOL number if not provided - may be required for certain FCs
+      const bolNumber = carrier.billOfLadingNumber ||
+        (trackingNumber ? `BOL-${trackingNumber}` : null);
+
       confirmation.transportationDetails = {
         carrierScac: carrierScac,
         carrierShipmentReferenceNumber: trackingNumber,
-        transportationMode: carrier.mode || TRANSPORTATION_METHODS.ROAD
+        transportationMode: carrier.mode || TRANSPORTATION_METHODS.ROAD,
+        ...(bolNumber && { billOfLadingNumber: bolNumber })
       };
-      console.log(`[VendorASNCreator] TransportationDetails: SCAC=${carrierScac}, tracking=${trackingNumber}`);
+      console.log(`[VendorASNCreator] TransportationDetails: SCAC=${carrierScac}, tracking=${trackingNumber}, BOL=${bolNumber}`);
     }
 
     // Add pallet data if present - at root level
@@ -991,11 +996,17 @@ class VendorASNCreator {
     };
 
     // Add transportation details if carrier provided
+    // Note: billOfLadingNumber may be required even for SmallParcel to certain FCs
     if (carrier.scac || carrier.name) {
+      // Generate a BOL number if not provided - use first carton's tracking as reference
+      const bolNumber = carrier.billOfLadingNumber ||
+        (cartons.length > 0 && cartons[0].trackingNumber ? `BOL-${cartons[0].trackingNumber}` : null);
+
       confirmation.transportationDetails = {
-        carrierScac: carrier.scac || 'GLSFR',
+        carrierScac: carrier.scac || 'GLSO',  // GLS Standard SCAC
         carrierShipmentReferenceNumber: carrier.trackingNumber || null,
-        transportationMode: carrier.mode || 'Road'
+        transportationMode: carrier.mode || 'Road',
+        ...(bolNumber && { billOfLadingNumber: bolNumber })
       };
     }
 
