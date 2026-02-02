@@ -607,7 +607,10 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       query._testData = true;
     } else {
       query._testData = { $ne: true };
-      query['sourceIds.amazonVendorPONumber'] = { $not: /^TST/ };
+      // Only add TST exclusion if NOT a separate group (separate groups already have specific PO filter)
+      if (!isSeparate) {
+        query['sourceIds.amazonVendorPONumber'] = { $not: /^TST/ };
+      }
     }
 
     // Add date filter if present - use UTC to match database dates
