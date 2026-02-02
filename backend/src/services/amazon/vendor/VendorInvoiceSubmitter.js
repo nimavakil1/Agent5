@@ -797,6 +797,10 @@ class VendorInvoiceSubmitter {
     // Check for missing items in invoice
     for (const [sku, poItem] of Object.entries(poItems)) {
       if (!invoiceItems[sku]) {
+        // Skip items with qty 0 - they're not expected to be invoiced
+        if (poItem.qty === 0) {
+          continue;
+        }
         result.comparison.itemsMissing.push({
           sku,
           asin: poItem.asin,
