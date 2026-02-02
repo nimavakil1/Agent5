@@ -11,7 +11,7 @@ async function main() {
 
   // Find the most recent consolidated shipment for 58AIYHEC
   const shipment = await db.collection('vendor_shipments').findOne({
-    transactionId: '6fc54205-3bd9-4d3b-8f29-0f08a1f4bbfa-20260202113515'
+    transactionId: 'df18c817-b94d-4f50-bc2c-1863da8b085b-20260202114307'
   }) || await db.collection('vendor_shipments').findOne({
     shipmentId: { $regex: /CONS.*58AIYHEC/ }
   }, { sort: { submittedAt: -1 } });
