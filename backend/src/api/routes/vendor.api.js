@@ -5071,7 +5071,7 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
         // Get DELIVERED quantities from stock.move (actual shipped quantities)
         const stockMoves = await odoo.searchRead('stock.move',
           [['picking_id', '=', pickingInfo.id], ['state', '=', 'done']],
-          ['id', 'product_id', 'product_uom_qty', 'quantity', 'sale_line_id']
+          ['id', 'product_id', 'product_uom_qty', 'quantity_done', 'sale_line_id']
         );
 
         // Build a map of sale_line_id -> delivered qty
@@ -5079,7 +5079,7 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
         for (const move of stockMoves) {
           if (move.sale_line_id) {
             const lineId = move.sale_line_id[0];
-            deliveredByLine[lineId] = (deliveredByLine[lineId] || 0) + (move.quantity || move.product_uom_qty);
+            deliveredByLine[lineId] = (deliveredByLine[lineId] || 0) + (move.quantity_done || move.product_uom_qty);
           }
         }
 
