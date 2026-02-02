@@ -353,7 +353,7 @@ router.get('/orders/consolidate', async (req, res) => {
       const vendorGroup = getVendorGroup(marketplaceCode);
 
       // If order has a consolidationOverride, it gets its own separate group
-      const groupId = order.consolidationOverride
+      const groupId = order.amazonVendor?.consolidationOverride
         ? `${createConsolidationGroupId(vendorGroup, partyId, deliveryEnd)}_SEP_${poNumber}`
         : createConsolidationGroupId(vendorGroup, partyId, deliveryEnd);
 
@@ -452,22 +452,23 @@ router.post('/orders/consolidation/remove', async (req, res) => {
     }
 
     const db = getDb();
-    const collection = db.collection('vendor_purchase_orders');
 
-    // Find the order
-    const order = await collection.findOne({ purchaseOrderNumber: poNumber });
+    // Find the order in unified_orders collection
+    const order = await db.collection('unified_orders').findOne({
+      'sourceIds.amazonVendorPONumber': poNumber
+    });
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
 
     // Set consolidationOverride to force separate group
-    await collection.updateOne(
-      { purchaseOrderNumber: poNumber },
+    await db.collection('unified_orders').updateOne(
+      { 'sourceIds.amazonVendorPONumber': poNumber },
       {
         $set: {
-          consolidationOverride: true,
-          consolidationOverrideAt: new Date(),
-          consolidationOverrideReason: `Removed from group ${groupId}`
+          'amazonVendor.consolidationOverride': true,
+          'amazonVendor.consolidationOverrideAt': new Date(),
+          'amazonVendor.consolidationOverrideReason': `Removed from group ${groupId}`
         }
       }
     );
@@ -498,16 +499,15 @@ router.post('/orders/consolidation/restore', async (req, res) => {
     }
 
     const db = getDb();
-    const collection = db.collection('vendor_purchase_orders');
 
-    // Remove consolidationOverride
-    await collection.updateOne(
-      { purchaseOrderNumber: poNumber },
+    // Remove consolidationOverride from unified_orders
+    await db.collection('unified_orders').updateOne(
+      { 'sourceIds.amazonVendorPONumber': poNumber },
       {
         $unset: {
-          consolidationOverride: '',
-          consolidationOverrideAt: '',
-          consolidationOverrideReason: ''
+          'amazonVendor.consolidationOverride': '',
+          'amazonVendor.consolidationOverrideAt': '',
+          'amazonVendor.consolidationOverrideReason': ''
         }
       }
     );
@@ -562,7 +562,7 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       query = {
         channel: 'amazon-vendor',
         'sourceIds.amazonVendorPONumber': poNumber,
-        consolidationOverride: true,
+        'amazonVendor.consolidationOverride': true,
         'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] }
       };
 
@@ -583,7 +583,7 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
       query = {
         channel: 'amazon-vendor',
         'amazonVendor.shipToParty.partyId': fcPartyId,
-        consolidationOverride: { $ne: true },
+        'amazonVendor.consolidationOverride': { $ne: true },
         'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] }
       };
 
@@ -1544,7 +1544,7 @@ async function generatePackingList(req, res) {
       'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
       'amazonVendor.shipmentStatus': 'not_shipped',
       'odoo.deliveryStatus': { $ne: 'full' },
-      consolidationOverride: { $ne: true }
+      'amazonVendor.consolidationOverride': { $ne: true }
     };
 
     // CRITICAL: Filter by vendor group to ensure only orders from same group are shown
