@@ -777,7 +777,8 @@
       }
 
       try {
-        const res = await fetch(`/api/vendor/orders/consolidate/${encodeURIComponent(groupId)}`, { credentials: 'include' });
+        // Always use status=all to allow working on any shipment (including completed ones)
+        const res = await fetch(`/api/vendor/orders/consolidate/${encodeURIComponent(groupId)}?status=all`, { credentials: 'include' });
         const data = await res.json();
 
         if (!data.success) throw new Error(data.error);
