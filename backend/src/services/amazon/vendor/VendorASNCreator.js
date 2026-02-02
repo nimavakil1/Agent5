@@ -468,10 +468,16 @@ class VendorASNCreator {
     Object.values(itemTotals).forEach(item => shippedItems.push(item));
 
     // Build confirmation with correct Amazon API field names
+    // shipmentStructure determines the hierarchy:
+    // - LooseAssortmentCase: Shipment -> Order -> Carton/Package -> Item (Small Parcel, no pallets)
+    // - PalletizedAssortmentCase: Shipment -> Order -> Pallet/Tare -> Carton/Package -> Item (LTL with pallets)
+    const shipmentStructure = pallets.length > 0 ? 'PalletizedAssortmentCase' : 'LooseAssortmentCase';
+
     const confirmation = {
       shipmentIdentifier: shipmentId,
       shipmentConfirmationType: confirmationType,
       shipmentType: pallets.length > 0 ? SHIPMENT_TYPES.LESS_THAN_TRUCK_LOAD : SHIPMENT_TYPES.SMALL_PARCEL,
+      shipmentStructure: shipmentStructure,
       shipmentConfirmationDate: new Date(shipmentDate).toISOString(),
       shippedDate: new Date(shipmentDate).toISOString(),
       estimatedDeliveryDate: (po.amazonVendor?.deliveryWindow?.endDate || po.deliveryWindow?.endDate)
