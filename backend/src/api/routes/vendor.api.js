@@ -4932,9 +4932,11 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
       console.log(`[VendorAPI] STEP 3: Submit ASN to Amazon for ${poNumbers.length} PO(s)`);
       const asnCreator = await getVendorASNCreator();
 
-      // Build carton data from parcels
+      // Build carton data from parcels - include weight and tracking
       const cartons = shipment.parcels.map(parcel => ({
         sscc: parcel.sscc,
+        trackingNumber: parcel.glsTrackingNumber || parcel.trackingNumber || null,
+        weight: parcel.weight || parcel.estimatedWeight || null,
         items: (parcel.items || []).map(item => ({
           ean: item.ean,
           sku: item.sku,
@@ -4942,17 +4944,40 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
         }))
       }));
 
-      console.log(`[VendorAPI] ASN carton data: ${cartons.length} carton(s)`);
+      // Calculate total weight from all parcels
+      const totalWeight = shipment.parcels.reduce((sum, p) => sum + (p.weight || p.estimatedWeight || 0), 0);
+
+      // Get tracking number (use first parcel's tracking or shipment-level tracking)
+      const masterTrackingNumber = shipment.trackingNumber ||
+        (shipment.parcels.find(p => p.glsTrackingNumber || p.trackingNumber)?.glsTrackingNumber) ||
+        (shipment.parcels.find(p => p.glsTrackingNumber || p.trackingNumber)?.trackingNumber) ||
+        null;
+
+      console.log(`[VendorAPI] ASN carton data: ${cartons.length} carton(s), totalWeight=${totalWeight}kg, tracking=${masterTrackingNumber}`);
       cartons.forEach((c, i) => {
-        console.log(`[VendorAPI]   Carton ${i + 1}: SSCC=${c.sscc}, items=${c.items.length}, total_qty=${c.items.reduce((s, it) => s + it.quantity, 0)}`);
+        console.log(`[VendorAPI]   Carton ${i + 1}: SSCC=${c.sscc}, weight=${c.weight}kg, tracking=${c.trackingNumber}, items=${c.items.length}, total_qty=${c.items.reduce((s, it) => s + it.quantity, 0)}`);
         c.items.forEach(it => console.log(`[VendorAPI]     - EAN=${it.ean}, SKU=${it.sku}, qty=${it.quantity}`));
       });
+
+      // Build carrier info for small parcel shipment
+      const carrier = {
+        scac: 'GLSO', // GLS SCAC code
+        name: 'GLS',
+        mode: 'SmallParcel', // IMPORTANT: SmallParcel instead of Road/LTL
+        trackingNumber: masterTrackingNumber
+      };
+
+      // Build measurements
+      const measurements = {
+        totalWeight: totalWeight,
+        weightUnit: 'KG'
+      };
 
       // Submit ASN for each PO
       for (const poNumber of poNumbers) {
         console.log(`[VendorAPI] Submitting ASN for PO: ${poNumber}`);
         try {
-          const asnResult = await asnCreator.submitASNWithSSCC(poNumber, { cartons }, {
+          const asnResult = await asnCreator.submitASNWithSSCC(poNumber, { cartons, carrier, measurements }, {
             dryRun: false
           });
 
