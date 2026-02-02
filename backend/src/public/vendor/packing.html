@@ -172,12 +172,14 @@
     .progress-step.success { border-left-color: #22c55e; }
     .progress-step.error { border-left-color: #ef4444; background: #1a1218; }
     .progress-step.skipped { border-left-color: #71717a; opacity: 0.6; }
+    .progress-step.warning { border-left-color: #eab308; background: #1a1a18; }
     .progress-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .progress-step.pending .progress-icon { background: #3f3f50; color: #71717a; }
     .progress-step.running .progress-icon { background: #f9731630; color: #f97316; }
     .progress-step.success .progress-icon { background: #22c55e30; color: #22c55e; }
     .progress-step.error .progress-icon { background: #ef444430; color: #ef4444; }
     .progress-step.skipped .progress-icon { background: #3f3f50; color: #71717a; }
+    .progress-step.warning .progress-icon { background: #eab30830; color: #eab308; }
     .progress-icon .material-symbols-outlined { font-size: 20px; }
     .progress-icon.spinning .material-symbols-outlined { animation: spin 1s linear infinite; }
     .progress-content { flex: 1; min-width: 0; }
@@ -1341,6 +1343,9 @@
       } else if (status === 'skipped') {
         iconEl.classList.remove('spinning');
         iconEl.innerHTML = '<span class="material-symbols-outlined">remove_circle_outline</span>';
+      } else if (status === 'warning') {
+        iconEl.classList.remove('spinning');
+        iconEl.innerHTML = '<span class="material-symbols-outlined">warning</span>';
       }
 
       if (detail) {
@@ -1463,7 +1468,56 @@
         await new Promise(r => setTimeout(r, 300));
         if (data.amazon?.asnSubmitted) {
           const txnIds = data.amazon.transactionIds?.map(t => t.transactionId || t).join(', ') || 'N/A';
-          updateStep('asn', 'success', `ASN submitted! Transaction: ${txnIds}`);
+          const shipmentId = data.amazon.shipmentId;
+
+          // Show verifying status while we poll Amazon for actual acceptance
+          updateStep('asn', 'running', `Verifying with Amazon... (Transaction: ${txnIds})`);
+
+          // Poll for actual transaction status
+          if (shipmentId) {
+            let verified = false;
+            let attempts = 0;
+            const maxAttempts = 10; // Max 10 attempts (~20 seconds)
+
+            while (!verified && attempts < maxAttempts) {
+              attempts++;
+              await new Promise(r => setTimeout(r, 2000)); // Wait 2 seconds between polls
+
+              try {
+                const statusRes = await fetch(`/api/vendor/shipments/${shipmentId}/check-status`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include'
+                });
+                const statusData = await statusRes.json();
+
+                if (statusData.success && statusData.transactionStatus) {
+                  const amazonStatus = statusData.transactionStatus.status;
+
+                  if (amazonStatus === 'Success') {
+                    updateStep('asn', 'success', `ASN accepted by Amazon! Transaction: ${txnIds}`);
+                    verified = true;
+                  } else if (amazonStatus === 'Failure') {
+                    const errorMsg = statusData.transactionStatus.errors?.[0]?.message || 'ASN rejected by Amazon';
+                    updateStep('asn', 'error', `Amazon rejected ASN: ${errorMsg}`);
+                    verified = true;
+                  } else if (amazonStatus === 'Processing') {
+                    updateStep('asn', 'running', `Amazon processing... (attempt ${attempts}/${maxAttempts})`);
+                  }
+                }
+              } catch (pollError) {
+                console.error('Error polling ASN status:', pollError);
+              }
+            }
+
+            if (!verified) {
+              // Timed out waiting for Amazon - show pending state
+              updateStep('asn', 'warning', `ASN submitted (pending verification). Transaction: ${txnIds}`);
+            }
+          } else {
+            // No shipment ID to check - just show submitted
+            updateStep('asn', 'success', `ASN submitted! Transaction: ${txnIds}`);
+          }
         } else if (data.amazon?.errors?.some(e => e.includes('ASN'))) {
           updateStep('asn', 'error', data.amazon.errors.find(e => e.includes('ASN')) || 'ASN submission failed');
         } else {
