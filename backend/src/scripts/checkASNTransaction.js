@@ -85,8 +85,32 @@ async function main() {
     console.log('Importer returned PO:');
     console.log('  sellingParty:', JSON.stringify(importerPO.sellingParty));
     console.log('  amazonVendor.sellingParty:', JSON.stringify(importerPO.amazonVendor?.sellingParty));
+    console.log('  shipToParty:', JSON.stringify(importerPO.amazonVendor?.shipToParty));
+    console.log('  importDetails:', JSON.stringify(importerPO.amazonVendor?.importDetails));
   } else {
     console.log('Importer returned null for PO 58AIYHEC');
+  }
+
+  // Check packing shipment for carton tracking numbers
+  console.log('\n--- Checking packing shipment cartons ---');
+  const packingShipment = await db.collection('packing_shipments').findOne({
+    poNumbers: '58AIYHEC'
+  }, { sort: { createdAt: -1 } });
+
+  if (packingShipment) {
+    console.log('Packing shipment found:');
+    console.log('  ID:', packingShipment.packingShipmentId);
+    console.log('  parcels count:', packingShipment.parcels?.length);
+    if (packingShipment.parcels?.length > 0) {
+      packingShipment.parcels.forEach((p, i) => {
+        console.log(`  Parcel ${i + 1}:`);
+        console.log(`    SSCC: ${p.sscc}`);
+        console.log(`    glsTrackingNumber: ${p.glsTrackingNumber}`);
+        console.log(`    trackingNumber: ${p.trackingNumber}`);
+      });
+    }
+  } else {
+    console.log('No packing shipment found');
   }
 
   process.exit(0);
