@@ -787,9 +787,13 @@
         renderGroupInfo();
 
         // Check for existing packing shipment and restore parcel data
-        await loadExistingPackingShipment();
+        // Returns true if shipment was found and restored
+        const restored = await loadExistingPackingShipment();
 
-        setWorkflowStep(1);
+        // Only set to step 1 if no existing shipment was restored
+        if (!restored) {
+          setWorkflowStep(1);
+        }
       } catch (err) {
         document.getElementById('group-loading').innerHTML = `
           <div style="text-align: center;">
@@ -801,20 +805,21 @@
     }
 
     // Load existing packing shipment if any
+    // Returns true if a shipment was found and restored, false otherwise
     async function loadExistingPackingShipment() {
-      if (!groupData || !groupData.orders) return;
+      if (!groupData || !groupData.orders) return false;
 
       // Get PO numbers from the group
       const poNumbers = groupData.orders.map(o => o.purchaseOrderNumber);
-      if (poNumbers.length === 0) return;
+      if (poNumbers.length === 0) return false;
 
       try {
         // Check for existing packing shipment using the first PO
         const res = await fetch(`/api/vendor/packing/shipment-by-po/${encodeURIComponent(poNumbers[0])}`, { credentials: 'include' });
-        if (!res.ok) return; // No existing shipment
+        if (!res.ok) return false; // No existing shipment
 
         const data = await res.json();
-        if (!data.success || !data.shipment) return;
+        if (!data.success || !data.shipment) return false;
 
         const shipment = data.shipment;
         console.log('Found existing packing shipment:', shipment.shipmentId, 'status:', shipment.status);
@@ -838,11 +843,12 @@
           // Store the shipment ID for ASN submission
           currentShipmentId = shipment.shipmentId;
 
+          // Re-render to show the existing data
+          renderParcels();
+
           // If labels were already generated, restore the full state
           if (shipment.status === 'labels_generated' || shipment.status === 'completed') {
             showToast(`Restored ${parcels.length} parcels from previous session`);
-            // Re-render to show the existing data
-            renderParcels();
 
             // Enable buttons based on status
             document.getElementById('print-btn').disabled = false;
@@ -856,10 +862,17 @@
 
             // Set workflow step
             setWorkflowStep(shipment.status === 'completed' ? 4 : 3);
+            return true;
+          } else {
+            // Shipment exists but labels not generated yet - restore parcels but stay on step 1
+            showToast(`Restored ${parcels.length} parcels from previous session`);
+            return false; // Let calling code set step 1
           }
         }
+        return false;
       } catch (err) {
         console.warn('Could not load existing packing shipment:', err.message);
+        return false;
       }
     }
 
