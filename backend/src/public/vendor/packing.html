@@ -163,6 +163,36 @@
     .carrier-badge { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
     .carrier-badge.parcel { background: #3b82f620; color: #60a5fa; }
     .carrier-badge.freight { background: #f9731620; color: #f97316; }
+
+    /* Progress Modal */
+    .progress-modal { width: 600px; }
+    .progress-step { display: flex; align-items: flex-start; gap: 16px; padding: 16px; background: #1a1a28; border-radius: 10px; margin-bottom: 12px; border-left: 3px solid #3f3f50; }
+    .progress-step.pending { opacity: 0.5; }
+    .progress-step.running { border-left-color: #f97316; background: #1a1a20; }
+    .progress-step.success { border-left-color: #22c55e; }
+    .progress-step.error { border-left-color: #ef4444; background: #1a1218; }
+    .progress-step.skipped { border-left-color: #71717a; opacity: 0.6; }
+    .progress-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .progress-step.pending .progress-icon { background: #3f3f50; color: #71717a; }
+    .progress-step.running .progress-icon { background: #f9731630; color: #f97316; }
+    .progress-step.success .progress-icon { background: #22c55e30; color: #22c55e; }
+    .progress-step.error .progress-icon { background: #ef444430; color: #ef4444; }
+    .progress-step.skipped .progress-icon { background: #3f3f50; color: #71717a; }
+    .progress-icon .material-symbols-outlined { font-size: 20px; }
+    .progress-icon.spinning .material-symbols-outlined { animation: spin 1s linear infinite; }
+    .progress-content { flex: 1; min-width: 0; }
+    .progress-title { font-size: 14px; font-weight: 600; color: #e4e4e7; margin-bottom: 4px; }
+    .progress-detail { font-size: 12px; color: #71717a; word-break: break-word; }
+    .progress-detail.error { color: #f87171; }
+    .progress-detail.success { color: #4ade80; }
+    .progress-summary { margin-top: 20px; padding: 16px; background: #12121a; border-radius: 10px; }
+    .progress-summary-title { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 12px; }
+    .progress-summary-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #252532; font-size: 13px; }
+    .progress-summary-item:last-child { border-bottom: none; }
+    .progress-summary-label { color: #71717a; }
+    .progress-summary-value { color: #e4e4e7; font-weight: 500; }
+    .progress-summary-value.success { color: #4ade80; }
+    .progress-summary-value.error { color: #f87171; }
   </style>
 </head>
 <body>
@@ -335,6 +365,25 @@
 
   <!-- Toast -->
   <div class="toast" id="toast"></div>
+
+  <!-- ASN Progress Modal -->
+  <div class="modal-overlay" id="asn-progress-modal">
+    <div class="modal progress-modal">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="material-symbols-outlined" style="color: #f97316; margin-right: 8px;">rocket_launch</span>
+          Submitting to Odoo & Amazon
+        </div>
+        <button class="modal-close" id="progress-close-btn" onclick="closeProgressModal()" style="display: none;">&times;</button>
+      </div>
+      <div class="modal-body" id="progress-steps">
+        <!-- Steps will be rendered dynamically -->
+      </div>
+      <div class="modal-footer" id="progress-footer" style="display: none;">
+        <button class="btn btn-secondary" onclick="closeProgressModal()">Close</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Add Items Modal -->
   <div class="modal-overlay" id="add-items-modal">
@@ -1240,7 +1289,123 @@
       showToast('Labels opened for printing');
     }
 
-    // Submit ASN
+    // Progress modal state
+    const progressSteps = [
+      { id: 'validate', title: 'Validate Odoo Pickings', icon: 'inventory_2' },
+      { id: 'quantities', title: 'Update Odoo Quantities', icon: 'edit_note' },
+      { id: 'attachments', title: 'Attach Labels to Odoo', icon: 'attach_file' },
+      { id: 'asn', title: 'Submit ASN to Amazon', icon: 'cloud_upload' },
+      { id: 'invoices', title: 'Create & Post Invoices', icon: 'receipt_long' },
+      { id: 'submit-invoices', title: 'Submit Invoices to Amazon', icon: 'send' }
+    ];
+
+    function openProgressModal() {
+      const modal = document.getElementById('asn-progress-modal');
+      const stepsContainer = document.getElementById('progress-steps');
+      document.getElementById('progress-close-btn').style.display = 'none';
+      document.getElementById('progress-footer').style.display = 'none';
+
+      // Render initial steps
+      stepsContainer.innerHTML = progressSteps.map(step => `
+        <div class="progress-step pending" id="step-${step.id}">
+          <div class="progress-icon">
+            <span class="material-symbols-outlined">${step.icon}</span>
+          </div>
+          <div class="progress-content">
+            <div class="progress-title">${step.title}</div>
+            <div class="progress-detail" id="detail-${step.id}">Waiting...</div>
+          </div>
+        </div>
+      `).join('') + '<div id="progress-summary-container"></div>';
+
+      modal.classList.add('open');
+    }
+
+    function updateStep(stepId, status, detail) {
+      const stepEl = document.getElementById(`step-${stepId}`);
+      const detailEl = document.getElementById(`detail-${stepId}`);
+      if (!stepEl) return;
+
+      stepEl.className = `progress-step ${status}`;
+      const iconEl = stepEl.querySelector('.progress-icon');
+
+      if (status === 'running') {
+        iconEl.classList.add('spinning');
+        iconEl.innerHTML = '<span class="material-symbols-outlined">sync</span>';
+      } else if (status === 'success') {
+        iconEl.classList.remove('spinning');
+        iconEl.innerHTML = '<span class="material-symbols-outlined">check_circle</span>';
+      } else if (status === 'error') {
+        iconEl.classList.remove('spinning');
+        iconEl.innerHTML = '<span class="material-symbols-outlined">error</span>';
+      } else if (status === 'skipped') {
+        iconEl.classList.remove('spinning');
+        iconEl.innerHTML = '<span class="material-symbols-outlined">remove_circle_outline</span>';
+      }
+
+      if (detail) {
+        detailEl.textContent = detail;
+        detailEl.className = `progress-detail ${status === 'error' ? 'error' : (status === 'success' ? 'success' : '')}`;
+      }
+    }
+
+    function showProgressSummary(data) {
+      const container = document.getElementById('progress-summary-container');
+      const allErrors = [...(data.odoo?.errors || []), ...(data.amazon?.errors || [])];
+
+      let summaryHtml = `
+        <div class="progress-summary">
+          <div class="progress-summary-title">Summary</div>
+          <div class="progress-summary-item">
+            <span class="progress-summary-label">Pickings Validated</span>
+            <span class="progress-summary-value ${data.odoo?.pickingsValidated?.length ? 'success' : ''}">${data.odoo?.pickingsValidated?.length || 0}</span>
+          </div>
+          <div class="progress-summary-item">
+            <span class="progress-summary-label">ASN Submitted</span>
+            <span class="progress-summary-value ${data.amazon?.asnSubmitted ? 'success' : 'error'}">${data.amazon?.asnSubmitted ? 'Yes' : 'No'}</span>
+          </div>
+          <div class="progress-summary-item">
+            <span class="progress-summary-label">Transaction IDs</span>
+            <span class="progress-summary-value">${data.amazon?.transactionIds?.length || 0}</span>
+          </div>
+          <div class="progress-summary-item">
+            <span class="progress-summary-label">Invoices Created</span>
+            <span class="progress-summary-value">${data.odoo?.invoicesCreated?.length || 0}</span>
+          </div>
+          <div class="progress-summary-item">
+            <span class="progress-summary-label">Invoices Posted</span>
+            <span class="progress-summary-value">${data.odoo?.invoicesPosted?.length || 0}</span>
+          </div>
+          <div class="progress-summary-item">
+            <span class="progress-summary-label">Invoices Submitted to Amazon</span>
+            <span class="progress-summary-value ${data.amazon?.invoicesSubmitted?.length ? 'success' : ''}">${data.amazon?.invoicesSubmitted?.length || 0}</span>
+          </div>
+      `;
+
+      if (allErrors.length > 0) {
+        summaryHtml += `
+          <div class="progress-summary-item" style="flex-direction: column; align-items: flex-start; margin-top: 12px;">
+            <span class="progress-summary-label" style="color: #ef4444; margin-bottom: 8px;">Errors (${allErrors.length}):</span>
+            <div style="font-size: 12px; color: #f87171;">
+              ${allErrors.map(e => `• ${e}`).join('<br>')}
+            </div>
+          </div>
+        `;
+      }
+
+      summaryHtml += '</div>';
+      container.innerHTML = summaryHtml;
+
+      // Show close button
+      document.getElementById('progress-close-btn').style.display = 'block';
+      document.getElementById('progress-footer').style.display = 'flex';
+    }
+
+    function closeProgressModal() {
+      document.getElementById('asn-progress-modal').classList.remove('open');
+    }
+
+    // Submit ASN with progress modal
     async function submitASN() {
       if (!currentShipmentId) {
         showToast('Generate labels first', true);
@@ -1249,7 +1414,12 @@
 
       const asnBtn = document.getElementById('asn-btn');
       asnBtn.disabled = true;
-      asnBtn.innerHTML = '<span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">sync</span>Submitting...';
+
+      // Open progress modal
+      openProgressModal();
+
+      // Start with first step running
+      updateStep('validate', 'running', 'Validating Odoo pickings...');
 
       try {
         const res = await fetch(`/api/vendor/packing/${currentShipmentId}/submit-asn`, {
@@ -1259,56 +1429,102 @@
         });
 
         const data = await res.json();
-        if (!data.success) throw new Error(data.error);
+
+        // Update steps based on response
+        // Step 1: Validate Odoo Pickings
+        if (data.odoo?.pickingsValidated?.length > 0) {
+          updateStep('validate', 'success', `${data.odoo.pickingsValidated.length} picking(s) validated`);
+        } else if (data.odoo?.errors?.some(e => e.includes('Picking'))) {
+          updateStep('validate', 'error', data.odoo.errors.find(e => e.includes('Picking')) || 'Validation failed');
+        } else {
+          updateStep('validate', 'skipped', 'No pickings to validate');
+        }
+
+        // Step 2: Update Quantities
+        updateStep('quantities', 'running', 'Updating quantities...');
+        await new Promise(r => setTimeout(r, 300)); // Small delay for visual effect
+        if (data.odoo?.pickingsValidated?.length > 0) {
+          updateStep('quantities', 'success', 'Quantities updated in Odoo');
+        } else {
+          updateStep('quantities', 'skipped', 'Skipped - no pickings');
+        }
+
+        // Step 3: Attach Labels
+        updateStep('attachments', 'running', 'Attaching labels...');
+        await new Promise(r => setTimeout(r, 300));
+        if (data.odoo?.attachmentsCreated?.length > 0) {
+          updateStep('attachments', 'success', `${data.odoo.attachmentsCreated.length} attachment(s) created`);
+        } else {
+          updateStep('attachments', 'skipped', 'No attachments created');
+        }
+
+        // Step 4: Submit ASN
+        updateStep('asn', 'running', 'Submitting ASN to Amazon...');
+        await new Promise(r => setTimeout(r, 300));
+        if (data.amazon?.asnSubmitted) {
+          const txnIds = data.amazon.transactionIds?.map(t => t.transactionId || t).join(', ') || 'N/A';
+          updateStep('asn', 'success', `ASN submitted! Transaction: ${txnIds}`);
+        } else if (data.amazon?.errors?.some(e => e.includes('ASN'))) {
+          updateStep('asn', 'error', data.amazon.errors.find(e => e.includes('ASN')) || 'ASN submission failed');
+        } else {
+          updateStep('asn', 'error', 'ASN not submitted - check errors');
+        }
+
+        // Step 5: Create & Post Invoices
+        updateStep('invoices', 'running', 'Creating invoices...');
+        await new Promise(r => setTimeout(r, 300));
+        if (data.odoo?.invoicesPosted?.length > 0) {
+          updateStep('invoices', 'success', `${data.odoo.invoicesPosted.length} invoice(s) posted: ${data.odoo.invoicesPosted.map(i => i.name).join(', ')}`);
+        } else if (data.odoo?.invoicesCreated?.length > 0) {
+          updateStep('invoices', 'success', `${data.odoo.invoicesCreated.length} invoice(s) created (not posted)`);
+        } else {
+          updateStep('invoices', 'skipped', 'No invoices created');
+        }
+
+        // Step 6: Submit Invoices to Amazon
+        updateStep('submit-invoices', 'running', 'Submitting invoices to Amazon...');
+        await new Promise(r => setTimeout(r, 300));
+        if (data.amazon?.invoicesSubmitted?.length > 0) {
+          updateStep('submit-invoices', 'success', `${data.amazon.invoicesSubmitted.length} invoice(s) submitted`);
+        } else if (data.amazon?.errors?.some(e => e.toLowerCase().includes('invoice'))) {
+          const invoiceError = data.amazon.errors.find(e => e.toLowerCase().includes('invoice'));
+          updateStep('submit-invoices', 'error', invoiceError || 'Invoice submission failed');
+        } else {
+          updateStep('submit-invoices', 'skipped', 'No invoices to submit');
+        }
+
+        // Show summary
+        showProgressSummary(data);
+
+        // Update main UI
+        if (!data.success) {
+          throw new Error(data.error || 'Submission failed');
+        }
 
         setWorkflowStep(4);
+        document.getElementById('action-status').textContent = data.message || 'Completed';
 
-        // Show comprehensive status message from the server
-        const statusMsg = data.message || 'Completed';
-        document.getElementById('action-status').textContent = statusMsg;
-
-        // Collect all errors
-        const allErrors = [
-          ...(data.odoo?.errors || []),
-          ...(data.amazon?.errors || [])
-        ];
-
-        // Show different toast based on what was accomplished
-        if (data.amazon?.invoicesSubmitted?.length > 0) {
-          showToast('Deliveries validated, invoices created & submitted to Amazon!');
-        } else if (data.amazon?.asnSubmitted) {
-          showToast('ASN submitted. Check errors for invoice details.');
-        } else if (allErrors.length > 0) {
-          // Show the actual errors in the UI
-          const errorList = allErrors.slice(0, 3).join('\n• ');
-          const moreCount = allErrors.length > 3 ? ` (+${allErrors.length - 3} more)` : '';
-          showToast(`Errors:\n• ${errorList}${moreCount}`, true);
-        } else {
-          showToast('Completed with some errors. Check console.');
-        }
-
-        // Display errors in the action-status area for visibility
-        if (allErrors.length > 0) {
-          const statusEl = document.getElementById('action-status');
-          statusEl.innerHTML = `<span style="color: #ef4444;">Errors (${allErrors.length}):</span><br>` +
-            allErrors.map(e => `• ${e}`).join('<br>');
-          statusEl.style.color = '#ef4444';
-        }
-
-        // Update button based on final status
+        // Update button
+        const allErrors = [...(data.odoo?.errors || []), ...(data.amazon?.errors || [])];
         const hasErrors = allErrors.length > 0;
-        const btnText = data.status === 'invoiced' ? 'Invoiced' : (hasErrors ? 'Completed with errors' : 'Completed');
-        const btnClass = hasErrors ? 'btn-warning' : 'btn-success';
-        asnBtn.innerHTML = `<span class="material-symbols-outlined">${hasErrors ? 'warning' : 'check_circle'}</span>${btnText}`;
-        asnBtn.classList.remove('btn-secondary', 'btn-success', 'btn-warning');
+        const btnText = data.amazon?.asnSubmitted ? (hasErrors ? 'ASN Sent (with errors)' : 'ASN Submitted') : 'Completed with errors';
+        const btnClass = data.amazon?.asnSubmitted ? (hasErrors ? 'btn-warning' : 'btn-success') : 'btn-danger';
+        asnBtn.innerHTML = `<span class="material-symbols-outlined">${data.amazon?.asnSubmitted ? 'check_circle' : 'warning'}</span>${btnText}`;
+        asnBtn.classList.remove('btn-secondary', 'btn-success', 'btn-warning', 'btn-danger');
         asnBtn.classList.add(btnClass);
-
-        // Log any errors for debugging
-        if (allErrors.length > 0) {
-          console.log('All errors:', allErrors);
-        }
+        asnBtn.disabled = false;
 
       } catch (err) {
+        // Update all pending steps to error
+        progressSteps.forEach(step => {
+          const el = document.getElementById(`step-${step.id}`);
+          if (el && el.classList.contains('pending')) {
+            updateStep(step.id, 'error', 'Aborted due to error');
+          }
+        });
+
+        showProgressSummary({ odoo: { errors: [err.message] }, amazon: { errors: [] } });
+
         showToast('Error: ' + err.message, true);
         asnBtn.disabled = false;
         asnBtn.innerHTML = '<span class="material-symbols-outlined">send</span>Update Odoo & submit ASN to Amazon Vendor Central';
