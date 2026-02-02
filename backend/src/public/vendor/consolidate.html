@@ -242,6 +242,9 @@
       const container = document.getElementById('groups-container');
       container.innerHTML = '<div class="loading"><span class="material-symbols-outlined">sync</span>Loading consolidation data...</div>';
 
+      // Clear cached details when reloading (filter may have changed)
+      groupDetails = {};
+
       try {
         const marketplace = document.getElementById('filter-marketplace').value;
         const poSearch = document.getElementById('filter-po').value.trim();
@@ -384,7 +387,9 @@
       // Load details if not cached
       if (!groupDetails[groupId]) {
         try {
-          const res = await fetch(`/api/vendor/orders/consolidate/${encodeURIComponent(groupId)}`, { credentials: 'include' });
+          const status = document.getElementById('filter-status').value;
+          const detailUrl = `/api/vendor/orders/consolidate/${encodeURIComponent(groupId)}?status=${status}`;
+          const res = await fetch(detailUrl, { credentials: 'include' });
           const data = await res.json();
           if (!data.success) throw new Error(data.error);
           groupDetails[groupId] = data;

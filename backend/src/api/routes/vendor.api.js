@@ -554,18 +554,25 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
 
     console.log('[VendorAPI] Consolidate detail - parsed:', JSON.stringify(parsed));
 
+    // Status filter: 'open' (default) or 'all' (include completed)
+    const statusFilter = req.query.status || 'open';
+
     if (isSeparate) {
       // Separate/override group - query for that specific PO
       query = {
         channel: 'amazon-vendor',
         'sourceIds.amazonVendorPONumber': poNumber,
         consolidationOverride: true,
-        'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
-        'amazonVendor.shipmentStatus': 'not_shipped',
-        'odoo.deliveryStatus': { $ne: 'full' }
+        'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] }
       };
 
-      console.log('[VendorAPI] Consolidate detail (SEPARATE) - groupId:', groupId, 'poNumber:', poNumber);
+      // Only filter by shipment/delivery status if status=open
+      if (statusFilter === 'open') {
+        query['amazonVendor.shipmentStatus'] = 'not_shipped';
+        query['odoo.deliveryStatus'] = { $ne: 'full' };
+      }
+
+      console.log('[VendorAPI] Consolidate detail (SEPARATE) - groupId:', groupId, 'poNumber:', poNumber, 'status:', statusFilter);
     } else {
       if (!fcPartyId) {
         return res.status(400).json({ success: false, error: 'Invalid group ID' });
@@ -577,10 +584,14 @@ router.get('/orders/consolidate/:groupId', async (req, res) => {
         channel: 'amazon-vendor',
         'amazonVendor.shipToParty.partyId': fcPartyId,
         consolidationOverride: { $ne: true },
-        'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
-        'amazonVendor.shipmentStatus': 'not_shipped',
-        'odoo.deliveryStatus': { $ne: 'full' }
+        'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] }
       };
+
+      // Only filter by shipment/delivery status if status=open
+      if (statusFilter === 'open') {
+        query['amazonVendor.shipmentStatus'] = 'not_shipped';
+        query['odoo.deliveryStatus'] = { $ne: 'full' };
+      }
 
       // CRITICAL: Filter by vendor group to ensure only orders from same group are shown
       // Orders from different vendor groups cannot be consolidated (different ASNs)
