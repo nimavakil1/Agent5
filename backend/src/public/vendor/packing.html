@@ -846,8 +846,11 @@
           // Re-render to show the existing data
           renderParcels();
 
-          // If labels were already generated, restore the full state
-          if (shipment.status === 'labels_generated' || shipment.status === 'completed') {
+          // Check if labels were already generated (parcels have tracking numbers or SSCC)
+          const hasLabels = parcels.some(p => p.glsTrackingNumber || p.sscc);
+          const isCompleted = ['completed', 'invoiced', 'asn_submitted'].includes(shipment.status);
+
+          if (hasLabels) {
             showToast(`Restored ${parcels.length} parcels from previous session`);
 
             // Enable buttons based on status
@@ -856,12 +859,12 @@
             document.getElementById('generate-btn').textContent = 'Re-generate Labels';
 
             // Update status message
-            document.getElementById('action-status').innerHTML = shipment.status === 'completed'
+            document.getElementById('action-status').innerHTML = isCompleted
               ? '<span style="color: #4ade80;">✓ ASN submitted - you can re-submit if needed</span>'
               : '<span style="color: #fbbf24;">Labels generated - ready to print and submit ASN</span>';
 
             // Set workflow step
-            setWorkflowStep(shipment.status === 'completed' ? 4 : 3);
+            setWorkflowStep(isCompleted ? 4 : 3);
             return true;
           } else {
             // Shipment exists but labels not generated yet - restore parcels but stay on step 1
