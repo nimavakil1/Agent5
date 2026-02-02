@@ -4997,14 +4997,18 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
           processedPickings.add(picking.id);
 
           try {
-            // Get move lines for this picking
+            // Get move lines for this picking - only non-cancelled moves
             const moves = await odoo.searchRead('stock.move',
-              [['picking_id', '=', picking.id]],
-              ['id', 'product_id', 'product_uom_qty', 'quantity_done']
+              [
+                ['picking_id', '=', picking.id],
+                ['state', 'not in', ['cancel', 'done']]  // Skip cancelled and already done moves
+              ],
+              ['id', 'product_id', 'product_uom_qty', 'quantity_done', 'state']
             );
 
-            // Set quantity done on each move
+            // Set quantity done on each move (only for moves that can be modified)
             for (const move of moves) {
+              if (move.state === 'cancel') continue; // Extra safety check
               await odoo.write('stock.move', [move.id], {
                 quantity_done: move.product_uom_qty
               });
