@@ -43,6 +43,31 @@ async function main() {
     }
   }
 
+  // Also check what partyId is in the PO
+  console.log('\n--- Checking PO partyId values ---');
+  const po = await db.collection('unified_orders').findOne({
+    'sourceIds.amazonVendorPONumber': '58AIYHEC'
+  });
+
+  if (po) {
+    console.log('PO 58AIYHEC:');
+    console.log('  sellingParty:', JSON.stringify(po.sellingParty));
+    console.log('  amazonVendor.sellingParty:', JSON.stringify(po.amazonVendor?.sellingParty));
+    console.log('  shipToParty:', JSON.stringify(po.shipToParty));
+    console.log('  amazonVendor.shipToParty:', JSON.stringify(po.amazonVendor?.shipToParty));
+  }
+
+  // Check vendor_purchase_orders too
+  const vpo = await db.collection('vendor_purchase_orders').findOne({
+    purchaseOrderNumber: '58AIYHEC'
+  });
+
+  if (vpo) {
+    console.log('\nVendor PO 58AIYHEC:');
+    console.log('  sellingParty:', JSON.stringify(vpo.sellingParty));
+    console.log('  shipToParty:', JSON.stringify(vpo.shipToParty));
+  }
+
   process.exit(0);
 }
 
