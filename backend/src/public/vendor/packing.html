@@ -1297,8 +1297,7 @@
       { id: 'quantities', title: 'Update Odoo Quantities', icon: 'edit_note' },
       { id: 'attachments', title: 'Attach Labels to Odoo', icon: 'attach_file' },
       { id: 'asn', title: 'Submit ASN to Amazon', icon: 'cloud_upload' },
-      { id: 'invoices', title: 'Create & Post Invoices', icon: 'receipt_long' },
-      { id: 'submit-invoices', title: 'Submit Invoices to Amazon', icon: 'send' }
+      { id: 'invoices', title: 'Create & Post Invoices', icon: 'receipt_long' }
     ];
 
     function openProgressModal() {
@@ -1380,10 +1379,6 @@
           <div class="progress-summary-item">
             <span class="progress-summary-label">Invoices Posted</span>
             <span class="progress-summary-value">${data.odoo?.invoicesPosted?.length || 0}</span>
-          </div>
-          <div class="progress-summary-item">
-            <span class="progress-summary-label">Invoices Submitted to Amazon</span>
-            <span class="progress-summary-value ${data.amazon?.invoicesSubmitted?.length ? 'success' : ''}">${data.amazon?.invoicesSubmitted?.length || 0}</span>
           </div>
       `;
 
@@ -1533,18 +1528,6 @@
           updateStep('invoices', 'success', `${data.odoo.invoicesCreated.length} invoice(s) created (not posted)`);
         } else {
           updateStep('invoices', 'skipped', 'No invoices created');
-        }
-
-        // Step 6: Submit Invoices to Amazon
-        updateStep('submit-invoices', 'running', 'Submitting invoices to Amazon...');
-        await new Promise(r => setTimeout(r, 300));
-        if (data.amazon?.invoicesSubmitted?.length > 0) {
-          updateStep('submit-invoices', 'success', `${data.amazon.invoicesSubmitted.length} invoice(s) submitted`);
-        } else if (data.amazon?.errors?.some(e => e.toLowerCase().includes('invoice'))) {
-          const invoiceError = data.amazon.errors.find(e => e.toLowerCase().includes('invoice'));
-          updateStep('submit-invoices', 'error', invoiceError || 'Invoice submission failed');
-        } else {
-          updateStep('submit-invoices', 'skipped', 'No invoices to submit');
         }
 
         // Show summary

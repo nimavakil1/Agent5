@@ -5338,40 +5338,16 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
     // ========================================
     // STEP 4c: Submit posted invoices to Amazon
     // ========================================
-    for (const postedInvoice of result.odoo.invoicesPosted) {
-      try {
-        const submitResult = await invoiceSubmitter.submitInvoice(postedInvoice.poNumber, {
-          odooInvoiceId: postedInvoice.id,
-          skipValidation: false,
-          forceSubmit: false
-        });
-
-        if (submitResult.success) {
-          result.amazon.invoicesSubmitted.push({
-            poNumber: postedInvoice.poNumber,
-            invoiceName: postedInvoice.name,
-            invoiceNumber: submitResult.invoiceNumber,
-            transactionId: submitResult.transactionId
-          });
-          console.log(`[VendorAPI] Invoice ${postedInvoice.name} submitted to Amazon (txn: ${submitResult.transactionId})`);
-        } else {
-          const errors = submitResult.errors?.join(', ') || 'Unknown error';
-          result.amazon.errors.push(`Invoice ${postedInvoice.name}: ${errors}`);
-        }
-      } catch (submitErr) {
-        result.amazon.errors.push(`Invoice ${postedInvoice.name}: Submit failed - ${submitErr.message}`);
-      }
-    }
+    // NOTE: Invoice submission to Amazon is not yet implemented
+    // This step is skipped for now - invoices are created in Odoo but not sent to Amazon
 
     // ========================================
     // STEP 5: Update shipment status
     // ========================================
     // Determine final status based on what was accomplished
     let newStatus = 'asn_submitted';
-    if (result.amazon.asnSubmitted && result.amazon.invoicesSubmitted.length > 0) {
-      newStatus = 'invoiced'; // Best case: everything done
-    } else if (result.amazon.asnSubmitted) {
-      newStatus = 'completed'; // ASN done but invoices may have issues
+    if (result.amazon.asnSubmitted) {
+      newStatus = 'completed'; // ASN done, invoices created in Odoo
     }
 
     await db.collection('packing_shipments').updateOne(
@@ -5389,22 +5365,16 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
       }
     );
 
-    // Update POs shipment status and invoice info
+    // Update POs shipment status
     for (const poNumber of poNumbers) {
-      const invoiceInfo = result.amazon.invoicesSubmitted.find(i => i.poNumber === poNumber);
-      const updateData = {
-        shipmentStatus: 'shipped',
-        updatedAt: new Date()
-      };
-      if (invoiceInfo) {
-        updateData.invoiceSubmitted = true;
-        updateData.invoiceNumber = invoiceInfo.invoiceNumber;
-        updateData.invoiceTransactionId = invoiceInfo.transactionId;
-      }
       // Use unified_orders collection with sourceIds path
       await db.collection('unified_orders').updateOne(
         { 'sourceIds.amazonVendorPONumber': poNumber },
-        { $set: { 'amazonVendor.shipmentStatus': updateData.shipmentStatus, ...updateData } }
+        { $set: {
+          'amazonVendor.shipmentStatus': 'shipped',
+          shipmentStatus: 'shipped',
+          updatedAt: new Date()
+        } }
       );
     }
 
@@ -5423,9 +5393,6 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
     }
     if (result.odoo.invoicesPosted.length > 0) {
       parts.push(`${result.odoo.invoicesPosted.length} invoice(s) posted`);
-    }
-    if (result.amazon.invoicesSubmitted.length > 0) {
-      parts.push(`${result.amazon.invoicesSubmitted.length} invoice(s) submitted to Amazon`);
     }
     result.message = parts.length > 0 ? parts.join(', ') : 'No operations completed';
 
