@@ -50,22 +50,39 @@ async function main() {
   });
 
   if (po) {
-    console.log('PO 58AIYHEC:');
+    console.log('PO 58AIYHEC (unified_orders):');
+    console.log('  unifiedOrderId:', po.unifiedOrderId);
     console.log('  sellingParty:', JSON.stringify(po.sellingParty));
     console.log('  amazonVendor.sellingParty:', JSON.stringify(po.amazonVendor?.sellingParty));
     console.log('  shipToParty:', JSON.stringify(po.shipToParty));
     console.log('  amazonVendor.shipToParty:', JSON.stringify(po.amazonVendor?.shipToParty));
   }
 
-  // Check vendor_purchase_orders too
-  const vpo = await db.collection('vendor_purchase_orders').findOne({
-    purchaseOrderNumber: '58AIYHEC'
+  // Check if there's also data in the old lookup format
+  const poByUnifiedId = await db.collection('unified_orders').findOne({
+    unifiedOrderId: 'AmazonVendor:58AIYHEC'
   });
 
-  if (vpo) {
-    console.log('\nVendor PO 58AIYHEC:');
-    console.log('  sellingParty:', JSON.stringify(vpo.sellingParty));
-    console.log('  shipToParty:', JSON.stringify(vpo.shipToParty));
+  if (poByUnifiedId) {
+    console.log('\nPO by unifiedOrderId (AmazonVendor:58AIYHEC):');
+    console.log('  sellingParty:', JSON.stringify(poByUnifiedId.sellingParty));
+    console.log('  amazonVendor.sellingParty:', JSON.stringify(poByUnifiedId.amazonVendor?.sellingParty));
+  } else {
+    console.log('\nNo PO found by unifiedOrderId: AmazonVendor:58AIYHEC');
+  }
+
+  // Check what the importer returns
+  console.log('\n--- Checking VendorPOImporter.getPurchaseOrder result ---');
+  const { getVendorPOImporter } = require('../services/amazon/vendor/VendorPOImporter');
+  const importer = await getVendorPOImporter();
+  const importerPO = await importer.getPurchaseOrder('58AIYHEC');
+
+  if (importerPO) {
+    console.log('Importer returned PO:');
+    console.log('  sellingParty:', JSON.stringify(importerPO.sellingParty));
+    console.log('  amazonVendor.sellingParty:', JSON.stringify(importerPO.amazonVendor?.sellingParty));
+  } else {
+    console.log('Importer returned null for PO 58AIYHEC');
   }
 
   process.exit(0);
