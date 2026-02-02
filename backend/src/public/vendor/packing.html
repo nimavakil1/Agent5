@@ -834,11 +834,27 @@
           // Update parcel count input
           document.getElementById('parcel-count').value = parcels.length;
 
-          // If labels were already generated, show them
+          // Store the shipment ID for ASN submission
+          currentShipmentId = shipment.shipmentId;
+
+          // If labels were already generated, restore the full state
           if (shipment.status === 'labels_generated' || shipment.status === 'completed') {
             showToast(`Restored ${parcels.length} parcels from previous session`);
             // Re-render to show the existing data
             renderParcels();
+
+            // Enable buttons based on status
+            document.getElementById('print-btn').disabled = false;
+            document.getElementById('asn-btn').disabled = false;
+            document.getElementById('generate-btn').textContent = 'Re-generate Labels';
+
+            // Update status message
+            document.getElementById('action-status').innerHTML = shipment.status === 'completed'
+              ? '<span style="color: #4ade80;">✓ ASN submitted - you can re-submit if needed</span>'
+              : '<span style="color: #fbbf24;">Labels generated - ready to print and submit ASN</span>';
+
+            // Set workflow step
+            setWorkflowStep(shipment.status === 'completed' ? 4 : 3);
           }
         }
       } catch (err) {
