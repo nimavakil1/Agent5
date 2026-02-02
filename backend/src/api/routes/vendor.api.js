@@ -4091,6 +4091,31 @@ router.get('/packing/by-group/:groupId', async (req, res) => {
 });
 
 /**
+ * @route GET /api/vendor/packing/shipment-by-po/:poNumber
+ * @desc Get packing shipment that contains a specific PO
+ */
+router.get('/packing/shipment-by-po/:poNumber', async (req, res) => {
+  try {
+    const db = getDb();
+    const shipment = await db.collection('packing_shipments').findOne({
+      purchaseOrders: req.params.poNumber
+    }, { sort: { createdAt: -1 } });
+
+    if (!shipment) {
+      return res.status(404).json({ success: false, error: 'No shipment found for this PO' });
+    }
+
+    res.json({
+      success: true,
+      shipment
+    });
+  } catch (error) {
+    console.error('[VendorAPI] GET /packing/shipment-by-po/:poNumber error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * @route POST /api/vendor/packing/:shipmentId/generate-labels
  * @desc Generate carrier labels and SSCC codes for all parcels in a packing shipment
  * @body {carrier: 'gls'|'dachser'|'none'} - Selected carrier for label generation

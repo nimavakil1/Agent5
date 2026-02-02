@@ -784,6 +784,10 @@
 
         groupData = data;
         renderGroupInfo();
+
+        // Check for existing packing shipment and restore parcel data
+        await loadExistingPackingShipment();
+
         setWorkflowStep(1);
       } catch (err) {
         document.getElementById('group-loading').innerHTML = `
@@ -792,6 +796,53 @@
             <p style="color: #f87171; margin-top: 12px;">${err.message}</p>
           </div>
         `;
+      }
+    }
+
+    // Load existing packing shipment if any
+    async function loadExistingPackingShipment() {
+      if (!groupData || !groupData.orders) return;
+
+      // Get PO numbers from the group
+      const poNumbers = groupData.orders.map(o => o.purchaseOrderNumber);
+      if (poNumbers.length === 0) return;
+
+      try {
+        // Check for existing packing shipment using the first PO
+        const res = await fetch(`/api/vendor/packing/shipment-by-po/${encodeURIComponent(poNumbers[0])}`, { credentials: 'include' });
+        if (!res.ok) return; // No existing shipment
+
+        const data = await res.json();
+        if (!data.success || !data.shipment) return;
+
+        const shipment = data.shipment;
+        console.log('Found existing packing shipment:', shipment.shipmentId, 'status:', shipment.status);
+
+        // Restore parcels from saved shipment
+        if (shipment.parcels && shipment.parcels.length > 0) {
+          parcels = shipment.parcels.map(p => ({
+            items: p.items || [],
+            weight: p.weight || p.estimatedWeight || 1.0,
+            estimatedWeight: p.estimatedWeight || p.weight || 1.0,
+            sscc: p.sscc,
+            ssccFormatted: p.ssccFormatted,
+            glsTrackingNumber: p.glsTrackingNumber,
+            glsParcelNumber: p.glsParcelNumber,
+            glsLabelPdf: p.glsLabelPdf
+          }));
+
+          // Update parcel count input
+          document.getElementById('parcel-count').value = parcels.length;
+
+          // If labels were already generated, show them
+          if (shipment.status === 'labels_generated' || shipment.status === 'completed') {
+            showToast(`Restored ${parcels.length} parcels from previous session`);
+            // Re-render to show the existing data
+            renderParcels();
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load existing packing shipment:', err.message);
       }
     }
 
@@ -808,7 +859,7 @@
       // Render items table
       renderItemsTable();
 
-      // Initialize parcels
+      // Initialize parcels (will be overwritten if existing shipment found)
       updateParcels();
     }
 
