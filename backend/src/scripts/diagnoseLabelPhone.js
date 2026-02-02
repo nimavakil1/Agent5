@@ -2,7 +2,7 @@
  * Diagnose GLS Label Phone Number Issue
  *
  * Checks the phone data flow:
- * 1. Amazon order data → unified_orders
+ * 1. Amazon order data → seller_orders
  * 2. Odoo partner (res.partner)
  * 3. Odoo stock.picking partner_id
  */
@@ -16,32 +16,41 @@ async function main() {
   const odoo = new OdooDirectClient();
   await odoo.authenticate();
 
-  // Find recent Amazon Seller orders with shippingAddress
-  console.log('=== Finding recent Amazon Seller orders ===\n');
+  // Find Amazon Seller orders with shippingAddress and linked to Odoo
+  console.log('=== Finding Amazon Seller orders with phone data ===\n');
 
-  const recentOrders = await db.collection('unified_orders').find({
-    source: 'amazon',
-    'sourceIds.amazonOrderId': { $exists: true },
-    shippingAddress: { $exists: true }
-  }).sort({ createdAt: -1 }).limit(5).toArray();
+  const recentOrders = await db.collection('seller_orders').find({
+    'shippingAddress.phone': { $exists: true, $ne: null },
+    'odoo.saleOrderId': { $exists: true }
+  }).sort({ importedAt: -1 }).limit(5).toArray();
+
+  console.log(`Found ${recentOrders.length} orders with phone and Odoo link\n`);
 
   if (recentOrders.length === 0) {
-    console.log('No Amazon Seller orders found');
+    // Try finding any orders with phone
+    const withPhone = await db.collection('seller_orders').find({
+      'shippingAddress.phone': { $exists: true, $ne: null, $ne: '' }
+    }).sort({ importedAt: -1 }).limit(3).toArray();
+
+    console.log('Orders with phone (not necessarily linked to Odoo):');
+    for (const o of withPhone) {
+      console.log(`  ${o.amazonOrderId}: phone=${o.shippingAddress?.phone}, odoo=${o.odoo?.saleOrderId || 'none'}`);
+    }
     process.exit(0);
   }
 
   for (const order of recentOrders) {
-    const amazonOrderId = order.sourceIds?.amazonOrderId;
-    const odooOrderId = order.odooIds?.saleOrderId;
+    const amazonOrderId = order.amazonOrderId;
+    const odooOrderId = order.odoo?.saleOrderId;
 
     console.log('-------------------------------------------');
     console.log(`Order: ${amazonOrderId}`);
-    console.log(`Unified ID: ${order.unifiedOrderId}`);
-    console.log(`Created: ${order.createdAt}`);
+    console.log(`Imported: ${order.importedAt}`);
 
-    // Check phone in unified_orders
+    // Check phone in seller_orders
     const phone = order.shippingAddress?.phone;
-    console.log(`\n[unified_orders] shippingAddress.phone: "${phone || '(empty)'}"`);
+    console.log(`\n[seller_orders] shippingAddress.phone: "${phone || '(empty)'}"`);
+    console.log(`[seller_orders] Full address: ${JSON.stringify(order.shippingAddress)}`);
 
     if (!odooOrderId) {
       console.log('[Odoo] No sale order linked\n');
@@ -79,8 +88,8 @@ async function main() {
       const isShipping = partner.id === saleOrder.partner_shipping_id[0];
       const label = isShipping ? 'SHIPPING' : 'INVOICE';
       console.log(`\n[Odoo res.partner ${label}] ID ${partner.id}: ${partner.name}`);
-      console.log(`  phone: "${partner.phone || '(empty)'}"`);
-      console.log(`  mobile: "${partner.mobile || '(empty)'}"`);
+      console.log(`  phone: "${partner.phone || '(EMPTY)'}"`);
+      console.log(`  mobile: "${partner.mobile || '(EMPTY)'}"`);
       if (partner.parent_id) {
         console.log(`  parent_id: ${partner.parent_id[0]} (${partner.parent_id[1]})`);
       }
@@ -105,8 +114,8 @@ async function main() {
             ['id', 'name', 'phone', 'mobile']
           );
           if (pickingPartner.length > 0) {
-            console.log(`  [picking partner phone] "${pickingPartner[0].phone || '(empty)'}"`);
-            console.log(`  [picking partner mobile] "${pickingPartner[0].mobile || '(empty)'}"`);
+            console.log(`  [picking partner phone] "${pickingPartner[0].phone || '(EMPTY)'}"`);
+            console.log(`  [picking partner mobile] "${pickingPartner[0].mobile || '(EMPTY)'}"`);
           }
         }
       }
