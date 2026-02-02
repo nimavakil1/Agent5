@@ -113,6 +113,43 @@ async function main() {
     console.log('No packing shipment found');
   }
 
+  // Check the vendor_shipments for carton tracking info
+  console.log('\n--- Checking vendor_shipments cartons ---');
+  if (shipment && shipment.cartons) {
+    console.log('Cartons in vendor_shipment:');
+    shipment.cartons.forEach((c, i) => {
+      console.log(`  Carton ${i + 1}:`);
+      console.log(`    SSCC: ${c.sscc}`);
+      console.log(`    trackingNumber: ${c.trackingNumber}`);
+      console.log(`    items: ${c.items?.length || 0}`);
+    });
+  }
+
+  // Also check packing_shipments with different query
+  console.log('\n--- Alternative packing shipment search ---');
+  const packingShipment2 = await db.collection('packing_shipments').findOne({
+    poNumbers: { $in: ['58AIYHEC', '5XQHQ68M'] }
+  }, { sort: { createdAt: -1 } });
+
+  if (packingShipment2) {
+    console.log('Found packing shipment:', packingShipment2.packingShipmentId);
+    console.log('  parcels:', packingShipment2.parcels?.length);
+    if (packingShipment2.parcels?.length > 0) {
+      packingShipment2.parcels.forEach((p, i) => {
+        console.log(`  Parcel ${i + 1}: SSCC=${p.sscc}, tracking=${p.glsTrackingNumber || p.trackingNumber}`);
+      });
+    }
+  } else {
+    console.log('No packing shipment found with alternative query');
+
+    // List all packing shipments
+    const allPackingShipments = await db.collection('packing_shipments').find({}).sort({ createdAt: -1 }).limit(5).toArray();
+    console.log('\nRecent packing shipments:');
+    allPackingShipments.forEach(ps => {
+      console.log(`  ${ps.packingShipmentId}: POs=${ps.poNumbers?.join(',')} parcels=${ps.parcels?.length}`);
+    });
+  }
+
   process.exit(0);
 }
 
