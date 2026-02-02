@@ -5130,7 +5130,28 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
       for (const poNumber of poNumbers) {
         console.log(`[VendorAPI] Submitting ASN for PO: ${poNumber}`);
         try {
-          const asnResult = await asnCreator.submitASNWithSSCC(poNumber, { cartons, carrier, measurements }, {
+          // Get PO to filter cartons to only items belonging to this PO
+          const po = await db.collection('unified_orders').findOne({ 'sourceIds.amazonVendorPONumber': poNumber });
+          const poItemEANs = new Set((po?.items || []).map(item => item.vendorProductIdentifier).filter(Boolean));
+          console.log(`[VendorAPI] PO ${poNumber} has items with EANs:`, [...poItemEANs]);
+
+          // Filter cartons to only include items that belong to this PO
+          const filteredCartons = cartons.map(carton => ({
+            ...carton,
+            items: carton.items.filter(item => poItemEANs.has(item.ean))
+          })).filter(carton => carton.items.length > 0); // Remove empty cartons
+
+          console.log(`[VendorAPI] Filtered cartons for PO ${poNumber}: ${filteredCartons.length} carton(s) with items`);
+          filteredCartons.forEach((c, i) => {
+            console.log(`[VendorAPI]   Carton ${i + 1}: SSCC=${c.sscc}, items=${c.items.length}, EANs=${c.items.map(it => it.ean).join(',')}`);
+          });
+
+          if (filteredCartons.length === 0) {
+            result.amazon.errors.push(`PO ${poNumber}: No cartons contain items for this PO`);
+            continue;
+          }
+
+          const asnResult = await asnCreator.submitASNWithSSCC(poNumber, { cartons: filteredCartons, carrier, measurements }, {
             dryRun: false
           });
 
