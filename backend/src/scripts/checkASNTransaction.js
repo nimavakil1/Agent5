@@ -11,6 +11,8 @@ async function main() {
 
   // Find the most recent consolidated shipment for 58AIYHEC
   const shipment = await db.collection('vendor_shipments').findOne({
+    transactionId: '6fc54205-3bd9-4d3b-8f29-0f08a1f4bbfa-20260202113515'
+  }) || await db.collection('vendor_shipments').findOne({
     shipmentId: { $regex: /CONS.*58AIYHEC/ }
   }, { sort: { submittedAt: -1 } });
 
@@ -28,8 +30,10 @@ async function main() {
   console.log('  POs:', shipment.purchaseOrderNumbers?.join(', ') || shipment.purchaseOrderNumber);
 
   // Check transaction status with Amazon
-  console.log('\nChecking transaction status with Amazon...');
-  const client = new VendorClient(shipment.marketplaceId || 'FR');
+  // Use the marketplaceId stored in shipment (which is now the token key based on vendor code)
+  const tokenKey = shipment.marketplaceId || shipment.vendorCode === 'HN6VB' ? 'NL' : 'FR';
+  console.log('\nChecking transaction status with Amazon using', tokenKey, 'credentials...');
+  const client = new VendorClient(tokenKey);
   await client.init();
 
   try {
