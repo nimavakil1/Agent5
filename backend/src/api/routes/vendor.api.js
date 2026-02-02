@@ -4952,7 +4952,11 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Shipment not found' });
     }
 
-    if (shipment.status !== 'labels_generated') {
+    // Check if labels were generated - either by status or by checking parcels have tracking/SSCC
+    const validStatuses = ['labels_generated', 'completed', 'invoiced', 'asn_submitted'];
+    const hasLabels = shipment.parcels?.some(p => p.glsTrackingNumber || p.sscc);
+
+    if (!validStatuses.includes(shipment.status) && !hasLabels) {
       return res.status(400).json({
         success: false,
         error: 'Labels must be generated before submitting ASN'
