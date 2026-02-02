@@ -273,11 +273,26 @@ class AddressCleaningService {
       ? ''
       : (rawAddress.buyerName || '');
 
+    // Handle "c/o" (care of) patterns - these should be part of the name, not street2
+    // Common patterns: "c/o Name", "C/O Name", "c/o. Name", "z.Hd. Name", "Attn: Name", "t.a.v. Name"
+    let street2Raw = rawAddress.street2 || rawAddress.addressLine2 || rawAddress.extraAddressInformation || '';
+    let careOfName = '';
+
+    const careOfPatterns = /^(c\/o\.?\s*|z\.?\s*hd\.?\s*|attn:?\s*|t\.?\s*a\.?\s*v\.?\s*)/i;
+    if (street2Raw && careOfPatterns.test(street2Raw.trim())) {
+      // Extract the care-of name and append to recipient name
+      careOfName = street2Raw.trim();
+      street2Raw = ''; // Remove from street2 since it's now part of name
+    }
+
+    // Append c/o info to name if present
+    const finalName = careOfName ? `${fullName} ${careOfName}` : fullName;
+
     return {
-      name: fullName,
+      name: finalName,
       company: rawAddress.company || rawAddress.buyerCompanyName || '',
       street: street,
-      street2: rawAddress.street2 || rawAddress.addressLine2 || rawAddress.extraAddressInformation || '',
+      street2: street2Raw,
       street3: rawAddress.addressLine3 || '',
       city: rawAddress.city || '',
       state: rawAddress.state || '',
