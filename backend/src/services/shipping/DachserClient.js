@@ -395,6 +395,26 @@ class DachserClient {
       references: shipment.references || []
     };
 
+    // Add goods value if provided
+    if (shipment.goodsValue && shipment.goodsValue.amount > 0) {
+      request.goodsValue = {
+        amount: shipment.goodsValue.amount,
+        currency: shipment.goodsValue.currency || 'EUR'
+      };
+    }
+
+    // Add nature of goods
+    if (shipment.natureOfGoods) {
+      request.natureOfGoods = shipment.natureOfGoods;
+    }
+
+    // Add delivery instructions (order texts)
+    if (shipment.deliveryInstructions) {
+      request.orderTexts = {
+        deliveryInstructions: shipment.deliveryInstructions
+      };
+    }
+
     // Add delivery notice if receiver has phone/email
     if (receiver.phone || receiver.email) {
       request.services = request.services || [];

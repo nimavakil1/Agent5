@@ -4285,13 +4285,78 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
       }
 
       try {
+        // Calculate goods value - fetch from unified_orders for accurate pricing
+        let goodsValueAmount = 0;
+
+        // Get orders from the group to calculate total value
+        if (shipment.groupId) {
+          const parsed = parseConsolidationGroupId(shipment.groupId);
+          let ordersQuery;
+
+          if (parsed.isSeparate) {
+            ordersQuery = {
+              channel: 'amazon-vendor',
+              'sourceIds.amazonVendorPONumber': parsed.poNumber
+            };
+          } else {
+            ordersQuery = {
+              channel: 'amazon-vendor',
+              'amazonVendor.shipToParty.partyId': parsed.fcPartyId,
+              'amazonVendor.consolidationOverride': { $ne: true }
+            };
+            if (parsed.vendorGroup && VENDOR_GROUPS[parsed.vendorGroup]) {
+              ordersQuery['marketplace.code'] = { $in: VENDOR_GROUPS[parsed.vendorGroup].marketplaces };
+            }
+            if (parsed.dateStr && parsed.dateStr !== 'nodate') {
+              const startOfDay = new Date(parsed.dateStr + 'T00:00:00.000Z');
+              const endOfDay = new Date(parsed.dateStr + 'T00:00:00.000Z');
+              endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+              ordersQuery['amazonVendor.deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
+            }
+          }
+
+          ordersQuery._testData = isTestMode() ? true : { $ne: true };
+
+          const orders = await db.collection('unified_orders').find(ordersQuery).toArray();
+          for (const order of orders) {
+            for (const item of (order.items || [])) {
+              const qty = item.acknowledgeQty ?? item.orderedQuantity?.amount ?? item.quantity ?? 0;
+              const unitPrice = parseFloat(item.netCost?.amount) || 0;
+              goodsValueAmount += qty * unitPrice;
+            }
+          }
+        }
+
+        // Fallback: try parcel items if group calculation failed
+        if (goodsValueAmount === 0) {
+          for (const parcel of updatedParcels) {
+            for (const item of (parcel.items || [])) {
+              const unitPrice = item.netCost || item.price || 0;
+              const qty = item.quantity || 0;
+              goodsValueAmount += unitPrice * qty;
+            }
+          }
+        }
+
+        // Build delivery instructions
+        const poNumbers = shipment.purchaseOrders || [];
+        const palletCount = palletInfo?.count || 1;
+        const cartonCount = updatedParcels.length;
+        const deliveryInstructions = `Purchase order ${poNumbers.join(' + ')} | Shipment ID: ${shipment.shipmentId} | ${palletCount} PAL - ${cartonCount} cartons`;
+
         dachserResult = await dachserClient.createTransportOrder({
           receiver: dachserReceiverAddress,
           packages,
           references: [
             { type: 'SHIPMENT', value: shipment.shipmentId },
-            { type: 'CUSTOMER_REF', value: shipment.purchaseOrders?.join(',') || '' }
+            { type: 'CUSTOMER_REF', value: poNumbers.join(',') }
           ],
+          goodsValue: {
+            amount: Math.round(goodsValueAmount * 100) / 100,
+            currency: 'EUR'
+          },
+          natureOfGoods: 'mixed office stuff',
+          deliveryInstructions,
           collectionDate: new Date() // Tomorrow or next business day would be better
         });
 
