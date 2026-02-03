@@ -537,7 +537,13 @@ class BolOrderCreator {
             { 'odoo.creating': { $ne: true } },  // Not being created
             { 'odoo.creatingStartedAt': { $lt: new Date(now.getTime() - LOCK_TIMEOUT_MS) } }  // Or lock is stale
           ],
-          'sourceIds.odooSaleOrderId': { $exists: false }  // Not already created
+          // Not already created - check both missing and null
+          $and: [
+            { $or: [
+              { 'sourceIds.odooSaleOrderId': { $exists: false } },
+              { 'sourceIds.odooSaleOrderId': null }
+            ]}
+          ]
         },
         {
           $set: {
