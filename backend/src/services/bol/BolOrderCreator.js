@@ -677,6 +677,8 @@ class BolOrderCreator {
           syncError: '',
           creating: false  // Clear lock
         };
+        // Remove creatingStartedAt from odooData since we're replacing the whole object
+        delete odooData.creatingStartedAt;
         await collection.updateOne(
           { unifiedOrderId },
           {
@@ -685,8 +687,7 @@ class BolOrderCreator {
               'sourceIds.odooSaleOrderName': createResult.odooOrderName,
               odoo: odooData,
               updatedAt: new Date()
-            },
-            $unset: { 'odoo.creatingStartedAt': '' }
+            }
           }
         );
       } else {
@@ -716,11 +717,11 @@ class BolOrderCreator {
           syncError: error.message,
           creating: false  // Clear lock on error
         };
+        delete odooData.creatingStartedAt;
         await collection.updateOne(
           { unifiedOrderId },
           {
-            $set: { odoo: odooData, updatedAt: new Date() },
-            $unset: { 'odoo.creatingStartedAt': '' }
+            $set: { odoo: odooData, updatedAt: new Date() }
           }
         );
       } catch (dbError) {
@@ -875,13 +876,13 @@ class BolOrderCreator {
         // Also set the primary odooSaleOrderId (for backward compatibility)
         updateSet['sourceIds.odooSaleOrderId'] = fbbResult?.odooOrderId || fbrResult?.odooOrderId;
         updateSet['sourceIds.odooSaleOrderName'] = fbbResult?.odooOrderName || fbrResult?.odooOrderName;
+        delete odooData.creatingStartedAt;
         updateSet.odoo = odooData;
 
         await collection.updateOne(
           { unifiedOrderId },
           {
-            $set: updateSet,
-            $unset: { 'odoo.creatingStartedAt': '' }
+            $set: updateSet
           }
         );
 
@@ -910,11 +911,11 @@ class BolOrderCreator {
           syncError: error.message,
           creating: false  // Clear lock
         };
+        delete odooData.creatingStartedAt;
         await collection.updateOne(
           { unifiedOrderId },
           {
-            $set: { odoo: odooData, updatedAt: new Date() },
-            $unset: { 'odoo.creatingStartedAt': '' }
+            $set: { odoo: odooData, updatedAt: new Date() }
           }
         );
       } catch (dbError) {
