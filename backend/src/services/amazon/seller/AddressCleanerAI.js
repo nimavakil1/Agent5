@@ -32,6 +32,7 @@ RULES FOR PARSING:
    - Words like "Hospital", "Krankenhaus", "School", "College", "Institut", "Verein", "Stiftung" indicate organizations
    - ALL CAPS text in address fields often indicates a company name
    - If address-1 contains a company name and address-2 contains a street, the company is in the WRONG field
+   - CRITICAL: If address-1 STARTS with a legal term (e.g., "GmbH,Something" or "AG Department"), it's a CONTINUATION of the company name from recipient-name. COMBINE THEM: recipient-name + address-1 = full company name. Example: recipient="Franke", address-1="GmbH,Wasserschadensanierung" → company="Franke GmbH,Wasserschadensanierung"
 
 2. IDENTIFYING STREET ADDRESSES:
    - German streets: "Straße", "Str.", "Weg", "Platz", "Allee", "Ring", "Gasse", "Damm" + house number
@@ -152,6 +153,33 @@ Output:
   "po_number": "Router JHZ & Gefü Büro",
   "confidence": "high",
   "notes": "Jugendhof indicates youth organization. PO number is FULL text after 'PO': 'Router JHZ & Gefü Büro'. Department info 'JHZ & Gefü Büro' placed in street2."
+}
+
+Input:
+recipient-name: "Franke"
+ship-address-1: "GmbH,Wasserschadensanierung&Elektrotechnik"
+ship-address-2: "Körnickerfeld 36"
+ship-address-3: ""
+ship-city: "Grömitz"
+ship-postal-code: "23743"
+ship-country: "DE"
+buyer-company-name: "Amazon Business EU SARL"
+buyer-name: "Amazon Business EU SARL - Kasten Büro, Hülle NR"
+
+Output:
+{
+  "company_name": "Franke GmbH,Wasserschadensanierung&Elektrotechnik",
+  "contact_person": null,
+  "street": "Körnickerfeld 36",
+  "street2": null,
+  "zip": "23743",
+  "city": "Grömitz",
+  "state": null,
+  "country": "DE",
+  "is_business": true,
+  "po_number": "Kasten Büro, Hülle NR",
+  "confidence": "high",
+  "notes": "Company name was SPLIT: recipient-name='Franke' + address-1='GmbH,...' combined to full company name. Address-2 contains the actual street. PO extracted from buyer-name after 'Amazon Business EU SARL - '."
 }
 
 Now parse the following address:`;
