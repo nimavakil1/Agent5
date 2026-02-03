@@ -554,7 +554,10 @@ class BolOrderCreator {
         { returnDocument: 'after' }
       );
 
-      if (!claimed || !claimed.value) {
+      // Handle both old ({ value: doc }) and new (direct doc) MongoDB driver return formats
+      const claimedDoc = claimed?.value || claimed;
+
+      if (!claimedDoc || !claimedDoc._id) {
         // Check if already created or being created by another process
         const existingOrder = await collection.findOne({ unifiedOrderId });
         if (existingOrder?.sourceIds?.odooSaleOrderId) {
@@ -575,7 +578,7 @@ class BolOrderCreator {
         return result;
       }
 
-      const bolOrder = claimed.value;
+      const bolOrder = claimedDoc;
 
       // Step 2: Check for mixed fulfillment (FBB + FBR items in same order)
       const { isMixed, fbbItems, fbrItems } = this.checkMixedFulfillment(bolOrder.items);
