@@ -1661,16 +1661,27 @@
           </div>
         `;
 
-        // Dachser mode: show pallet info and tracking
+        // Dachser mode: show pallet info, ASN, and tracking
         if (isDachserMode() && labelsData.dachser) {
           const palletCount = parseInt(document.getElementById('pallet-count').value) || 1;
+
+          // Show ASN info if it was auto-submitted
+          if (labelsData.amazonASN?.submitted) {
+            labelsInfoHtml += `
+              <div class="label-stat success">
+                <div class="label-stat-value" style="font-size: 11px; word-break: break-all;">${labelsData.amazonASN.shipmentId}</div>
+                <div class="label-stat-label">ASN (Auto-submitted)</div>
+              </div>
+            `;
+          }
+
           labelsInfoHtml += `
             <div class="label-stat success">
               <div class="label-stat-value">${palletCount}</div>
               <div class="label-stat-label">Pallet Labels</div>
             </div>
             <div class="label-stat success">
-              <div class="label-stat-value" style="font-size: 12px; word-break: break-all;">${labelsData.dachser.trackingNumber}</div>
+              <div class="label-stat-value" style="font-size: 11px; word-break: break-all;">${labelsData.dachser.trackingNumber || '-'}</div>
               <div class="label-stat-label">Dachser Tracking</div>
             </div>
           `;
@@ -1693,11 +1704,19 @@
         document.getElementById('labels-info').innerHTML = labelsInfoHtml;
 
         if (isDachserMode() && labelsData.dachser) {
-          document.getElementById('action-status').textContent = `Labels generated: ${ssccCount} SSCC carton labels + Dachser pallet labels`;
+          const asnStatus = labelsData.amazonASN?.submitted ? ' + ASN submitted to Amazon' : '';
+          document.getElementById('action-status').textContent = `Labels generated: ${ssccCount} SSCC carton labels + Dachser pallet labels${asnStatus}`;
+          showToast(`Labels generated${asnStatus}!`);
+
+          // Disable ASN button since it's already done, but user can still click for Odoo validation
+          const asnBtn = document.getElementById('asn-btn');
+          if (asnBtn && labelsData.amazonASN?.submitted) {
+            asnBtn.innerHTML = '<span class="material-symbols-outlined">task_alt</span>Complete Odoo (ASN done)';
+          }
         } else {
           document.getElementById('action-status').textContent = `Labels generated: ${ssccCount} SSCC, ${carrierCount} ${carrierName}`;
+          showToast('Labels generated successfully!');
         }
-        showToast('Labels generated successfully!');
 
       } catch (err) {
         showToast('Error: ' + err.message, true);

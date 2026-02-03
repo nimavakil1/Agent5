@@ -4256,7 +4256,76 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
       }
     }
 
-    // STEP 2b: Create Dachser transport order (freight shipment with pallet info)
+    // STEP 2b: For Dachser, submit ASN to Amazon FIRST to get ASN number
+    let amazonASNResult = null;
+    let asnNumber = null;
+
+    if (dachserClient && palletInfo && shipment.fcAddress) {
+      console.log(`[VendorAPI] Dachser mode: Submitting ASN to Amazon first to get ASN number`);
+
+      try {
+        const asnCreator = await getVendorASNCreator();
+        const poNumbers = shipment.purchaseOrders || [];
+
+        // Build EAN -> PO mapping
+        const eanToPOMap = {};
+        for (const poNumber of poNumbers) {
+          const po = await db.collection('unified_orders').findOne({ 'sourceIds.amazonVendorPONumber': poNumber });
+          if (po?.items) {
+            for (const item of po.items) {
+              if (item.vendorProductIdentifier) {
+                eanToPOMap[item.vendorProductIdentifier] = poNumber;
+              }
+            }
+          }
+        }
+
+        // Build carton data from parcels
+        const cartons = updatedParcels.map(parcel => ({
+          sscc: parcel.sscc,
+          trackingNumber: null, // No carrier tracking yet
+          weight: parcel.weight || parcel.estimatedWeight || null,
+          items: (parcel.items || []).map(item => ({
+            ean: item.ean,
+            sku: item.sku,
+            quantity: item.quantity,
+            poNumber: eanToPOMap[item.ean] || poNumbers[0]
+          }))
+        }));
+
+        // Calculate total weight
+        const totalWeight = updatedParcels.reduce((sum, p) => sum + (p.weight || p.estimatedWeight || 0), 0);
+
+        // Build carrier info - use Dachser (will be updated after booking)
+        const carrierInfo = {
+          scac: 'DAHL', // Dachser SCAC code
+          name: 'Dachser',
+          mode: 'Road',
+          trackingNumber: null // Will be updated after Dachser booking
+        };
+
+        const measurements = {
+          totalWeight: totalWeight,
+          weightUnit: 'Kg'
+        };
+
+        console.log(`[VendorAPI] Submitting consolidated ASN for ${poNumbers.length} POs`);
+        amazonASNResult = await asnCreator.submitConsolidatedASN(poNumbers, { cartons, carrier: carrierInfo, measurements }, {
+          dryRun: false
+        });
+
+        if (amazonASNResult.success) {
+          asnNumber = amazonASNResult.shipmentId;
+          console.log(`[VendorAPI] ASN submitted successfully: ${asnNumber}`);
+        } else {
+          console.error(`[VendorAPI] ASN submission failed:`, amazonASNResult.errors);
+        }
+      } catch (asnErr) {
+        console.error(`[VendorAPI] ASN submission error:`, asnErr.message);
+      }
+    }
+
+    // STEP 2c: Create Dachser transport order (freight shipment with pallet info)
     let dachserResult = null;
     if (dachserClient && palletInfo && shipment.fcAddress) {
       console.log(`[VendorAPI] Creating Dachser transport order with ${palletInfo.count} pallet(s)`);
@@ -4338,19 +4407,32 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
           }
         }
 
-        // Build delivery instructions
+        // Build delivery instructions with ASN number if available
         const poNumbers = shipment.purchaseOrders || [];
         const palletCount = palletInfo?.count || 1;
         const cartonCount = updatedParcels.length;
-        const deliveryInstructions = `Purchase order ${poNumbers.join(' + ')} | Shipment ID: ${shipment.shipmentId} | ${palletCount} PAL - ${cartonCount} cartons`;
+
+        // Build delivery instructions - include ASN if we got it
+        let deliveryInstructions = `Purchase order ${poNumbers.join(' + ')}`;
+        if (asnNumber) {
+          deliveryInstructions += ` | ASN: ${asnNumber}`;
+        }
+        deliveryInstructions += ` | ${palletCount} PAL - ${cartonCount} cartons`;
+
+        // Build references - include ASN as order number if available
+        const references = [
+          { type: 'CUSTOMER_REF', value: poNumbers.join(',') }
+        ];
+        if (asnNumber) {
+          references.unshift({ type: 'ORDER_NUMBER', value: asnNumber });
+        } else {
+          references.unshift({ type: 'SHIPMENT', value: shipment.shipmentId });
+        }
 
         dachserResult = await dachserClient.createTransportOrder({
           receiver: dachserReceiverAddress,
           packages,
-          references: [
-            { type: 'SHIPMENT', value: shipment.shipmentId },
-            { type: 'CUSTOMER_REF', value: poNumbers.join(',') }
-          ],
+          references,
           goodsValue: {
             amount: Math.round(goodsValueAmount * 100) / 100,
             currency: 'EUR'
@@ -4421,6 +4503,17 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
       shipmentUpdate.palletInfo = palletInfo;
     }
 
+    // Store Amazon ASN info (for Dachser mode where ASN is submitted early)
+    if (amazonASNResult && amazonASNResult.success) {
+      shipmentUpdate.amazonASN = {
+        shipmentId: amazonASNResult.shipmentId,
+        transactionId: amazonASNResult.transactionId,
+        submittedAt: new Date(),
+        autoSubmitted: true // Flag to indicate this was auto-submitted for Dachser
+      };
+      shipmentUpdate.status = 'asn_submitted'; // Mark as ASN submitted
+    }
+
     // Store Dachser booking info
     if (dachserResult && dachserResult.success) {
       shipmentUpdate.dachser = {
@@ -4428,7 +4521,8 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
         shipmentId: dachserResult.shipmentId,
         labelPdf: dachserResult.labelPdf,
         trackingUrl: dachserClient.getTrackingUrl(dachserResult.trackingNumber),
-        bookedAt: new Date()
+        bookedAt: new Date(),
+        asnNumber: asnNumber // Store the ASN number used
       };
     }
 
@@ -4447,12 +4541,22 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
       dachserConfigured: !!dachserClient
     };
 
+    // Include Amazon ASN info in response (for Dachser mode)
+    if (amazonASNResult && amazonASNResult.success) {
+      response.amazonASN = {
+        submitted: true,
+        shipmentId: amazonASNResult.shipmentId,
+        transactionId: amazonASNResult.transactionId
+      };
+    }
+
     // Include Dachser shipment info in response
     if (dachserResult && dachserResult.success) {
       response.dachser = {
         trackingNumber: dachserResult.trackingNumber,
         trackingUrl: dachserClient.getTrackingUrl(dachserResult.trackingNumber),
-        labelPdf: dachserResult.labelPdf ? true : false // Just indicate if we have it
+        labelPdf: dachserResult.labelPdf ? true : false, // Just indicate if we have it
+        asnNumber: asnNumber
       };
     }
 
@@ -5204,6 +5308,19 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
     // Per Amazon API: one shipment confirmation can contain multiple POs
     // Each item specifies its purchaseOrderNumber in itemDetails
     // ========================================
+
+    // Check if ASN was already submitted (Dachser mode auto-submits ASN)
+    if (shipment.amazonASN?.autoSubmitted) {
+      console.log(`[VendorAPI] STEP 3: ASN already submitted (auto-submitted for Dachser): ${shipment.amazonASN.shipmentId}`);
+      result.amazon.asnSubmitted = true;
+      result.amazon.transactionIds.push({
+        poNumbers: poNumbers,
+        transactionId: shipment.amazonASN.transactionId,
+        shipmentId: shipment.amazonASN.shipmentId,
+        consolidated: true,
+        autoSubmitted: true
+      });
+    } else {
     try {
       console.log(`[VendorAPI] STEP 3: Submit CONSOLIDATED ASN to Amazon for ${poNumbers.length} PO(s): ${poNumbers.join(', ')}`);
       const asnCreator = await getVendorASNCreator();
@@ -5295,6 +5412,7 @@ router.post('/packing/:shipmentId/submit-asn', async (req, res) => {
       console.error('[VendorAPI] Amazon ASN fatal error:', amazonErr);
       result.amazon.errors.push(`Amazon ASN: ${amazonErr.message}`);
     }
+    } // End of else block for non-auto-submitted ASN
 
     // ========================================
     // STEP 4: Create Invoices from Delivered Quantities
