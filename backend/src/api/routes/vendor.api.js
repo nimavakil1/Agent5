@@ -4148,7 +4148,7 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
   try {
     const db = getDb();
     const generator = await getSSCCGenerator();
-    const { carrier = 'gls' } = req.body;
+    const { carrier = 'gls', palletInfo } = req.body;
 
     const shipment = await db.collection('packing_shipments').findOne({
       shipmentId: req.params.shipmentId
@@ -4164,6 +4164,9 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
 
     console.log(`[VendorAPI] generate-labels: carrier=${carrier}, shipmentId=${req.params.shipmentId}`);
     console.log(`[VendorAPI] generate-labels: fcAddress=${JSON.stringify(shipment.fcAddress)}`);
+    if (palletInfo) {
+      console.log(`[VendorAPI] generate-labels: palletInfo=${JSON.stringify(palletInfo)}`);
+    }
 
     if (carrier === 'gls') {
       try {
@@ -4253,6 +4256,68 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
       }
     }
 
+    // STEP 2b: Create Dachser transport order (freight shipment with pallet info)
+    let dachserResult = null;
+    if (dachserClient && palletInfo && shipment.fcAddress) {
+      console.log(`[VendorAPI] Creating Dachser transport order with ${palletInfo.count} pallet(s)`);
+
+      const dachserReceiverAddress = {
+        name: shipment.fcAddress.name || shipment.fcName || 'Amazon FC',
+        street: shipment.fcAddress.addressLine1 || shipment.fcAddress.street || '',
+        postalCode: shipment.fcAddress.postalOrZipCode || shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
+        city: shipment.fcAddress.city || '',
+        countryCode: shipment.fcAddress.countryCode || 'FR',
+        phone: shipment.fcAddress.phone || '',
+        email: shipment.fcAddress.email || ''
+      };
+
+      // Build packages array - one entry per pallet with its weight
+      const packages = [];
+      for (let p = 0; p < palletInfo.count; p++) {
+        packages.push({
+          packingType: palletInfo.packingType || 'EU', // Euro pallet
+          quantity: 1,
+          weight: palletInfo.weights?.[p] || 0,
+          length: 120, // Euro pallet dimensions (cm)
+          width: 80,
+          height: 150 // Default stacking height
+        });
+      }
+
+      try {
+        dachserResult = await dachserClient.createTransportOrder({
+          receiver: dachserReceiverAddress,
+          packages,
+          references: [
+            { type: 'SHIPMENT', value: shipment.shipmentId },
+            { type: 'CUSTOMER_REF', value: shipment.purchaseOrders?.join(',') || '' }
+          ],
+          collectionDate: new Date() // Tomorrow or next business day would be better
+        });
+
+        if (dachserResult.success) {
+          console.log(`[VendorAPI] Dachser transport order created: ${dachserResult.trackingNumber}`);
+
+          // Mark all parcels with Dachser info
+          updatedParcels.forEach(parcel => {
+            parcel.carrier = 'dachser';
+            parcel.dachserTrackingNumber = dachserResult.trackingNumber;
+            parcel.dachserShipmentId = dachserResult.shipmentId;
+          });
+        } else {
+          console.error(`[VendorAPI] Dachser transport order failed:`, dachserResult.error);
+          updatedParcels.forEach(parcel => {
+            parcel.dachserError = dachserResult.error || 'Dachser booking failed';
+          });
+        }
+      } catch (dachserErr) {
+        console.error('[VendorAPI] Dachser booking exception:', dachserErr.message);
+        updatedParcels.forEach(parcel => {
+          parcel.dachserError = dachserErr.message;
+        });
+      }
+    }
+
     // STEP 3: Build results for response
     for (let i = 0; i < updatedParcels.length; i++) {
       const parcel = updatedParcels[i];
@@ -4260,54 +4325,16 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
         parcelNumber: parcel.parcelNumber,
         sscc: parcel.sscc,
         ssccFormatted: parcel.ssccFormatted,
-        carrierTrackingNumber: parcel.glsTrackingNumber || parcel.dachserReference || null,
-        carrierError: parcel.glsError || null,
+        carrierTrackingNumber: parcel.glsTrackingNumber || parcel.dachserTrackingNumber || null,
+        carrierError: parcel.glsError || parcel.dachserError || null,
         glsTrackingNumber: parcel.glsTrackingNumber || null,
-        glsError: parcel.glsError || null
+        glsError: parcel.glsError || null,
+        dachserTrackingNumber: parcel.dachserTrackingNumber || null,
+        dachserError: parcel.dachserError || null
       };
 
-      // Handle Dachser for freight shipments (still per-parcel for quotes)
-      if (dachserClient && !parcel.dachserTrackingNumber && shipment.fcAddress) {
-        try {
-          const dachserReceiverAddress = {
-            name: shipment.fcAddress.name || shipment.fcName || 'Amazon FC',
-            street: shipment.fcAddress.addressLine1 || shipment.fcAddress.street || '',
-            postalCode: shipment.fcAddress.postalOrZipCode || shipment.fcAddress.postalCode || shipment.fcAddress.zipCode || '',
-            city: shipment.fcAddress.city || '',
-            countryCode: shipment.fcAddress.countryCode || 'FR',
-            phone: '',
-            email: ''
-          };
-
-          const quoteResult = await dachserClient.getQuotation({
-            receiver: dachserReceiverAddress,
-            packages: [{
-              packingType: 'EU',
-              quantity: 1,
-              weight: parcel.weight,
-              length: 120,
-              width: 80,
-              height: 100
-            }],
-            references: [{ type: 'SHIPMENT', value: shipment.shipmentId }]
-          });
-
-          if (quoteResult.success) {
-            parcel.dachserQuote = {
-              price: quoteResult.price,
-              currency: quoteResult.currency,
-              transitDays: quoteResult.transitDays
-            };
-            parcel.carrier = 'dachser';
-            parcelResult.carrierTrackingNumber = `DACHSER-${shipment.shipmentId}-P${parcel.parcelNumber}`;
-            parcel.dachserReference = parcelResult.carrierTrackingNumber;
-          } else {
-            parcelResult.carrierError = quoteResult.error || 'Dachser quote failed';
-          }
-        } catch (err) {
-          parcelResult.carrierError = err.message;
-        }
-      } else if (carrier !== 'none' && !glsClient && !dachserClient) {
+      // Handle carrier not configured case
+      if (carrier !== 'none' && !glsClient && !dachserClient) {
         parcelResult.carrierError = `${carrier.toUpperCase()} not configured`;
         parcelResult.glsError = carrier === 'gls' ? 'GLS not configured' : null;
       }
@@ -4315,28 +4342,56 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
       results.push(parcelResult);
     }
 
-    // Update shipment with carrier info
+    // Update shipment with carrier info and pallet data
+    const shipmentUpdate = {
+      parcels: updatedParcels,
+      carrier: carrier,
+      status: 'labels_generated',
+      labelsGeneratedAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Store pallet info if provided
+    if (palletInfo) {
+      shipmentUpdate.palletInfo = palletInfo;
+    }
+
+    // Store Dachser booking info
+    if (dachserResult && dachserResult.success) {
+      shipmentUpdate.dachser = {
+        trackingNumber: dachserResult.trackingNumber,
+        shipmentId: dachserResult.shipmentId,
+        labelPdf: dachserResult.labelPdf,
+        trackingUrl: dachserClient.getTrackingUrl(dachserResult.trackingNumber),
+        bookedAt: new Date()
+      };
+    }
+
     await db.collection('packing_shipments').updateOne(
       { shipmentId: req.params.shipmentId },
-      {
-        $set: {
-          parcels: updatedParcels,
-          carrier: carrier,
-          status: 'labels_generated',
-          labelsGeneratedAt: new Date(),
-          updatedAt: new Date()
-        }
-      }
+      { $set: shipmentUpdate }
     );
 
-    res.json({
+    // Build response
+    const response = {
       success: true,
       shipmentId: shipment.shipmentId,
       carrier: carrier,
       parcels: results,
       glsConfigured: !!glsClient,
       dachserConfigured: !!dachserClient
-    });
+    };
+
+    // Include Dachser shipment info in response
+    if (dachserResult && dachserResult.success) {
+      response.dachser = {
+        trackingNumber: dachserResult.trackingNumber,
+        trackingUrl: dachserClient.getTrackingUrl(dachserResult.trackingNumber),
+        labelPdf: dachserResult.labelPdf ? true : false // Just indicate if we have it
+      };
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('[VendorAPI] POST /packing/:shipmentId/generate-labels error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -5446,6 +5501,203 @@ router.post('/packing/estimate-weight', (req, res) => {
     });
   } catch (error) {
     console.error('[VendorAPI] POST /packing/estimate-weight error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route POST /api/vendor/packing/suggest-cartons
+ * @desc Suggest optimal carton breakdown based on packaging levels (master cartons, inner boxes)
+ * @body groupId - Consolidation group ID
+ * @returns Suggested cartons + remaining items for manual handling
+ *
+ * Algorithm:
+ * For each SKU:
+ *   1. Get packaging levels sorted by qty DESC (master carton first)
+ *   2. For each level, calculate how many full cartons fit
+ *   3. Remaining items go to "mix" for manual handling
+ *
+ * Example: SKU with Master=15, Inner=5, Ordered=22
+ *   → 1 Master (15) + 1 Inner (5) + 2 remaining for mix
+ */
+router.post('/packing/suggest-cartons', async (req, res) => {
+  try {
+    const { groupId } = req.body;
+
+    if (!groupId) {
+      return res.status(400).json({ success: false, error: 'groupId is required' });
+    }
+
+    const db = getDb();
+
+    // Parse the group ID to get the filter criteria
+    const parsed = parseConsolidationGroupId(groupId);
+    const { vendorGroup, fcPartyId, dateStr, isSeparate, poNumber } = parsed;
+
+    // Build query (same logic as consolidate/:groupId endpoint)
+    let query;
+    if (isSeparate) {
+      query = {
+        channel: 'amazon-vendor',
+        'sourceIds.amazonVendorPONumber': poNumber,
+        'amazonVendor.consolidationOverride': true,
+        'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] }
+      };
+    } else {
+      query = {
+        channel: 'amazon-vendor',
+        'amazonVendor.shipToParty.partyId': fcPartyId,
+        'amazonVendor.consolidationOverride': { $ne: true },
+        'amazonVendor.purchaseOrderState': { $in: ['New', 'Acknowledged'] },
+        'amazonVendor.shipmentStatus': 'not_shipped',
+        'odoo.deliveryStatus': { $ne: 'full' }
+      };
+
+      if (vendorGroup && VENDOR_GROUPS[vendorGroup]) {
+        query['marketplace.code'] = { $in: VENDOR_GROUPS[vendorGroup].marketplaces };
+      }
+
+      if (dateStr && dateStr !== 'nodate') {
+        const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
+        const endOfDay = new Date(dateStr + 'T00:00:00.000Z');
+        endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+        query['amazonVendor.deliveryWindow.endDate'] = { $gte: startOfDay, $lt: endOfDay };
+      }
+    }
+
+    // Test mode isolation
+    if (isTestMode()) {
+      query._testData = true;
+    } else {
+      query._testData = { $ne: true };
+      if (!isSeparate) {
+        query['sourceIds.amazonVendorPONumber'] = { $not: /^TST/ };
+      }
+    }
+
+    const orders = await db.collection('unified_orders').find(query).toArray();
+
+    if (orders.length === 0) {
+      return res.status(404).json({ success: false, error: 'No orders found for this group' });
+    }
+
+    // Consolidate items by SKU
+    const itemsBySku = {};
+    for (const order of orders) {
+      for (const item of (order.items || [])) {
+        const sku = item.odooSku || item.vendorProductIdentifier;
+        if (!sku) continue;
+
+        const qty = item.acknowledgeQty ?? item.orderedQuantity?.amount ?? item.quantity ?? 0;
+
+        if (!itemsBySku[sku]) {
+          itemsBySku[sku] = {
+            sku,
+            ean: item.vendorProductIdentifier || item.odooBarcode,
+            name: item.odooProductName || item.name || item.title || `Product ${sku}`,
+            totalQty: 0,
+            unitWeight: item.weight || 0.5, // Default 0.5kg if not specified
+            odooProductId: item.odooProductId
+          };
+        }
+        itemsBySku[sku].totalQty += qty;
+      }
+    }
+
+    // Fetch weights from products collection
+    const skuList = Object.keys(itemsBySku);
+    const products = await db.collection('products').find(
+      { sku: { $in: skuList } },
+      { projection: { sku: 1, weight: 1, packaging: 1 } }
+    ).toArray();
+
+    const productData = {};
+    for (const p of products) {
+      productData[p.sku] = {
+        weight: p.weight || 0.5,
+        packaging: (p.packaging || []).sort((a, b) => b.qty - a.qty) // Sort by qty DESC
+      };
+    }
+
+    // Generate suggested cartons
+    const suggestedParcels = [];
+    const remainingItems = [];
+    let totalEstimatedWeight = 0;
+    const PACKAGING_WEIGHT = 0.5; // kg per carton
+
+    for (const [sku, item] of Object.entries(itemsBySku)) {
+      let remaining = item.totalQty;
+      const pData = productData[sku] || { weight: item.unitWeight, packaging: [] };
+      const unitWeight = pData.weight || item.unitWeight || 0.5;
+      const packaging = pData.packaging || [];
+
+      // Process each packaging level (master carton first, then inner boxes)
+      for (const pkg of packaging) {
+        if (remaining <= 0) break;
+        if (!pkg.qty || pkg.qty <= 0) continue;
+
+        const fullCartons = Math.floor(remaining / pkg.qty);
+
+        if (fullCartons > 0) {
+          // Create individual parcels for each carton
+          for (let i = 0; i < fullCartons; i++) {
+            const parcelWeight = (unitWeight * pkg.qty) + PACKAGING_WEIGHT;
+            suggestedParcels.push({
+              type: 'packaging',
+              packagingType: pkg.name || 'Carton',
+              sku,
+              ean: item.ean,
+              name: item.name,
+              qtyPerCarton: pkg.qty,
+              unitWeight,
+              estimatedWeight: Math.round(parcelWeight * 100) / 100,
+              items: [{
+                sku,
+                ean: item.ean,
+                name: item.name,
+                quantity: pkg.qty,
+                weight: unitWeight
+              }]
+            });
+            totalEstimatedWeight += parcelWeight;
+          }
+          remaining -= fullCartons * pkg.qty;
+        }
+      }
+
+      // Remaining items go to mix
+      if (remaining > 0) {
+        remainingItems.push({
+          sku,
+          ean: item.ean,
+          name: item.name,
+          qty: remaining,
+          unitWeight,
+          totalWeight: Math.round(remaining * unitWeight * 100) / 100
+        });
+      }
+    }
+
+    // Calculate total remaining weight (for mix parcels)
+    const remainingWeight = remainingItems.reduce((sum, i) => sum + i.totalWeight, 0);
+
+    res.json({
+      success: true,
+      suggestedParcels,
+      remainingItems,
+      summary: {
+        totalSuggestedCartons: suggestedParcels.length,
+        totalSuggestedUnits: suggestedParcels.reduce((sum, p) =>
+          sum + p.items.reduce((s, i) => s + i.quantity, 0), 0),
+        totalRemainingUnits: remainingItems.reduce((sum, i) => sum + i.qty, 0),
+        estimatedCartonWeight: Math.round(totalEstimatedWeight * 100) / 100,
+        estimatedRemainingWeight: Math.round(remainingWeight * 100) / 100,
+        estimatedTotalWeight: Math.round((totalEstimatedWeight + remainingWeight) * 100) / 100
+      }
+    });
+
+  } catch (error) {
+    console.error('[VendorAPI] POST /packing/suggest-cartons error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -164,6 +164,57 @@
     .carrier-badge.parcel { background: #3b82f620; color: #60a5fa; }
     .carrier-badge.freight { background: #f9731620; color: #f97316; }
 
+    /* Dachser Freight Mode */
+    .freight-mode-banner { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: white; padding: 12px 20px; border-radius: 10px; margin-bottom: 16px; display: none; align-items: center; gap: 12px; }
+    .freight-mode-banner .material-symbols-outlined { font-size: 28px; }
+    .freight-mode-banner h3 { margin: 0; font-size: 16px; font-weight: 600; }
+    .freight-mode-banner p { margin: 2px 0 0; font-size: 12px; opacity: 0.9; }
+
+    /* Pallet Configuration */
+    .pallet-config { display: none; }
+    .pallet-config.visible { display: block; }
+    .pallet-grid { display: grid; grid-template-columns: 200px 1fr; gap: 20px; align-items: start; }
+    .pallet-count-section { background: #1a1a28; padding: 16px; border-radius: 10px; }
+    .pallet-count-section label { display: block; font-size: 12px; color: #71717a; margin-bottom: 8px; }
+    .pallet-count-section input { width: 100%; padding: 12px; background: #252532; border: 1px solid #3f3f50; border-radius: 8px; color: #fff; font-size: 18px; text-align: center; }
+    .pallet-count-section input:focus { outline: none; border-color: #f97316; }
+    .pallet-weights-section { background: #1a1a28; padding: 16px; border-radius: 10px; }
+    .pallet-weights-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px; }
+    .pallet-weight-item { background: #252532; padding: 12px; border-radius: 8px; }
+    .pallet-weight-item label { display: block; font-size: 11px; color: #71717a; margin-bottom: 6px; }
+    .pallet-weight-item input { width: 100%; padding: 8px; background: #18181f; border: 1px solid #3f3f50; border-radius: 6px; color: #fff; font-size: 14px; text-align: right; }
+    .pallet-weight-item input:focus { outline: none; border-color: #f97316; }
+    .pallet-weight-item .unit { color: #71717a; font-size: 12px; margin-left: 4px; }
+    .pallet-summary { display: flex; gap: 24px; padding-top: 12px; border-top: 1px solid #3f3f50; font-size: 13px; }
+    .pallet-summary-item { display: flex; align-items: center; gap: 8px; }
+    .pallet-summary-item .label { color: #71717a; }
+    .pallet-summary-item .value { color: #fff; font-weight: 600; }
+    .pallet-summary-item .value.match { color: #4ade80; }
+    .pallet-summary-item .value.mismatch { color: #fbbf24; }
+
+    /* Suggest Cartons Button */
+    .suggest-cartons-btn { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .suggest-cartons-btn:hover { background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); }
+    .suggest-cartons-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .suggest-cartons-btn .material-symbols-outlined { font-size: 20px; }
+
+    /* Parcel type badges */
+    .parcel-type-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 8px; }
+    .parcel-type-badge.packaging { background: #8b5cf620; color: #a78bfa; }
+    .parcel-type-badge.mix { background: #f9731620; color: #fb923c; }
+
+    /* Remaining items section */
+    .remaining-items { background: #1a1a28; border: 2px dashed #3f3f50; border-radius: 10px; padding: 16px; margin-top: 20px; }
+    .remaining-items.empty { border-color: #22c55e40; background: #22c55e10; }
+    .remaining-items-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .remaining-items-title { font-size: 14px; font-weight: 600; color: #e4e4e7; display: flex; align-items: center; gap: 8px; }
+    .remaining-items-title .material-symbols-outlined { font-size: 18px; color: #f97316; }
+    .remaining-items-title.complete .material-symbols-outlined { color: #22c55e; }
+    .remaining-items-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .remaining-item { background: #252532; padding: 8px 12px; border-radius: 6px; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+    .remaining-item-sku { color: #e4e4e7; font-weight: 500; }
+    .remaining-item-qty { color: #f97316; font-weight: 600; }
+
     /* Progress Modal */
     .progress-modal { width: 600px; }
     .progress-step { display: flex; align-items: flex-start; gap: 16px; padding: 16px; background: #1a1a28; border-radius: 10px; margin-bottom: 12px; border-left: 3px solid #3f3f50; }
@@ -242,6 +293,48 @@
       </select>
     </div>
 
+    <!-- Dachser Freight Mode Banner -->
+    <div class="freight-mode-banner" id="freight-mode-banner">
+      <span class="material-symbols-outlined">local_shipping</span>
+      <div>
+        <h3>🚛 Dachser Freight Mode</h3>
+        <p>Configure pallets and use "Suggest Cartons" to auto-create cartons based on packaging levels</p>
+      </div>
+    </div>
+
+    <!-- Pallet Configuration (Dachser only) -->
+    <div class="card pallet-config" id="pallet-config-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="material-symbols-outlined">pallet</span>
+          Pallet Configuration
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="pallet-grid">
+          <div class="pallet-count-section">
+            <label>Number of Pallets</label>
+            <input type="number" id="pallet-count" min="1" max="20" value="1" onchange="updatePalletWeightFields()">
+          </div>
+          <div class="pallet-weights-section">
+            <div class="pallet-weights-grid" id="pallet-weights-grid">
+              <!-- Pallet weight inputs will be generated dynamically -->
+            </div>
+            <div class="pallet-summary">
+              <div class="pallet-summary-item">
+                <span class="label">Sum of pallet weights:</span>
+                <span class="value" id="pallet-weight-sum">0 kg</span>
+              </div>
+              <div class="pallet-summary-item">
+                <span class="label">Estimated from cartons:</span>
+                <span class="value" id="pallet-weight-estimated">0 kg</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Group Info -->
     <div class="card" id="group-card">
       <div class="card-header">
@@ -303,10 +396,16 @@
       <div class="card-header">
         <div class="card-title">
           <span class="material-symbols-outlined">deployed_code</span>
-          Parcel Configuration
+          <span id="parcels-card-title">Parcel Configuration</span>
         </div>
       </div>
       <div class="card-body">
+        <!-- Suggest Cartons Button (Dachser mode) -->
+        <button class="suggest-cartons-btn" id="suggest-cartons-btn" onclick="suggestCartons()" style="display: none;">
+          <span class="material-symbols-outlined">auto_fix_high</span>
+          Suggest Cartons Based on Packaging
+        </button>
+
         <div class="parcel-count-input">
           <label>Number of Parcels:</label>
           <input type="number" id="parcel-count" min="1" max="50" value="1" onchange="validateParcelCount()">
@@ -324,6 +423,22 @@
 
         <div class="parcels-grid" id="parcels-grid">
           <!-- Parcels will be rendered here -->
+        </div>
+
+        <!-- Remaining Items (for manual mix parcels) -->
+        <div class="remaining-items" id="remaining-items-section" style="display: none;">
+          <div class="remaining-items-header">
+            <div class="remaining-items-title" id="remaining-items-title">
+              <span class="material-symbols-outlined">inventory</span>
+              <span>Items Remaining for Mix Parcels</span>
+            </div>
+            <button class="btn btn-primary btn-sm" id="add-mix-parcel-btn" onclick="openAddItemsModal(parcels.length)">
+              <span class="material-symbols-outlined">add</span>Add Mix Parcel
+            </button>
+          </div>
+          <div class="remaining-items-list" id="remaining-items-list">
+            <!-- Remaining items will be rendered here -->
+          </div>
         </div>
       </div>
     </div>
@@ -416,6 +531,190 @@
     let itemsRemaining = {}; // Track remaining qty for each item
     let currentModalParcelIndex = -1; // Which parcel we're adding items to
     let packagingCache = {}; // Cache packaging data by SKU
+    let palletWeights = []; // Track weight for each pallet (Dachser mode)
+    let estimatedTotalWeight = 0; // Estimated from cartons
+
+    // Check if Dachser freight mode is active
+    function isDachserMode() {
+      return selectedCarrier === 'dachser';
+    }
+
+    // Update UI for Dachser freight mode
+    function updateDachserUI() {
+      const isDachser = isDachserMode();
+      const freightBanner = document.getElementById('freight-mode-banner');
+      const palletConfig = document.getElementById('pallet-config-card');
+      const suggestBtn = document.getElementById('suggest-cartons-btn');
+      const autoDistributeBtn = document.getElementById('auto-distribute-btn');
+      const parcelsTitle = document.getElementById('parcels-card-title');
+
+      freightBanner.style.display = isDachser ? 'flex' : 'none';
+      palletConfig.classList.toggle('visible', isDachser);
+      suggestBtn.style.display = isDachser ? 'flex' : 'none';
+      autoDistributeBtn.style.display = isDachser ? 'none' : 'inline-flex';
+      parcelsTitle.textContent = isDachser ? 'Carton Configuration' : 'Parcel Configuration';
+
+      if (isDachser) {
+        updatePalletWeightFields();
+      }
+
+      // Update remaining items visibility
+      renderRemainingItems();
+    }
+
+    // Generate pallet weight input fields
+    function updatePalletWeightFields() {
+      const count = parseInt(document.getElementById('pallet-count').value) || 1;
+      const grid = document.getElementById('pallet-weights-grid');
+
+      // Preserve existing weights when count changes
+      while (palletWeights.length < count) {
+        palletWeights.push(0);
+      }
+      while (palletWeights.length > count) {
+        palletWeights.pop();
+      }
+
+      grid.innerHTML = palletWeights.map((weight, idx) => `
+        <div class="pallet-weight-item">
+          <label>Pallet ${idx + 1}</label>
+          <div style="display: flex; align-items: center;">
+            <input type="number" step="0.1" min="0" value="${weight || ''}"
+                   onchange="updatePalletWeight(${idx}, this.value)"
+                   placeholder="0">
+            <span class="unit">kg</span>
+          </div>
+        </div>
+      `).join('');
+
+      updatePalletWeightSum();
+    }
+
+    // Update individual pallet weight
+    function updatePalletWeight(index, value) {
+      palletWeights[index] = parseFloat(value) || 0;
+      updatePalletWeightSum();
+    }
+
+    // Calculate and display pallet weight sum
+    function updatePalletWeightSum() {
+      const sum = palletWeights.reduce((s, w) => s + (w || 0), 0);
+      const sumEl = document.getElementById('pallet-weight-sum');
+      const estEl = document.getElementById('pallet-weight-estimated');
+
+      sumEl.textContent = `${sum.toFixed(1)} kg`;
+      estEl.textContent = `${estimatedTotalWeight.toFixed(1)} kg`;
+
+      // Highlight if there's a big difference (>10%)
+      const diff = Math.abs(sum - estimatedTotalWeight);
+      const threshold = estimatedTotalWeight * 0.1;
+
+      if (sum > 0 && estimatedTotalWeight > 0) {
+        if (diff <= threshold) {
+          sumEl.className = 'value match';
+        } else {
+          sumEl.className = 'value mismatch';
+        }
+      } else {
+        sumEl.className = 'value';
+      }
+    }
+
+    // Suggest cartons based on packaging levels
+    async function suggestCartons() {
+      if (!groupId) {
+        showToast('No group selected', true);
+        return;
+      }
+
+      const btn = document.getElementById('suggest-cartons-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">sync</span>Calculating...';
+
+      try {
+        const res = await fetch('/api/vendor/packing/suggest-cartons', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ groupId })
+        });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        // Clear existing parcels and create suggested ones
+        parcels = data.suggestedParcels.map(p => ({
+          type: p.type, // 'packaging'
+          packagingType: p.packagingType,
+          items: p.items,
+          weight: p.estimatedWeight,
+          estimatedWeight: p.estimatedWeight
+        }));
+
+        // Update parcel count input
+        document.getElementById('parcel-count').value = parcels.length;
+
+        // Store estimated total weight for pallet comparison
+        estimatedTotalWeight = data.summary.estimatedTotalWeight;
+        updatePalletWeightSum();
+
+        // Render parcels and remaining items
+        renderParcels();
+        renderRemainingItems();
+        renderItemsTable();
+
+        showToast(`Created ${parcels.length} cartons, ${data.summary.totalRemainingUnits} units remaining for mix parcels`);
+
+      } catch (err) {
+        showToast('Error: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined">auto_fix_high</span>Suggest Cartons Based on Packaging';
+      }
+    }
+
+    // Render remaining items section (for mix parcels)
+    function renderRemainingItems() {
+      calculateRemaining();
+      const section = document.getElementById('remaining-items-section');
+      const list = document.getElementById('remaining-items-list');
+      const title = document.getElementById('remaining-items-title');
+      const addBtn = document.getElementById('add-mix-parcel-btn');
+
+      // Only show in Dachser mode or if there are remaining items
+      const remainingEntries = Object.entries(itemsRemaining).filter(([_, qty]) => qty > 0);
+      const hasRemaining = remainingEntries.length > 0;
+
+      section.style.display = isDachserMode() ? 'block' : 'none';
+
+      if (!hasRemaining) {
+        section.classList.add('empty');
+        title.classList.add('complete');
+        title.innerHTML = '<span class="material-symbols-outlined">check_circle</span><span>All Items Packed</span>';
+        list.innerHTML = '<span style="color: #4ade80; font-size: 13px;">All items have been assigned to cartons</span>';
+        addBtn.style.display = 'none';
+      } else {
+        section.classList.remove('empty');
+        title.classList.remove('complete');
+        const totalRemaining = remainingEntries.reduce((sum, [_, qty]) => sum + qty, 0);
+        title.innerHTML = `<span class="material-symbols-outlined">inventory</span><span>Items Remaining for Mix Parcels (${totalRemaining} units)</span>`;
+        addBtn.style.display = 'inline-flex';
+
+        // Render each remaining item
+        list.innerHTML = remainingEntries.map(([sku, qty]) => {
+          const item = groupData?.consolidatedItems?.find(i =>
+            (i.odooSku || i.vendorProductIdentifier) === sku
+          );
+          const name = item?.odooProductName || 'Unknown';
+          return `
+            <div class="remaining-item">
+              <span class="remaining-item-sku">${sku}</span>
+              <span class="remaining-item-qty">×${qty}</span>
+            </div>
+          `;
+        }).join('');
+      }
+    }
 
     // Fetch packaging for a product by SKU
     async function fetchPackaging(sku) {
@@ -671,6 +970,20 @@
       const inputs = document.querySelectorAll('.item-select-qty');
       let addedCount = 0;
 
+      // Check if we're adding to a new parcel (mix parcel from remaining items)
+      const isNewParcel = currentModalParcelIndex >= parcels.length;
+      if (isNewParcel) {
+        // Create a new mix parcel
+        parcels.push({
+          type: 'mix',
+          items: [],
+          weight: 0,
+          estimatedWeight: 0
+        });
+      }
+
+      const parcelIndex = isNewParcel ? parcels.length - 1 : currentModalParcelIndex;
+
       inputs.forEach(input => {
         const qty = parseInt(input.value) || 0;
         if (qty > 0) {
@@ -680,14 +993,14 @@
           const weight = parseFloat(input.dataset.weight) || 0.5;
 
           // Check if item already exists in parcel
-          const existing = parcels[currentModalParcelIndex].items.find(i =>
+          const existing = parcels[parcelIndex].items.find(i =>
             (i.sku && i.sku === sku) || (i.ean && i.ean === ean)
           );
 
           if (existing) {
             existing.quantity += qty;
           } else {
-            parcels[currentModalParcelIndex].items.push({
+            parcels[parcelIndex].items.push({
               sku, ean, name, quantity: qty, weight
             });
           }
@@ -696,11 +1009,19 @@
       });
 
       if (addedCount > 0) {
+        // Update parcel count input
+        document.getElementById('parcel-count').value = parcels.length;
+
         // Recalculate weight for this parcel (await to ensure weight is updated before render)
-        await recalculateParcelWeight(currentModalParcelIndex);
+        await recalculateParcelWeight(parcelIndex);
         renderParcels();
         renderItemsTable();
-        showToast(`Added ${addedCount} units to Parcel ${currentModalParcelIndex + 1}`);
+
+        const parcelLabel = isDachserMode() ? 'Carton' : 'Parcel';
+        showToast(`Added ${addedCount} units to ${parcelLabel} ${parcelIndex + 1}`);
+      } else if (isNewParcel) {
+        // Remove the empty parcel we just created
+        parcels.pop();
       }
 
       closeAddItemsModal();
@@ -771,6 +1092,7 @@
         }
 
         updateGenerateButtonText();
+        updateDachserUI();
       } catch (err) {
         console.error('Failed to check carrier status:', err);
       }
@@ -796,6 +1118,7 @@
       }
 
       updateGenerateButtonText();
+      updateDachserUI();
     }
 
     // Update generate button text based on selected carrier
@@ -1071,12 +1394,20 @@
       calculateRemaining();
       const grid = document.getElementById('parcels-grid');
       const hasRemainingItems = Object.values(itemsRemaining).some(qty => qty > 0);
+      const inDachserMode = isDachserMode();
 
       const MAX_PARCEL_WEIGHT = 15; // kg - Amazon limit
 
       grid.innerHTML = parcels.map((parcel, idx) => {
         const status = parcel.sscc ? 'ready' : 'pending';
         const isOverweight = parcel.weight > MAX_PARCEL_WEIGHT;
+        const parcelLabel = inDachserMode ? 'Carton' : 'Parcel';
+
+        // Parcel type badge (packaging vs mix)
+        const typeBadge = parcel.type === 'packaging'
+          ? `<span class="parcel-type-badge packaging">${parcel.packagingType || 'Packaging'}</span>`
+          : (parcel.type === 'mix' ? '<span class="parcel-type-badge mix">Mix</span>' : '');
+
         const itemsHtml = parcel.items.length > 0
           ? parcel.items.map((item, itemIdx) => `
               <div class="parcel-item">
@@ -1095,8 +1426,14 @@
         return `
           <div class="parcel-card ${status} ${isOverweight ? 'overweight' : ''}">
             <div class="parcel-header">
-              <span class="parcel-title">Parcel ${idx + 1}</span>
-              <span class="parcel-status ${status}">${status === 'ready' ? 'Ready' : isOverweight ? 'Overweight!' : 'Pending'}</span>
+              <span class="parcel-title">${parcelLabel} ${idx + 1}${typeBadge}</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="parcel-status ${status}">${status === 'ready' ? 'Ready' : isOverweight ? 'Overweight!' : 'Pending'}</span>
+                <button class="btn btn-sm" style="padding: 4px 8px; background: #ef444420; color: #ef4444; border: none; border-radius: 4px; cursor: pointer;"
+                        onclick="deleteParcel(${idx})" title="Delete ${parcelLabel.toLowerCase()}">
+                  <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
+                </button>
+              </div>
             </div>
             <div class="parcel-body">
               <div class="weight-row">
@@ -1110,16 +1447,17 @@
               <div class="parcel-field">
                 <label>Items (${parcel.items.reduce((sum, i) => sum + i.quantity, 0)} units)</label>
                 <div class="parcel-items">${itemsHtml}</div>
-                ${hasRemainingItems ? `
+                ${hasRemainingItems && !inDachserMode ? `
                   <button class="add-item-btn" onclick="openAddItemsModal(${idx})">
                     <span class="material-symbols-outlined">add</span>Add Items
                   </button>
-                ` : `
+                ` : ''}
+                ${!hasRemainingItems && !inDachserMode ? `
                   <div style="text-align: center; padding: 10px; color: #4ade80; font-size: 12px;">
                     <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">check_circle</span>
                     All items distributed
                   </div>
-                `}
+                ` : ''}
                 ${isOverweight ? `
                   <div class="overweight-warning">
                     <span class="material-symbols-outlined">warning</span>
@@ -1144,6 +1482,38 @@
 
       // Update parcel controls based on packing status
       updateParcelControls();
+
+      // Update remaining items section (Dachser mode)
+      if (inDachserMode) {
+        renderRemainingItems();
+        // Update estimated total weight
+        estimatedTotalWeight = parcels.reduce((sum, p) => sum + (p.estimatedWeight || 0), 0);
+        updatePalletWeightSum();
+      }
+    }
+
+    // Delete a parcel (returns items to remaining)
+    function deleteParcel(index) {
+      if (index < 0 || index >= parcels.length) return;
+
+      const parcel = parcels[index];
+      const itemCount = parcel.items.reduce((sum, i) => sum + i.quantity, 0);
+
+      if (!confirm(`Delete this ${isDachserMode() ? 'carton' : 'parcel'} with ${itemCount} items?\n\nThe items will be returned to the remaining items pool.`)) {
+        return;
+      }
+
+      // Remove the parcel
+      parcels.splice(index, 1);
+
+      // Update parcel count input
+      document.getElementById('parcel-count').value = parcels.length;
+
+      // Re-render
+      renderParcels();
+      renderItemsTable();
+
+      showToast(`${isDachserMode() ? 'Carton' : 'Parcel'} deleted, ${itemCount} items returned to remaining`);
     }
 
     // Update parcel weight
@@ -1188,6 +1558,24 @@
         }
       }
 
+      // Dachser mode: validate pallet weights
+      if (isDachserMode()) {
+        const palletCount = parseInt(document.getElementById('pallet-count').value) || 1;
+        const totalPalletWeight = palletWeights.reduce((sum, w) => sum + (w || 0), 0);
+
+        if (totalPalletWeight <= 0) {
+          showToast('Please enter weights for all pallets', true);
+          return;
+        }
+
+        const hasEmptyPallet = palletWeights.slice(0, palletCount).some(w => !w || w <= 0);
+        if (hasEmptyPallet) {
+          if (!confirm('Some pallets have no weight specified.\n\nDo you want to continue anyway?')) {
+            return;
+          }
+        }
+      }
+
       const generateBtn = document.getElementById('generate-btn');
       generateBtn.disabled = true;
       generateBtn.innerHTML = '<span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">sync</span>Generating...';
@@ -1218,11 +1606,23 @@
         currentShipmentId = createData.shipment.shipmentId;
 
         // Step 2: Generate labels
+        const labelRequestBody = { carrier: selectedCarrier };
+
+        // Add pallet info for Dachser
+        if (isDachserMode()) {
+          const palletCount = parseInt(document.getElementById('pallet-count').value) || 1;
+          labelRequestBody.palletInfo = {
+            count: palletCount,
+            weights: palletWeights.slice(0, palletCount),
+            packingType: 'EU' // Euro pallet
+          };
+        }
+
         const labelsRes = await fetch(`/api/vendor/packing/${currentShipmentId}/generate-labels`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ carrier: selectedCarrier })
+          body: JSON.stringify(labelRequestBody)
         });
 
         const labelsData = await labelsRes.json();
@@ -1253,22 +1653,50 @@
         const carrierName = selectedCarrier && selectedCarrier !== 'none'
           ? (carriersData?.carriers[selectedCarrier]?.name || selectedCarrier.toUpperCase())
           : 'Carrier';
-        document.getElementById('labels-info').innerHTML = `
+
+        let labelsInfoHtml = `
           <div class="label-stat success">
             <div class="label-stat-value">${ssccCount}/${parcels.length}</div>
-            <div class="label-stat-label">SSCC Labels</div>
+            <div class="label-stat-label">SSCC Labels (Cartons)</div>
           </div>
-          <div class="label-stat ${carrierCount === parcels.length ? 'success' : 'warning'}">
-            <div class="label-stat-value">${carrierCount}/${parcels.length}</div>
-            <div class="label-stat-label">${carrierName} Labels</div>
-          </div>
+        `;
+
+        // Dachser mode: show pallet info and tracking
+        if (isDachserMode() && labelsData.dachser) {
+          const palletCount = parseInt(document.getElementById('pallet-count').value) || 1;
+          labelsInfoHtml += `
+            <div class="label-stat success">
+              <div class="label-stat-value">${palletCount}</div>
+              <div class="label-stat-label">Pallet Labels</div>
+            </div>
+            <div class="label-stat success">
+              <div class="label-stat-value" style="font-size: 12px; word-break: break-all;">${labelsData.dachser.trackingNumber}</div>
+              <div class="label-stat-label">Dachser Tracking</div>
+            </div>
+          `;
+        } else {
+          labelsInfoHtml += `
+            <div class="label-stat ${carrierCount === parcels.length ? 'success' : 'warning'}">
+              <div class="label-stat-value">${carrierCount}/${parcels.length}</div>
+              <div class="label-stat-label">${carrierName} Labels</div>
+            </div>
+          `;
+        }
+
+        labelsInfoHtml += `
           <div class="label-stat">
             <div class="label-stat-value">${currentShipmentId}</div>
             <div class="label-stat-label">Shipment ID</div>
           </div>
         `;
 
-        document.getElementById('action-status').textContent = `Labels generated: ${ssccCount} SSCC, ${carrierCount} ${carrierName}`;
+        document.getElementById('labels-info').innerHTML = labelsInfoHtml;
+
+        if (isDachserMode() && labelsData.dachser) {
+          document.getElementById('action-status').textContent = `Labels generated: ${ssccCount} SSCC carton labels + Dachser pallet labels`;
+        } else {
+          document.getElementById('action-status').textContent = `Labels generated: ${ssccCount} SSCC, ${carrierCount} ${carrierName}`;
+        }
         showToast('Labels generated successfully!');
 
       } catch (err) {
