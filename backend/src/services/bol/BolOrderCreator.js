@@ -525,11 +525,51 @@ class BolOrderCreator {
       const collection = db.collection(COLLECTION_NAME);
       const unifiedOrderId = `${CHANNELS.BOL}:${orderId}`;
 
-      const bolOrder = await collection.findOne({ unifiedOrderId });
-      if (!bolOrder) {
+      // Step 1b: Atomic lock - claim the order before creating
+      // This prevents race conditions where two processes try to create the same order
+      const LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes - consider stale locks
+      const now = new Date();
+
+      const claimed = await collection.findOneAndUpdate(
+        {
+          unifiedOrderId,
+          $or: [
+            { 'odoo.creating': { $ne: true } },  // Not being created
+            { 'odoo.creatingStartedAt': { $lt: new Date(now.getTime() - LOCK_TIMEOUT_MS) } }  // Or lock is stale
+          ],
+          'sourceIds.odooSaleOrderId': { $exists: false }  // Not already created
+        },
+        {
+          $set: {
+            'odoo.creating': true,
+            'odoo.creatingStartedAt': now
+          }
+        },
+        { returnDocument: 'after' }
+      );
+
+      if (!claimed || !claimed.value) {
+        // Check if already created or being created by another process
+        const existingOrder = await collection.findOne({ unifiedOrderId });
+        if (existingOrder?.sourceIds?.odooSaleOrderId) {
+          result.success = true;
+          result.skipped = true;
+          result.skipReason = `Order already created: ${existingOrder.sourceIds.odooSaleOrderName}`;
+          result.odooOrderId = existingOrder.sourceIds.odooSaleOrderId;
+          result.odooOrderName = existingOrder.sourceIds.odooSaleOrderName;
+          return result;
+        }
+        if (existingOrder?.odoo?.creating) {
+          result.success = true;
+          result.skipped = true;
+          result.skipReason = `Order is being created by another process (started ${existingOrder.odoo.creatingStartedAt})`;
+          return result;
+        }
         result.errors.push(`Order not found in database: ${orderId}`);
         return result;
       }
+
+      const bolOrder = claimed.value;
 
       // Step 2: Check for mixed fulfillment (FBB + FBR items in same order)
       const { isMixed, fbbItems, fbrItems } = this.checkMixedFulfillment(bolOrder.items);
@@ -617,7 +657,7 @@ class BolOrderCreator {
       result.confirmed = createResult.confirmed;
       result.taxConfig = createResult.taxConfig;
 
-      // Step 6: Update unified_orders with Odoo link
+      // Step 6: Update unified_orders with Odoo link and clear lock
       if (createResult.success && createResult.odooOrderId) {
         const odooData = {
           ...(bolOrder.odoo || {}),
@@ -625,7 +665,8 @@ class BolOrderCreator {
           saleOrderName: createResult.odooOrderName,
           linkedAt: new Date(),
           syncedAt: new Date(),
-          syncError: ''
+          syncError: '',
+          creating: false  // Clear lock
         };
         await collection.updateOne(
           { unifiedOrderId },
@@ -635,7 +676,17 @@ class BolOrderCreator {
               'sourceIds.odooSaleOrderName': createResult.odooOrderName,
               odoo: odooData,
               updatedAt: new Date()
-            }
+            },
+            $unset: { 'odoo.creatingStartedAt': '' }
+          }
+        );
+      } else {
+        // Clear lock on failure too
+        await collection.updateOne(
+          { unifiedOrderId },
+          {
+            $set: { 'odoo.creating': false, updatedAt: new Date() },
+            $unset: { 'odoo.creatingStartedAt': '' }
           }
         );
       }
@@ -645,7 +696,7 @@ class BolOrderCreator {
     } catch (error) {
       result.errors.push(error.message);
 
-      // Update unified_orders with error
+      // Update unified_orders with error and clear lock
       try {
         const db = getDb();
         const collection = db.collection(COLLECTION_NAME);
@@ -653,11 +704,15 @@ class BolOrderCreator {
         const currentOrder = await collection.findOne({ unifiedOrderId });
         const odooData = {
           ...(currentOrder?.odoo || {}),
-          syncError: error.message
+          syncError: error.message,
+          creating: false  // Clear lock on error
         };
         await collection.updateOne(
           { unifiedOrderId },
-          { $set: { odoo: odooData, updatedAt: new Date() } }
+          {
+            $set: { odoo: odooData, updatedAt: new Date() },
+            $unset: { 'odoo.creatingStartedAt': '' }
+          }
         );
       } catch (dbError) {
         console.error(`[BolOrderCreator] Failed to update error in DB:`, dbError.message);
@@ -775,14 +830,15 @@ class BolOrderCreator {
       result.odooOrderId = fbbResult?.odooOrderId || fbrResult?.odooOrderId;
       result.odooOrderName = fbbResult?.odooOrderName || fbrResult?.odooOrderName;
 
-      // Update unified_orders with split order references
+      // Update unified_orders with split order references and clear lock
       if (allSuccess && !dryRun) {
         const odooData = {
           ...(bolOrder.odoo || {}),
           isSplitOrder: true,
           linkedAt: new Date(),
           syncedAt: new Date(),
-          syncError: ''
+          syncError: '',
+          creating: false  // Clear lock
         };
 
         const updateSet = {
@@ -812,9 +868,24 @@ class BolOrderCreator {
         updateSet['sourceIds.odooSaleOrderName'] = fbbResult?.odooOrderName || fbrResult?.odooOrderName;
         updateSet.odoo = odooData;
 
-        await collection.updateOne({ unifiedOrderId }, { $set: updateSet });
+        await collection.updateOne(
+          { unifiedOrderId },
+          {
+            $set: updateSet,
+            $unset: { 'odoo.creatingStartedAt': '' }
+          }
+        );
 
         console.log(`[BolOrderCreator] ✅ Created split orders for ${orderId}: FBB=${fbbResult?.odooOrderName || 'N/A'}, FBR=${fbrResult?.odooOrderName || 'N/A'}`);
+      } else if (!dryRun) {
+        // Clear lock on failure
+        await collection.updateOne(
+          { unifiedOrderId },
+          {
+            $set: { 'odoo.creating': false, updatedAt: new Date() },
+            $unset: { 'odoo.creatingStartedAt': '' }
+          }
+        );
       }
 
       return result;
@@ -822,15 +893,20 @@ class BolOrderCreator {
     } catch (error) {
       result.errors.push(error.message);
 
+      // Clear lock on error
       try {
         const currentOrder = await collection.findOne({ unifiedOrderId });
         const odooData = {
           ...(currentOrder?.odoo || {}),
-          syncError: error.message
+          syncError: error.message,
+          creating: false  // Clear lock
         };
         await collection.updateOne(
           { unifiedOrderId },
-          { $set: { odoo: odooData, updatedAt: new Date() } }
+          {
+            $set: { odoo: odooData, updatedAt: new Date() },
+            $unset: { 'odoo.creatingStartedAt': '' }
+          }
         );
       } catch (dbError) {
         console.error(`[BolOrderCreator] Failed to update error in DB:`, dbError.message);
