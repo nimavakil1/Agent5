@@ -4729,20 +4729,20 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
       labelsHtml.push('<div class="label-title dachser">Dachser Transport Order</div>');
 
       if (shipment.dachser?.trackingNumber) {
-        labelsHtml.push(\`
-          <p><strong>Tracking Number:</strong> <span class="tracking-code">\${shipment.dachser.trackingNumber}</span></p>
-          <p><strong>ASN Number:</strong> \${shipment.dachser.asnNumber || shipment.amazonASN?.shipmentId || 'N/A'}</p>
-          <p><strong>Pallets:</strong> \${shipment.palletInfo?.count || 1} x Euro Pallet</p>
-          <p><a href="\${shipment.dachser.trackingUrl || '#'}" target="_blank" style="color: #0066cc;">🔗 Track Shipment on Dachser.com</a></p>
-        \`);
+        labelsHtml.push(`
+          <p><strong>Tracking Number:</strong> <span class="tracking-code">${shipment.dachser.trackingNumber}</span></p>
+          <p><strong>ASN Number:</strong> ${shipment.dachser.asnNumber || shipment.amazonASN?.shipmentId || 'N/A'}</p>
+          <p><strong>Pallets:</strong> ${shipment.palletInfo?.count || 1} x Euro Pallet</p>
+          <p><a href="${shipment.dachser.trackingUrl || '#'}" target="_blank" style="color: #0066cc;">🔗 Track Shipment on Dachser.com</a></p>
+        `);
         if (shipment.dachser.labelPdf) {
-          labelsHtml.push(\`<iframe class="label-pdf" src="data:application/pdf;base64,\${shipment.dachser.labelPdf}"></iframe>\`);
+          labelsHtml.push(`<iframe class="label-pdf" src="data:application/pdf;base64,${shipment.dachser.labelPdf}"></iframe>`);
         }
       } else {
         // Check for errors on any parcel
         const dachserError = shipment.parcels.find(p => p.dachserError)?.dachserError;
         if (dachserError) {
-          labelsHtml.push(\`<div class="error-msg">⚠️ Dachser API Error: \${dachserError}</div>\`);
+          labelsHtml.push(`<div class="error-msg">⚠️ Dachser API Error: ${dachserError}</div>`);
           labelsHtml.push('<p class="no-label">Dachser transport order not created. Please check API configuration or contact Dachser support.</p>');
         } else {
           labelsHtml.push('<p class="no-label">Dachser shipment pending - awaiting carrier booking</p>');
