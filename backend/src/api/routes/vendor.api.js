@@ -109,7 +109,7 @@ function getVendorGroupName(groupCode) {
 
 /**
  * @route GET /api/vendor/products/:sku/packaging
- * @desc Get packaging info for a product from MongoDB
+ * @desc Get packaging info for a product - checks MongoDB first, falls back to Odoo
  * @param sku - Product SKU
  */
 router.get('/products/:sku/packaging', async (req, res) => {
@@ -120,19 +120,43 @@ router.get('/products/:sku/packaging', async (req, res) => {
     // Find product by SKU in MongoDB products collection
     const product = await db.collection('products').findOne({ sku });
 
-    if (!product) {
-      return res.json({ success: true, packaging: [] });
+    // Check if MongoDB has packaging data
+    if (product && product.packaging && product.packaging.length > 0) {
+      const packaging = product.packaging
+        .map(p => ({ name: p.name, qty: p.qty }))
+        .sort((a, b) => b.qty - a.qty);
+      return res.json({ success: true, packaging, source: 'mongodb' });
     }
 
-    // Return packaging array, sorted by qty descending
-    const packaging = (product.packaging || [])
-      .map(p => ({
-        name: p.name,
-        qty: p.qty
-      }))
-      .sort((a, b) => b.qty - a.qty);
+    // Fall back to Odoo if no packaging in MongoDB
+    if (product && product.odooId) {
+      try {
+        const { getCachedOdooClient } = require('../../core/agents/integrations/OdooMCP');
+        const odoo = await getCachedOdooClient();
 
-    res.json({ success: true, packaging });
+        // Fetch packaging from Odoo
+        const odooPackaging = await odoo.searchRead('product.packaging', [
+          ['product_id', '=', product.odooId]
+        ], ['name', 'qty'], { order: 'qty desc' });
+
+        if (odooPackaging.length > 0) {
+          const packaging = odooPackaging.map(p => ({ name: p.name, qty: p.qty }));
+
+          // Cache to MongoDB for future requests
+          await db.collection('products').updateOne(
+            { sku },
+            { $set: { packaging, packagingSyncedAt: new Date() } }
+          );
+
+          return res.json({ success: true, packaging, source: 'odoo' });
+        }
+      } catch (odooErr) {
+        console.error('[VendorAPI] Odoo packaging fetch failed:', odooErr.message);
+      }
+    }
+
+    // No packaging found
+    res.json({ success: true, packaging: [] });
   } catch (error) {
     console.error('Product packaging fetch error:', error);
     res.status(500).json({ error: error.message });
@@ -5787,19 +5811,73 @@ router.post('/packing/suggest-cartons', async (req, res) => {
       }
     }
 
-    // Fetch weights from products collection
+    // Fetch weights and packaging from products collection
     const skuList = Object.keys(itemsBySku);
     const products = await db.collection('products').find(
       { sku: { $in: skuList } },
-      { projection: { sku: 1, weight: 1, packaging: 1 } }
+      { projection: { sku: 1, weight: 1, packaging: 1, odooId: 1 } }
     ).toArray();
 
     const productData = {};
+    const productsNeedingPackaging = []; // Products without packaging in MongoDB
+
     for (const p of products) {
       productData[p.sku] = {
         weight: p.weight || 0.5,
-        packaging: (p.packaging || []).sort((a, b) => b.qty - a.qty) // Sort by qty DESC
+        packaging: (p.packaging || []).sort((a, b) => b.qty - a.qty),
+        odooId: p.odooId
       };
+      // Track products missing packaging for Odoo fetch
+      if ((!p.packaging || p.packaging.length === 0) && p.odooId) {
+        productsNeedingPackaging.push({ sku: p.sku, odooId: p.odooId });
+      }
+    }
+
+    // Fetch packaging from Odoo for products missing it in MongoDB
+    if (productsNeedingPackaging.length > 0) {
+      try {
+        const { getCachedOdooClient } = require('../../core/agents/integrations/OdooMCP');
+        const odoo = await getCachedOdooClient();
+        const odooIds = productsNeedingPackaging.map(p => p.odooId);
+
+        // Fetch all packaging for these products in one query
+        const odooPackaging = await odoo.searchRead('product.packaging', [
+          ['product_id', 'in', odooIds]
+        ], ['product_id', 'name', 'qty'], { order: 'qty desc' });
+
+        // Group packaging by product ID
+        const packagingByOdooId = {};
+        for (const pkg of odooPackaging) {
+          const productOdooId = pkg.product_id[0];
+          if (!packagingByOdooId[productOdooId]) {
+            packagingByOdooId[productOdooId] = [];
+          }
+          packagingByOdooId[productOdooId].push({ name: pkg.name, qty: pkg.qty });
+        }
+
+        // Update productData and cache to MongoDB
+        const bulkOps = [];
+        for (const { sku, odooId } of productsNeedingPackaging) {
+          const packaging = packagingByOdooId[odooId] || [];
+          if (packaging.length > 0) {
+            productData[sku].packaging = packaging;
+            bulkOps.push({
+              updateOne: {
+                filter: { sku },
+                update: { $set: { packaging, packagingSyncedAt: new Date() } }
+              }
+            });
+          }
+        }
+
+        // Batch update MongoDB
+        if (bulkOps.length > 0) {
+          await db.collection('products').bulkWrite(bulkOps, { ordered: false });
+          console.log(`[VendorAPI] Cached packaging for ${bulkOps.length} products from Odoo`);
+        }
+      } catch (odooErr) {
+        console.error('[VendorAPI] Failed to fetch packaging from Odoo:', odooErr.message);
+      }
     }
 
     // Generate suggested cartons

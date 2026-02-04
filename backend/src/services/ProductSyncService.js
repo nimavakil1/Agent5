@@ -20,6 +20,7 @@ class ProductSyncService {
     this.locationToWarehouse = {};
     this.isRunning = false;
     this.lastSync = null;
+    this.packagingCache = {};  // Cache packaging details by ID
   }
 
   async init() {
@@ -91,7 +92,56 @@ class ProductSyncService {
     return stockByProduct;
   }
 
-  transformProduct(p, stockMap = {}) {
+  /**
+   * Fetch packaging details from Odoo
+   * @param {number[]} packagingIds - Array of product.packaging IDs
+   * @returns {Object} Map of packaging ID to {name, qty}
+   */
+  async fetchPackagingDetails(packagingIds) {
+    if (!packagingIds || packagingIds.length === 0) return {};
+
+    // Filter out IDs we already have cached
+    const uncachedIds = packagingIds.filter(id => !this.packagingCache[id]);
+
+    if (uncachedIds.length > 0) {
+      try {
+        const packagings = await this.odoo.read('product.packaging', uncachedIds, ['id', 'name', 'qty']);
+        for (const pkg of packagings) {
+          this.packagingCache[pkg.id] = { name: pkg.name, qty: pkg.qty };
+        }
+      } catch (err) {
+        console.error('[ProductSync] Error fetching packaging details:', err.message);
+      }
+    }
+
+    // Build result from cache
+    const result = {};
+    for (const id of packagingIds) {
+      if (this.packagingCache[id]) {
+        result[id] = this.packagingCache[id];
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Get packaging array for a product
+   * @param {number[]} packagingIds - Array of product.packaging IDs
+   * @param {Object} packagingMap - Map from fetchPackagingDetails
+   * @returns {Array} Array of {name, qty} sorted by qty desc
+   */
+  getPackagingArray(packagingIds, packagingMap) {
+    if (!packagingIds || packagingIds.length === 0) return [];
+
+    const packaging = packagingIds
+      .map(id => packagingMap[id])
+      .filter(Boolean)
+      .sort((a, b) => b.qty - a.qty);  // Sort by qty descending
+
+    return packaging;
+  }
+
+  transformProduct(p, stockMap = {}, packagingMap = {}) {
     const stockByWarehouse = stockMap[p.id] || {};
     const totalStock = Object.values(stockByWarehouse).reduce((sum, qty) => sum + qty, 0);
     const cwStock = stockByWarehouse[CW_WAREHOUSE_ID] || 0;
