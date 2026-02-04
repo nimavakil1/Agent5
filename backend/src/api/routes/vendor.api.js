@@ -4712,13 +4712,47 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
           <h1>Shipment: ${shipment.shipmentId} <span class="carrier-badge ${carrier}">${carrierName}</span></h1>
           <div class="header-info">
             <div><strong>Destination:</strong> ${shipTo.fcName}</div>
-            <div><strong>Parcels:</strong> ${shipment.parcels.length}</div>
+            <div><strong>Cartons:</strong> ${shipment.parcels.length}</div>
+            <div><strong>Pallets:</strong> ${shipment.palletInfo?.count || 1}</div>
             <div><strong>Total Weight:</strong> ${shipment.totalWeight} kg</div>
             <div><strong>Carrier:</strong> ${carrierName}</div>
             <div><strong>Status:</strong> ${shipment.status}</div>
           </div>
         </div>
     `);
+
+    // For Dachser: Show ONE freight label section at the top (shipment-level)
+    if (isDachser) {
+      labelsHtml.push('<div class="label-container">');
+      labelsHtml.push('<div class="parcel-header"><h2>🚛 Dachser Freight Shipment</h2></div>');
+      labelsHtml.push('<div class="label-section dachser">');
+      labelsHtml.push('<div class="label-title dachser">Dachser Transport Order</div>');
+
+      if (shipment.dachser?.trackingNumber) {
+        labelsHtml.push(\`
+          <p><strong>Tracking Number:</strong> <span class="tracking-code">\${shipment.dachser.trackingNumber}</span></p>
+          <p><strong>ASN Number:</strong> \${shipment.dachser.asnNumber || shipment.amazonASN?.shipmentId || 'N/A'}</p>
+          <p><strong>Pallets:</strong> \${shipment.palletInfo?.count || 1} x Euro Pallet</p>
+          <p><a href="\${shipment.dachser.trackingUrl || '#'}" target="_blank" style="color: #0066cc;">🔗 Track Shipment on Dachser.com</a></p>
+        \`);
+        if (shipment.dachser.labelPdf) {
+          labelsHtml.push(\`<iframe class="label-pdf" src="data:application/pdf;base64,\${shipment.dachser.labelPdf}"></iframe>\`);
+        }
+      } else {
+        // Check for errors on any parcel
+        const dachserError = shipment.parcels.find(p => p.dachserError)?.dachserError;
+        if (dachserError) {
+          labelsHtml.push(\`<div class="error-msg">⚠️ Dachser API Error: \${dachserError}</div>\`);
+          labelsHtml.push('<p class="no-label">Dachser transport order not created. Please check API configuration or contact Dachser support.</p>');
+        } else {
+          labelsHtml.push('<p class="no-label">Dachser shipment pending - awaiting carrier booking</p>');
+        }
+      }
+      labelsHtml.push('</div></div>');
+    }
+
+    // Per-carton labels (SSCC + carrier label for GLS, SSCC only for Dachser)
+    const cartonLabel = isDachser ? 'Carton' : 'Parcel';
 
     for (let i = 0; i < shipment.parcels.length; i++) {
       const parcel = shipment.parcels[i];
@@ -4727,7 +4761,7 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
       labelsHtml.push(`
         <div class="label-container${!isLast ? ' page-break' : ''}">
           <div class="parcel-header">
-            <h2>📦 Parcel ${parcel.parcelNumber} of ${shipment.parcels.length}</h2>
+            <h2>📦 ${cartonLabel} ${parcel.parcelNumber} of ${shipment.parcels.length}</h2>
             <div class="parcel-meta">
               <strong>Weight:</strong> ${parcel.weight} kg |
               <strong>Items:</strong> ${parcel.items?.length || 0} SKUs
@@ -4735,29 +4769,8 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
           </div>
       `);
 
-      // Carrier Label section (GLS or Dachser)
-      if (isDachser) {
-        labelsHtml.push('<div class="label-section dachser">');
-        labelsHtml.push('<div class="label-title dachser">🚛 Dachser Freight Label</div>');
-
-        if (shipment.dachser?.trackingNumber) {
-          labelsHtml.push(`
-            <p><strong>Tracking Number:</strong> <span class="tracking-code">${shipment.dachser.trackingNumber}</span></p>
-            <p><strong>Tracking:</strong> <a href="${shipment.dachser.trackingUrl || '#'}" target="_blank">Track Shipment</a></p>
-          `);
-          if (shipment.dachser.labelPdf) {
-            labelsHtml.push(`<iframe class="label-pdf" src="data:application/pdf;base64,${shipment.dachser.labelPdf}"></iframe>`);
-          } else {
-            labelsHtml.push('<p class="no-label">Dachser label PDF stored separately - check shipment attachments</p>');
-          }
-        } else if (parcel.dachserError) {
-          labelsHtml.push(`<div class="error-msg">⚠️ Dachser API Error: ${parcel.dachserError}</div>`);
-          labelsHtml.push('<p class="no-label">Dachser shipment not created. Please check API configuration.</p>');
-        } else {
-          labelsHtml.push('<p class="no-label">Dachser shipment pending - labels will appear after carrier booking</p>');
-        }
-        labelsHtml.push('</div>');
-      } else if (isGLS) {
+      // Carrier Label section (GLS only - Dachser is shown at shipment level above)
+      if (isGLS) {
         labelsHtml.push('<div class="label-section gls">');
         labelsHtml.push('<div class="label-title gls">🚚 GLS Shipping Label</div>');
 
