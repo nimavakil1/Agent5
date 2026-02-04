@@ -4593,7 +4593,8 @@ router.post('/packing/:shipmentId/generate-labels', async (req, res) => {
 
 /**
  * @route GET /api/vendor/packing/:shipmentId/labels
- * @desc Get combined labels page (GLS + SSCC) for printing
+ * @desc Get combined labels page (carrier + SSCC) for printing
+ * Supports GLS, Dachser, or no carrier (SSCC-only)
  */
 router.get('/packing/:shipmentId/labels', async (req, res) => {
   try {
@@ -4607,6 +4608,11 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Shipment not found' });
     }
 
+    // Determine carrier type
+    const carrier = shipment.carrier || 'none';
+    const isDachser = carrier === 'dachser';
+    const isGLS = carrier === 'gls';
+
     // Parse groupId for FC info
     const lastUnderscoreIndex = (shipment.groupId || '').lastIndexOf('_');
     const fcPartyId = lastUnderscoreIndex > 0
@@ -4618,6 +4624,10 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
       fcName: shipment.fcName || FC_NAMES[fcPartyId] || fcPartyId,
       address: shipment.fcAddress
     };
+
+    // Carrier label text
+    const carrierName = isDachser ? 'Dachser' : isGLS ? 'GLS' : 'No Carrier';
+    const carrierColor = isDachser ? '#0066cc' : isGLS ? '#ffc107' : '#6c757d';
 
     // Build combined labels HTML
     const labelsHtml = [];
@@ -4643,10 +4653,16 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
           .parcel-meta { color: #666; font-size: 14px; }
           .label-section { border: 2px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 6px; }
           .label-section.gls { border-color: #ffc107; background: #fffef0; }
+          .label-section.dachser { border-color: #0066cc; background: #f0f7ff; }
           .label-section.sscc { border-color: #28a745; background: #f0fff4; }
           .label-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
           .label-title.gls { color: #856404; }
+          .label-title.dachser { color: #0066cc; }
           .label-title.sscc { color: #155724; }
+          .carrier-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+          .carrier-badge.dachser { background: #0066cc; color: white; }
+          .carrier-badge.gls { background: #ffc107; color: #000; }
+          .error-msg { color: #dc3545; background: #f8d7da; padding: 10px; border-radius: 4px; margin-top: 10px; }
           .tracking-code { font-family: monospace; font-size: 18px; background: #f8f9fa; padding: 8px 12px; border-radius: 4px; display: inline-block; }
           .label-pdf { width: 100%; height: 450px; border: 1px solid #ddd; border-radius: 4px; }
           .items-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
@@ -4682,7 +4698,7 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
           <div class="actions-buttons">
             <a href="/api/vendor/packing/${shipment.shipmentId}/labels.pdf" class="action-btn labels" download>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
-              All Labels PDF (GLS + SSCC)
+              All Labels PDF (${carrierName} + SSCC)
             </a>
             <a href="/api/vendor/packing/${shipment.shipmentId}/delivery-note.pdf" class="action-btn delivery" download>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
@@ -4693,11 +4709,12 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
 
         <div class="content-wrapper">
         <div class="header no-print">
-          <h1>Shipment: ${shipment.shipmentId}</h1>
+          <h1>Shipment: ${shipment.shipmentId} <span class="carrier-badge ${carrier}">${carrierName}</span></h1>
           <div class="header-info">
             <div><strong>Destination:</strong> ${shipTo.fcName}</div>
             <div><strong>Parcels:</strong> ${shipment.parcels.length}</div>
             <div><strong>Total Weight:</strong> ${shipment.totalWeight} kg</div>
+            <div><strong>Carrier:</strong> ${carrierName}</div>
             <div><strong>Status:</strong> ${shipment.status}</div>
           </div>
         </div>
@@ -4718,21 +4735,50 @@ router.get('/packing/:shipmentId/labels', async (req, res) => {
           </div>
       `);
 
-      // GLS Label section
-      labelsHtml.push('<div class="label-section gls">');
-      labelsHtml.push('<div class="label-title gls">🚚 GLS Shipping Label</div>');
+      // Carrier Label section (GLS or Dachser)
+      if (isDachser) {
+        labelsHtml.push('<div class="label-section dachser">');
+        labelsHtml.push('<div class="label-title dachser">🚛 Dachser Freight Label</div>');
 
-      if (parcel.glsTrackingNumber) {
-        labelsHtml.push(`
-          <p><strong>Tracking Number:</strong> <span class="tracking-code">${parcel.glsTrackingNumber}</span></p>
-          ${parcel.glsLabelPdf ? `
-            <iframe class="label-pdf" src="data:application/pdf;base64,${parcel.glsLabelPdf}"></iframe>
-          ` : '<p class="no-label">GLS label PDF not available - print from GLS portal</p>'}
-        `);
+        if (shipment.dachser?.trackingNumber) {
+          labelsHtml.push(`
+            <p><strong>Tracking Number:</strong> <span class="tracking-code">${shipment.dachser.trackingNumber}</span></p>
+            <p><strong>Tracking:</strong> <a href="${shipment.dachser.trackingUrl || '#'}" target="_blank">Track Shipment</a></p>
+          `);
+          if (shipment.dachser.labelPdf) {
+            labelsHtml.push(`<iframe class="label-pdf" src="data:application/pdf;base64,${shipment.dachser.labelPdf}"></iframe>`);
+          } else {
+            labelsHtml.push('<p class="no-label">Dachser label PDF stored separately - check shipment attachments</p>');
+          }
+        } else if (parcel.dachserError) {
+          labelsHtml.push(`<div class="error-msg">⚠️ Dachser API Error: ${parcel.dachserError}</div>`);
+          labelsHtml.push('<p class="no-label">Dachser shipment not created. Please check API configuration.</p>');
+        } else {
+          labelsHtml.push('<p class="no-label">Dachser shipment pending - labels will appear after carrier booking</p>');
+        }
+        labelsHtml.push('</div>');
+      } else if (isGLS) {
+        labelsHtml.push('<div class="label-section gls">');
+        labelsHtml.push('<div class="label-title gls">🚚 GLS Shipping Label</div>');
+
+        if (parcel.glsTrackingNumber) {
+          labelsHtml.push(`
+            <p><strong>Tracking Number:</strong> <span class="tracking-code">${parcel.glsTrackingNumber}</span></p>
+            ${parcel.glsLabelPdf ? `
+              <iframe class="label-pdf" src="data:application/pdf;base64,${parcel.glsLabelPdf}"></iframe>
+            ` : '<p class="no-label">GLS label PDF not available - print from GLS portal</p>'}
+          `);
+        } else {
+          labelsHtml.push('<p class="no-label">GLS label not generated (GLS integration not configured or disabled)</p>');
+        }
+        labelsHtml.push('</div>');
       } else {
-        labelsHtml.push('<p class="no-label">GLS label not generated (GLS integration not configured or disabled)</p>');
+        // No carrier - just SSCC labels
+        labelsHtml.push('<div class="label-section" style="border-color: #6c757d; background: #f8f9fa;">');
+        labelsHtml.push('<div class="label-title" style="color: #6c757d;">📦 No Carrier Selected</div>');
+        labelsHtml.push('<p class="no-label">This shipment has no carrier integration - only SSCC labels are available</p>');
+        labelsHtml.push('</div>');
       }
-      labelsHtml.push('</div>');
 
       // SSCC Label section
       labelsHtml.push('<div class="label-section sscc">');
