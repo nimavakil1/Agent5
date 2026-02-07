@@ -116,6 +116,14 @@
         { id: 'chargebacks', path: '/accounting/chargebacks', name: 'Chargebacks', icon: 'money_off' }
       ]
     },
+    'invoice-sync': {
+      id: 'invoice-sync', name: 'Invoice Sync', icon: 'sync_alt', color: '#0ea5e9',
+      basePath: '/invoice-sync',
+      pages: [
+        { id: 'dashboard', path: '/invoice-sync/', name: 'Dashboard', icon: 'dashboard' },
+        { id: 'suppliers', path: '/invoice-sync/suppliers', name: 'Suppliers', icon: 'business' },
+      ]
+    },
     'analytics': {
       id: 'analytics', name: 'Analytics', icon: 'analytics', color: '#ec4899',
       basePath: '/analytics',

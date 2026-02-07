@@ -21,6 +21,8 @@ let _amazonFbaReportCheckTimer = null;
 let _safetyStockVerifyCron = null;
 let _amazonFbmListingsRefreshCron = null;
 let _weeklyPricingReportCron = null;
+let _invoiceSyncCronMorning = null;
+let _invoiceSyncCronAfternoon = null;
 
 /**
  * Check if current time is within stock sync operating hours
@@ -275,6 +277,28 @@ function start() {
 
     console.log('[scheduler] Weekly Pricing Report scheduled: Sunday 20:00 (Europe/Amsterdam)');
   } catch (e) { console.error('[scheduler] Weekly Pricing Report cron init error', e); }
+
+  // Invoice Sync (SDT) - Mo-Fr at 09:00 and 14:00 (Europe/Brussels)
+  // Scans Gmail for supplier invoices, parses PDFs, submits to portal/Odoo
+  try {
+    if (process.env.INVOICE_SYNC_ENABLED === '1') {
+      const { runInvoiceSyncCycle } = require('../services/invoice-sync/InvoiceSyncScheduler');
+
+      // 09:00 Mon-Fri
+      _invoiceSyncCronMorning = cron.schedule('0 9 * * 1-5', async () => {
+        console.log('[scheduler] Invoice Sync: morning run starting...');
+        await runInvoiceSyncCycle();
+      }, { timezone: 'Europe/Brussels' });
+
+      // 14:00 Mon-Fri
+      _invoiceSyncCronAfternoon = cron.schedule('0 14 * * 1-5', async () => {
+        console.log('[scheduler] Invoice Sync: afternoon run starting...');
+        await runInvoiceSyncCycle();
+      }, { timezone: 'Europe/Brussels' });
+
+      console.log('[scheduler] Invoice Sync scheduled: Mo-Fr 09:00 and 14:00 (Europe/Brussels)');
+    }
+  } catch (e) { console.error('[scheduler] Invoice Sync cron init error', e); }
 }
 
 /**
@@ -959,5 +983,8 @@ module.exports = {
   // Safety stock verification
   verifySafetyStockSync,
   // Weekly reports
-  runWeeklyPricingReport
+  runWeeklyPricingReport,
+  // Invoice sync (SDT)
+  _invoiceSyncCronMorning,
+  _invoiceSyncCronAfternoon,
 };

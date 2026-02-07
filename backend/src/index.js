@@ -64,6 +64,7 @@ const alertsRouter = require('./api/routes/alerts.api');
 const productsApiRouter = require('./api/routes/products.api');
 const systemRouter = require('./api/routes/system.api');
 const reportsRouter = require('./api/routes/reports.api');
+const invoiceSyncRouter = require('./api/routes/invoice-sync.api');
 const connectDB = require('./config/database');
 const { createPlatform } = require('./core/Platform');
 const { AgentModule } = require('./core/agents');
@@ -91,6 +92,14 @@ if (process.env.NODE_ENV !== 'test') {
     try { await ensureDefaultRoles(); } catch(e) { console.error('roles seed error', e); }
     if (process.env.AUTO_SEED_ADMIN === '1') {
       await ensureAdmin();
+    }
+
+    // Seed Invoice Sync default suppliers
+    try {
+      const { seedSuppliers } = require('./services/invoice-sync');
+      await seedSuppliers();
+    } catch (e) {
+      console.warn('Invoice Sync seed skipped:', e.message);
     }
 
     // Initialize RAG system for knowledge retrieval
@@ -314,7 +323,7 @@ app.get('/login', (req, res) => {
 });
 
 // New platform UI (v2) - protected sections
-const protectedSections = ['vendor', 'settings', 'seller', 'inventory', 'accounting', 'analytics', 'ai', 'calls', 'bol', 'fulfillment', 'assistant', 'monitoring'];
+const protectedSections = ['vendor', 'settings', 'seller', 'inventory', 'accounting', 'analytics', 'ai', 'calls', 'bol', 'fulfillment', 'assistant', 'monitoring', 'invoice-sync'];
 protectedSections.forEach(section => {
   app.use(`/${section}`, requireSession, express.static(path.join(__dirname, 'public', section), {
     etag: false,
@@ -469,6 +478,8 @@ app.use('/api/fulfillment', requireSession, fulfillmentRouter);
 app.use('/api/accounting', requireSession, accountingRouter);
 // Accounting Assistant - conversational AI with memory
 app.use('/api/accounting-assistant', requireSession, accountingAssistantRouter);
+// Invoice Sync module (SDT supplier invoices)
+app.use('/api/invoice-sync', requireSession, invoiceSyncRouter);
 app.use('/api/amazon/mappings', requireSession, amazonMappingsRouter);
 // Module logs API (SSE streaming for real-time logs)
 app.use('/api/logs', requireSession, logsRouter);
