@@ -300,6 +300,44 @@ class SettlementReportParser {
   }
 
   /**
+   * Extract unique order details from settlement transactions.
+   * Returns per-order totals needed for VCS invoice reconciliation.
+   */
+  extractOrderDetails(transactions) {
+    const ordersMap = {};
+
+    for (const tx of transactions) {
+      const txType = tx.transactionType || '';
+      const orderId = tx.orderId;
+
+      // Only order-related transactions with a valid order ID
+      if (!orderId || !ORDER_TRANSACTION_TYPES.some(t => txType.includes(t))) {
+        continue;
+      }
+
+      if (!ordersMap[orderId]) {
+        ordersMap[orderId] = {
+          orderId,
+          marketplace: tx.marketplaceCountry || 'BE',
+          totalAmount: 0,
+          transactionTypes: new Set(),
+          lineCount: 0,
+        };
+      }
+
+      ordersMap[orderId].totalAmount += (tx.amount || 0);
+      ordersMap[orderId].transactionTypes.add(txType);
+      ordersMap[orderId].lineCount++;
+    }
+
+    // Convert Sets to arrays for storage
+    return Object.values(ordersMap).map(o => ({
+      ...o,
+      transactionTypes: [...o.transactionTypes],
+    }));
+  }
+
+  /**
    * Calculate order-related totals by marketplace (for reconciliation)
    */
   aggregateOrderTotals(transactions) {
@@ -355,6 +393,9 @@ class SettlementReportParser {
     // Aggregate order totals for reconciliation info
     const ordersByMarketplace = this.aggregateOrderTotals(parsed.transactions);
 
+    // Extract individual order details for VCS invoice reconciliation
+    const orderDetails = this.extractOrderDetails(parsed.transactions);
+
     // Store in MongoDB
     const db = getDb();
     const settlementDoc = {
@@ -367,6 +408,7 @@ class SettlementReportParser {
       transactionCount: parsed.transactionCount,
       feesByMarketplace,
       ordersByMarketplace,
+      orderCount: orderDetails.length,
       source: 'csv-upload',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -378,6 +420,42 @@ class SettlementReportParser {
         { $set: settlementDoc, $setOnInsert: { firstUploadedAt: new Date() } },
         { upsert: true }
       );
+
+      // Persist individual order IDs for VCS invoice reconciliation
+      if (orderDetails.length > 0) {
+        const bulkOps = orderDetails.map(order => ({
+          updateOne: {
+            filter: { settlementId: parsed.settlementId, orderId: order.orderId },
+            update: {
+              $set: {
+                settlementId: parsed.settlementId,
+                orderId: order.orderId,
+                marketplace: order.marketplace,
+                totalAmount: order.totalAmount,
+                transactionTypes: order.transactionTypes,
+                lineCount: order.lineCount,
+                updatedAt: new Date(),
+              },
+              $setOnInsert: {
+                reconciled: false,
+                odooInvoiceId: null,
+                reconciledAt: null,
+                createdAt: new Date(),
+              },
+            },
+            upsert: true,
+          },
+        }));
+
+        await db.collection('amazon_settlement_orders').bulkWrite(bulkOps);
+
+        // Ensure indexes exist for efficient reconciliation queries
+        await db.collection('amazon_settlement_orders').createIndex(
+          { settlementId: 1, orderId: 1 }, { unique: true }
+        );
+        await db.collection('amazon_settlement_orders').createIndex({ orderId: 1 });
+        await db.collection('amazon_settlement_orders').createIndex({ reconciled: 1 });
+      }
     }
 
     return {
@@ -392,6 +470,7 @@ class SettlementReportParser {
       transactionCount: parsed.transactionCount,
       feesByMarketplace,
       ordersByMarketplace,
+      orderCount: orderDetails.length,
       dryRun,
     };
   }
